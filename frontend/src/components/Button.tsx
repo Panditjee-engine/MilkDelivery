@@ -1,5 +1,5 @@
 import React from 'react';
-import { TouchableOpacity, Text, StyleSheet, ActivityIndicator, ViewStyle, TextStyle } from 'react-native';
+import { TouchableOpacity, Text, StyleSheet, ActivityIndicator, View, ViewStyle, TextStyle, StyleProp } from 'react-native';
 import { Colors } from '../constants/colors';
 
 interface ButtonProps {
@@ -26,7 +26,7 @@ export default function Button({
   icon,
 }: ButtonProps) {
   const getButtonStyle = () => {
-    const base = [styles.button, styles[size]];
+    const base: StyleProp<ViewStyle>[] = [styles.button, styles[size]];
     
     switch (variant) {
       case 'secondary':
@@ -50,7 +50,7 @@ export default function Button({
   };
 
   const getTextStyle = () => {
-    const base = [styles.text, styles[`${size}Text`]];
+    const base: StyleProp<TextStyle>[] = [styles.text, styles[`${size}Text` as 'smallText' | 'mediumText' | 'largeText']];
     
     if (variant === 'outline') {
       base.push(styles.outlineText);
@@ -72,7 +72,7 @@ export default function Button({
         <ActivityIndicator color={variant === 'outline' ? Colors.primary : Colors.textInverse} />
       ) : (
         <>
-          {icon}
+          {icon && <View style={styles.icon}>{icon}</View>}
           <Text style={[...getTextStyle(), textStyle]}>{title}</Text>
         </>
       )}
@@ -86,7 +86,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 12,
-    gap: 8,
+  },
+  icon: {
+    marginRight: 8,
   },
   primary: {
     backgroundColor: Colors.primary,

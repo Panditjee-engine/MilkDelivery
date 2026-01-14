@@ -4,44 +4,52 @@ const API_BASE = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 
 class ApiService {
   private token: string | null = null;
+  
 
   async init() {
-    this.token = await AsyncStorage.getItem('auth_token');
+  this.token = await AsyncStorage.getItem('access_token');
+}
+
+  
+
+ setToken(token: string | null) {
+  this.token = token;
+
+  if (token) {
+    AsyncStorage.setItem('access_token', token);
+  } else {
+    AsyncStorage.removeItem('access_token');
+  }
+}
+
+private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  const url = `${API_BASE}/api${endpoint}`;
+
+  const storedToken =
+    this.token || await AsyncStorage.getItem('access_token');
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string>),
+  };
+
+  if (storedToken) {
+    headers['Authorization'] = `Bearer ${storedToken}`;
   }
 
-  setToken(token: string | null) {
-    this.token = token;
-    if (token) {
-      AsyncStorage.setItem('auth_token', token);
-    } else {
-      AsyncStorage.removeItem('auth_token');
-    }
+  const response = await fetch(url, {
+    ...options,
+    headers,
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Request failed' }));
+    throw new Error(error.detail || 'Request failed');
   }
 
-  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    const url = `${API_BASE}/api${endpoint}`;
-    
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      ...(options.headers as Record<string, string>),
-    };
+  return response.json();
+}
 
-    if (this.token) {
-      headers['Authorization'] = `Bearer ${this.token}`;
-    }
-
-    const response = await fetch(url, {
-      ...options,
-      headers,
-    });
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: 'Request failed' }));
-      throw new Error(error.detail || 'Request failed');
-    }
-
-    return response.json();
-  }
 
   // Auth
   async login(email: string, password: string) {
@@ -275,9 +283,10 @@ class ApiService {
     return this.request<any>('/seed', { method: 'POST' });
   }
 
-  logout() {
-    this.setToken(null);
-  }
+logout = async () => {
+  this.setToken(null);
+};
+
 }
 
 export const api = new ApiService();

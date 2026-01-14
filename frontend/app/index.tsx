@@ -16,7 +16,7 @@ export default function Index() {
       // Seed initial data
       try {
         setSeeding(true);
-        await api.seedData();
+         await api.seedData();
       } catch (error) {
         console.log('Seed skipped or failed:', error);
       } finally {

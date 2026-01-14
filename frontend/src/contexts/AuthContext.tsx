@@ -33,21 +33,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const checkAuth = async () => {
-    try {
-      await api.init();
-      const token = await AsyncStorage.getItem('auth_token');
-      if (token) {
-        const userData = await api.getMe();
-        setUser(userData);
-      }
-    } catch (error) {
-      console.log('Auth check failed:', error);
-      await AsyncStorage.removeItem('auth_token');
-    } finally {
-      setLoading(false);
-    }
-  };
+  try {
+    await api.init();
+    const token = await AsyncStorage.getItem('access_token');
 
+    if (token) {
+      const userData = await api.getMe();
+      setUser(userData);
+    } else {
+      setUser(null);
+    }
+  } catch (error) {
+    console.log('Auth check failed:', error);
+    setUser(null);
+    await AsyncStorage.removeItem('access_token');
+  } finally {
+    setLoading(false);
+  }
+};
   const login = async (email: string, password: string) => {
     const response = await api.login(email, password);
     setUser(response.user);
@@ -58,10 +61,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(response.user);
   };
 
-  const logout = async () => {
-    api.logout();
-    setUser(null);
-  };
+const logout = async () => {
+  console.log('LOGOUT FUNCTION CALLED');
+  await api.logout();
+  setUser(null);
+};
+
 
   const updateUser = (data: Partial<User>) => {
     if (user) {
