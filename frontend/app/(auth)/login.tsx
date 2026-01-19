@@ -1,8 +1,19 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, Alert } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+  TouchableOpacity,
+  Alert,
+  Image,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+
 import { useAuth } from '../../src/contexts/AuthContext';
 import { Colors } from '../../src/constants/colors';
 import Input from '../../src/components/Input';
@@ -13,6 +24,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
   const { login } = useAuth();
   const router = useRouter();
 
@@ -25,7 +37,6 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       await login(email, password);
-      // Navigation handled by index.tsx
       router.replace('/');
     } catch (error: any) {
       Alert.alert('Login Failed', error.message || 'Invalid credentials');
@@ -40,57 +51,102 @@ export default function LoginScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Header */}
           <View style={styles.header}>
             <View style={styles.logoCircle}>
-              <Text style={styles.logoEmoji}>🥛</Text>
+              <Image
+                source={require('./loginassets/gauhamlogo.png')}
+                style={styles.logoImage}
+                resizeMode="contain"
+              />
             </View>
-            <Text style={styles.title}>Welcome Back</Text>
-            <Text style={styles.subtitle}>Sign in to continue with FreshMilk</Text>
+
+            <Text style={styles.title}>Welcome to Gauhum</Text>
+            <Text style={styles.subtitle}>
+              Sign in to continue with FreshMilk
+            </Text>
           </View>
 
+          {/* Form */}
           <View style={styles.form}>
-            <Input
-              label="Email"
-              placeholder="Enter your email"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              leftIcon={<Ionicons name="mail-outline" size={20} color={Colors.textSecondary} />}
-            />
-
-            <Input
-              label="Password"
-              placeholder="Enter your password"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!showPassword}
-              leftIcon={<Ionicons name="lock-closed-outline" size={20} color={Colors.textSecondary} />}
-              rightIcon={
-                <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+            <View style={styles.card}>
+              <Input
+                label="Email"
+                placeholder="Enter your email"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                leftIcon={
                   <Ionicons
-                    name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                    name="mail-outline"
                     size={20}
                     color={Colors.textSecondary}
                   />
-                </TouchableOpacity>
-              }
-            />
+                }
+              />
 
-            <Button title="Sign In" onPress={handleLogin} loading={loading} style={styles.button} />
+              <Input
+                label="Password"
+                placeholder="Enter your password"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+                leftIcon={
+                  <Ionicons
+                    name="lock-closed-outline"
+                    size={20}
+                    color={Colors.textSecondary}
+                  />
+                }
+                rightIcon={
+                  <TouchableOpacity
+                    onPress={() => setShowPassword(!showPassword)}
+                  >
+                    <Ionicons
+                      name={
+                        showPassword
+                          ? 'eye-off-outline'
+                          : 'eye-outline'
+                      }
+                      size={20}
+                      color={Colors.textSecondary}
+                    />
+                  </TouchableOpacity>
+                }
+              />
+
+              <Button
+                title="Sign In"
+                onPress={handleLogin}
+                loading={loading}
+                style={styles.button}
+              />
+            </View>
           </View>
 
+          {/* Footer */}
           <View style={styles.footer}>
-            <Text style={styles.footerText}>Don't have an account?</Text>
-            <TouchableOpacity onPress={() => router.push('/(auth)/register')}>
+            <Text style={styles.footerText}>
+              Don't have an account?
+            </Text>
+            <TouchableOpacity
+              onPress={() => router.push('/(auth)/register')}
+            >
               <Text style={styles.linkText}>Sign Up</Text>
             </TouchableOpacity>
           </View>
 
+          {/* Bottom Info */}
           <View style={styles.demoSection}>
-            <Text style={styles.demoTitle}>Demo Accounts:</Text>
-            <Text style={styles.demoText}>Admin: admin@milkapp.com / admin123</Text>
+            <Text style={styles.demoTitle}>Gauhum</Text>
+            <Text style={styles.demoText}>
+              A woman powered initiative
+            </Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -101,7 +157,7 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: '#F4F6FA',
   },
   keyboardView: {
     flex: 1,
@@ -115,17 +171,11 @@ const styles = StyleSheet.create({
     marginTop: 40,
     marginBottom: 40,
   },
-  logoCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: Colors.primaryLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  logoEmoji: {
-    fontSize: 40,
+  logoCircle: {},
+  logoImage: {
+    width: 96,
+    height: 96,
+    marginBottom: 12,
   },
   title: {
     fontSize: 28,
@@ -139,6 +189,19 @@ const styles = StyleSheet.create({
   },
   form: {
     marginBottom: 24,
+  },
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 24,
+    gap: 12,
+
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 8,
   },
   button: {
     marginTop: 8,

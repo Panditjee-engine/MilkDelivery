@@ -1,8 +1,18 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, Alert } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+  TouchableOpacity,
+  Alert,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+
 import { useAuth } from '../../src/contexts/AuthContext';
 import { Colors } from '../../src/constants/colors';
 import Input from '../../src/components/Input';
@@ -11,9 +21,24 @@ import Button from '../../src/components/Button';
 type Role = 'customer' | 'delivery_partner' | 'admin';
 
 const roles = [
-  { value: 'customer' as Role, label: 'Customer', icon: 'person', description: 'Order daily essentials' },
-  { value: 'delivery_partner' as Role, label: 'Delivery Partner', icon: 'bicycle', description: 'Deliver orders' },
-  { value: 'admin' as Role, label: 'Admin', icon: 'shield', description: 'Manage the platform' },
+  {
+    value: 'customer' as Role,
+    label: 'Customer',
+    icon: 'person',
+    description: 'Order daily essentials',
+  },
+  {
+    value: 'delivery_partner' as Role,
+    label: 'Delivery Partner',
+    icon: 'bicycle',
+    description: 'Deliver orders',
+  },
+  {
+    value: 'admin' as Role,
+    label: 'Admin',
+    icon: 'shield',
+    description: 'Manage the platform',
+  },
 ];
 
 export default function RegisterScreen() {
@@ -25,6 +50,7 @@ export default function RegisterScreen() {
   const [role, setRole] = useState<Role>('customer');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
   const { register } = useAuth();
   const router = useRouter();
 
@@ -55,7 +81,10 @@ export default function RegisterScreen() {
       });
       router.replace('/');
     } catch (error: any) {
-      Alert.alert('Registration Failed', error.message || 'Could not create account');
+      Alert.alert(
+        'Registration Failed',
+        error.message || 'Could not create account'
+      );
     } finally {
       setLoading(false);
     }
@@ -67,8 +96,14 @@ export default function RegisterScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+          >
             <Ionicons name="arrow-back" size={24} color={Colors.text} />
           </TouchableOpacity>
 
@@ -77,89 +112,167 @@ export default function RegisterScreen() {
             <Text style={styles.subtitle}>Join FreshMilk today</Text>
           </View>
 
+          {/* Role Selection */}
           <View style={styles.roleSection}>
-            <Text style={styles.sectionTitle}>I am a...</Text>
+            <Text style={styles.sectionTitle}></Text>
+
             <View style={styles.roleContainer}>
-              {roles.map((r) => (
-                <TouchableOpacity
-                  key={r.value}
-                  style={[styles.roleCard, role === r.value && styles.roleCardActive]}
-                  onPress={() => setRole(r.value)}
-                >
-                  <Ionicons
-                    name={r.icon as any}
-                    size={28}
-                    color={role === r.value ? Colors.primary : Colors.textSecondary}
-                  />
-                  <Text style={[styles.roleLabel, role === r.value && styles.roleLabelActive]}>
-                    {r.label}
-                  </Text>
-                  <Text style={styles.roleDescription}>{r.description}</Text>
-                </TouchableOpacity>
-              ))}
+              {roles.map((r) => {
+                const isActive = role === r.value;
+
+                return (
+                  <TouchableOpacity
+                    key={r.value}
+                    activeOpacity={0.8}
+                    style={[
+                      styles.roleCard,
+                      isActive && styles.roleCardActive,
+                    ]}
+                    onPress={() => setRole(r.value)}
+                  >
+                    <Ionicons
+                      name={r.icon as any}
+                      size={30}
+                      color={
+                        isActive
+                          ? Colors.primary
+                          : Colors.textSecondary
+                      }
+                    />
+
+                    <Text
+                      style={[
+                        styles.roleLabel,
+                        isActive && styles.roleLabelActive,
+                      ]}
+                    >
+                      {r.label}
+                    </Text>
+
+                    <Text style={styles.roleDescription}>
+                      {r.description}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <View style={styles.selectedRoleWrapper}>
+              <Text style={styles.selectedRoleText}>
+                I am a{' '}
+                <Text style={styles.selectedRoleHighlight}>
+                  {roles.find((r) => r.value === role)?.label}
+                </Text>
+              </Text>
             </View>
           </View>
 
+          {/* Form */}
           <View style={styles.form}>
-            <Input
-              label="Full Name *"
-              placeholder="Enter your name"
-              value={name}
-              onChangeText={setName}
-              leftIcon={<Ionicons name="person-outline" size={20} color={Colors.textSecondary} />}
-            />
-
-            <Input
-              label="Email *"
-              placeholder="Enter your email"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              leftIcon={<Ionicons name="mail-outline" size={20} color={Colors.textSecondary} />}
-            />
-
-            <Input
-              label="Phone (Optional)"
-              placeholder="Enter phone number"
-              value={phone}
-              onChangeText={setPhone}
-              keyboardType="phone-pad"
-              leftIcon={<Ionicons name="call-outline" size={20} color={Colors.textSecondary} />}
-            />
-
-            <Input
-              label="Password *"
-              placeholder="Create a password"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!showPassword}
-              leftIcon={<Ionicons name="lock-closed-outline" size={20} color={Colors.textSecondary} />}
-              rightIcon={
-                <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+            <View style={styles.formCard}>
+              <Input
+                label="Full Name *"
+                placeholder="Enter your name"
+                value={name}
+                onChangeText={setName}
+                leftIcon={
                   <Ionicons
-                    name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                    name="person-outline"
                     size={20}
                     color={Colors.textSecondary}
                   />
-                </TouchableOpacity>
-              }
-            />
+                }
+              />
 
-            <Input
-              label="Confirm Password *"
-              placeholder="Confirm your password"
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              secureTextEntry={!showPassword}
-              leftIcon={<Ionicons name="lock-closed-outline" size={20} color={Colors.textSecondary} />}
-            />
+              <Input
+                label="Email *"
+                placeholder="Enter your email"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                leftIcon={
+                  <Ionicons
+                    name="mail-outline"
+                    size={20}
+                    color={Colors.textSecondary}
+                  />
+                }
+              />
 
-            <Button title="Create Account" onPress={handleRegister} loading={loading} style={styles.button} />
+              <Input
+                label="Phone (Optional)"
+                placeholder="Enter phone number"
+                value={phone}
+                onChangeText={setPhone}
+                keyboardType="phone-pad"
+                leftIcon={
+                  <Ionicons
+                    name="call-outline"
+                    size={20}
+                    color={Colors.textSecondary}
+                  />
+                }
+              />
+
+              <Input
+                label="Password *"
+                placeholder="Create a password"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+                leftIcon={
+                  <Ionicons
+                    name="lock-closed-outline"
+                    size={20}
+                    color={Colors.textSecondary}
+                  />
+                }
+                rightIcon={
+                  <TouchableOpacity
+                    onPress={() => setShowPassword(!showPassword)}
+                  >
+                    <Ionicons
+                      name={
+                        showPassword
+                          ? 'eye-off-outline'
+                          : 'eye-outline'
+                      }
+                      size={20}
+                      color={Colors.textSecondary}
+                    />
+                  </TouchableOpacity>
+                }
+              />
+
+              <Input
+                label="Confirm Password *"
+                placeholder="Confirm your password"
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                secureTextEntry={!showPassword}
+                leftIcon={
+                  <Ionicons
+                    name="lock-closed-outline"
+                    size={20}
+                    color={Colors.textSecondary}
+                  />
+                }
+              />
+
+              <Button
+                title="Create Account"
+                onPress={handleRegister}
+                loading={loading}
+                style={styles.button}
+              />
+            </View>
           </View>
 
           <View style={styles.footer}>
-            <Text style={styles.footerText}>Already have an account?</Text>
+            <Text style={styles.footerText}>
+              Already have an account?
+            </Text>
             <TouchableOpacity onPress={() => router.back()}>
               <Text style={styles.linkText}>Sign In</Text>
             </TouchableOpacity>
@@ -204,6 +317,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: Colors.textSecondary,
   },
+
+  /* Role */
   roleSection: {
     marginBottom: 24,
   },
@@ -219,19 +334,26 @@ const styles = StyleSheet.create({
   },
   roleCard: {
     flex: 1,
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
-    padding: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 12,
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: Colors.border,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
   },
   roleCardActive: {
     borderColor: Colors.primary,
-    backgroundColor: Colors.primaryLight + '20',
+    // backgroundColor: Colors.primary + '10',
+    elevation: 8,
   },
   roleLabel: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '600',
     color: Colors.textSecondary,
     marginTop: 8,
@@ -241,17 +363,44 @@ const styles = StyleSheet.create({
     color: Colors.primary,
   },
   roleDescription: {
-    fontSize: 10,
+    fontSize: 11,
     color: Colors.textLight,
     marginTop: 4,
     textAlign: 'center',
   },
+  selectedRoleWrapper: {
+    marginTop: 12,
+    alignItems: 'center',
+  },
+  selectedRoleText: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+  },
+  selectedRoleHighlight: {
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+
+  /* Form */
   form: {
     marginBottom: 24,
+  },
+  formCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 20,
+    gap: 14,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
   },
   button: {
     marginTop: 8,
   },
+
+  /* Footer */
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
