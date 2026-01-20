@@ -27,12 +27,16 @@ export default function ProductCard({ product, onPress, onSubscribe }: ProductCa
     <TouchableOpacity style={styles.container} onPress={onPress} activeOpacity={0.7}>
       <View style={[styles.imageContainer, { backgroundColor: categoryColor }]}>
         {product.image ? (
-          <Image source={{ uri: product.image }} style={styles.image} />
+          <Image
+            source={{ uri: product.image }}
+            style={styles.image}
+            resizeMode="cover"
+          />
         ) : (
-          <Ionicons 
-            name={getCategoryIcon(product.category)} 
-            size={40} 
-            color={Colors.textSecondary} 
+          <Ionicons
+            name={getCategoryIcon(product.category)}
+            size={40}
+            color={Colors.textSecondary}
           />
         )}
         {!product.is_available && (
@@ -56,6 +60,8 @@ export default function ProductCard({ product, onPress, onSubscribe }: ProductCa
     </TouchableOpacity>
   );
 }
+
+
 
 function getCategoryIcon(category: string): keyof typeof Ionicons.glyphMap {
   switch (category) {
