@@ -114,16 +114,30 @@ class Token(BaseModel):
     user: UserResponse
 
 # Product Models
+# class ProductBase(BaseModel):
+#     name: str
+#     description: Optional[str] = None
+#     category: ProductCategory
+#     price: float
+#     unit: str  # e.g., "500ml", "1L", "1kg"
+#     image: Optional[str] = None  # base64
+    
+#     nutritional_info: Optional[Dict[str, Any]] = None
+#     stock: int = 100
+#     is_available: bool = True
+
 class ProductBase(BaseModel):
     name: str
     description: Optional[str] = None
     category: ProductCategory
     price: float
-    unit: str  # e.g., "500ml", "1L", "1kg"
-    image: Optional[str] = None  # base64
+    unit: str
+    image: Optional[str] = None  # base64 OR URL
+    image_type: Optional[str] = "base64"  # "base64" | "url"
     nutritional_info: Optional[Dict[str, Any]] = None
     stock: int = 100
     is_available: bool = True
+
 
 class ProductCreate(ProductBase):
     pass
@@ -362,6 +376,10 @@ async def update_profile(
     updated_user = await db.users.find_one({"id": user.id})
     return UserResponse(**updated_user)
 
+def is_valid_image_url(url: str) -> bool:
+    return url.startswith("http://") or url.startswith("https://")
+
+
 # ===================== PRODUCT ENDPOINTS =====================
 
 @api_router.get("/products", response_model=List[Product])
@@ -379,21 +397,64 @@ async def get_product(product_id: str):
         raise HTTPException(status_code=404, detail="Product not found")
     return Product(**product)
 
+# @api_router.post("/products", response_model=Product)
+# async def create_product(product: ProductCreate, admin: User = Depends(get_admin_user)):
+#     product_dict = product.dict()
+#     product_dict["id"] = str(uuid.uuid4())
+#     product_dict["created_at"] = datetime.utcnow()
+#     await db.products.insert_one(product_dict)
+#     return Product(**product_dict)
+
 @api_router.post("/products", response_model=Product)
 async def create_product(product: ProductCreate, admin: User = Depends(get_admin_user)):
+        
     product_dict = product.dict()
+
+    # ✅ ADD THIS BLOCK (VERY IMPORTANT)
+    if product_dict.get("image") and not product_dict.get("image_type"):
+        product_dict["image_type"] = "url"
+
+    # Validate image if URL
+    if product_dict.get("image") and product_dict.get("image_type") == "url":
+        if not is_valid_image_url(product_dict["image"]):
+            raise HTTPException(status_code=400, detail="Invalid image URL")
+
     product_dict["id"] = str(uuid.uuid4())
     product_dict["created_at"] = datetime.utcnow()
+
     await db.products.insert_one(product_dict)
     return Product(**product_dict)
 
+
+
+# @api_router.put("/products/{product_id}", response_model=Product)
+# async def update_product(product_id: str, update_data: Dict[str, Any], admin: User = Depends(get_admin_user)):
+#     await db.products.update_one({"id": product_id}, {"$set": update_data})
+#     product = await db.products.find_one({"id": product_id})
+#     if not product:
+#         raise HTTPException(status_code=404, detail="Product not found")
+#     return Product(**product)
+
 @api_router.put("/products/{product_id}", response_model=Product)
 async def update_product(product_id: str, update_data: Dict[str, Any], admin: User = Depends(get_admin_user)):
+
+    # ✅ ADD THIS BLOCK
+    if "image" in update_data and "image_type" not in update_data:
+        update_data["image_type"] = "url"
+
+    if "image" in update_data and update_data.get("image_type") == "url":
+        if not is_valid_image_url(update_data["image"]):
+            raise HTTPException(status_code=400, detail="Invalid image URL")
+
     await db.products.update_one({"id": product_id}, {"$set": update_data})
+
     product = await db.products.find_one({"id": product_id})
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
+
     return Product(**product)
+
+
 
 @api_router.delete("/products/{product_id}")
 async def delete_product(product_id: str, admin: User = Depends(get_admin_user)):
@@ -1085,36 +1146,36 @@ async def seed_data():
     if existing > 0:
         return {"message": "Data already seeded"}
     
-    products = [
-        # Milk
-        {"name": "Fresh Cow Milk", "category": "milk", "price": 60, "unit": "1L", "description": "Farm-fresh whole cow milk", "stock": 500, "is_available": True},
-        {"name": "Toned Milk", "category": "milk", "price": 52, "unit": "1L", "description": "Low-fat toned milk", "stock": 400, "is_available": True},
-        {"name": "Buffalo Milk", "category": "milk", "price": 70, "unit": "1L", "description": "Rich and creamy buffalo milk", "stock": 300, "is_available": True},
-        {"name": "Organic A2 Milk", "category": "milk", "price": 90, "unit": "1L", "description": "Premium organic A2 cow milk", "stock": 200, "is_available": True},
-        {"name": "Skimmed Milk", "category": "milk", "price": 48, "unit": "1L", "description": "Fat-free skimmed milk", "stock": 250, "is_available": True},
+    # products = [
+    #     # Milk
+    #     {"name": "Fresh Cow Milk", "category": "milk", "price": 60, "unit": "1L", "description": "Farm-fresh whole cow milk", "stock": 500, "is_available": True},
+    #     {"name": "Toned Milk", "category": "milk", "price": 52, "unit": "1L", "description": "Low-fat toned milk", "stock": 400, "is_available": True},
+    #     {"name": "Buffalo Milk", "category": "milk", "price": 70, "unit": "1L", "description": "Rich and creamy buffalo milk", "stock": 300, "is_available": True},
+    #     {"name": "Organic A2 Milk", "category": "milk", "price": 90, "unit": "1L", "description": "Premium organic A2 cow milk", "stock": 200, "is_available": True},
+    #     {"name": "Skimmed Milk", "category": "milk", "price": 48, "unit": "1L", "description": "Fat-free skimmed milk", "stock": 250, "is_available": True},
         
-        # Dairy
-        {"name": "Fresh Curd", "category": "dairy", "price": 45, "unit": "500g", "description": "Homemade style fresh curd", "stock": 300, "is_available": True},
-        {"name": "Paneer", "category": "dairy", "price": 120, "unit": "250g", "description": "Fresh cottage cheese", "stock": 150, "is_available": True},
-        {"name": "Butter", "category": "dairy", "price": 55, "unit": "100g", "description": "Fresh unsalted butter", "stock": 200, "is_available": True},
-        {"name": "Ghee", "category": "dairy", "price": 180, "unit": "250ml", "description": "Pure desi ghee", "stock": 100, "is_available": True},
-        {"name": "Cheese Slices", "category": "dairy", "price": 85, "unit": "200g", "description": "Processed cheese slices", "stock": 150, "is_available": True},
+    #     # Dairy
+    #     {"name": "Fresh Curd", "category": "dairy", "price": 45, "unit": "500g", "description": "Homemade style fresh curd", "stock": 300, "is_available": True},
+    #     {"name": "Paneer", "category": "dairy", "price": 120, "unit": "250g", "description": "Fresh cottage cheese", "stock": 150, "is_available": True},
+    #     {"name": "Butter", "category": "dairy", "price": 55, "unit": "100g", "description": "Fresh unsalted butter", "stock": 200, "is_available": True},
+    #     {"name": "Ghee", "category": "dairy", "price": 180, "unit": "250ml", "description": "Pure desi ghee", "stock": 100, "is_available": True},
+    #     {"name": "Cheese Slices", "category": "dairy", "price": 85, "unit": "200g", "description": "Processed cheese slices", "stock": 150, "is_available": True},
         
-        # Bakery
-        {"name": "White Bread", "category": "bakery", "price": 40, "unit": "400g", "description": "Soft white sandwich bread", "stock": 200, "is_available": True},
-        {"name": "Brown Bread", "category": "bakery", "price": 45, "unit": "400g", "description": "Healthy whole wheat bread", "stock": 180, "is_available": True},
-        {"name": "Milk Bread", "category": "bakery", "price": 50, "unit": "400g", "description": "Soft and fluffy milk bread", "stock": 150, "is_available": True},
-        {"name": "Butter Croissant", "category": "bakery", "price": 35, "unit": "1pc", "description": "Flaky butter croissant", "stock": 100, "is_available": True},
+    #     # Bakery
+    #     {"name": "White Bread", "category": "bakery", "price": 40, "unit": "400g", "description": "Soft white sandwich bread", "stock": 200, "is_available": True},
+    #     {"name": "Brown Bread", "category": "bakery", "price": 45, "unit": "400g", "description": "Healthy whole wheat bread", "stock": 180, "is_available": True},
+    #     {"name": "Milk Bread", "category": "bakery", "price": 50, "unit": "400g", "description": "Soft and fluffy milk bread", "stock": 150, "is_available": True},
+    #     {"name": "Butter Croissant", "category": "bakery", "price": 35, "unit": "1pc", "description": "Flaky butter croissant", "stock": 100, "is_available": True},
         
-        # Fruits
-        {"name": "Bananas", "category": "fruits", "price": 50, "unit": "1 dozen", "description": "Fresh ripe bananas", "stock": 200, "is_available": True},
-        {"name": "Apples", "category": "fruits", "price": 180, "unit": "1kg", "description": "Fresh red apples", "stock": 150, "is_available": True},
-        {"name": "Oranges", "category": "fruits", "price": 80, "unit": "1kg", "description": "Juicy sweet oranges", "stock": 120, "is_available": True},
+    #     # Fruits
+    #     {"name": "Bananas", "category": "fruits", "price": 50, "unit": "1 dozen", "description": "Fresh ripe bananas", "stock": 200, "is_available": True},
+    #     {"name": "Apples",  "category": "fruits", "price": 180, "unit": "1kg", "description": "Fresh red apples", "stock": 150, "is_available": True},
+    #     {"name": "Oranges", "category": "fruits", "price": 80, "unit": "1kg", "description": "Juicy sweet oranges", "stock": 120, "is_available": True},
         
-        # Essentials
-        {"name": "Farm Eggs", "category": "essentials", "price": 80, "unit": "12 pcs", "description": "Free-range farm eggs", "stock": 300, "is_available": True},
-        {"name": "Organic Eggs", "category": "essentials", "price": 120, "unit": "12 pcs", "description": "Certified organic eggs", "stock": 150, "is_available": True},
-    ]
+    #     # Essentials
+    #     {"name": "Farm Eggs", "category": "essentials", "price": 80, "unit": "12 pcs", "description": "Free-range farm eggs", "stock": 300, "is_available": True},
+    #     {"name": "Organic Eggs", "category": "essentials", "price": 120, "unit": "12 pcs", "description": "Certified organic eggs", "stock": 150, "is_available": True},
+    # ]
     
     for p in products:
         p["id"] = str(uuid.uuid4())
