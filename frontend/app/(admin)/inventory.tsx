@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -13,7 +13,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+// import SwipeButton from 'react-native-swipe-button';
+import { Dimensions } from 'react-native';
 
+import SwipeToConfirm from '../../src/components/SwipeToConfirm';
 import { api } from '../../src/services/api';
 import { Colors } from '../../src/constants/colors';
 import Card from '../../src/components/Card';
@@ -23,13 +27,13 @@ import { useAuth } from '../../src/contexts/AuthContext';
 
 /* ================= TYPES ================= */
 type Product = {
-  id?: number; // 👈 optional to avoid TS error
+  id?: string;
   name: string;
   category: string;
   unit: string;
   price: number;
   stock: number;
-  image_url?: string | null;
+  image?: string | null;
 };
 
 /* ================= SCREEN ================= */
@@ -44,7 +48,6 @@ export default function InventoryScreen() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [stockModal, setStockModal] = useState(false);
   const [newStock, setNewStock] = useState('');
-  const [updating, setUpdating] = useState(false);
 
   const [addModal, setAddModal] = useState(false);
   const [newProduct, setNewProduct] = useState({
@@ -53,7 +56,7 @@ export default function InventoryScreen() {
     unit: '',
     price: '',
     stock: '',
-    image_url: '',
+    image: '', // base64
   });
 
   /* ================= DATA ================= */
@@ -61,8 +64,6 @@ export default function InventoryScreen() {
     try {
       const data = await api.getProducts();
       setProducts(data);
-    } catch (e) {
-      console.error(e);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -78,75 +79,58 @@ export default function InventoryScreen() {
     fetchData();
   }, []);
 
+  /* ================= IMAGE PICKER ================= */
+  const pickImageFromGallery = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('Permission required', 'Gallery access is needed');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.6,
+      base64: true,
+    });
+
+    if (!result.canceled && result.assets[0].base64) {
+      setNewProduct(p => ({
+        ...p,
+        image: `data:image/jpeg;base64,${result.assets[0].base64}`,
+      }));
+    }
+  };
+
+  /* ================= FORM VALID ================= */
+  const isFormValid = useMemo(() => {
+    const name = newProduct.name.trim();
+    const category = newProduct.category.trim();
+    const unit = newProduct.unit.trim();
+    const price = parseFloat(newProduct.price);
+    const stock = parseInt(newProduct.stock, 10);
+
+    if (!name || !category || !unit) return false;
+    if (!Number.isFinite(price) || price <= 0) return false;
+    if (!Number.isInteger(stock) || stock < 0) return false;
+    if (!newProduct.image || newProduct.image.length < 10) return false;
+
+    return true;
+  }, [newProduct]);
+
+
+
+
   /* ================= ACTIONS ================= */
-  const openStockModal = (product: Product) => {
-    if (!product.id) return;
-    setSelectedProduct(product);
-    setNewStock(String(product.stock));
-    setStockModal(true);
-  };
-
-  const handleUpdateStock = async () => {
-    if (!selectedProduct?.id) return;
-
-    const qty = parseInt(newStock);
-    if (isNaN(qty) || qty < 0) {
-      Alert.alert('Error', 'Invalid stock value');
-      return;
-    }
-
-    setUpdating(true);
-    try {
-      await api.updateStock(selectedProduct.id, qty);
-      setStockModal(false);
-      fetchData();
-    } catch (e: any) {
-      Alert.alert('Error', e.message);
-    } finally {
-      setUpdating(false);
-    }
-  };
-
-  const deleteProduct = async (id?: number) => {
-    if (!id) return;
-
-    try {
-      await api.deleteProduct(id);
-      fetchData();
-    } catch (e: any) {
-      Alert.alert('Error', e.message);
-    }
-  };
-
-  const confirmDelete = (product: Product) => {
-    if (!product.id) return;
-
-    Alert.alert('Delete Product', product.name, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: () => deleteProduct(product.id),
-      },
-    ]);
-  };
-
   const handleAddProduct = async () => {
-    const { name, category, unit, price, stock, image_url } = newProduct;
-
-    if (!name || !category || !unit || !price || !stock) {
-      Alert.alert('Error', 'All fields except image are required');
-      return;
-    }
-
     try {
       await api.createProduct({
-        name,
-        category,
-        unit,
-        price: Number(price),
-        stock: Number(stock),
-        image: image_url || null,
+        name: newProduct.name,
+        category: newProduct.category.toLowerCase(),
+        unit: newProduct.unit,
+        price: Number(newProduct.price),
+        stock: Number(newProduct.stock),
+        image: newProduct.image,
+        image_type: 'base64',
       });
 
       setAddModal(false);
@@ -156,7 +140,7 @@ export default function InventoryScreen() {
         unit: '',
         price: '',
         stock: '',
-        image_url: '',
+        image: '',
       });
 
       fetchData();
@@ -165,17 +149,13 @@ export default function InventoryScreen() {
     }
   };
 
-  if (loading) return <LoadingScreen />;
+  const deleteProduct = async (id?: string) => {
+    if (!id) return;
+    await api.deleteProduct(id);
+    fetchData();
+  };
 
-  /* ================= GROUP ================= */
-  const productsByCategory: Record<string, Product[]> = products.reduce(
-    (acc, product) => {
-      acc[product.category] = acc[product.category] || [];
-      acc[product.category].push(product);
-      return acc;
-    },
-    {} as Record<string, Product[]>
-  );
+  if (loading) return <LoadingScreen />;
 
   /* ================= UI ================= */
   return (
@@ -192,42 +172,33 @@ export default function InventoryScreen() {
       )}
 
       <ScrollView refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-        {Object.entries(productsByCategory).map(([category, list]) => (
-          <View key={category} style={styles.categorySection}>
-            <Text style={styles.categoryTitle}>{category}</Text>
+        {products.map(product => (
+          <Card key={product.id} style={styles.productCard}>
+            {product.image ? (
+              <Image source={{ uri: product.image }} style={styles.productImage} />
+            ) : (
+              <View style={styles.imagePlaceholder}>
+                <Ionicons name="image" size={24} color={Colors.textSecondary} />
+              </View>
+            )}
 
-            {list.map((product, index) => (
-              <Card key={product.id ?? index} style={styles.productCard}>
-                {product.image_url ? (
-                  <Image source={{ uri: product.image_url }} style={styles.productImage} />
-                ) : (
-                  <View style={styles.imagePlaceholder}>
-                    <Ionicons name="image" size={24} color={Colors.textSecondary} />
-                  </View>
-                )}
+            <View style={styles.productInfo}>
+              <Text style={styles.productName}>{product.name}</Text>
+              <Text style={styles.productUnit}>
+                {product.unit} • ₹{product.price}
+              </Text>
+            </View>
 
-                <View style={styles.productInfo}>
-                  <Text style={styles.productName}>{product.name}</Text>
-                  <Text style={styles.productUnit}>
-                    {product.unit} • ₹{product.price}
-                  </Text>
-                </View>
+            <View style={styles.stockBadge}>
+              <Text>{product.stock}</Text>
+            </View>
 
-                <TouchableOpacity
-                  onPress={() => openStockModal(product)}
-                  style={styles.stockBadge}
-                >
-                  <Text>{product.stock}</Text>
-                </TouchableOpacity>
-
-                {isAdmin && product.id && (
-                  <TouchableOpacity onPress={() => confirmDelete(product)}>
-                    <Ionicons name="trash" size={18} color={Colors.error} />
-                  </TouchableOpacity>
-                )}
-              </Card>
-            ))}
-          </View>
+            {isAdmin && (
+              <TouchableOpacity onPress={() => deleteProduct(product.id)}>
+                <Ionicons name="trash" size={18} color={Colors.error} />
+              </TouchableOpacity>
+            )}
+          </Card>
         ))}
       </ScrollView>
 
@@ -237,10 +208,10 @@ export default function InventoryScreen() {
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Add Product</Text>
 
-            {['name', 'category', 'unit', 'price', 'stock', 'image_url'].map(field => (
+            {['name', 'category', 'unit', 'price', 'stock'].map(field => (
               <TextInput
                 key={field}
-                placeholder={field === 'image_url' ? 'Image URL (optional)' : field.toUpperCase()}
+                placeholder={field.toUpperCase()}
                 keyboardType={field === 'price' || field === 'stock' ? 'numeric' : 'default'}
                 value={(newProduct as any)[field]}
                 onChangeText={v => setNewProduct(p => ({ ...p, [field]: v }))}
@@ -248,36 +219,37 @@ export default function InventoryScreen() {
               />
             ))}
 
-            {newProduct.image_url ? (
-              <Image source={{ uri: newProduct.image_url }} style={styles.previewImage} />
+            {/* IMAGE PICKER BUTTON */}
+            <TouchableOpacity style={styles.imagePicker} onPress={pickImageFromGallery}>
+              <Ionicons name="image-outline" size={20} color="#16a34a" />
+              <Text style={styles.imagePickerText}>Select Image from Gallery</Text>
+            </TouchableOpacity>
+
+            {newProduct.image ? (
+              <Image source={{ uri: newProduct.image }} style={styles.previewImage} />
             ) : null}
+            <View style={{ paddingHorizontal: 20, marginVertical: 16 }}>
+              {isFormValid && (
+                <View style={{ alignItems: 'center', marginVertical: 16 }}>
+                  <SwipeToConfirm
+                    text="Swipe → Add Product"
+                    disabled={!isFormValid}
+                    onSwipeSuccess={handleAddProduct}
+                  />
+                </View>
+              )}
 
-            <View style={{ marginBottom: 12 }}>
-              <Button title="Save Product" onPress={handleAddProduct} />
+
+              <View style={{ marginTop: 12 }}>
+                <Button
+                  title="Cancel"
+                  onPress={() => setAddModal(false)}
+                  style={{ backgroundColor: Colors.error }}
+                />
+                  </View>
+              </View>
             </View>
-
-            <Button
-              title="Cancel"
-              onPress={() => setAddModal(false)}
-              style={{ backgroundColor: Colors.error }}
-            />
           </View>
-        </View>
-      </Modal>
-
-      {/* STOCK MODAL */}
-      <Modal visible={stockModal} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <TextInput
-              value={newStock}
-              keyboardType="numeric"
-              onChangeText={setNewStock}
-              style={styles.input}
-            />
-            <Button title="Update Stock" onPress={handleUpdateStock} loading={updating} />
-          </View>
-        </View>
       </Modal>
     </SafeAreaView>
   );
@@ -291,10 +263,7 @@ const styles = StyleSheet.create({
   subtitle: { color: Colors.textSecondary },
   adminActions: { paddingHorizontal: 20, marginBottom: 12 },
 
-  categorySection: { paddingHorizontal: 20, marginBottom: 20 },
-  categoryTitle: { fontWeight: '700', marginBottom: 8 },
-
-  productCard: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  productCard: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12 },
   productImage: { width: 48, height: 48, borderRadius: 8 },
   imagePlaceholder: {
     width: 48,
@@ -313,12 +282,12 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surfaceSecondary,
     borderRadius: 12,
   },
+  // swipeButton: {
+  //   marginHorizontal: 20,
+  //   marginVertical: 10,
+  // },
 
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: Colors.overlay,
-    justifyContent: 'flex-end',
-  },
+  modalOverlay: { flex: 1, backgroundColor: Colors.overlay, justifyContent: 'flex-end' },
   modalContent: {
     backgroundColor: Colors.surface,
     padding: 20,
@@ -333,10 +302,28 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 10,
   },
+  imagePicker: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#22c55e',
+    marginBottom: 10,
+  },
+  imagePickerText: {
+    color: '#16a34a',
+    fontWeight: '600',
+  },
   previewImage: {
     width: '100%',
     height: 150,
     borderRadius: 12,
     marginBottom: 12,
+  },
+  swipeContainer: {
+    marginVertical: 16,
+    alignItems: 'center',
   },
 });
