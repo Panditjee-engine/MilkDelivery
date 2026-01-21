@@ -407,23 +407,27 @@ async def get_product(product_id: str):
 
 @api_router.post("/products", response_model=Product)
 async def create_product(product: ProductCreate, admin: User = Depends(get_admin_user)):
-        
+
     product_dict = product.dict()
 
-    # ✅ ADD THIS BLOCK (VERY IMPORTANT)
+    # ✅ ENSURE image_type EXISTS
     if product_dict.get("image") and not product_dict.get("image_type"):
-        product_dict["image_type"] = "url"
+        product_dict["image_type"] = "base64"  # frontend sending base64
 
-    # Validate image if URL
-    if product_dict.get("image") and product_dict.get("image_type") == "url":
+    # ✅ OPTIONAL URL validation (only if image_type = url)
+    if product_dict.get("image_type") == "url":
         if not is_valid_image_url(product_dict["image"]):
             raise HTTPException(status_code=400, detail="Invalid image URL")
 
+    # ✅ ADD REQUIRED FIELDS
     product_dict["id"] = str(uuid.uuid4())
     product_dict["created_at"] = datetime.utcnow()
 
+    # ✅ THIS LINE ACTUALLY SAVES TO MONGO
     await db.products.insert_one(product_dict)
+
     return Product(**product_dict)
+
 
 
 
