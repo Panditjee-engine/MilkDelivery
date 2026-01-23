@@ -4,51 +4,51 @@ const API_BASE = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 
 class ApiService {
   private token: string | null = null;
-  
+
 
   async init() {
-  this.token = await AsyncStorage.getItem('access_token');
-}
-
-  
-
- setToken(token: string | null) {
-  this.token = token;
-
-  if (token) {
-    AsyncStorage.setItem('access_token', token);
-  } else {
-    AsyncStorage.removeItem('access_token');
-  }
-}
-
-private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const url = `${API_BASE}/api${endpoint}`;
-
-  const storedToken =
-    this.token || await AsyncStorage.getItem('access_token');
-
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(options.headers as Record<string, string>),
-  };
-
-  if (storedToken) {
-    headers['Authorization'] = `Bearer ${storedToken}`;
+    this.token = await AsyncStorage.getItem('access_token');
   }
 
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  });
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Request failed' }));
-    throw new Error(error.detail || 'Request failed');
+
+  setToken(token: string | null) {
+    this.token = token;
+
+    if (token) {
+      AsyncStorage.setItem('access_token', token);
+    } else {
+      AsyncStorage.removeItem('access_token');
+    }
   }
 
-  return response.json();
-}
+  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+    const url = `${API_BASE}/api${endpoint}`;
+
+    const storedToken =
+      this.token || await AsyncStorage.getItem('access_token');
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...(options.headers as Record<string, string>),
+    };
+
+    if (storedToken) {
+      headers['Authorization'] = `Bearer ${storedToken}`;
+    }
+
+    const response = await fetch(url, {
+      ...options,
+      headers,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Request failed' }));
+      throw new Error(error.detail || 'Request failed');
+    }
+
+    return response.json();
+  }
 
 
   // Auth
@@ -82,10 +82,21 @@ private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T
   }
 
   // Products
-  async getProducts(category?: string) {
-    const params = category ? `?category=${category}` : '';
-    return this.request<any[]>(`/products${params}`);
-  }
+  // async getProducts(category?: string) {
+  //   const params = category ? `?category=${category}` : '';
+  //   return this.request<any[]>(`/products${params}`);
+  // }
+
+async getProducts(adminId?: string, category?: string) {
+  const params = new URLSearchParams();
+
+  if (adminId) params.append('admin_id', adminId);
+  if (category) params.append('category', category);
+
+  const query = params.toString() ? `?${params.toString()}` : '';
+  return this.request<any[]>(`/products${query}`);
+}
+
 
   async getProduct(id: string) {
     return this.request<any>(`/products/${id}`);
@@ -265,6 +276,12 @@ private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T
     });
   }
 
+  // Admin list (for catalog)
+  async getAdmins() {
+    return this.request<any[]>('/catalog/admins');
+  }
+
+
   async updateProduct(id: string, data: any) {
     return this.request<any>(`/products/${id}`, {
       method: 'PUT',
@@ -283,9 +300,9 @@ private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T
     return this.request<any>('/seed', { method: 'POST' });
   }
 
-logout = async () => {
-  this.setToken(null);
-};
+  logout = async () => {
+    this.setToken(null);
+  };
 
 }
 

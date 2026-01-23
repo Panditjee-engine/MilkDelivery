@@ -1,5 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, Modal, Alert } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  RefreshControl,
+  Modal,
+  Alert,
+  TextInput,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '../../src/services/api';
@@ -8,6 +18,7 @@ import ProductCard from '../../src/components/ProductCard';
 import Button from '../../src/components/Button';
 import LoadingScreen from '../../src/components/LoadingScreen';
 
+/* ---------------- CONSTANTS ---------------- */
 const patterns = [
   { value: 'daily', label: 'Daily', description: 'Every day' },
   { value: 'alternate', label: 'Alternate', description: 'Every other day' },
@@ -25,14 +36,18 @@ const weekDays = [
   { value: 6, label: 'Sun' },
 ];
 
+/* ---------------- SCREEN ---------------- */
 export default function CatalogScreen() {
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [admins, setAdmins] = useState<any[]>([]);
+  const [selectedAdmin, setSelectedAdmin] = useState<any | null>(null);
+
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  
-  // Subscription modal state
+
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [quantity, setQuantity] = useState(1);
@@ -40,16 +55,29 @@ export default function CatalogScreen() {
   const [customDays, setCustomDays] = useState<number[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
+  /* ---------------- DATA ---------------- */
   const fetchData = async () => {
     try {
-      const [productsData, categoriesData] = await Promise.all([
-        api.getProducts(selectedCategory || undefined),
-        api.getCategories(),
-      ]);
+      if (!selectedAdmin) {
+        const rawAdmins = await api.getAdmins();
+        const normalized = rawAdmins.map((a: any) => ({
+          ...a,
+          id: a.id || a._id || a.admin_id,
+        }));
+        setAdmins(normalized);
+        setLoading(false);
+        return;
+      }
+
+      const productsData = await api.getProducts(
+        selectedAdmin.id,
+        selectedCategory || undefined
+      );
+      const categoriesData = await api.getCategories();
       setProducts(productsData);
       setCategories(categoriesData);
     } catch (error) {
-      console.error('Error fetching products:', error);
+      console.error('Catalog error:', error);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -58,13 +86,14 @@ export default function CatalogScreen() {
 
   useEffect(() => {
     fetchData();
-  }, [selectedCategory]);
+  }, [selectedAdmin, selectedCategory]);
 
   const onRefresh = () => {
     setRefreshing(true);
     fetchData();
   };
 
+  /* ---------------- SUBSCRIBE ---------------- */
   const openSubscriptionModal = (product: any) => {
     setSelectedProduct(product);
     setQuantity(1);
@@ -74,8 +103,8 @@ export default function CatalogScreen() {
   };
 
   const toggleCustomDay = (day: number) => {
-    setCustomDays(prev => 
-      prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]
+    setCustomDays((prev) =>
+      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]
     );
   };
 
@@ -89,184 +118,185 @@ export default function CatalogScreen() {
     try {
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
-      const startDate = tomorrow.toISOString().split('T')[0];
 
       await api.createSubscription({
         product_id: selectedProduct.id,
         quantity,
         pattern,
         custom_days: pattern === 'custom' ? customDays : null,
-        start_date: startDate,
-        end_date: pattern === 'buy_once' ? startDate : null,
+        start_date: tomorrow.toISOString().split('T')[0],
+        end_date:
+          pattern === 'buy_once'
+            ? tomorrow.toISOString().split('T')[0]
+            : null,
       });
 
-      Alert.alert('Success', 'Subscription created successfully!');
+      Alert.alert('Success', 'Subscription created!');
       setModalVisible(false);
-    } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to create subscription');
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed');
     } finally {
       setSubmitting(false);
     }
   };
 
-  if (loading) {
-    return <LoadingScreen />;
-  }
+  /* ---------------- UI ---------------- */
+  if (loading) return <LoadingScreen />;
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Product Catalog</Text>
-        <Text style={styles.subtitle}>Fresh daily essentials</Text>
-      </View>
+    <SafeAreaView style={styles.container}>
+      {/* ---------- ADMIN LIST ---------- */}
+      {!selectedAdmin && (
+        <>
+          <View style={styles.header}>
+            <Text style={styles.title}>Shops</Text>
+            <Text style={styles.subtitle}>Choose a shop</Text>
+          </View>
 
-      {/* Categories */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.categoriesContainer}
-        contentContainerStyle={styles.categoriesContent}
-      >
-        <TouchableOpacity
-          style={[styles.categoryChip, !selectedCategory && styles.categoryChipActive]}
-          onPress={() => setSelectedCategory(null)}
-        >
-          <Text style={[styles.categoryText, !selectedCategory && styles.categoryTextActive]}>All</Text>
-        </TouchableOpacity>
-        {categories.map((cat) => (
-          <TouchableOpacity
-            key={cat.value}
-            style={[
-              styles.categoryChip,
-              selectedCategory === cat.value && styles.categoryChipActive,
-              { backgroundColor: selectedCategory === cat.value ? Colors.primary : CategoryColors[cat.value] || Colors.surfaceSecondary },
-            ]}
-            onPress={() => setSelectedCategory(cat.value)}
+          <ScrollView contentContainerStyle={{ padding: 20 }}>
+            {admins.map((admin) => (
+              <TouchableOpacity
+                key={admin.id}
+                style={styles.adminCard}
+                onPress={() => {
+                  setSelectedAdmin(admin);
+                  setSelectedCategory(null);
+                  setLoading(true);
+                }}
+              >
+                <Ionicons name="storefront-outline" size={20} color={Colors.primary} />
+                <Text style={styles.shopName}>{admin.shop_name || admin.name}</Text>
+                <Text style={styles.adminAddress}>{admin.address}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </>
+      )}
+
+      {/* ---------- PRODUCTS ---------- */}
+      {selectedAdmin && (
+        <>
+          <View style={styles.headerRow}>
+            <TouchableOpacity
+              onPress={() => {
+                setSelectedAdmin(null);
+                setProducts([]);
+                setCategories([]);
+              }}
+            >
+              <Ionicons name="arrow-back" size={24} />
+            </TouchableOpacity>
+
+            <View>
+              <Text style={styles.title}>{selectedAdmin.shop_name}</Text>
+              <Text style={styles.subtitle}>Products</Text>
+            </View>
+          </View>
+
+          {/* Categories */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.categoriesContainer}
+            contentContainerStyle={styles.categoriesContent}
           >
-            <Text style={[styles.categoryText, selectedCategory === cat.value && styles.categoryTextActive]}>
-              {cat.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+            <TouchableOpacity
+              style={[styles.categoryChip, !selectedCategory && styles.categoryChipActive]}
+              onPress={() => setSelectedCategory(null)}
+            >
+              <Text style={styles.categoryText}>All</Text>
+            </TouchableOpacity>
 
-      {/* Products Grid */}
-      <ScrollView
-        style={styles.productsContainer}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.productsGrid}>
-          {products.map((product) => (
-            <ProductCard
-              key={product.id}
-              product={product}
-              onPress={() => openSubscriptionModal(product)}
-              onSubscribe={() => openSubscriptionModal(product)}
-            />
-          ))}
-        </View>
-      </ScrollView>
+            {categories.map((cat) => (
+              <TouchableOpacity
+                key={cat.value}
+                style={[
+                  styles.categoryChip,
+                  selectedCategory === cat.value && styles.categoryChipActive,
+                  {
+                    backgroundColor:
+                      selectedCategory === cat.value
+                        ? Colors.primary
+                        : CategoryColors[cat.value] || Colors.surfaceSecondary,
+                  },
+                ]}
+                onPress={() => setSelectedCategory(cat.value)}
+              >
+                <Text style={styles.categoryText}>{cat.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
 
-      {/* Subscription Modal */}
+          {/* Products */}
+          <ScrollView
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          >
+            <View style={styles.productsGrid}>
+              {products.map((product) => (
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                  onPress={() => openSubscriptionModal(product)}
+                />
+              ))}
+            </View>
+          </ScrollView>
+        </>
+      )}
+
+      {/* ---------- SUBSCRIPTION MODAL ---------- */}
       <Modal visible={modalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Subscribe</Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
-                <Ionicons name="close" size={24} color={Colors.text} />
+            <Text style={styles.modalTitle}>{selectedProduct?.name}</Text>
+
+            {/* Quantity */}
+            <Text>Quantity:</Text>
+            <TextInput
+              style={styles.quantityInput}
+              keyboardType="numeric"
+              value={quantity.toString()}
+              onChangeText={(text) => setQuantity(Number(text))}
+            />
+
+            {/* Pattern */}
+            {patterns.map((p) => (
+              <TouchableOpacity
+                key={p.value}
+                style={[
+                  styles.patternOption,
+                  pattern === p.value && styles.patternOptionSelected,
+                ]}
+                onPress={() => setPattern(p.value)}
+              >
+                <Text style={{ fontWeight: '700' }}>{p.label}</Text>
+                <Text>{p.description}</Text>
               </TouchableOpacity>
-            </View>
+            ))}
 
-            {selectedProduct && (
-              <>
-                <View style={styles.productInfo}>
-                  <Text style={styles.productName}>{selectedProduct.name}</Text>
-                  <Text style={styles.productPrice}>₹{selectedProduct.price}/{selectedProduct.unit}</Text>
-                </View>
-
-                {/* Quantity */}
-                <View style={styles.section}>
-                  <Text style={styles.sectionTitle}>Quantity</Text>
-                  <View style={styles.quantityControl}>
-                    <TouchableOpacity
-                      style={styles.quantityButton}
-                      onPress={() => setQuantity(Math.max(1, quantity - 1))}
-                    >
-                      <Ionicons name="remove" size={20} color={Colors.primary} />
-                    </TouchableOpacity>
-                    <Text style={styles.quantityText}>{quantity}</Text>
-                    <TouchableOpacity
-                      style={styles.quantityButton}
-                      onPress={() => setQuantity(quantity + 1)}
-                    >
-                      <Ionicons name="add" size={20} color={Colors.primary} />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                {/* Pattern */}
-                <View style={styles.section}>
-                  <Text style={styles.sectionTitle}>Delivery Pattern</Text>
-                  <View style={styles.patternGrid}>
-                    {patterns.map((p) => (
-                      <TouchableOpacity
-                        key={p.value}
-                        style={[styles.patternCard, pattern === p.value && styles.patternCardActive]}
-                        onPress={() => setPattern(p.value)}
-                      >
-                        <Text style={[styles.patternLabel, pattern === p.value && styles.patternLabelActive]}>
-                          {p.label}
-                        </Text>
-                        <Text style={styles.patternDesc}>{p.description}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-
-                {/* Custom Days */}
-                {pattern === 'custom' && (
-                  <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Select Days</Text>
-                    <View style={styles.daysGrid}>
-                      {weekDays.map((day) => (
-                        <TouchableOpacity
-                          key={day.value}
-                          style={[
-                            styles.dayChip,
-                            customDays.includes(day.value) && styles.dayChipActive,
-                          ]}
-                          onPress={() => toggleCustomDay(day.value)}
-                        >
-                          <Text
-                            style={[
-                              styles.dayText,
-                              customDays.includes(day.value) && styles.dayTextActive,
-                            ]}
-                          >
-                            {day.label}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  </View>
-                )}
-
-                {/* Total */}
-                <View style={styles.totalSection}>
-                  <Text style={styles.totalLabel}>Per Delivery Total</Text>
-                  <Text style={styles.totalAmount}>₹{selectedProduct.price * quantity}</Text>
-                </View>
-
-                <Button
-                  title="Subscribe Now"
-                  onPress={handleSubscribe}
-                  loading={submitting}
-                  style={styles.subscribeButton}
-                />
-              </>
+            {/* Custom days */}
+            {pattern === 'custom' && (
+              <View style={styles.weekDaysContainer}>
+                {weekDays.map((day) => (
+                  <TouchableOpacity
+                    key={day.value}
+                    style={[
+                      styles.dayChip,
+                      customDays.includes(day.value) && styles.dayChipSelected,
+                    ]}
+                    onPress={() => toggleCustomDay(day.value)}
+                  >
+                    <Text>{day.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             )}
+
+            <Button
+              title="Subscribe Now"
+              onPress={handleSubscribe}
+              loading={submitting}
+            />
           </View>
         </View>
       </Modal>
@@ -274,208 +304,54 @@ export default function CatalogScreen() {
   );
 }
 
+/* ---------------- STYLES ---------------- */
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  header: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: Colors.text,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    marginTop: 4,
-  },
-  categoriesContainer: {
-    maxHeight: 50,
-  },
-  categoriesContent: {
-    paddingHorizontal: 20,
-    gap: 8,
-  },
-  categoryChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: Colors.surfaceSecondary,
-    marginRight: 8,
-  },
-  categoryChipActive: {
-    backgroundColor: Colors.primary,
-  },
-  categoryText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-  },
-  categoryTextActive: {
-    color: Colors.textInverse,
-  },
-  productsContainer: {
-    flex: 1,
-    paddingTop: 16,
-  },
-  productsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: 20,
-    justifyContent: 'space-between',
-    paddingBottom: 20,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: Colors.overlay,
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
+  container: { flex: 1, backgroundColor: Colors.background },
+
+  header: { padding: 20 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 20 },
+
+  title: { fontSize: 22, fontWeight: '700' },
+  subtitle: { fontSize: 14, color: Colors.textSecondary },
+
+  adminCard: {
     backgroundColor: Colors.surface,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 24,
-    maxHeight: '85%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: Colors.text,
-  },
-  productInfo: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  productName: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: Colors.text,
-  },
-  productPrice: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: Colors.primary,
-  },
-  section: {
-    marginBottom: 20,
-  },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.textSecondary,
+    padding: 16,
+    borderRadius: 12,
     marginBottom: 12,
   },
-  quantityControl: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 24,
-  },
-  quantityButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.primaryLight + '30',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  quantityText: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: Colors.text,
-    minWidth: 40,
-    textAlign: 'center',
-  },
-  patternGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  patternCard: {
-    width: '48%',
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-  },
-  patternCardActive: {
-    borderColor: Colors.primary,
-    backgroundColor: Colors.primaryLight + '20',
-  },
-  patternLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.text,
-  },
-  patternLabelActive: {
-    color: Colors.primary,
-  },
-  patternDesc: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    marginTop: 4,
-  },
-  daysGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  dayChip: {
+  shopName: { fontSize: 18, fontWeight: '700' },
+  adminAddress: { fontSize: 12, color: Colors.textSecondary },
+
+  categoriesContainer: { maxHeight: 50 },
+  categoriesContent: { paddingHorizontal: 20 },
+  categoryChip: {
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 20,
-    borderWidth: 2,
+    marginRight: 8,
+  },
+  categoryChipActive: { backgroundColor: Colors.primary },
+  categoryText: { color: Colors.textInverse },
+
+  productsGrid: { flexDirection: 'row', flexWrap: 'wrap', padding: 20, justifyContent: 'space-between' },
+
+  modalOverlay: { flex: 1, backgroundColor: Colors.overlay, justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: Colors.surface, padding: 24, borderTopLeftRadius: 20, borderTopRightRadius: 20 },
+  modalTitle: { fontSize: 18, fontWeight: '700', marginBottom: 16 },
+
+  quantityInput: {
+    borderWidth: 1,
     borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    padding: 8,
+    marginBottom: 12,
+    borderRadius: 8,
   },
-  dayChipActive: {
-    borderColor: Colors.primary,
-    backgroundColor: Colors.primary,
-  },
-  dayText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-  },
-  dayTextActive: {
-    color: Colors.textInverse,
-  },
-  totalSection: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 16,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-    marginBottom: 16,
-  },
-  totalLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.text,
-  },
-  totalAmount: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: Colors.primary,
-  },
-  subscribeButton: {
-    marginBottom: 16,
-  },
+
+  patternOption: { padding: 10, marginBottom: 8, borderWidth: 1, borderColor: Colors.border, borderRadius: 8 },
+  patternOptionSelected: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+
+  weekDaysContainer: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 12, marginTop: 8 },
+  dayChip: { padding: 8, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, marginRight: 6, marginBottom: 6 },
+  dayChipSelected: { backgroundColor: Colors.primary, borderColor: Colors.primary },
 });
