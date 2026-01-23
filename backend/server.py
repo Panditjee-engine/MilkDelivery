@@ -15,6 +15,7 @@ from jose import JWTError, jwt
 from enum import Enum
 import base64
 
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
@@ -113,6 +114,7 @@ class Token(BaseModel):
     token_type: str
     user: UserResponse
 
+
 # Product Models
 # class ProductBase(BaseModel):
 #     name: str
@@ -132,6 +134,7 @@ class ProductBase(BaseModel):
     category: ProductCategory
     price: float
     unit: str
+    shop_id: Optional[str] = None
     image: Optional[str] = None  # base64 OR URL
     image_type: Optional[str] = "base64"  # "base64" | "url"
     nutritional_info: Optional[Dict[str, Any]] = None
@@ -171,6 +174,21 @@ class Subscription(SubscriptionBase):
 
 class SubscriptionResponse(Subscription):
     product: Optional[Product] = None
+
+# SHOP MODELS  Change by Badal
+
+class ShopBase(BaseModel):
+    name: str
+    description: Optional[str] = None
+    is_active: bool = True
+
+class ShopCreate(ShopBase):
+    gaushala_id: str
+
+class Shop(ShopBase):
+    id: str
+    gaushala_id: str
+    created_at: datetime
 
 # Vacation Models
 class VacationCreate(BaseModel):
@@ -289,6 +307,7 @@ async def get_delivery_partner(user: User = Depends(get_current_user)) -> User:
         raise HTTPException(status_code=403, detail="Delivery partner access required")
     return user
 
+
 # ===================== AUTH ENDPOINTS =====================
 
 @api_router.post("/auth/register", response_model=Token)
@@ -379,6 +398,38 @@ async def update_profile(
 def is_valid_image_url(url: str) -> bool:
     return url.startswith("http://") or url.startswith("https://")
 
+# ===================== SHOP ENDPOINT============================
+
+@api_router.post("/shops", response_model=Shop)
+async def create_shop(
+    shop_data: ShopCreate,
+    user: User = Depends(get_current_user)
+):
+    if user.role not in ["admin", "gaushala_admin"]:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    shop_dict = shop_data.dict()
+    shop_dict["id"] = str(uuid.uuid4())
+    shop_dict["created_at"] = datetime.utcnow()
+
+    await db.shops.insert_one(shop_dict)
+
+    shop_dict.pop("_id", None)
+    return Shop(**shop_dict)
+#=====================SHOP LIST API======================
+
+
+@api_router.get("/gaushalas/{gaushala_id}/shops", response_model=List[Shop])
+async def get_gaushala_shops(gaushala_id: str):
+    shops = await db.shops.find(
+        {"gaushala_id": gaushala_id, "is_active": True}
+    ).to_list(100)
+
+    for s in shops:
+        s.pop("_id", None)
+
+    return shops
+
 
 # ===================== PRODUCT ENDPOINTS =====================
 
@@ -396,6 +447,18 @@ async def get_product(product_id: str):
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
     return Product(**product)
+
+#Change BY Badal
+@api_router.get("/shops/{shop_id}/products", response_model=List[Product])
+async def get_shop_products(shop_id: str):
+    products = await db.products.find(
+        {"shop_id": shop_id, "is_available": True}
+    ).to_list(200)
+
+    for p in products:
+        p.pop("_id", None)
+
+    return products
 
 # @api_router.post("/products", response_model=Product)
 # async def create_product(product: ProductCreate, admin: User = Depends(get_admin_user)):
@@ -470,6 +533,7 @@ async def delete_product(product_id: str, admin: User = Depends(get_admin_user))
 @api_router.get("/categories")
 async def get_categories():
     return [{"value": c.value, "label": c.value.replace("_", " ").title()} for c in ProductCategory]
+
 
 # ===================== SUBSCRIPTION ENDPOINTS =====================
 
