@@ -144,6 +144,7 @@ class ProductCreate(ProductBase):
 
 class Product(ProductBase):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    admin_id: str 
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 # Subscription Models
@@ -382,20 +383,39 @@ def is_valid_image_url(url: str) -> bool:
 
 # ===================== PRODUCT ENDPOINTS =====================
 
+@api_router.get("/catalog/admins")
+async def get_admin_catalog():
+    admins = await db.users.find(
+        {"role": "admin"},
+        {"password": 0}
+    ).to_list(100)
+
+    return [
+        {
+            "id": a["id"],
+            "name": a["name"]
+        }
+        for a in admins
+    ]
+
+
 @api_router.get("/products", response_model=List[Product])
-async def get_products(category: Optional[ProductCategory] = None):
+async def get_products(
+    category: Optional[ProductCategory] = None,
+    admin_id: Optional[str] = None
+):
     query = {}
+
     if category:
-        query["category"] = category
+        query["category"] = category.value   # IMPORTANT
+
+    if admin_id:
+        query["admin_id"] = admin_id         # IMPORTANT
+
     products = await db.products.find(query).to_list(100)
     return [Product(**p) for p in products]
 
-@api_router.get("/products/{product_id}", response_model=Product)
-async def get_product(product_id: str):
-    product = await db.products.find_one({"id": product_id})
-    if not product:
-        raise HTTPException(status_code=404, detail="Product not found")
-    return Product(**product)
+
 
 # @api_router.post("/products", response_model=Product)
 # async def create_product(product: ProductCreate, admin: User = Depends(get_admin_user)):
@@ -409,6 +429,9 @@ async def get_product(product_id: str):
 async def create_product(product: ProductCreate, admin: User = Depends(get_admin_user)):
 
     product_dict = product.dict()
+
+    product_dict["admin_id"] = admin.id  # ✅ ADD
+
 
     # ✅ ENSURE image_type EXISTS
     if product_dict.get("image") and not product_dict.get("image_type"):
