@@ -68,11 +68,12 @@ export default function CatalogScreen() {
         setLoading(false);
         return;
       }
-
-      const productsData = await api.getProducts(
-        selectedAdmin.id,
+//chnages 27-jan
+      const productsData = await api.getCatalogProducts(
+        selectedAdmin?.id,
         selectedCategory || undefined
       );
+//till here
       const categoriesData = await api.getCategories();
       setProducts(productsData);
       setCategories(categoriesData);

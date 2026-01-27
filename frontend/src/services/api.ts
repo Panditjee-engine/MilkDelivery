@@ -81,11 +81,18 @@ class ApiService {
     });
   }
 
-  // Products
-  // async getProducts(category?: string) {
-  //   const params = category ? `?category=${category}` : '';
-  //   return this.request<any[]>(`/products${params}`);
-  // }
+//add - 26 Jun 2024
+// Public catalog products (any user can see)
+async getCatalogProducts(adminId?: string, category?: string) {
+  const params = new URLSearchParams();
+
+  if (adminId) params.append('admin_id', adminId);
+  if (category) params.append('category', category);
+
+  const query = params.toString() ? `?${params.toString()}` : '';
+  return this.request<any[]>(`/catalog/products${query}`);
+}
+
 
 async getProducts(adminId?: string, category?: string) {
   const params = new URLSearchParams();
