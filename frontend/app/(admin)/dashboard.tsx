@@ -91,7 +91,7 @@ export default function AdminDashboard() {
         <View style={styles.header}>
           <View>
             <Text style={styles.greeting}>Admin Dashboard</Text>
-            <Text style={styles.userName}>Welcome, {user?.name}</Text>
+            <Text style={styles.userName}>{user?.name}</Text>
           </View>
           <View style={styles.adminBadge}>
             <Ionicons name="shield-checkmark" size={20} color={Colors.primary} />
@@ -102,22 +102,22 @@ export default function AdminDashboard() {
 
         {/* Stats Grid */}
         <View style={styles.statsGrid}>
-          <Card variant="elevated" style={[styles.statCard, { backgroundColor: Colors.primary }]}>
+          <Card variant="elevated" style={{ ...styles.statCard, backgroundColor: Colors.primary }}>
             <Ionicons name="people" size={28} color={Colors.textInverse} />
             <Text style={styles.statValue}>{stats?.total_customers || 0}</Text>
             <Text style={styles.statLabel}>Customers</Text>
           </Card>
-          <Card variant="elevated" style={[styles.statCard, { backgroundColor: Colors.secondary }]}>
+          <Card variant="elevated" style={{ ...styles.statCard, backgroundColor: Colors.secondary }}>
             <Ionicons name="bicycle" size={28} color={Colors.textInverse} />
             <Text style={styles.statValue}>{stats?.total_delivery_partners || 0}</Text>
             <Text style={styles.statLabel}>Partners</Text>
           </Card>
-          <Card variant="elevated" style={[styles.statCard, { backgroundColor: Colors.accent }]}>
+          <Card variant="elevated" style={{ ...styles.statCard, backgroundColor: Colors.accent }}>
             <Ionicons name="repeat" size={28} color={Colors.textInverse} />
             <Text style={styles.statValue}>{stats?.active_subscriptions || 0}</Text>
             <Text style={styles.statLabel}>Active Subs</Text>
           </Card>
-          <Card variant="elevated" style={[styles.statCard, { backgroundColor: Colors.info }]}>
+          <Card variant="elevated" style={{ ...styles.statCard, backgroundColor: Colors.info }}>
             <Ionicons name="cash" size={28} color={Colors.textInverse} />
             <Text style={styles.statValue}>₹{stats?.today_revenue || 0}</Text>
             <Text style={styles.statLabel}>Revenue Today</Text>
