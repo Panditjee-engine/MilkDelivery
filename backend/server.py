@@ -402,28 +402,37 @@ async def get_admin_catalog():
 @api_router.get("/products", response_model=List[Product])
 async def get_products(
     category: Optional[ProductCategory] = None,
-    admin_id: Optional[str] = None
+    admin_id: Optional[str] = None,
+    admin: User = Depends(get_admin_user)  # add dependency
 ):
     query = {}
 
     if category:
-        query["category"] = category.value   # IMPORTANT
+        query["category"] = category.value
+
+    # If admin_id not provided, default to current admin
+    query["admin_id"] = admin_id or admin.id
+
+    products = await db.products.find(query).to_list(100)
+    return [Product(**p) for p in products]
+
+@api_router.get("/catalog/products", response_model=List[Product])
+async def public_catalog(admin_id: Optional[str] = None, category: Optional[ProductCategory] = None):
+    """
+    Public catalog endpoint.
+    - Optional: filter by admin or category.
+    """
+    query = {}
 
     if admin_id:
-        query["admin_id"] = admin_id         # IMPORTANT
+        query["admin_id"] = admin_id
+    if category:
+        query["category"] = category.value
 
     products = await db.products.find(query).to_list(100)
     return [Product(**p) for p in products]
 
 
-
-# @api_router.post("/products", response_model=Product)
-# async def create_product(product: ProductCreate, admin: User = Depends(get_admin_user)):
-#     product_dict = product.dict()
-#     product_dict["id"] = str(uuid.uuid4())
-#     product_dict["created_at"] = datetime.utcnow()
-#     await db.products.insert_one(product_dict)
-#     return Product(**product_dict)
 
 @api_router.post("/products", response_model=Product)
 async def create_product(product: ProductCreate, admin: User = Depends(get_admin_user)):
@@ -451,16 +460,6 @@ async def create_product(product: ProductCreate, admin: User = Depends(get_admin
 
     return Product(**product_dict)
 
-
-
-
-# @api_router.put("/products/{product_id}", response_model=Product)
-# async def update_product(product_id: str, update_data: Dict[str, Any], admin: User = Depends(get_admin_user)):
-#     await db.products.update_one({"id": product_id}, {"$set": update_data})
-#     product = await db.products.find_one({"id": product_id})
-#     if not product:
-#         raise HTTPException(status_code=404, detail="Product not found")
-#     return Product(**product)
 
 @api_router.put("/products/{product_id}", response_model=Product)
 async def update_product(product_id: str, update_data: Dict[str, Any], admin: User = Depends(get_admin_user)):
@@ -1173,7 +1172,7 @@ async def seed_data():
     if existing > 0:
         return {"message": "Data already seeded"}
     
-    # products = [
+    products = [
     #     # Milk
     #     {"name": "Fresh Cow Milk", "category": "milk", "price": 60, "unit": "1L", "description": "Farm-fresh whole cow milk", "stock": 500, "is_available": True},
     #     {"name": "Toned Milk", "category": "milk", "price": 52, "unit": "1L", "description": "Low-fat toned milk", "stock": 400, "is_available": True},
@@ -1202,7 +1201,7 @@ async def seed_data():
     #     # Essentials
     #     {"name": "Farm Eggs", "category": "essentials", "price": 80, "unit": "12 pcs", "description": "Free-range farm eggs", "stock": 300, "is_available": True},
     #     {"name": "Organic Eggs", "category": "essentials", "price": 120, "unit": "12 pcs", "description": "Certified organic eggs", "stock": 150, "is_available": True},
-    # ]
+     ]
     
     for p in products:
         p["id"] = str(uuid.uuid4())
