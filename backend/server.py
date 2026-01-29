@@ -14,7 +14,11 @@ from passlib.context import CryptContext
 from jose import JWTError, jwt
 from enum import Enum
 from typing import Optional, Union
+from fastapi import APIRouter, Depends
+from bson import ObjectId
 import base64
+
+#29-jan- 6:00 pm
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -239,7 +243,37 @@ class ProcurementItem(BaseModel):
     total_quantity: int
     category: str
 
+class UserStatusUpdate(BaseModel):
+    is_active: bool
+
+class ProductStatusUpdate(BaseModel):
+    is_available: bool
+
 # ===================== AUTH HELPERS =====================
+
+def serialize_order(order: dict):
+    # Ensure it's a dict
+    order = dict(order)
+    
+    # Convert MongoDB ObjectId to string
+    if "_id" in order:
+        order["id"] = str(order["_id"])
+        order.pop("_id")
+    else:
+        order["id"] = str(order.get("id", ""))
+
+    # If you have nested ObjectIds (like user_id or delivery_partner_id)
+    for key in ["user_id", "delivery_partner_id"]:
+        if key in order and isinstance(order[key], ObjectId):
+            order[key] = str(order[key])
+
+    return order
+
+def serialize_product(product):
+    product = dict(product)
+    product["id"] = str(product["_id"])
+    product.pop("_id", None)
+    return product
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
@@ -264,6 +298,13 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         user_data = await db.users.find_one({"id": user_id})
         if user_data is None:
             raise HTTPException(status_code=401, detail="User not found")
+        
+        # 🔥 THIS IS THE IMPORTANT FIX
+        if not user_data.get("is_active", True):
+            raise HTTPException(
+                status_code=403,
+                detail="Account is blocked"
+            )
         
         return User(**user_data)
     except JWTError:
@@ -351,6 +392,11 @@ async def login(credentials: UserLogin):
     user = await db.users.find_one({"email": credentials.email})
     if not user or not verify_password(credentials.password, user["password"]):
         raise HTTPException(status_code=401, detail="Invalid email or password")
+    if not user.get("is_active", True):
+        raise HTTPException(
+        status_code=403,
+        detail="Account is blocked. Contact superadmin."
+    )
     
     access_token = create_access_token({"sub": user["id"]})
     
@@ -528,6 +574,9 @@ async def create_subscription(subscription: SubscriptionCreate, user: User = Dep
     product = await db.products.find_one({"id": subscription.product_id})
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
+    
+    if not product.get("is_available", True):
+        raise HTTPException(status_code=400, detail="Cannot subscribe to out-of-stock product")
     
     sub_dict = subscription.dict()
     sub_dict["id"] = str(uuid.uuid4())
@@ -857,38 +906,86 @@ async def get_users_for_superadmin(
 
 
 @api_router.get("/superadmin/dashboard")
-async def superadmin_dashboard(superadmin: User = Depends(get_superadmin_user)):
-    total_users = await db.users.count_documents({})
-    total_admins = await db.users.count_documents({"role": "admin"})
-    total_customers = await db.users.count_documents({"role": "customer"})
-    total_partners = await db.users.count_documents({"role": "delivery_partner"})
-    total_products = await db.products.count_documents({})
+async def superadmin_dashboard(
+    superadmin: User = Depends(get_superadmin_user)
+):
+    total_customers = await db.users.count_documents({
+        "role": "customer"
+    })
+
+    total_admins = await db.users.count_documents({
+        "role": "admin"
+    })
+
+    total_delivery_partners = await db.users.count_documents({
+        "role": "delivery_partner"
+    })
+
+    active_delivery_partners = await db.users.count_documents({
+        "role": "delivery_partner",
+        "is_active": True
+    })
+
     total_orders = await db.orders.count_documents({})
 
     return {
-        "total_users": total_users,
-        "admins": total_admins,
-        "customers": total_customers,
-        "delivery_partners": total_partners,
-        "products": total_products,
-        "orders": total_orders
+        "total_customers": total_customers,
+        "total_admins": total_admins,
+        "total_delivery_partners": total_delivery_partners,
+        "active_delivery_partners": active_delivery_partners,
+        "total_orders": total_orders,
+
+        # frontend safety
+        "today_orders": 0,
+        "pending_orders": 0,
+        "delivered_today": 0,
+        "total_revenue": 0,
+        "today_revenue": 0,
+        "week_revenue": 0,
+        "month_revenue": 0,
+        "revenue_trend": [],
+        "orders_by_status": []
     }
+
+
+
+@api_router.put("/superadmin/products/{product_id}/status")
+async def update_product_status(
+    product_id: str,
+    payload: ProductStatusUpdate,  # parses JSON body
+    superadmin: User = Depends(get_superadmin_user)
+):
+    from bson import ObjectId
+
+    obj_id = ObjectId(product_id)
+    result = await db.products.update_one(
+        {"_id": obj_id},
+        {"$set": {"is_available": payload.is_available}}
+    )
+
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    product = await db.products.find_one({"_id": obj_id})
+    return serialize_product(product)
 
 @api_router.put("/superadmin/users/{user_id}/status")
 async def toggle_user_status(
     user_id: str,
-    is_active: bool,
+    body: UserStatusUpdate,
     superadmin: User = Depends(get_superadmin_user)
 ):
     result = await db.users.update_one(
         {"id": user_id},
-        {"$set": {"is_active": is_active}}
+        {"$set": {"is_active": body.is_active}}
     )
 
-    if result.modified_count == 0:
+    if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="User not found")
 
     return {"message": "User status updated"}
+
+
 
 @api_router.put("/superadmin/users/{user_id}/role")
 async def update_user_role(
@@ -910,18 +1007,16 @@ async def update_user_role(
     return {"message": "User role updated"}
 
 @api_router.get("/superadmin/orders")
-async def get_all_orders_for_superadmin(
- superadmin: User = Depends(get_superadmin_user)
-):
+async def get_all_orders_for_superadmin(superadmin: User = Depends(get_superadmin_user)):
     orders = await db.orders.find().to_list(1000)
-    return orders
+    return [serialize_order(o) for o in orders]
 
 @api_router.get("/superadmin/products")
 async def get_all_products_for_superadmin(
     superadmin: User = Depends(get_superadmin_user)
 ):
     products = await db.products.find().to_list(1000)
-    return products
+    return [serialize_product(p) for p in products]
 
 @api_router.get("/superadmin/revenue")
 async def get_revenue_for_superadmin(
