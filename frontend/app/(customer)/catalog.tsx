@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -9,31 +9,31 @@ import {
   Modal,
   Alert,
   TextInput,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { api } from '../../src/services/api';
-import { Colors, CategoryColors } from '../../src/constants/colors';
-import ProductCard from '../../src/components/ProductCard';
-import Button from '../../src/components/Button';
-import LoadingScreen from '../../src/components/LoadingScreen';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
+import { api } from "../../src/services/api";
+import { Colors, CategoryColors } from "../../src/constants/colors";
+import ProductCard from "../../src/components/ProductCard";
+import Button from "../../src/components/Button";
+import LoadingScreen from "../../src/components/LoadingScreen";
 
-/* ---------------- CONSTANTS ---------------- */
+/* ---------------- CONSTANTS ----------------  29 - jan - 6:00 pm*/
 const patterns = [
-  { value: 'daily', label: 'Daily', description: 'Every day' },
-  { value: 'alternate', label: 'Alternate', description: 'Every other day' },
-  { value: 'custom', label: 'Custom', description: 'Choose specific days' },
-  { value: 'buy_once', label: 'Buy Once', description: 'One-time purchase' },
+  { value: "daily", label: "Daily", description: "Every day" },
+  { value: "alternate", label: "Alternate", description: "Every other day" },
+  { value: "custom", label: "Custom", description: "Choose specific days" },
+  { value: "buy_once", label: "Buy Once", description: "One-time purchase" },
 ];
 
 const weekDays = [
-  { value: 0, label: 'Mon' },
-  { value: 1, label: 'Tue' },
-  { value: 2, label: 'Wed' },
-  { value: 3, label: 'Thu' },
-  { value: 4, label: 'Fri' },
-  { value: 5, label: 'Sat' },
-  { value: 6, label: 'Sun' },
+  { value: 0, label: "Mon" },
+  { value: 1, label: "Tue" },
+  { value: 2, label: "Wed" },
+  { value: 3, label: "Thu" },
+  { value: 4, label: "Fri" },
+  { value: 5, label: "Sat" },
+  { value: 6, label: "Sun" },
 ];
 
 /* ---------------- SCREEN ---------------- */
@@ -51,7 +51,7 @@ export default function CatalogScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [quantity, setQuantity] = useState(1);
-  const [pattern, setPattern] = useState('daily');
+  const [pattern, setPattern] = useState("daily");
   const [customDays, setCustomDays] = useState<number[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
@@ -68,17 +68,17 @@ export default function CatalogScreen() {
         setLoading(false);
         return;
       }
-//chnages 27-jan
+      //chnages 27-jan
       const productsData = await api.getCatalogProducts(
         selectedAdmin?.id,
-        selectedCategory || undefined
+        selectedCategory || undefined,
       );
-//till here
+      //till here
       const categoriesData = await api.getCategories();
       setProducts(productsData);
       setCategories(categoriesData);
     } catch (error) {
-      console.error('Catalog error:', error);
+      console.error("Catalog error:", error);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -98,20 +98,20 @@ export default function CatalogScreen() {
   const openSubscriptionModal = (product: any) => {
     setSelectedProduct(product);
     setQuantity(1);
-    setPattern('daily');
+    setPattern("daily");
     setCustomDays([]);
     setModalVisible(true);
   };
 
   const toggleCustomDay = (day: number) => {
     setCustomDays((prev) =>
-      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]
+      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day],
     );
   };
 
   const handleSubscribe = async () => {
-    if (pattern === 'custom' && customDays.length === 0) {
-      Alert.alert('Error', 'Please select at least one day');
+    if (pattern === "custom" && customDays.length === 0) {
+      Alert.alert("Error", "Please select at least one day");
       return;
     }
 
@@ -124,18 +124,16 @@ export default function CatalogScreen() {
         product_id: selectedProduct.id,
         quantity,
         pattern,
-        custom_days: pattern === 'custom' ? customDays : null,
-        start_date: tomorrow.toISOString().split('T')[0],
+        custom_days: pattern === "custom" ? customDays : null,
+        start_date: tomorrow.toISOString().split("T")[0],
         end_date:
-          pattern === 'buy_once'
-            ? tomorrow.toISOString().split('T')[0]
-            : null,
+          pattern === "buy_once" ? tomorrow.toISOString().split("T")[0] : null,
       });
 
-      Alert.alert('Success', 'Subscription created!');
+      Alert.alert("Success", "Subscription created!");
       setModalVisible(false);
     } catch (e: any) {
-      Alert.alert('Error', e.message || 'Failed');
+      Alert.alert("Error", e.message || "Failed");
     } finally {
       setSubmitting(false);
     }
@@ -165,8 +163,14 @@ export default function CatalogScreen() {
                   setLoading(true);
                 }}
               >
-                <Ionicons name="storefront-outline" size={20} color={Colors.primary} />
-                <Text style={styles.shopName}>{admin.shop_name || admin.name}</Text>
+                <Ionicons
+                  name="storefront-outline"
+                  size={20}
+                  color={Colors.primary}
+                />
+                <Text style={styles.shopName}>
+                  {admin.shop_name || admin.name}
+                </Text>
                 <Text style={styles.adminAddress}>{admin.address}</Text>
               </TouchableOpacity>
             ))}
@@ -202,7 +206,10 @@ export default function CatalogScreen() {
             contentContainerStyle={styles.categoriesContent}
           >
             <TouchableOpacity
-              style={[styles.categoryChip, !selectedCategory && styles.categoryChipActive]}
+              style={[
+                styles.categoryChip,
+                !selectedCategory && styles.categoryChipActive,
+              ]}
               onPress={() => setSelectedCategory(null)}
             >
               <Text style={styles.categoryText}>All</Text>
@@ -230,7 +237,9 @@ export default function CatalogScreen() {
 
           {/* Products */}
           <ScrollView
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
           >
             <View style={styles.productsGrid}>
               {products.map((product) => (
@@ -249,7 +258,15 @@ export default function CatalogScreen() {
       <Modal visible={modalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>{selectedProduct?.name}</Text>
+            {/* --------- Modal Header --------- */}
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{selectedProduct?.name}</Text>
+
+              {/* Close Button */}
+              <TouchableOpacity onPress={() => setModalVisible(false)}>
+                <Ionicons name="close" size={24} color={Colors.text} />
+              </TouchableOpacity>
+            </View>
 
             {/* Quantity */}
             <Text>Quantity:</Text>
@@ -270,13 +287,13 @@ export default function CatalogScreen() {
                 ]}
                 onPress={() => setPattern(p.value)}
               >
-                <Text style={{ fontWeight: '700' }}>{p.label}</Text>
+                <Text style={{ fontWeight: "700" }}>{p.label}</Text>
                 <Text>{p.description}</Text>
               </TouchableOpacity>
             ))}
 
             {/* Custom days */}
-            {pattern === 'custom' && (
+            {pattern === "custom" && (
               <View style={styles.weekDaysContainer}>
                 {weekDays.map((day) => (
                   <TouchableOpacity
@@ -310,9 +327,14 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
 
   header: { padding: 20 },
-  headerRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 20 },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 20,
+  },
 
-  title: { fontSize: 22, fontWeight: '700' },
+  title: { fontSize: 22, fontWeight: "700" },
   subtitle: { fontSize: 14, color: Colors.textSecondary },
 
   adminCard: {
@@ -321,7 +343,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 12,
   },
-  shopName: { fontSize: 18, fontWeight: '700' },
+  shopName: { fontSize: 18, fontWeight: "700" },
   adminAddress: { fontSize: 12, color: Colors.textSecondary },
 
   categoriesContainer: { maxHeight: 50 },
@@ -335,11 +357,25 @@ const styles = StyleSheet.create({
   categoryChipActive: { backgroundColor: Colors.primary },
   categoryText: { color: Colors.textInverse },
 
-  productsGrid: { flexDirection: 'row', flexWrap: 'wrap', padding: 20, justifyContent: 'space-between' },
+  productsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    padding: 20,
+    justifyContent: "space-between",
+  },
 
-  modalOverlay: { flex: 1, backgroundColor: Colors.overlay, justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: Colors.surface, padding: 24, borderTopLeftRadius: 20, borderTopRightRadius: 20 },
-  modalTitle: { fontSize: 18, fontWeight: '700', marginBottom: 16 },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: Colors.overlay,
+    justifyContent: "flex-end",
+  },
+  modalContent: {
+    backgroundColor: Colors.surface,
+    padding: 24,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+  },
+  modalTitle: { fontSize: 18, fontWeight: "700", marginBottom: 16 },
 
   quantityInput: {
     borderWidth: 1,
@@ -349,10 +385,41 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
 
-  patternOption: { padding: 10, marginBottom: 8, borderWidth: 1, borderColor: Colors.border, borderRadius: 8 },
-  patternOptionSelected: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 16,
+  },
 
-  weekDaysContainer: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 12, marginTop: 8 },
-  dayChip: { padding: 8, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, marginRight: 6, marginBottom: 6 },
-  dayChipSelected: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  patternOption: {
+    padding: 10,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 8,
+  },
+  patternOptionSelected: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+
+  weekDaysContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginBottom: 12,
+    marginTop: 8,
+  },
+  dayChip: {
+    padding: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 8,
+    marginRight: 6,
+    marginBottom: 6,
+  },
+  dayChipSelected: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
 });
