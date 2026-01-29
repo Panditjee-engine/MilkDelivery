@@ -85,7 +85,7 @@ export default function UsersScreen() {
       Alert.alert('Error', 'Please enter a reason');
       return;
     }
-
+// Proceed with refund
     setUpdating(true);
     try {
       await api.processRefund(selectedUser.id, amount, refundReason.trim());
