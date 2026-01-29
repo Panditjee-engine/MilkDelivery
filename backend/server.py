@@ -9,10 +9,11 @@ from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional, Dict, Any
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta ,date
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 from enum import Enum
+from typing import Optional, Union
 import base64
 
 ROOT_DIR = Path(__file__).parent
@@ -46,6 +47,7 @@ class UserRole(str, Enum):
     CUSTOMER = "customer"
     DELIVERY_PARTNER = "delivery_partner"
     ADMIN = "admin"
+    SUPERADMIN = "superadmin"
 
 class SubscriptionPattern(str, Enum):
     DAILY = "daily"
@@ -102,9 +104,9 @@ class UserResponse(BaseModel):
     id: str
     email: str
     name: str
-    phone: Optional[str]
+    phone: Optional[str] = None
     role: UserRole
-    address: Optional[Dict[str, Any]]
+    address: Optional[Union[str, dict]] = None
     is_active: bool
     zone: Optional[str] = None
 
@@ -112,19 +114,6 @@ class Token(BaseModel):
     access_token: str
     token_type: str
     user: UserResponse
-
-# Product Models
-# class ProductBase(BaseModel):
-#     name: str
-#     description: Optional[str] = None
-#     category: ProductCategory
-#     price: float
-#     unit: str  # e.g., "500ml", "1L", "1kg"
-#     image: Optional[str] = None  # base64
-    
-#     nutritional_info: Optional[Dict[str, Any]] = None
-#     stock: int = 100
-#     is_available: bool = True
 
 class ProductBase(BaseModel):
     name: str
@@ -285,12 +274,40 @@ async def get_admin_user(user: User = Depends(get_current_user)) -> User:
         raise HTTPException(status_code=403, detail="Admin access required")
     return user
 
+@app.on_event("startup")
+async def create_superadmin():
+    superadmin_exists = await db.users.find_one(
+        {"email": "superadmin@milkapp.com"}
+    )
+
+    if not superadmin_exists:
+        superadmin = {
+            "id": str(uuid.uuid4()),
+            "email": "superadmin@milkapp.com",
+            "name": "Super Admin",
+            "password": get_password_hash("superadmin123"),
+            "role": UserRole.SUPERADMIN.value,  # ✅ FIXED
+            "is_active": True,
+            "created_at": datetime.utcnow()
+        }
+        await db.users.insert_one(superadmin)
+        logger.info("✅ Superadmin created")
+
+
 async def get_delivery_partner(user: User = Depends(get_current_user)) -> User:
     if user.role != UserRole.DELIVERY_PARTNER:
         raise HTTPException(status_code=403, detail="Delivery partner access required")
     return user
 
 # ===================== AUTH ENDPOINTS =====================
+
+async def get_superadmin_user(user: User = Depends(get_current_user)) -> User:
+    if user.role != UserRole.SUPERADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="SuperAdmin access required"
+        )
+    return user
 
 @api_router.post("/auth/register", response_model=Token)
 async def register(user_data: UserCreate):
@@ -819,6 +836,121 @@ async def get_checkin_status(partner: User = Depends(get_delivery_partner)):
         "checkin_time": checkin.get("checkin_time"),
         "checkout_time": checkin.get("checkout_time")
     }
+
+# ===================== SUPERADMIN ENDPOINTS =====================
+
+@api_router.get("/superadmin/users")
+async def get_users_for_superadmin(
+    role: Optional[UserRole] = None,
+    superadmin: User = Depends(get_superadmin_user)
+):
+    query = {}
+    if role:
+        query["role"] = role.value
+
+    users = await db.users.find(query, {"password": 0}).to_list(1000)
+
+    return [
+        UserResponse(**u)
+        for u in users
+    ]
+
+
+@api_router.get("/superadmin/dashboard")
+async def superadmin_dashboard(superadmin: User = Depends(get_superadmin_user)):
+    total_users = await db.users.count_documents({})
+    total_admins = await db.users.count_documents({"role": "admin"})
+    total_customers = await db.users.count_documents({"role": "customer"})
+    total_partners = await db.users.count_documents({"role": "delivery_partner"})
+    total_products = await db.products.count_documents({})
+    total_orders = await db.orders.count_documents({})
+
+    return {
+        "total_users": total_users,
+        "admins": total_admins,
+        "customers": total_customers,
+        "delivery_partners": total_partners,
+        "products": total_products,
+        "orders": total_orders
+    }
+
+@api_router.put("/superadmin/users/{user_id}/status")
+async def toggle_user_status(
+    user_id: str,
+    is_active: bool,
+    superadmin: User = Depends(get_superadmin_user)
+):
+    result = await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"is_active": is_active}}
+    )
+
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return {"message": "User status updated"}
+
+@api_router.put("/superadmin/users/{user_id}/role")
+async def update_user_role(
+    user_id: str,
+    role: UserRole,
+    superadmin: User = Depends(get_superadmin_user)
+):
+    if role == UserRole.SUPERADMIN:
+        raise HTTPException(status_code=400, detail="Cannot assign superadmin")
+
+    result = await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"role": role.value}}
+    )
+
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return {"message": "User role updated"}
+
+@api_router.get("/superadmin/orders")
+async def get_all_orders_for_superadmin(
+ superadmin: User = Depends(get_superadmin_user)
+):
+    orders = await db.orders.find().to_list(1000)
+    return orders
+
+@api_router.get("/superadmin/products")
+async def get_all_products_for_superadmin(
+    superadmin: User = Depends(get_superadmin_user)
+):
+    products = await db.products.find().to_list(1000)
+    return products
+
+@api_router.get("/superadmin/revenue")
+async def get_revenue_for_superadmin(
+    start_date: date,
+    end_date: date,
+    superadmin: User = Depends(get_superadmin_user)
+):
+    pipeline = [
+        {
+            "$match": {
+                "created_at": {
+                    "$gte": datetime.combine(start_date, datetime.min.time()),
+                    "$lte": datetime.combine(end_date, datetime.max.time())
+                }
+            }
+        },
+        {
+            "$group": {
+                "_id": None,
+                "total_revenue": {"$sum": "$total_amount"}
+            }
+        }
+    ]
+
+    result = await db.orders.aggregate(pipeline).to_list(1)
+    return {
+        "total_revenue": result[0]["total_revenue"] if result else 0
+    }
+
 
 # ===================== ADMIN ENDPOINTS =====================
 
