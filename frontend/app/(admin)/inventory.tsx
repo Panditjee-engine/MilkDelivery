@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -10,20 +10,22 @@ import {
   Alert,
   Modal,
   Image,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
 // import SwipeButton from 'react-native-swipe-button';
-import { Dimensions } from 'react-native';
+// 30-Jan status all fine after updates at 39(add new product type), 64-73(add new toggle availabilityy),214 - 237(update product card)
+//223 - 227 (add new availability icons)
+import { Dimensions } from "react-native";
 
-import SwipeToConfirm from '../../src/components/SwipeToConfirm';
-import { api } from '../../src/services/api';
-import { Colors } from '../../src/constants/colors';
-import Card from '../../src/components/Card';
-import Button from '../../src/components/Button';
-import LoadingScreen from '../../src/components/LoadingScreen';
-import { useAuth } from '../../src/contexts/AuthContext';
+import SwipeToConfirm from "../../src/components/SwipeToConfirm";
+import { api } from "../../src/services/api";
+import { Colors } from "../../src/constants/colors";
+import Card from "../../src/components/Card";
+import Button from "../../src/components/Button";
+import LoadingScreen from "../../src/components/LoadingScreen";
+import { useAuth } from "../../src/contexts/AuthContext";
 
 /* ================= TYPES ================= */
 type Product = {
@@ -34,12 +36,13 @@ type Product = {
   price: number;
   stock: number;
   image?: string | null;
+  is_available: boolean;
 };
 
 /* ================= SCREEN ================= */
 export default function InventoryScreen() {
   const { user } = useAuth();
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = user?.role === "admin";
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -47,17 +50,28 @@ export default function InventoryScreen() {
 
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [stockModal, setStockModal] = useState(false);
-  const [newStock, setNewStock] = useState('');
+  const [newStock, setNewStock] = useState("");
 
   const [addModal, setAddModal] = useState(false);
   const [newProduct, setNewProduct] = useState({
-    name: '',
-    category: '',
-    unit: '',
-    price: '',
-    stock: '',
-    image: '', // base64
+    name: "",
+    category: "",
+    unit: "",
+    price: "",
+    stock: "",
+    image: "", // base64
   });
+
+  const toggleAvailability = async (product: Product) => {
+    try {
+      await api.updateProduct(product.id!, {
+        is_available: !product.is_available,
+      });
+      fetchData(); // refresh list
+    } catch (e: any) {
+      Alert.alert("Error", e.message);
+    }
+  };
 
   /* ================= DATA ================= */
   const fetchData = async () => {
@@ -83,7 +97,7 @@ export default function InventoryScreen() {
   const pickImageFromGallery = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert('Permission required', 'Gallery access is needed');
+      Alert.alert("Permission required", "Gallery access is needed");
       return;
     }
 
@@ -94,7 +108,7 @@ export default function InventoryScreen() {
     });
 
     if (!result.canceled && result.assets[0].base64) {
-      setNewProduct(p => ({
+      setNewProduct((p) => ({
         ...p,
         image: `data:image/jpeg;base64,${result.assets[0].base64}`,
       }));
@@ -117,9 +131,6 @@ export default function InventoryScreen() {
     return true;
   }, [newProduct]);
 
-
-
-
   /* ================= ACTIONS ================= */
   const handleAddProduct = async () => {
     try {
@@ -130,22 +141,22 @@ export default function InventoryScreen() {
         price: Number(newProduct.price),
         stock: Number(newProduct.stock),
         image: newProduct.image,
-        image_type: 'base64',
+        image_type: "base64",
       });
 
       setAddModal(false);
       setNewProduct({
-        name: '',
-        category: '',
-        unit: '',
-        price: '',
-        stock: '',
-        image: '',
+        name: "",
+        category: "",
+        unit: "",
+        price: "",
+        stock: "",
+        image: "",
       });
 
       fetchData();
     } catch (e: any) {
-      Alert.alert('Error', e.message);
+      Alert.alert("Error", e.message);
     }
   };
 
@@ -171,11 +182,18 @@ export default function InventoryScreen() {
         </View>
       )}
 
-      <ScrollView refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-        {products.map(product => (
+      <ScrollView
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
+        {products.map((product) => (
           <Card key={product.id} style={styles.productCard}>
             {product.image ? (
-              <Image source={{ uri: product.image }} style={styles.productImage} />
+              <Image
+                source={{ uri: product.image }}
+                style={styles.productImage}
+              />
             ) : (
               <View style={styles.imagePlaceholder}>
                 <Ionicons name="image" size={24} color={Colors.textSecondary} />
@@ -198,6 +216,41 @@ export default function InventoryScreen() {
                 <Ionicons name="trash" size={18} color={Colors.error} />
               </TouchableOpacity>
             )}
+            <TouchableOpacity
+              onPress={() => toggleAvailability(product)}
+              style={{ marginRight: 10 }}
+            >
+              <Ionicons
+                name={product.is_available ? "eye" : "eye-off"}
+                size={18}
+                color={product.is_available ? "#16a34a" : "#dc2626"}
+              />
+            </TouchableOpacity>
+
+            <View style={{ alignItems: "center", gap: 6 }}>
+              <View
+                style={{
+                  paddingHorizontal: 10,
+                  paddingVertical: 4,
+                  borderRadius: 10,
+                  backgroundColor: product.is_available ? "#dcfce7" : "#fee2e2",
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 12,
+                    fontWeight: "600",
+                    color: product.is_available ? "#166534" : "#991b1b",
+                  }}
+                >
+                  {product.is_available ? "Available" : "Not Available"}
+                </Text>
+              </View>
+
+              <View style={styles.stockBadge}>
+                <Text>{product.stock}</Text>
+              </View>
+            </View>
           </Card>
         ))}
       </ScrollView>
@@ -208,29 +261,41 @@ export default function InventoryScreen() {
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Add Product</Text>
 
-            {['name', 'category', 'unit', 'price', 'stock'].map(field => (
+            {["name", "category", "unit", "price", "stock"].map((field) => (
               <TextInput
                 key={field}
                 placeholder={field.toUpperCase()}
-                keyboardType={field === 'price' || field === 'stock' ? 'numeric' : 'default'}
+                keyboardType={
+                  field === "price" || field === "stock" ? "numeric" : "default"
+                }
                 value={(newProduct as any)[field]}
-                onChangeText={v => setNewProduct(p => ({ ...p, [field]: v }))}
+                onChangeText={(v) =>
+                  setNewProduct((p) => ({ ...p, [field]: v }))
+                }
                 style={styles.input}
               />
             ))}
 
             {/* IMAGE PICKER BUTTON */}
-            <TouchableOpacity style={styles.imagePicker} onPress={pickImageFromGallery}>
+            <TouchableOpacity
+              style={styles.imagePicker}
+              onPress={pickImageFromGallery}
+            >
               <Ionicons name="image-outline" size={20} color="#16a34a" />
-              <Text style={styles.imagePickerText}>Select Image from Gallery</Text>
+              <Text style={styles.imagePickerText}>
+                Select Image from Gallery
+              </Text>
             </TouchableOpacity>
 
             {newProduct.image ? (
-              <Image source={{ uri: newProduct.image }} style={styles.previewImage} />
+              <Image
+                source={{ uri: newProduct.image }}
+                style={styles.previewImage}
+              />
             ) : null}
             <View style={{ paddingHorizontal: 20, marginVertical: 16 }}>
               {isFormValid && (
-                <View style={{ alignItems: 'center', marginVertical: 16 }}>
+                <View style={{ alignItems: "center", marginVertical: 16 }}>
                   <SwipeToConfirm
                     text="Swipe → Add Product"
                     disabled={!isFormValid}
@@ -239,17 +304,16 @@ export default function InventoryScreen() {
                 </View>
               )}
 
-
               <View style={{ marginTop: 12 }}>
                 <Button
                   title="Cancel"
                   onPress={() => setAddModal(false)}
                   style={{ backgroundColor: Colors.error }}
                 />
-                  </View>
               </View>
             </View>
           </View>
+        </View>
       </Modal>
     </SafeAreaView>
   );
@@ -259,22 +323,27 @@ export default function InventoryScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   header: { padding: 20 },
-  title: { fontSize: 24, fontWeight: '700' },
+  title: { fontSize: 24, fontWeight: "700" },
   subtitle: { color: Colors.textSecondary },
   adminActions: { paddingHorizontal: 20, marginBottom: 12 },
 
-  productCard: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12 },
+  productCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    padding: 12,
+  },
   productImage: { width: 48, height: 48, borderRadius: 8 },
   imagePlaceholder: {
     width: 48,
     height: 48,
     borderRadius: 8,
     backgroundColor: Colors.surfaceSecondary,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   productInfo: { flex: 1 },
-  productName: { fontWeight: '600' },
+  productName: { fontWeight: "600" },
   productUnit: { fontSize: 12 },
 
   stockBadge: {
@@ -287,14 +356,18 @@ const styles = StyleSheet.create({
   //   marginVertical: 10,
   // },
 
-  modalOverlay: { flex: 1, backgroundColor: Colors.overlay, justifyContent: 'flex-end' },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: Colors.overlay,
+    justifyContent: "flex-end",
+  },
   modalContent: {
     backgroundColor: Colors.surface,
     padding: 20,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
   },
-  modalTitle: { fontSize: 18, fontWeight: '700', marginBottom: 12 },
+  modalTitle: { fontSize: 18, fontWeight: "700", marginBottom: 12 },
 
   input: {
     backgroundColor: Colors.surfaceSecondary,
@@ -303,27 +376,27 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   imagePicker: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
     padding: 12,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#22c55e',
+    borderColor: "#22c55e",
     marginBottom: 10,
   },
   imagePickerText: {
-    color: '#16a34a',
-    fontWeight: '600',
+    color: "#16a34a",
+    fontWeight: "600",
   },
   previewImage: {
-    width: '100%',
+    width: "100%",
     height: 150,
     borderRadius: 12,
     marginBottom: 12,
   },
   swipeContainer: {
     marginVertical: 16,
-    alignItems: 'center',
+    alignItems: "center",
   },
 });
