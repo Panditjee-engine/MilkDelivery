@@ -18,7 +18,7 @@ from fastapi import APIRouter, Depends
 from bson import ObjectId
 import base64
 
-#29-jan- 6:00 pm
+#30-jan- status all finen after updates at 318-324(add new dependency)
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -315,6 +315,14 @@ async def get_admin_user(user: User = Depends(get_current_user)) -> User:
         raise HTTPException(status_code=403, detail="Admin access required")
     return user
 
+def get_admin_or_superadmin_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+          ) -> User:
+          user = get_current_user(credentials)
+          if user.role not in ["admin", "superadmin"]:
+           raise HTTPException(status_code=403, detail="Not authorized")
+          return user
+
 @app.on_event("startup")
 async def create_superadmin():
     superadmin_exists = await db.users.find_one(
@@ -333,7 +341,6 @@ async def create_superadmin():
         }
         await db.users.insert_one(superadmin)
         logger.info("✅ Superadmin created")
-
 
 async def get_delivery_partner(user: User = Depends(get_current_user)) -> User:
     if user.role != UserRole.DELIVERY_PARTNER:
@@ -443,7 +450,6 @@ async def update_profile(
 def is_valid_image_url(url: str) -> bool:
     return url.startswith("http://") or url.startswith("https://")
 
-
 # ===================== PRODUCT ENDPOINTS =====================
 
 @api_router.get("/catalog/admins")
@@ -460,7 +466,6 @@ async def get_admin_catalog():
         }
         for a in admins
     ]
-
 
 @api_router.get("/products", response_model=List[Product])
 async def get_products(
@@ -495,15 +500,12 @@ async def public_catalog(admin_id: Optional[str] = None, category: Optional[Prod
     products = await db.products.find(query).to_list(100)
     return [Product(**p) for p in products]
 
-
-
 @api_router.post("/products", response_model=Product)
 async def create_product(product: ProductCreate, admin: User = Depends(get_admin_user)):
 
     product_dict = product.dict()
 
     product_dict["admin_id"] = admin.id  # ✅ ADD
-
 
     # ✅ ENSURE image_type EXISTS
     if product_dict.get("image") and not product_dict.get("image_type"):
@@ -523,7 +525,6 @@ async def create_product(product: ProductCreate, admin: User = Depends(get_admin
 
     return Product(**product_dict)
 
-
 @api_router.put("/products/{product_id}", response_model=Product)
 async def update_product(product_id: str, update_data: Dict[str, Any], admin: User = Depends(get_admin_user)):
 
@@ -542,8 +543,6 @@ async def update_product(product_id: str, update_data: Dict[str, Any], admin: Us
         raise HTTPException(status_code=404, detail="Product not found")
 
     return Product(**product)
-
-
 
 @api_router.delete("/products/{product_id}")
 async def delete_product(product_id: str, admin: User = Depends(get_admin_user)):
@@ -904,27 +903,22 @@ async def get_users_for_superadmin(
         for u in users
     ]
 
-
 @api_router.get("/superadmin/dashboard")
 async def superadmin_dashboard(
     superadmin: User = Depends(get_superadmin_user)
 ):
     total_customers = await db.users.count_documents({
-        "role": "customer"
-    })
+        "role": "customer"})
 
     total_admins = await db.users.count_documents({
-        "role": "admin"
-    })
+        "role": "admin" })
 
     total_delivery_partners = await db.users.count_documents({
-        "role": "delivery_partner"
-    })
+        "role": "delivery_partner" })
 
     active_delivery_partners = await db.users.count_documents({
         "role": "delivery_partner",
-        "is_active": True
-    })
+        "is_active": True })
 
     total_orders = await db.orders.count_documents({})
 
@@ -934,7 +928,6 @@ async def superadmin_dashboard(
         "total_delivery_partners": total_delivery_partners,
         "active_delivery_partners": active_delivery_partners,
         "total_orders": total_orders,
-
         # frontend safety
         "today_orders": 0,
         "pending_orders": 0,
@@ -946,8 +939,6 @@ async def superadmin_dashboard(
         "revenue_trend": [],
         "orders_by_status": []
     }
-
-
 
 @api_router.put("/superadmin/products/{product_id}/status")
 async def update_product_status(
@@ -984,8 +975,6 @@ async def toggle_user_status(
         raise HTTPException(status_code=404, detail="User not found")
 
     return {"message": "User status updated"}
-
-
 
 @api_router.put("/superadmin/users/{user_id}/role")
 async def update_user_role(
@@ -1046,7 +1035,6 @@ async def get_revenue_for_superadmin(
         "total_revenue": result[0]["total_revenue"] if result else 0
     }
 
-
 # ===================== ADMIN ENDPOINTS =====================
 
 @api_router.get("/admin/dashboard")
@@ -1081,8 +1069,7 @@ async def get_procurement_list(admin: User = Depends(get_admin_user)):
     day_of_week = tomorrow_date.weekday()
     
     # Get all active subscriptions
-    subscriptions = await db.subscriptions.find({"is_active": True}).to_list(10000)
-    
+    subscriptions = await db.subscriptions.find({"is_active": True}).to_list(10000)   
     # Group by product
     product_quantities = {}
     
@@ -1269,7 +1256,6 @@ async def generate_tomorrow_orders(admin: User = Depends(get_admin_user)):
     
     # Get all customers with active subscriptions
     subscriptions = await db.subscriptions.find({"is_active": True}).to_list(10000)
-    
     # Group subscriptions by user
     user_subs = {}
     for sub in subscriptions:
@@ -1288,7 +1274,7 @@ async def generate_tomorrow_orders(admin: User = Depends(get_admin_user)):
         if is_vacation:
             orders_skipped += 1
             continue
-        
+               
         # Get user details
         user = await db.users.find_one({"id": user_id})
         if not user:
