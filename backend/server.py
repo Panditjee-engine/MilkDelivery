@@ -99,6 +99,7 @@ class UserLogin(BaseModel):
 
 class User(UserBase):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    assigned_admin_ids: List[str] = Field(default_factory=list) #------> 6th feb
     address: Optional[Dict[str, Any]] = None
     is_active: bool = True
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -113,6 +114,8 @@ class UserResponse(BaseModel):
     address: Optional[Union[str, dict]] = None
     is_active: bool
     zone: Optional[str] = None
+    assigned_admin_ids: List[str] = []  
+    assigned_rider_name: Optional[str] = None
 
 class Token(BaseModel):
     access_token: str
@@ -131,13 +134,13 @@ class ProductBase(BaseModel):
     stock: int = 100
     is_available: bool = True
 
-
 class ProductCreate(ProductBase):
     pass
 
 class Product(ProductBase):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     admin_id: str 
+    admin_name: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 # Subscription Models
@@ -160,7 +163,9 @@ class Subscription(SubscriptionBase):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     user_id: str
     is_active: bool = True
-    modifications: List[Dict[str, Any]] = []  # Date-specific quantity changes
+    admin_id: Optional[str] = None
+    admin_name: Optional[str] = None
+    modifications: List[Dict[str, Any]] = Field(default_factory=list)  # Date-specific quantity changes
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 class SubscriptionResponse(Subscription):
@@ -192,7 +197,8 @@ class WalletRecharge(BaseModel):
 class Wallet(BaseModel):
     user_id: str
     balance: float = 0.0
-    transactions: List[WalletTransaction] = []
+    transactions: List[WalletTransaction] = Field(default_factory=list)
+
 
 # Order Models
 class OrderItem(BaseModel):
@@ -205,6 +211,8 @@ class OrderItem(BaseModel):
 class Order(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     user_id: str
+    admin_id: Optional[str] = None #---> 6th feb
+    admin_name: Optional[str] = None  
     items: List[OrderItem]
     total_amount: float
     status: OrderStatus = OrderStatus.PENDING
@@ -249,6 +257,15 @@ class UserStatusUpdate(BaseModel):
 class ProductStatusUpdate(BaseModel):
     is_available: bool
 
+class RiderAdminAssign(BaseModel):
+    admin_ids: List[str]
+
+class AssignAdminsRequest(BaseModel):
+    assigned_admin_ids: List[str]
+
+class AssignZoneRequest(BaseModel):
+    zone: str
+
 # ===================== AUTH HELPERS =====================
 
 def serialize_order(order: dict):
@@ -271,7 +288,7 @@ def serialize_order(order: dict):
 
 def serialize_product(product):
     product = dict(product)
-    product["id"] = str(product["_id"])
+    #product["id"] = str(product["_id"])
     product.pop("_id", None)
     return product
 
@@ -315,13 +332,12 @@ async def get_admin_user(user: User = Depends(get_current_user)) -> User:
         raise HTTPException(status_code=403, detail="Admin access required")
     return user
 
-def get_admin_or_superadmin_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security)
-          ) -> User:
-          user = get_current_user(credentials)
-          if user.role not in ["admin", "superadmin"]:
-           raise HTTPException(status_code=403, detail="Not authorized")
-          return user
+async def get_admin_or_superadmin_user(
+    user: User = Depends(get_current_user)
+) -> User:
+    if user.role not in [UserRole.ADMIN, UserRole.SUPERADMIN]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    return user
 
 @app.on_event("startup")
 async def create_superadmin():
@@ -506,6 +522,7 @@ async def create_product(product: ProductCreate, admin: User = Depends(get_admin
     product_dict = product.dict()
 
     product_dict["admin_id"] = admin.id  # ✅ ADD
+    product_dict["admin_name"] = admin.name
 
     # ✅ ENSURE image_type EXISTS
     if product_dict.get("image") and not product_dict.get("image_type"):
@@ -583,6 +600,8 @@ async def create_subscription(subscription: SubscriptionCreate, user: User = Dep
     sub_dict["is_active"] = True
     sub_dict["modifications"] = []
     sub_dict["created_at"] = datetime.utcnow()
+    sub_dict["admin_id"] = product.get("admin_id")
+    sub_dict["admin_name"] = product.get("admin_name")
     
     # For buy_once, set end_date same as start_date
     if subscription.pattern == SubscriptionPattern.BUY_ONCE:
@@ -835,9 +854,15 @@ async def get_today_deliveries(partner: User = Depends(get_delivery_partner)):
     """Get all deliveries assigned to this partner for today"""
     today = datetime.utcnow().strftime("%Y-%m-%d")
     
+    assigned_admins = getattr(partner, "assigned_admin_ids", [])
+
+    if not assigned_admins:
+         return []
+
     orders = await db.orders.find({
         "delivery_partner_id": partner.id,
         "delivery_date": today,
+         "admin_id": {"$in": assigned_admins},
         "status": {"$in": ["pending", "assigned", "out_for_delivery"]}
     }).to_list(100)
     
@@ -943,21 +968,18 @@ async def superadmin_dashboard(
 @api_router.put("/superadmin/products/{product_id}/status")
 async def update_product_status(
     product_id: str,
-    payload: ProductStatusUpdate,  # parses JSON body
+    payload: ProductStatusUpdate,
     superadmin: User = Depends(get_superadmin_user)
 ):
-    from bson import ObjectId
-
-    obj_id = ObjectId(product_id)
     result = await db.products.update_one(
-        {"_id": obj_id},
+        {"id": product_id},
         {"$set": {"is_available": payload.is_available}}
     )
 
     if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Product not found")
+        raise HTTPException(404, "Product not found")
 
-    product = await db.products.find_one({"_id": obj_id})
+    product = await db.products.find_one({"id": product_id})
     return serialize_product(product)
 
 @api_router.put("/superadmin/users/{user_id}/status")
@@ -996,15 +1018,60 @@ async def update_user_role(
     return {"message": "User role updated"}
 
 @api_router.get("/superadmin/orders")
-async def get_all_orders_for_superadmin(superadmin: User = Depends(get_superadmin_user)):
-    orders = await db.orders.find().to_list(1000)
+async def get_all_orders_for_superadmin(
+    admin_id: Optional[str] = None,
+    status: Optional[str] = None,
+    date: Optional[str] = None,
+    superadmin: User = Depends(get_superadmin_user)
+):
+    query = {}
+
+    # ✅ Filter by Admin
+    if admin_id:
+        query["admin_id"] = admin_id
+
+    # ✅ Filter by Status
+    if status:
+        query["status"] = status
+
+    # ✅ Filter by Delivery Date
+    if date:
+        query["delivery_date"] = date
+
+    orders = await db.orders.find(query).to_list(1000)
+
     return [serialize_order(o) for o in orders]
+
+@api_router.post("/superadmin/orders/generate")
+async def generate_orders(superadmin: User = Depends(get_superadmin_user)):
+    orders_created = 0
+    orders_skipped = 0
+
+    # Your generation logic here
+
+    return {
+        "orders_created": orders_created,
+        "orders_skipped": orders_skipped
+    }
 
 @api_router.get("/superadmin/products")
 async def get_all_products_for_superadmin(
+    admin_id: Optional[str] = None,
+    category: Optional[str] = None,
     superadmin: User = Depends(get_superadmin_user)
 ):
-    products = await db.products.find().to_list(1000)
+    query = {}
+
+    # ✅ Filter by Admin
+    if admin_id:
+        query["admin_id"] = admin_id
+
+    # ✅ Filter by Category
+    if category:
+        query["category"] = category
+
+    products = await db.products.find(query).to_list(1000)
+
     return [serialize_product(p) for p in products]
 
 @api_router.get("/superadmin/revenue")
@@ -1034,6 +1101,80 @@ async def get_revenue_for_superadmin(
     return {
         "total_revenue": result[0]["total_revenue"] if result else 0
     }
+
+@api_router.put("/superadmin/riders/{rider_id}/assign-admins")
+async def assign_rider_admins(
+    rider_id: str,
+    body: AssignAdminsRequest,
+    superadmin: User = Depends(get_superadmin_user)
+):
+    result = await db.users.update_one(
+        {"id": rider_id, "role": "delivery_partner"},
+        {"$set": {"assigned_admin_ids": body.assigned_admin_ids}}
+    )
+
+    if result.matched_count == 0:
+        raise HTTPException(404, "Rider not found")
+
+    return {"message": "Admins assigned successfully"}
+
+@api_router.put("/superadmin/users/{user_id}/zone")
+async def assign_zone(
+    user_id: str,
+    body: AssignZoneRequest,
+    superadmin: User = Depends(get_superadmin_user)
+):
+    result = await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"zone": body.zone}}
+    )
+
+    if result.matched_count == 0:
+        raise HTTPException(404, "User not found")
+
+    return {"message": "Zone assigned"}
+
+
+@api_router.get("/superadmin/admins-with-riders")
+async def get_admins_with_riders(
+    superadmin: User = Depends(get_superadmin_user)
+):
+    # Get all admins
+    admins = await db.users.find(
+        {"role": "admin"},
+        {"password": 0}
+    ).to_list(1000)
+
+    # Get all riders
+    riders = await db.users.find(
+        {"role": "delivery_partner"},
+        {"password": 0}
+    ).to_list(1000)
+
+    result = []
+
+    for admin in admins:
+        assigned_rider = next(
+            (
+                r for r in riders
+                if admin["id"] in r.get("assigned_admin_ids", [])
+            ),
+            None
+        )
+
+        admin["assigned_rider_name"] = (
+            assigned_rider["name"] if assigned_rider else None
+        )
+
+        result.append(admin)
+
+
+        for admin in result:
+         admin.pop("_id", None)
+
+    return result
+
+
 
 # ===================== ADMIN ENDPOINTS =====================
 
@@ -1069,7 +1210,7 @@ async def get_procurement_list(admin: User = Depends(get_admin_user)):
     day_of_week = tomorrow_date.weekday()
     
     # Get all active subscriptions
-    subscriptions = await db.subscriptions.find({"is_active": True}).to_list(10000)   
+    subscriptions = await db.subscriptions.find({"is_active": True,"admin_id": admin.id}).to_list(10000)   
     # Group by product
     product_quantities = {}
     
@@ -1155,7 +1296,7 @@ async def get_all_orders(
     date: Optional[str] = None,
     admin: User = Depends(get_admin_user)
 ):
-    query = {}
+    query = {"admin_id": admin.id}
     if status:
         query["status"] = status.value
     if date:
@@ -1385,36 +1526,7 @@ async def seed_data():
     if existing > 0:
         return {"message": "Data already seeded"}
     
-    products = [
-    #     # Milk
-    #     {"name": "Fresh Cow Milk", "category": "milk", "price": 60, "unit": "1L", "description": "Farm-fresh whole cow milk", "stock": 500, "is_available": True},
-    #     {"name": "Toned Milk", "category": "milk", "price": 52, "unit": "1L", "description": "Low-fat toned milk", "stock": 400, "is_available": True},
-    #     {"name": "Buffalo Milk", "category": "milk", "price": 70, "unit": "1L", "description": "Rich and creamy buffalo milk", "stock": 300, "is_available": True},
-    #     {"name": "Organic A2 Milk", "category": "milk", "price": 90, "unit": "1L", "description": "Premium organic A2 cow milk", "stock": 200, "is_available": True},
-    #     {"name": "Skimmed Milk", "category": "milk", "price": 48, "unit": "1L", "description": "Fat-free skimmed milk", "stock": 250, "is_available": True},
-        
-    #     # Dairy
-    #     {"name": "Fresh Curd", "category": "dairy", "price": 45, "unit": "500g", "description": "Homemade style fresh curd", "stock": 300, "is_available": True},
-    #     {"name": "Paneer", "category": "dairy", "price": 120, "unit": "250g", "description": "Fresh cottage cheese", "stock": 150, "is_available": True},
-    #     {"name": "Butter", "category": "dairy", "price": 55, "unit": "100g", "description": "Fresh unsalted butter", "stock": 200, "is_available": True},
-    #     {"name": "Ghee", "category": "dairy", "price": 180, "unit": "250ml", "description": "Pure desi ghee", "stock": 100, "is_available": True},
-    #     {"name": "Cheese Slices", "category": "dairy", "price": 85, "unit": "200g", "description": "Processed cheese slices", "stock": 150, "is_available": True},
-        
-    #     # Bakery
-    #     {"name": "White Bread", "category": "bakery", "price": 40, "unit": "400g", "description": "Soft white sandwich bread", "stock": 200, "is_available": True},
-    #     {"name": "Brown Bread", "category": "bakery", "price": 45, "unit": "400g", "description": "Healthy whole wheat bread", "stock": 180, "is_available": True},
-    #     {"name": "Milk Bread", "category": "bakery", "price": 50, "unit": "400g", "description": "Soft and fluffy milk bread", "stock": 150, "is_available": True},
-    #     {"name": "Butter Croissant", "category": "bakery", "price": 35, "unit": "1pc", "description": "Flaky butter croissant", "stock": 100, "is_available": True},
-        
-    #     # Fruits
-    #     {"name": "Bananas", "category": "fruits", "price": 50, "unit": "1 dozen", "description": "Fresh ripe bananas", "stock": 200, "is_available": True},
-    #     {"name": "Apples",  "category": "fruits", "price": 180, "unit": "1kg", "description": "Fresh red apples", "stock": 150, "is_available": True},
-    #     {"name": "Oranges", "category": "fruits", "price": 80, "unit": "1kg", "description": "Juicy sweet oranges", "stock": 120, "is_available": True},
-        
-    #     # Essentials
-    #     {"name": "Farm Eggs", "category": "essentials", "price": 80, "unit": "12 pcs", "description": "Free-range farm eggs", "stock": 300, "is_available": True},
-    #     {"name": "Organic Eggs", "category": "essentials", "price": 120, "unit": "12 pcs", "description": "Certified organic eggs", "stock": 150, "is_available": True},
-     ]
+    products = [] # ----> U can hardcode product in brackets whichh will never can be deleted 
     
     for p in products:
         p["id"] = str(uuid.uuid4())
