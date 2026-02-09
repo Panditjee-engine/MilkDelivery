@@ -17,6 +17,7 @@ export default function AdminDashboard() {
   const [procurement, setProcurement] = useState<any>(null);
   const [generating, setGenerating] = useState(false);
 
+
   const fetchData = async () => {
     try {
       const [dashboardData, procurementData] = await Promise.all([

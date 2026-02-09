@@ -108,7 +108,7 @@ export default function DeliveryHome() {
         <Card variant="elevated" style={[
           styles.checkinCard,
           { backgroundColor: checkinStatus?.checked_in ? Colors.secondary : Colors.primary }
-        ]}>
+        ] as any}>
           <View style={styles.checkinHeader}>
             <Ionicons 
               name={checkinStatus?.checked_in ? 'checkmark-circle' : 'time'} 

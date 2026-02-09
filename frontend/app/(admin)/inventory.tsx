@@ -126,13 +126,16 @@ export default function InventoryScreen() {
     if (!name || !category || !unit) return false;
     if (!Number.isFinite(price) || price <= 0) return false;
     if (!Number.isInteger(stock) || stock < 0) return false;
-    if (!newProduct.image || newProduct.image.length < 10) return false;
+    //if (!newProduct.image || newProduct.image.length < 10) return false;-----> badal
 
     return true;
   }, [newProduct]);
-
+   //================== Remove wrong image ================= update by badal*/
+   const removeImage = () => {
+  setNewProduct((p) => ({ ...p, image: "" }));
+};
   /* ================= ACTIONS ================= */
-  const handleAddProduct = async () => {
+ /* const handleAddProduct = async () => {
     try {
       await api.createProduct({
         name: newProduct.name,
@@ -142,7 +145,19 @@ export default function InventoryScreen() {
         stock: Number(newProduct.stock),
         image: newProduct.image,
         image_type: "base64",
-      });
+      });*/
+
+      /*==============ACTIONS UPDATED================= Date: 05-02-2026 ================ updated actions method by badal*/
+      const handleAddProduct = async () => {
+  try {
+    await api.createProduct({
+      name: newProduct.name.trim(),
+      category: newProduct.category.trim().toLowerCase(),
+      unit: newProduct.unit.trim(),
+      price: Number(newProduct.price),
+      stock: Number(newProduct.stock),
+      image: newProduct.image ? newProduct.image : null,
+    });
 
       setAddModal(false);
       setNewProduct({
@@ -286,13 +301,37 @@ export default function InventoryScreen() {
                 Select Image from Gallery
               </Text>
             </TouchableOpacity>
-
-            {newProduct.image ? (
+    {/*================== Image Preview and Remove Button =================  Date: 05-02-2026 */}
+    {/*newProduct.image ? (
               <Image
                 source={{ uri: newProduct.image }}
                 style={styles.previewImage}
               />
-            ) : null}
+            ) : null} */}
+            {newProduct.image ? (
+             <View style={{ alignItems: "center" }}>
+               <Image
+                source={{ uri: newProduct.image }}
+                style={styles.previewImage}
+                 />
+
+           <TouchableOpacity
+            onPress={removeImage}
+            style={{
+             marginTop: 8,
+              backgroundColor: "#f14141",
+              paddingHorizontal: 14,
+              paddingVertical: 8,
+              borderRadius: 8,
+                }}
+                >
+                <Text style={{ color: "white", fontWeight: "600" }}>
+                Remove Image
+                </Text>
+              </TouchableOpacity>
+              </View>
+              ) : null}
+
             <View style={{ paddingHorizontal: 20, marginVertical: 16 }}>
               {isFormValid && (
                 <View style={{ alignItems: "center", marginVertical: 16 }}>
