@@ -109,6 +109,7 @@ class User(UserBase):
     is_active: bool = True
     created_at: datetime = Field(default_factory=datetime.utcnow)
     zone: Optional[str] = None  # For delivery partners
+    is_verified: bool = False
 
 class UserResponse(BaseModel):
     id: str
@@ -121,6 +122,7 @@ class UserResponse(BaseModel):
     zone: Optional[str] = None
     assigned_admin_ids: List[str] = []  
     assigned_rider_name: Optional[str] = None
+    is_verified: bool = False 
 
 class Token(BaseModel):
     access_token: str
