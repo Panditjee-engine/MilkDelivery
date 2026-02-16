@@ -16,6 +16,8 @@ from enum import Enum
 from typing import Optional, Union
 from fastapi import APIRouter, Depends
 from bson import ObjectId
+import pytz
+import random
 import base64
 
 #30-jan- status all finen after updates at 318-324(add new dependency)
@@ -46,6 +48,7 @@ security = HTTPBearer()
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+IST = pytz.timezone("Asia/Kolkata")
 # ===================== ENUMS =====================
 class UserRole(str, Enum):
     CUSTOMER = "customer"
@@ -62,6 +65,7 @@ class SubscriptionPattern(str, Enum):
 class OrderStatus(str, Enum):
     PENDING = "pending"
     ASSIGNED = "assigned"
+    UNASSIGNED = "unassigned" ##
     OUT_FOR_DELIVERY = "out_for_delivery"
     DELIVERED = "delivered"
     SKIPPED = "skipped"
@@ -199,7 +203,6 @@ class Wallet(BaseModel):
     balance: float = 0.0
     transactions: List[WalletTransaction] = Field(default_factory=list)
 
-
 # Order Models
 class OrderItem(BaseModel):
     product_id: str
@@ -209,20 +212,28 @@ class OrderItem(BaseModel):
     subscription_id: Optional[str] = None
 
 class Order(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    id: str
     user_id: str
-    admin_id: Optional[str] = None #---> 6th feb
-    admin_name: Optional[str] = None  
+    admin_id: Optional[str]
+    admin_name: Optional[str]
     items: List[OrderItem]
     total_amount: float
-    status: OrderStatus = OrderStatus.PENDING
-    delivery_date: str  # YYYY-MM-DD
-    delivery_slot: str = "5:00 AM - 7:00 AM"
+    status: str
+    delivery_date: str
+    delivery_slot: str
     address: Dict[str, Any]
-    delivery_partner_id: Optional[str] = None
-    delivery_proof: Optional[str] = None  # base64 image
+
+    customer_name: Optional[str] = None
+    customer_phone: Optional[str] = None
+
+    delivery_partner_id: Optional[str]
+    delivery_partner_name: Optional[str] = None
+    delivery_partner_phone: Optional[str] = None
+    delivery_otp: Optional[str] = None
+    admin_otp: Optional[str] = None
     delivered_at: Optional[datetime] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime
+
 
 # Delivery Partner Models
 class DeliveryCheckin(BaseModel):
@@ -244,12 +255,8 @@ class ZoneAssignment(BaseModel):
 class StockUpdate(BaseModel):
     product_id: str
     quantity: int
-
-class ProcurementItem(BaseModel):
-    product_id: str
-    product_name: str
-    total_quantity: int
-    category: str
+    
+ # procumrement item base model erased
 
 class UserStatusUpdate(BaseModel):
     is_active: bool
@@ -268,22 +275,49 @@ class AssignZoneRequest(BaseModel):
 
 # ===================== AUTH HELPERS =====================
 
+def generate_otp():
+    return f"{random.randint(1000, 9999)}"
+
+def now_ist():
+    return datetime.now(IST)
+
+def serialize_doc(doc):
+    if not doc:
+        return doc
+    if "_id" in doc:
+        doc["_id"] = str(doc["_id"])
+    return doc
+
+def serialize_order_admin(order: dict):
+    order = dict(order)
+    if "_id" in order:
+        order["id"] = str(order["_id"])
+        order.pop("_id")
+    return order
+
+def serialize_order_public(order: dict):
+    order = dict(order)
+    order.pop("admin_otp", None)
+    if "_id" in order:
+        order["id"] = str(order["_id"])
+        order.pop("_id")
+    return order
+
+
 def serialize_order(order: dict):
     # Ensure it's a dict
     order = dict(order)
-    
+    order.pop("admin_otp", None)
     # Convert MongoDB ObjectId to string
     if "_id" in order:
         order["id"] = str(order["_id"])
         order.pop("_id")
     else:
         order["id"] = str(order.get("id", ""))
-
     # If you have nested ObjectIds (like user_id or delivery_partner_id)
     for key in ["user_id", "delivery_partner_id"]:
         if key in order and isinstance(order[key], ObjectId):
             order[key] = str(order[key])
-
     return order
 
 def serialize_product(product):
@@ -314,15 +348,13 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         
         user_data = await db.users.find_one({"id": user_id})
         if user_data is None:
-            raise HTTPException(status_code=401, detail="User not found")
-        
+            raise HTTPException(status_code=401, detail="User not found")        
         # 🔥 THIS IS THE IMPORTANT FIX
         if not user_data.get("is_active", True):
             raise HTTPException(
                 status_code=403,
                 detail="Account is blocked"
             )
-        
         return User(**user_data)
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
@@ -378,8 +410,7 @@ async def register(user_data: UserCreate):
     # Check if email exists
     existing = await db.users.find_one({"email": user_data.email})
     if existing:
-        raise HTTPException(status_code=400, detail="Email already registered")
-    
+        raise HTTPException(status_code=400, detail="Email already registered")   
     # Create user
     user_dict = user_data.dict()
     user_dict["password"] = get_password_hash(user_data.password)
@@ -388,12 +419,10 @@ async def register(user_data: UserCreate):
     user_dict["created_at"] = datetime.utcnow()
     
     await db.users.insert_one(user_dict)
-    
     # Create wallet for customers
     if user_data.role == UserRole.CUSTOMER:
         wallet = {"user_id": user_dict["id"], "balance": 0.0, "transactions": []}
         await db.wallets.insert_one(wallet)
-    
     # Create token
     access_token = create_access_token({"sub": user_dict["id"]})
     
@@ -420,9 +449,7 @@ async def login(credentials: UserLogin):
         status_code=403,
         detail="Account is blocked. Contact superadmin."
     )
-    
-    access_token = create_access_token({"sub": user["id"]})
-    
+    access_token = create_access_token({"sub": user["id"]})   
     user_response = UserResponse(
         id=user["id"],
         email=user["email"],
@@ -433,7 +460,6 @@ async def login(credentials: UserLogin):
         is_active=user["is_active"],
         zone=user.get("zone")
     )
-    
     return Token(access_token=access_token, token_type="bearer", user=user_response)
 
 @api_router.get("/auth/me", response_model=UserResponse)
@@ -475,13 +501,8 @@ async def get_admin_catalog():
         {"password": 0}
     ).to_list(100)
 
-    return [
-        {
-            "id": a["id"],
-            "name": a["name"]
-        }
-        for a in admins
-    ]
+    return [ {"id": a["id"],"name": a["name"] }
+        for a in admins ]
 
 @api_router.get("/products", response_model=List[Product])
 async def get_products(
@@ -490,10 +511,8 @@ async def get_products(
     admin: User = Depends(get_admin_user)  # add dependency
 ):
     query = {}
-
     if category:
         query["category"] = category.value
-
     # If admin_id not provided, default to current admin
     query["admin_id"] = admin_id or admin.id
 
@@ -502,12 +521,7 @@ async def get_products(
 
 @api_router.get("/catalog/products", response_model=List[Product])
 async def public_catalog(admin_id: Optional[str] = None, category: Optional[ProductCategory] = None):
-    """
-    Public catalog endpoint.
-    - Optional: filter by admin or category.
-    """
     query = {}
-
     if admin_id:
         query["admin_id"] = admin_id
     if category:
@@ -516,13 +530,14 @@ async def public_catalog(admin_id: Optional[str] = None, category: Optional[Prod
     products = await db.products.find(query).to_list(100)
     return [Product(**p) for p in products]
 
+
 @api_router.post("/products", response_model=Product)
 async def create_product(product: ProductCreate, admin: User = Depends(get_admin_user)):
 
     product_dict = product.dict()
 
     product_dict["admin_id"] = admin.id  # ✅ ADD
-    product_dict["admin_name"] = admin.name
+
 
     # ✅ ENSURE image_type EXISTS
     if product_dict.get("image") and not product_dict.get("image_type"):
@@ -574,41 +589,93 @@ async def get_categories():
 
 # ===================== SUBSCRIPTION ENDPOINTS =====================
 
-@api_router.get("/subscriptions", response_model=List[SubscriptionResponse])
+@api_router.get("/subscriptions")
 async def get_subscriptions(user: User = Depends(get_current_user)):
-    subscriptions = await db.subscriptions.find({"user_id": user.id, "is_active": True}).to_list(100)
+    subs = await db.subscriptions.find(
+        {"user_id": user.id, "is_active": True}
+    ).sort("created_at", -1).to_list(100)
+
     result = []
-    for sub in subscriptions:
+
+    for sub in subs:
         product = await db.products.find_one({"id": sub["product_id"]})
-        sub_response = SubscriptionResponse(**sub, product=Product(**product) if product else None)
-        result.append(sub_response)
+
+        sub["product"] = {
+            "name": product["name"],
+            "price": product["price"],
+            "unit": product.get("unit"),
+        } if product else None
+
+        # 🚫 prevent ObjectId crash
+        sub["_id"] = str(sub["_id"])
+
+        result.append(sub)
+
     return result
 
 @api_router.post("/subscriptions", response_model=Subscription)
 async def create_subscription(subscription: SubscriptionCreate, user: User = Depends(get_current_user)):
-    # Verify product exists
+
     product = await db.products.find_one({"id": subscription.product_id})
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
-    
+
     if not product.get("is_available", True):
-        raise HTTPException(status_code=400, detail="Cannot subscribe to out-of-stock product")
+        raise HTTPException(status_code=400, detail="Product unavailable")
+
+    user_otp = generate_otp()
+    admin_otp = generate_otp()
     
+    # ---------------- SUBSCRIPTION ----------------
     sub_dict = subscription.dict()
     sub_dict["id"] = str(uuid.uuid4())
     sub_dict["user_id"] = user.id
     sub_dict["is_active"] = True
     sub_dict["modifications"] = []
     sub_dict["created_at"] = datetime.utcnow()
-    sub_dict["admin_id"] = product.get("admin_id")
+    sub_dict["admin_id"] = product["admin_id"]
     sub_dict["admin_name"] = product.get("admin_name")
-    
-    # For buy_once, set end_date same as start_date
+    sub_dict["delivery_otp"] = user_otp
+
     if subscription.pattern == SubscriptionPattern.BUY_ONCE:
         sub_dict["end_date"] = subscription.start_date
-    
+
     await db.subscriptions.insert_one(sub_dict)
+
+    # ---------------- ORDER (🔥 NEW) ----------------
+    delivery_date = (
+        datetime.strptime(subscription.start_date, "%Y-%m-%d").strftime("%Y-%m-%d")
+    )
+
+    order = {
+        "id": str(uuid.uuid4()),
+        "subscription_id": sub_dict["id"],
+        "user_id": user.id,
+        "admin_id": product["admin_id"],
+        "admin_name": product.get("admin_name"),
+        "items": [{
+            "product_id": product["id"],
+            "product_name": product["name"],
+            "quantity": subscription.quantity,
+            "price": product["price"],
+            "subscription_id": sub_dict["id"]
+        }],
+        "delivery_otp": user_otp,
+        "admin_otp": admin_otp,
+
+        "total_amount": subscription.quantity * product["price"],
+        "status": OrderStatus.UNASSIGNED.value,
+        "delivery_date": delivery_date,
+        "delivery_slot": "5:00 AM - 7:00 AM",
+        "address": user.address or {},
+        "delivery_partner_id": None,
+        "created_at": datetime.utcnow()
+    }
+
+    await db.orders.insert_one(order)
+
     return Subscription(**sub_dict)
+    
 
 @api_router.put("/subscriptions/{subscription_id}")
 async def update_subscription(subscription_id: str, update_data: Dict[str, Any], user: User = Depends(get_current_user)):
@@ -627,13 +694,12 @@ async def update_subscription(subscription_id: str, update_data: Dict[str, Any],
 async def modify_subscription_date(
     subscription_id: str,
     modification: SubscriptionModification,
-    user: User = Depends(get_current_user)
-):
+    user: User = Depends(get_current_user)):
     """Modify quantity for a specific date"""
     sub = await db.subscriptions.find_one({"id": subscription_id, "user_id": user.id})
     if not sub:
         raise HTTPException(status_code=404, detail="Subscription not found")
-    
+
     # Update or add modification
     modifications = sub.get("modifications", [])
     existing_idx = next((i for i, m in enumerate(modifications) if m["date"] == modification.date), None)
@@ -647,14 +713,53 @@ async def modify_subscription_date(
     return {"message": "Modification saved", "modifications": modifications}
 
 @api_router.delete("/subscriptions/{subscription_id}")
-async def cancel_subscription(subscription_id: str, user: User = Depends(get_current_user)):
+async def cancel_subscription(
+    subscription_id: str,
+    user: User = Depends(get_current_user),
+):
+    # 1️⃣ Cancel subscription
     result = await db.subscriptions.update_one(
-        {"id": subscription_id, "user_id": user.id},
-        {"$set": {"is_active": False}}
+        {
+            "id": subscription_id,
+            "user_id": user.id,
+            "is_active": True,
+        },
+        {
+            "$set": {"is_active": False}
+        },
     )
-    if result.modified_count == 0:
-        raise HTTPException(status_code=404, detail="Subscription not found")
-    return {"message": "Subscription cancelled"}
+
+    if result.matched_count == 0:
+        raise HTTPException(
+            status_code=404,
+            detail="Active subscription not found",
+        )
+
+    # 2️⃣ DELETE related orders
+    await db.orders.delete_many(
+        {
+            "subscription_id": subscription_id,
+            "user_id": user.id,
+        }
+    )
+
+    return {
+        "success": True,
+        "message": "Subscription cancelled and orders deleted",
+    }
+
+@api_router.get("/superadmin/products")
+async def get_all_products_superadmin(
+    superadmin: User = Depends(get_superadmin_user)
+):
+    products = await db.products.find().to_list(1000)
+
+    for p in products:
+        if "_id" in p:
+            p["_id"] = str(p["_id"])
+
+    return products
+
 
 # ===================== VACATION ENDPOINTS =====================
 
@@ -745,8 +850,8 @@ async def get_order(order_id: str, user: User = Depends(get_current_user)):
 @api_router.get("/orders/tomorrow/preview")
 async def preview_tomorrow_order(user: User = Depends(get_current_user)):
     """Preview what tomorrow's order will look like based on active subscriptions"""
-    tomorrow = (datetime.utcnow() + timedelta(days=1)).strftime("%Y-%m-%d")
-    
+    tomorrow = (now_ist() + timedelta(days=1)).strftime("%Y-%m-%d")
+
     # Get active subscriptions
     subscriptions = await db.subscriptions.find({"user_id": user.id, "is_active": True}).to_list(100)
     
@@ -819,30 +924,42 @@ async def preview_tomorrow_order(user: User = Depends(get_current_user)):
 
 @api_router.post("/delivery/checkin")
 async def delivery_checkin(partner: User = Depends(get_delivery_partner)):
-    today = datetime.utcnow().strftime("%Y-%m-%d")
+    today = now_ist().strftime("%Y-%m-%d")
     
-    existing = await db.checkins.find_one({"partner_id": partner.id, "date": today})
+    existing = await db.checkins.find_one({
+    "partner_id": partner.id,
+    "date": today,
+    "checkout_time": None  })
+
     if existing:
-        return {"message": "Already checked in", "checkin": existing}
-    
+        return {"message": "Already checked in", "checkin": serialize_doc(existing)}
+
     checkin = {
         "id": str(uuid.uuid4()),
         "partner_id": partner.id,
-        "checkin_time": datetime.utcnow().isoformat(),
+        "checkin_time": now_ist().isoformat(),
         "checkout_time": None,
         "date": today
     }
     await db.checkins.insert_one(checkin)
-    return {"message": "Checked in successfully", "checkin": checkin}
+    return {"message": "Checked in successfully", "checkin": serialize_doc(checkin)}
 
 @api_router.post("/delivery/checkout")
 async def delivery_checkout(partner: User = Depends(get_delivery_partner)):
-    today = datetime.utcnow().strftime("%Y-%m-%d")
+    today = now_ist().strftime("%Y-%m-%d")
     
     result = await db.checkins.update_one(
-        {"partner_id": partner.id, "date": today},
-        {"$set": {"checkout_time": datetime.utcnow().isoformat()}}
-    )
+    {
+        "partner_id": partner.id,
+        "date": today,
+        "checkout_time": None   # ⭐ VERY IMPORTANT
+    },
+    {
+        "$set": {
+            "checkout_time": now_ist().isoformat()
+        }
+    }
+)
     
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="No active checkin found")
@@ -852,7 +969,7 @@ async def delivery_checkout(partner: User = Depends(get_delivery_partner)):
 @api_router.get("/delivery/today")
 async def get_today_deliveries(partner: User = Depends(get_delivery_partner)):
     """Get all deliveries assigned to this partner for today"""
-    today = datetime.utcnow().strftime("%Y-%m-%d")
+    today = now_ist().strftime("%Y-%m-%d")
     
     assigned_admins = getattr(partner, "assigned_admin_ids", [])
 
@@ -862,7 +979,7 @@ async def get_today_deliveries(partner: User = Depends(get_delivery_partner)):
     orders = await db.orders.find({
         "delivery_partner_id": partner.id,
         "delivery_date": today,
-         "admin_id": {"$in": assigned_admins},
+        "admin_id": {"$in": assigned_admins},
         "status": {"$in": ["pending", "assigned", "out_for_delivery"]}
     }).to_list(100)
     
@@ -885,8 +1002,8 @@ async def complete_delivery(delivery: DeliveryComplete, partner: User = Depends(
         raise HTTPException(status_code=404, detail="Order not found or not assigned to you")
     
     update_data = {
-        "status": OrderStatus.DELIVERED,
-        "delivered_at": datetime.utcnow().isoformat()
+         "status": OrderStatus.DELIVERED.value,
+        "delivered_at": now_ist().isoformat()
     }
     
     if delivery.proof_image:
@@ -896,19 +1013,111 @@ async def complete_delivery(delivery: DeliveryComplete, partner: User = Depends(
     return {"message": "Delivery marked as complete"}
 
 @api_router.get("/delivery/status")
-async def get_checkin_status(partner: User = Depends(get_delivery_partner)):
-    today = datetime.utcnow().strftime("%Y-%m-%d")
-    checkin = await db.checkins.find_one({"partner_id": partner.id, "date": today})
+async def get_delivery_shift_status(partner: User = Depends(get_delivery_partner)):
+    today = now_ist().strftime("%Y-%m-%d")
+    checkin = await db.checkins.find_one(
+    {
+        "partner_id": partner.id,
+        "date": today
+    },
+    sort=[("checkin_time", -1)]   # ⭐ MOST IMPORTANT
+)
     
     if not checkin:
         return {"checked_in": False, "checked_out": False}
     
+    checkout_time = checkin.get("checkout_time")
     return {
-        "checked_in": True,
-        "checked_out": checkin.get("checkout_time") is not None,
-        "checkin_time": checkin.get("checkin_time"),
-        "checkout_time": checkin.get("checkout_time")
-    }
+    "checked_in": True,
+    "checked_out": checkout_time is not None, 
+    "checkin_time": checkin.get("checkin_time"),
+    "checked_out": checkout_time is not None
+}
+
+@api_router.post("/delivery/orders/{order_id}/accept")
+async def accept_order(
+    order_id: str,
+    partner: User = Depends(get_delivery_partner)
+):
+    result = await db.orders.find_one_and_update(
+        {
+            "id": order_id,
+            "status": OrderStatus.UNASSIGNED.value,
+            "admin_id": {"$in": partner.assigned_admin_ids}  # 🔒 IMPORTANT
+        },
+        {
+            "$set": {
+                "delivery_partner_id": partner.id,
+                "status": OrderStatus.ASSIGNED.value,
+                "accepted_at": now_ist().isoformat()
+            }
+        }
+    )
+
+    if not result:
+        raise HTTPException(
+            status_code=400,
+            detail="Order already accepted or not available for you"
+        )
+
+    return {"message": "Order accepted"}
+
+
+@api_router.post("/delivery/orders/{order_id}/reject")
+async def reject_order(
+    order_id: str,
+    partner: User = Depends(get_delivery_partner)
+):
+    order = await db.orders.find_one(
+        {
+            "id": order_id,
+            "admin_id": {"$in": partner.assigned_admin_ids}
+        }
+    )
+
+    if not order:
+        raise HTTPException(404, "Order not found")
+    if order["status"] != OrderStatus.UNASSIGNED.value:
+        raise HTTPException(400, "Cannot reject an active order")
+
+    await db.rider_rejections.update_one(
+        {
+            "delivery_partner_id": partner.id,
+            "admin_id": order["admin_id"]
+        },
+        {
+            "$addToSet": {"order_ids": order_id}
+        },
+        upsert=True
+    )
+
+    return {"message": "Order hidden from rider"}
+
+@api_router.get("/delivery/available")
+async def get_available_orders(partner: User = Depends(get_delivery_partner)):
+
+    today = now_ist().strftime("%Y-%m-%d")
+
+    assigned_admins = getattr(partner, "assigned_admin_ids", [])
+    if not assigned_admins:
+        return []
+
+    checkin = await db.checkins.find_one({
+    "partner_id": partner.id,
+    "date": today,
+    "checkout_time": None
+})
+
+    if not checkin:
+        return []
+
+    orders = await db.orders.find({
+        "admin_id": {"$in": assigned_admins},
+        "status": OrderStatus.UNASSIGNED.value,
+        "delivery_date": today   # ⭐ ADD THIS
+    }).to_list(100)
+
+    return [serialize_order_public(o) for o in orders]
 
 # ===================== SUPERADMIN ENDPOINTS =====================
 
@@ -922,7 +1131,6 @@ async def get_users_for_superadmin(
         query["role"] = role.value
 
     users = await db.users.find(query, {"password": 0}).to_list(1000)
-
     return [
         UserResponse(**u)
         for u in users
@@ -932,19 +1140,10 @@ async def get_users_for_superadmin(
 async def superadmin_dashboard(
     superadmin: User = Depends(get_superadmin_user)
 ):
-    total_customers = await db.users.count_documents({
-        "role": "customer"})
-
-    total_admins = await db.users.count_documents({
-        "role": "admin" })
-
-    total_delivery_partners = await db.users.count_documents({
-        "role": "delivery_partner" })
-
-    active_delivery_partners = await db.users.count_documents({
-        "role": "delivery_partner",
-        "is_active": True })
-
+    total_customers = await db.users.count_documents({"role": "customer"})
+    total_admins = await db.users.count_documents({"role": "admin" })
+    total_delivery_partners = await db.users.count_documents({"role": "delivery_partner" })
+    active_delivery_partners = await db.users.count_documents({"role": "delivery_partner","is_active": True })
     total_orders = await db.orders.count_documents({})
 
     return {
@@ -973,8 +1172,7 @@ async def update_product_status(
 ):
     result = await db.products.update_one(
         {"id": product_id},
-        {"$set": {"is_available": payload.is_available}}
-    )
+        {"$set": {"is_available": payload.is_available}} )
 
     if result.matched_count == 0:
         raise HTTPException(404, "Product not found")
@@ -990,8 +1188,7 @@ async def toggle_user_status(
 ):
     result = await db.users.update_one(
         {"id": user_id},
-        {"$set": {"is_active": body.is_active}}
-    )
+        {"$set": {"is_active": body.is_active}} )
 
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="User not found")
@@ -1002,15 +1199,13 @@ async def toggle_user_status(
 async def update_user_role(
     user_id: str,
     role: UserRole,
-    superadmin: User = Depends(get_superadmin_user)
-):
+    superadmin: User = Depends(get_superadmin_user)):
     if role == UserRole.SUPERADMIN:
         raise HTTPException(status_code=400, detail="Cannot assign superadmin")
 
     result = await db.users.update_one(
         {"id": user_id},
-        {"$set": {"role": role.value}}
-    )
+        {"$set": {"role": role.value}})
 
     if result.modified_count == 0:
         raise HTTPException(status_code=404, detail="User not found")
@@ -1022,18 +1217,15 @@ async def get_all_orders_for_superadmin(
     admin_id: Optional[str] = None,
     status: Optional[str] = None,
     date: Optional[str] = None,
-    superadmin: User = Depends(get_superadmin_user)
-):
+    superadmin: User = Depends(get_superadmin_user)):
     query = {}
 
     # ✅ Filter by Admin
     if admin_id:
         query["admin_id"] = admin_id
-
     # ✅ Filter by Status
     if status:
         query["status"] = status
-
     # ✅ Filter by Delivery Date
     if date:
         query["delivery_date"] = date
@@ -1042,37 +1234,7 @@ async def get_all_orders_for_superadmin(
 
     return [serialize_order(o) for o in orders]
 
-@api_router.post("/superadmin/orders/generate")
-async def generate_orders(superadmin: User = Depends(get_superadmin_user)):
-    orders_created = 0
-    orders_skipped = 0
-
-    # Your generation logic here
-
-    return {
-        "orders_created": orders_created,
-        "orders_skipped": orders_skipped
-    }
-
-@api_router.get("/superadmin/products")
-async def get_all_products_for_superadmin(
-    admin_id: Optional[str] = None,
-    category: Optional[str] = None,
-    superadmin: User = Depends(get_superadmin_user)
-):
-    query = {}
-
-    # ✅ Filter by Admin
-    if admin_id:
-        query["admin_id"] = admin_id
-
-    # ✅ Filter by Category
-    if category:
-        query["category"] = category
-
-    products = await db.products.find(query).to_list(1000)
-
-    return [serialize_product(p) for p in products]
+#----- superadmin order genarte erased
 
 @api_router.get("/superadmin/revenue")
 async def get_revenue_for_superadmin(
@@ -1106,12 +1268,10 @@ async def get_revenue_for_superadmin(
 async def assign_rider_admins(
     rider_id: str,
     body: AssignAdminsRequest,
-    superadmin: User = Depends(get_superadmin_user)
-):
+    superadmin: User = Depends(get_superadmin_user)):
     result = await db.users.update_one(
         {"id": rider_id, "role": "delivery_partner"},
-        {"$set": {"assigned_admin_ids": body.assigned_admin_ids}}
-    )
+        {"$set": {"assigned_admin_ids": body.assigned_admin_ids}})
 
     if result.matched_count == 0:
         raise HTTPException(404, "Rider not found")
@@ -1122,29 +1282,24 @@ async def assign_rider_admins(
 async def assign_zone(
     user_id: str,
     body: AssignZoneRequest,
-    superadmin: User = Depends(get_superadmin_user)
-):
+    superadmin: User = Depends(get_superadmin_user)):
     result = await db.users.update_one(
         {"id": user_id},
-        {"$set": {"zone": body.zone}}
-    )
+        {"$set": {"zone": body.zone}})
 
     if result.matched_count == 0:
         raise HTTPException(404, "User not found")
 
     return {"message": "Zone assigned"}
 
-
 @api_router.get("/superadmin/admins-with-riders")
 async def get_admins_with_riders(
-    superadmin: User = Depends(get_superadmin_user)
-):
+    superadmin: User = Depends(get_superadmin_user)):
     # Get all admins
     admins = await db.users.find(
         {"role": "admin"},
         {"password": 0}
     ).to_list(1000)
-
     # Get all riders
     riders = await db.users.find(
         {"role": "delivery_partner"},
@@ -1159,8 +1314,7 @@ async def get_admins_with_riders(
                 r for r in riders
                 if admin["id"] in r.get("assigned_admin_ids", [])
             ),
-            None
-        )
+            None )
 
         admin["assigned_rider_name"] = (
             assigned_rider["name"] if assigned_rider else None
@@ -1168,19 +1322,16 @@ async def get_admins_with_riders(
 
         result.append(admin)
 
-
         for admin in result:
          admin.pop("_id", None)
 
     return result
 
-
-
 # ===================== ADMIN ENDPOINTS =====================
 
 @api_router.get("/admin/dashboard")
 async def admin_dashboard(admin: User = Depends(get_admin_user)):
-    today = datetime.utcnow().strftime("%Y-%m-%d")
+    today = now_ist().strftime("%Y-%m-%d")
     
     # Get stats
     total_customers = await db.users.count_documents({"role": "customer"})
@@ -1199,72 +1350,9 @@ async def admin_dashboard(admin: User = Depends(get_admin_user)):
         "active_subscriptions": active_subscriptions,
         "today_orders": today_orders,
         "delivered_today": delivered_today,
-        "today_revenue": today_revenue
-    }
+        "today_revenue": today_revenue }
 
-@api_router.get("/admin/procurement")
-async def get_procurement_list(admin: User = Depends(get_admin_user)):
-    """Generate procurement list for tomorrow based on subscriptions"""
-    tomorrow = (datetime.utcnow() + timedelta(days=1)).strftime("%Y-%m-%d")
-    tomorrow_date = datetime.strptime(tomorrow, "%Y-%m-%d")
-    day_of_week = tomorrow_date.weekday()
-    
-    # Get all active subscriptions
-    subscriptions = await db.subscriptions.find({"is_active": True,"admin_id": admin.id}).to_list(10000)   
-    # Group by product
-    product_quantities = {}
-    
-    for sub in subscriptions:
-        # Check vacation
-        vacations = await db.vacations.find({"user_id": sub["user_id"]}).to_list(100)
-        is_vacation = any(v["start_date"] <= tomorrow <= v["end_date"] for v in vacations)
-        if is_vacation:
-            continue
-        
-        # Check dates
-        if sub.get("end_date") and sub["end_date"] < tomorrow:
-            continue
-        if sub["start_date"] > tomorrow:
-            continue
-        
-        # Check pattern
-        should_deliver = False
-        if sub["pattern"] == "daily":
-            should_deliver = True
-        elif sub["pattern"] == "alternate":
-            start = datetime.strptime(sub["start_date"], "%Y-%m-%d")
-            days_diff = (tomorrow_date - start).days
-            should_deliver = days_diff % 2 == 0
-        elif sub["pattern"] == "custom":
-            should_deliver = day_of_week in (sub.get("custom_days") or [])
-        elif sub["pattern"] == "buy_once":
-            should_deliver = sub["start_date"] == tomorrow
-        
-        if should_deliver:
-            quantity = sub["quantity"]
-            for mod in sub.get("modifications", []):
-                if mod["date"] == tomorrow:
-                    quantity = mod["quantity"]
-                    break
-            
-            if quantity > 0:
-                pid = sub["product_id"]
-                product_quantities[pid] = product_quantities.get(pid, 0) + quantity
-    
-    # Get product details
-    result = []
-    for pid, qty in product_quantities.items():
-        product = await db.products.find_one({"id": pid})
-        if product:
-            result.append({
-                "product_id": pid,
-                "product_name": product["name"],
-                "category": product["category"],
-                "total_quantity": qty,
-                "unit": product["unit"]
-            })
-    
-    return {"date": tomorrow, "items": result}
+#admin procurement erased 
 
 @api_router.get("/admin/users")
 async def get_all_users(role: Optional[UserRole] = None, admin: User = Depends(get_admin_user)):
@@ -1292,18 +1380,41 @@ async def update_stock(product_id: str, stock: StockUpdate, admin: User = Depend
 
 @api_router.get("/admin/orders")
 async def get_all_orders(
-    status: Optional[OrderStatus] = None,
+    status: Optional[str] = None,
     date: Optional[str] = None,
-    admin: User = Depends(get_admin_user)
+    admin: User = Depends(get_admin_user),
 ):
     query = {"admin_id": admin.id}
+
     if status:
-        query["status"] = status.value
+        query["status"] = status.lower()  # matches DB
     if date:
         query["delivery_date"] = date
-    
+
     orders = await db.orders.find(query).sort("created_at", -1).to_list(1000)
-    return [Order(**o) for o in orders]
+
+    result = []
+
+    for o in orders:
+        # ✅ CUSTOMER
+        user = await db.users.find_one({"id": o.get("user_id")})
+        o["customer_name"] = user["name"] if user else "Unknown Customer"
+        o["customer_phone"] = user["phone"] if user and user.get("phone") else None
+
+        # ✅ RIDER
+        if o.get("delivery_partner_id"):
+            rider = await db.users.find_one({"id": o["delivery_partner_id"]})
+            o["delivery_partner_name"] = rider["name"] if rider else None
+            o["delivery_partner_phone"] = rider["phone"] if rider and rider.get("phone") else None
+        else:
+            o["delivery_partner_name"] = None
+            o["delivery_partner_phone"] = None
+
+        result.append(Order(**o))
+
+    return result
+
+
 
 @api_router.put("/admin/orders/{order_id}/assign")
 async def assign_delivery_partner(order_id: str, partner_id: str, admin: User = Depends(get_admin_user)):
@@ -1313,8 +1424,7 @@ async def assign_delivery_partner(order_id: str, partner_id: str, admin: User = 
     
     result = await db.orders.update_one(
         {"id": order_id},
-        {"$set": {"delivery_partner_id": partner_id, "status": OrderStatus.ASSIGNED}}
-    )
+        {"$set": {"delivery_partner_id": partner_id, "status": OrderStatus.ASSIGNED.value}} )
     if result.modified_count == 0:
         raise HTTPException(status_code=404, detail="Order not found")
     
@@ -1324,8 +1434,7 @@ async def assign_delivery_partner(order_id: str, partner_id: str, admin: User = 
 async def get_finance_report(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
-    admin: User = Depends(get_admin_user)
-):
+    admin: User = Depends(get_admin_user)):
     query = {"status": "delivered"}
     if start_date:
         query["delivery_date"] = {"$gte": start_date}
@@ -1352,8 +1461,7 @@ async def get_finance_report(
     return {
         "total_revenue": total_revenue,
         "total_orders": total_orders,
-        "by_date": by_date
-    }
+        "by_date": by_date  }
 
 @api_router.post("/admin/refund")
 async def process_refund(user_id: str, amount: float, reason: str, admin: User = Depends(get_admin_user)):
@@ -1378,143 +1486,15 @@ async def process_refund(user_id: str, amount: float, reason: str, admin: User =
     
     await db.wallets.update_one(
         {"user_id": user_id},
-        {
+          {
             "$set": {"balance": new_balance},
-            "$push": {"transactions": transaction}
-        }
-    )
+            "$push": {"transactions": transaction}})
     
     return {"message": "Refund processed", "new_balance": new_balance}
 
 # ===================== MIDNIGHT RUN - ORDER GENERATION =====================
 
-@api_router.post("/admin/generate-orders")
-async def generate_tomorrow_orders(admin: User = Depends(get_admin_user)):
-    """Generate orders for tomorrow based on subscriptions - The Midnight Run"""
-    tomorrow = (datetime.utcnow() + timedelta(days=1)).strftime("%Y-%m-%d")
-    tomorrow_date = datetime.strptime(tomorrow, "%Y-%m-%d")
-    day_of_week = tomorrow_date.weekday()
-    
-    # Get all customers with active subscriptions
-    subscriptions = await db.subscriptions.find({"is_active": True}).to_list(10000)
-    # Group subscriptions by user
-    user_subs = {}
-    for sub in subscriptions:
-        uid = sub["user_id"]
-        if uid not in user_subs:
-            user_subs[uid] = []
-        user_subs[uid].append(sub)
-    
-    orders_created = 0
-    orders_skipped = 0
-    
-    for user_id, subs in user_subs.items():
-        # Check vacation
-        vacations = await db.vacations.find({"user_id": user_id}).to_list(100)
-        is_vacation = any(v["start_date"] <= tomorrow <= v["end_date"] for v in vacations)
-        if is_vacation:
-            orders_skipped += 1
-            continue
-               
-        # Get user details
-        user = await db.users.find_one({"id": user_id})
-        if not user:
-            continue
-        
-        # Calculate order items
-        items = []
-        total = 0.0
-        
-        for sub in subs:
-            # Check dates
-            if sub.get("end_date") and sub["end_date"] < tomorrow:
-                continue
-            if sub["start_date"] > tomorrow:
-                continue
-            
-            # Check pattern
-            should_deliver = False
-            if sub["pattern"] == "daily":
-                should_deliver = True
-            elif sub["pattern"] == "alternate":
-                start = datetime.strptime(sub["start_date"], "%Y-%m-%d")
-                days_diff = (tomorrow_date - start).days
-                should_deliver = days_diff % 2 == 0
-            elif sub["pattern"] == "custom":
-                should_deliver = day_of_week in (sub.get("custom_days") or [])
-            elif sub["pattern"] == "buy_once":
-                should_deliver = sub["start_date"] == tomorrow
-            
-            if should_deliver:
-                product = await db.products.find_one({"id": sub["product_id"]})
-                if product:
-                    quantity = sub["quantity"]
-                    for mod in sub.get("modifications", []):
-                        if mod["date"] == tomorrow:
-                            quantity = mod["quantity"]
-                            break
-                    
-                    if quantity > 0:
-                        item_total = product["price"] * quantity
-                        items.append(OrderItem(
-                            product_id=product["id"],
-                            product_name=product["name"],
-                            quantity=quantity,
-                            price=product["price"],
-                            subscription_id=sub["id"]
-                        ))
-                        total += item_total
-        
-        if not items:
-            continue
-        
-        # Check wallet balance
-        wallet = await db.wallets.find_one({"user_id": user_id})
-        balance = wallet.get("balance", 0.0) if wallet else 0.0
-        
-        if balance < total:
-            # Skip order due to insufficient balance
-            orders_skipped += 1
-            # In real app, would send SMS notification here
-            continue
-        
-        # Deduct from wallet
-        new_balance = balance - total
-        transaction = {
-            "id": str(uuid.uuid4()),
-            "user_id": user_id,
-            "amount": total,
-            "type": "debit",
-            "description": f"Order for {tomorrow}",
-            "balance_after": new_balance,
-            "created_at": datetime.utcnow().isoformat()
-        }
-        
-        await db.wallets.update_one(
-            {"user_id": user_id},
-            {
-                "$set": {"balance": new_balance},
-                "$push": {"transactions": transaction}
-            }
-        )
-        
-        # Create order
-        order = Order(
-            user_id=user_id,
-            items=[item.dict() for item in items],
-            total_amount=total,
-            delivery_date=tomorrow,
-            address=user.get("address", {})
-        )
-        
-        await db.orders.insert_one(order.dict())
-        orders_created += 1
-    
-    return {
-        "message": "Midnight run completed",
-        "orders_created": orders_created,
-        "orders_skipped": orders_skipped
-    }
+#--- erased  admin order genarete
 
 # ===================== SEED DATA =====================
 
@@ -1544,8 +1524,7 @@ async def seed_data():
             "password": get_password_hash("admin123"),
             "role": "admin",
             "is_active": True,
-            "created_at": datetime.utcnow()
-        }
+            "created_at": datetime.utcnow() }
         await db.users.insert_one(admin)
     
     return {"message": "Data seeded successfully", "products_count": len(products)}
