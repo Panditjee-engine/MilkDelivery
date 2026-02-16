@@ -18,6 +18,7 @@ from fastapi import APIRouter, Depends
 from bson import ObjectId
 import pytz
 import random
+from pydantic import BaseModel
 import base64
 
 #30-jan- status all finen after updates at 318-324(add new dependency)
@@ -263,6 +264,9 @@ class UserStatusUpdate(BaseModel):
 
 class VerifyUserRequest(BaseModel):
     is_verified: bool = True
+
+class UserVerifyUpdate(BaseModel):
+    is_verified: bool
 
 class ProductStatusUpdate(BaseModel):
     is_available: bool
@@ -1392,6 +1396,21 @@ async def create_rider(
 
     return {"message": "Rider created successfully"}
 
+@api_router.put("/superadmin/users/{user_id}/verify")
+async def toggle_user_verify(
+    user_id: str,
+    body: UserVerifyUpdate,
+    superadmin: User = Depends(get_superadmin_user)
+):
+    result = await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"is_verified": body.is_verified}}
+    )
+
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return {"message": "User verify status updated"}
 
 # ===================== ADMIN ENDPOINTS =====================
 
