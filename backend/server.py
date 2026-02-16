@@ -261,6 +261,9 @@ class StockUpdate(BaseModel):
 class UserStatusUpdate(BaseModel):
     is_active: bool
 
+class VerifyUserRequest(BaseModel):
+    is_verified: bool = True
+
 class ProductStatusUpdate(BaseModel):
     is_available: bool
 
@@ -272,6 +275,13 @@ class AssignAdminsRequest(BaseModel):
 
 class AssignZoneRequest(BaseModel):
     zone: str
+
+class CreateRiderRequest(BaseModel):
+    name: str
+    email: EmailStr
+    phone: Optional[str] = None
+    password: str
+
 
 # ===================== AUTH HELPERS =====================
 
@@ -1326,6 +1336,62 @@ async def get_admins_with_riders(
          admin.pop("_id", None)
 
     return result
+
+@api_router.put("/superadmin/users/{user_id}/verify")
+async def verify_user(
+    user_id: str,
+    body: VerifyUserRequest,
+    superadmin: User = Depends(get_superadmin_user)
+):
+    result = await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"is_verified": body.is_verified}}
+    )
+
+    if result.matched_count == 0:
+        raise HTTPException(404, "User not found")
+
+    return {"message": "User verification updated"}
+
+@api_router.delete("/superadmin/users/{user_id}")
+async def delete_user(
+    user_id: str,
+    superadmin: User = Depends(get_superadmin_user)
+):
+    user = await db.users.find_one({"id": user_id})
+
+    if not user:
+        raise HTTPException(404, "User not found")
+
+    if user.get("role") == "superadmin":
+        raise HTTPException(400, "Cannot delete superadmin")
+
+    await db.users.delete_one({"id": user_id})
+
+    return {"message": "User deleted"}
+
+@api_router.post("/superadmin/users/create-rider")
+async def create_rider(
+    rider: CreateRiderRequest,
+    superadmin: User = Depends(get_superadmin_user)
+):
+    existing = await db.users.find_one({"email": rider.email})
+    if existing:
+        raise HTTPException(400, "Email already exists")
+
+    rider_dict = rider.dict()
+    rider_dict["id"] = str(uuid.uuid4())
+    rider_dict["password"] = get_password_hash(rider.password)
+    rider_dict["role"] = UserRole.DELIVERY_PARTNER.value
+    rider_dict["is_active"] = True
+    rider_dict["is_verified"] = False
+    rider_dict["assigned_admin_ids"] = []
+    rider_dict["created_at"] = datetime.utcnow()
+
+    await db.users.insert_one(rider_dict)
+
+    return {"message": "Rider created successfully"}
+
 
 # ===================== ADMIN ENDPOINTS =====================
 
