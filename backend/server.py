@@ -1,3 +1,4 @@
+from itertools import product
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
@@ -154,6 +155,7 @@ class Product(ProductBase):
 class SubscriptionBase(BaseModel):
     product_id: str
     quantity: int = 1
+    status: Optional[str] = "active"  # ✅ ADD THIS
     pattern: SubscriptionPattern
     custom_days: Optional[List[int]] = None  # 0=Mon, 6=Sun for custom pattern
     start_date: str  # YYYY-MM-DD
@@ -224,7 +226,7 @@ class Order(BaseModel):
     status: str
     delivery_date: str
     delivery_slot: str
-    address: Dict[str, Any]
+    address: Optional[Dict[str, Any]] = None  # ✅ FIXED
 
     customer_name: Optional[str] = None
     customer_phone: Optional[str] = None
@@ -288,6 +290,9 @@ class CreateRiderRequest(BaseModel):
     phone: Optional[str] = None
     password: str
 
+class StatusUpdateRequest(BaseModel):
+    order_id: str
+    status: str
 
 # ===================== AUTH HELPERS =====================
 
@@ -313,10 +318,15 @@ def serialize_order_admin(order: dict):
 
 def serialize_order_public(order: dict):
     order = dict(order)
-    order.pop("admin_otp", None)
+
+    # Only hide admin OTP if order is unassigned
+    if order.get("status") == "unassigned":
+        order.pop("admin_otp", None)
+
     if "_id" in order:
         order["id"] = str(order["_id"])
         order.pop("_id")
+
     return order
 
 
@@ -622,9 +632,16 @@ async def get_subscriptions(user: User = Depends(get_current_user)):
             "unit": product.get("unit"),
         } if product else None
 
-        # 🚫 prevent ObjectId crash
-        sub["_id"] = str(sub["_id"])
+        # ✅ Fetch linked order status
+        order = await db.orders.find_one({"subscription_id": sub["id"]})
+        if order:
+            sub["status"] = order.get("status", "unassigned")
+            sub["delivery_otp"] = order.get("delivery_otp")
+            sub["order_id"] = str(order.get("_id", ""))
+        else:
+            sub["status"] = "no_order"
 
+        sub["_id"] = str(sub["_id"])
         result.append(sub)
 
     return result
@@ -633,11 +650,14 @@ async def get_subscriptions(user: User = Depends(get_current_user)):
 async def create_subscription(subscription: SubscriptionCreate, user: User = Depends(get_current_user)):
 
     product = await db.products.find_one({"id": subscription.product_id})
+    
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
 
     if not product.get("is_available", True):
         raise HTTPException(status_code=400, detail="Product unavailable")
+    
+    admin = await db.users.find_one({"id": product["admin_id"]})
 
     user_otp = generate_otp()
     admin_otp = generate_otp()
@@ -664,30 +684,40 @@ async def create_subscription(subscription: SubscriptionCreate, user: User = Dep
     )
 
     order = {
-        "id": str(uuid.uuid4()),
-        "subscription_id": sub_dict["id"],
-        "user_id": user.id,
-        "admin_id": product["admin_id"],
-        "admin_name": product.get("admin_name"),
-        "items": [{
-            "product_id": product["id"],
-            "product_name": product["name"],
-            "quantity": subscription.quantity,
-            "price": product["price"],
-            "subscription_id": sub_dict["id"]
-        }],
-        "delivery_otp": user_otp,
-        "admin_otp": admin_otp,
+    "id": str(uuid.uuid4()),
+    "subscription_id": sub_dict["id"],
 
-        "total_amount": subscription.quantity * product["price"],
-        "status": OrderStatus.UNASSIGNED.value,
-        "delivery_date": delivery_date,
-        "delivery_slot": "5:00 AM - 7:00 AM",
-        "address": user.address or {},
-        "delivery_partner_id": None,
-        "created_at": datetime.utcnow()
-    }
+    # 👤 CUSTOMER INFO (Freeze snapshot)
+    "user_id": user.id,
+    "customer_name": user.name,
+    "customer_phone": user.phone,
+    "delivery_address": user.address or {},
 
+    # 🏪 ADMIN INFO (Freeze snapshot)
+    "admin_id": product["admin_id"],
+    "admin_name": admin["name"] if admin else None,
+    "admin_phone": admin.get("phone") if admin else None,
+    "pickup_address": admin.get("address") if admin else {},
+
+    "items": [{
+        "product_id": product["id"],
+        "product_name": product["name"],
+        "quantity": subscription.quantity,
+        "price": product["price"],
+        "subscription_id": sub_dict["id"]
+    }],
+
+    "delivery_otp": user_otp,
+    "admin_otp": admin_otp,
+
+    "total_amount": subscription.quantity * product["price"],
+    "status": OrderStatus.UNASSIGNED.value,
+    "delivery_date": delivery_date,
+    "delivery_slot": "5:00 AM - 7:00 AM",
+
+    "delivery_partner_id": None,
+    "created_at": datetime.utcnow()
+}
     await db.orders.insert_one(order)
 
     return Subscription(**sub_dict)
@@ -1016,16 +1046,64 @@ async def complete_delivery(delivery: DeliveryComplete, partner: User = Depends(
     order = await db.orders.find_one({"id": delivery.order_id, "delivery_partner_id": partner.id})
     if not order:
         raise HTTPException(status_code=404, detail="Order not found or not assigned to you")
-    
-    update_data = {
-         "status": OrderStatus.DELIVERED.value,
-        "delivered_at": now_ist().isoformat()
-    }
-    
-    if delivery.proof_image:
-        update_data["delivery_proof"] = delivery.proof_image
-    
-    await db.orders.update_one({"id": delivery.order_id}, {"$set": update_data})
+
+    await db.orders.update_one(
+        {"id": delivery.order_id},
+        {"$set": {"status": OrderStatus.DELIVERED.value, "delivered_at": now_ist().isoformat()}}
+    )
+
+    # ── AUTO WALLET TRANSFER ──
+    amount = order.get("total_amount", 0)
+    user_id = order.get("user_id")
+    admin_id = order.get("admin_id")
+
+    if amount > 0 and user_id and admin_id:
+        # Deduct from customer
+        customer_wallet = await db.wallets.find_one({"user_id": user_id})
+        if not customer_wallet:
+            customer_wallet = {"user_id": user_id, "balance": 0.0, "transactions": []}
+            await db.wallets.insert_one(customer_wallet)
+
+        customer_new_balance = customer_wallet.get("balance", 0.0) - amount
+        await db.wallets.update_one(
+            {"user_id": user_id},
+            {
+                "$set": {"balance": customer_new_balance},
+                "$push": {"transactions": {
+                    "id": str(uuid.uuid4()),
+                    "user_id": user_id,
+                    "amount": amount,
+                    "type": "debit",
+                    "description": f"Order delivered - {', '.join([i['product_name'] for i in order.get('items', [])])}",
+                    "balance_after": customer_new_balance,
+                    "created_at": datetime.utcnow().isoformat()
+                }}
+            }
+        )
+
+        # Credit to admin
+        admin_wallet = await db.wallets.find_one({"user_id": admin_id})
+        if not admin_wallet:
+            admin_wallet = {"user_id": admin_id, "balance": 0.0, "transactions": []}
+            await db.wallets.insert_one(admin_wallet)
+
+        admin_new_balance = admin_wallet.get("balance", 0.0) + amount
+        await db.wallets.update_one(
+            {"user_id": admin_id},
+            {
+                "$set": {"balance": admin_new_balance},
+                "$push": {"transactions": {
+                    "id": str(uuid.uuid4()),
+                    "user_id": admin_id,
+                    "amount": amount,
+                    "type": "credit",
+                    "description": f"Order delivered to {order.get('customer_name', 'Customer')}",
+                    "balance_after": admin_new_balance,
+                    "created_at": datetime.utcnow().isoformat()
+                }}
+            }
+        )
+
     return {"message": "Delivery marked as complete"}
 
 @api_router.get("/delivery/status")
@@ -1050,6 +1128,92 @@ async def get_delivery_shift_status(partner: User = Depends(get_delivery_partner
     "checked_out": checkout_time is not None
 }
 
+@api_router.post("/delivery/status-update")
+async def update_delivery_status(
+    data: StatusUpdateRequest,
+    partner: User = Depends(get_delivery_partner)
+):
+    try:
+        order = await db.orders.find_one({"_id": ObjectId(data.order_id)})
+    except:
+        raise HTTPException(status_code=400, detail="Invalid Order ID")
+
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    await db.orders.update_one(
+        {"_id": ObjectId(data.order_id)},
+        {"$set": {"status": data.status, "delivered_at": now_ist().isoformat()}}
+    )
+
+    # ── AUTO WALLET TRANSFER ON DELIVERY ──
+    if data.status == "delivered":
+        user_id = order.get("user_id")
+        admin_id = order.get("admin_id")
+        amount = order.get("total_amount", 0)
+
+        if amount > 0 and user_id and admin_id:
+
+            # ── 1. DEDUCT FROM CUSTOMER WALLET ──
+            customer_wallet = await db.wallets.find_one({"user_id": user_id})
+
+            if not customer_wallet:
+                customer_wallet = {"user_id": user_id, "balance": 0.0, "transactions": []}
+                await db.wallets.insert_one(customer_wallet)
+
+            customer_old_balance = customer_wallet.get("balance", 0.0)
+            customer_new_balance = customer_old_balance - amount
+
+            customer_tx = {
+                "id": str(uuid.uuid4()),
+                "user_id": user_id,
+                "amount": amount,
+                "type": "debit",
+                "description": f"Order delivered - {', '.join([i['product_name'] for i in order.get('items', [])])}",
+                "balance_after": customer_new_balance,
+                "created_at": datetime.utcnow().isoformat()
+            }
+
+            await db.wallets.update_one(
+                {"user_id": user_id},
+                {
+                    "$set": {"balance": customer_new_balance},
+                    "$push": {"transactions": customer_tx}
+                }
+            )
+
+            # ── 2. CREDIT TO ADMIN WALLET ──
+            admin_wallet = await db.wallets.find_one({"user_id": admin_id})
+
+            if not admin_wallet:
+                admin_wallet = {"user_id": admin_id, "balance": 0.0, "transactions": []}
+                await db.wallets.insert_one(admin_wallet)
+
+            admin_old_balance = admin_wallet.get("balance", 0.0)
+            admin_new_balance = admin_old_balance + amount
+
+            admin_tx = {
+                "id": str(uuid.uuid4()),
+                "user_id": admin_id,
+                "amount": amount,
+                "type": "credit",
+                "description": f"Order delivered to {order.get('customer_name', 'Customer')} - {', '.join([i['product_name'] for i in order.get('items', [])])}",
+                "balance_after": admin_new_balance,
+                "created_at": datetime.utcnow().isoformat()
+            }
+
+            await db.wallets.update_one(
+                {"user_id": admin_id},
+                {
+                    "$set": {"balance": admin_new_balance},
+                    "$push": {"transactions": admin_tx}
+                }
+            )
+
+            logger.info(f"✅ Wallet transfer: ₹{amount} from customer {user_id} → admin {admin_id}")
+
+    return {"message": "Status updated successfully"}
+
 @api_router.post("/delivery/orders/{order_id}/accept")
 async def accept_order(
     order_id: str,
@@ -1057,7 +1221,7 @@ async def accept_order(
 ):
     result = await db.orders.find_one_and_update(
         {
-            "id": order_id,
+             "_id": ObjectId(order_id),
             "status": OrderStatus.UNASSIGNED.value,
             "admin_id": {"$in": partner.assigned_admin_ids}  # 🔒 IMPORTANT
         },
@@ -1077,7 +1241,6 @@ async def accept_order(
         )
 
     return {"message": "Order accepted"}
-
 
 @api_router.post("/delivery/orders/{order_id}/reject")
 async def reject_order(
@@ -1112,28 +1275,50 @@ async def reject_order(
 @api_router.get("/delivery/available")
 async def get_available_orders(partner: User = Depends(get_delivery_partner)):
 
-    today = now_ist().strftime("%Y-%m-%d")
-
     assigned_admins = getattr(partner, "assigned_admin_ids", [])
+
     if not assigned_admins:
-        return []
-
-    checkin = await db.checkins.find_one({
-    "partner_id": partner.id,
-    "date": today,
-    "checkout_time": None
-})
-
-    if not checkin:
         return []
 
     orders = await db.orders.find({
         "admin_id": {"$in": assigned_admins},
-        "status": OrderStatus.UNASSIGNED.value,
-        "delivery_date": today   # ⭐ ADD THIS
+        "status": OrderStatus.UNASSIGNED.value
     }).to_list(100)
 
     return [serialize_order_public(o) for o in orders]
+
+@api_router.get("/delivery/my-orders")
+async def get_my_orders(partner: User = Depends(get_delivery_partner)):
+
+    orders = await db.orders.find({
+        "delivery_partner_id": partner.id
+    }).to_list(100)
+
+    result = []
+
+    for o in orders:
+
+        # 🔥 IF NOT PICKED → SHOW ADMIN DETAILS
+        if o.get("status") in ["assigned"]:
+
+            admin = await db.users.find_one({"id": o.get("admin_id")})
+
+            o["display_name"] = admin["name"] if admin else "Admin"
+            o["display_phone"] = admin.get("phone") if admin else None
+            o["display_address"] = admin.get("address") if admin else {}
+
+        # 🔥 IF PICKED → SHOW USER DETAILS
+        elif o.get("status") in ["picked_up", "out_for_delivery", "delivered"]:
+
+            user = await db.users.find_one({"id": o.get("user_id")})
+
+            o["display_name"] = user["name"] if user else "Customer"
+            o["display_phone"] = user.get("phone") if user else None
+            o["display_address"] = o.get("address", {})
+
+        result.append(serialize_order_public(o))
+
+    return result
 
 # ===================== SUPERADMIN ENDPOINTS =====================
 
