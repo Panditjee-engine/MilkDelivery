@@ -1,13 +1,15 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, Alert } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '../../src/contexts/AuthContext';
-import { api } from '../../src/services/api';
-import { Colors } from '../../src/constants/colors';
-import Card from '../../src/components/Card';
-import Button from '../../src/components/Button';
-import LoadingScreen from '../../src/components/LoadingScreen';
+import React, { useState, useEffect, useCallback } from "react";
+import {
+  View, Text, StyleSheet, ScrollView,
+  RefreshControl, Alert, TouchableOpacity,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
+import { useAuth } from "../../src/contexts/AuthContext";
+import { api } from "../../src/services/api";
+import { Colors } from "../../src/constants/colors";
+import Button from "../../src/components/Button";
+import LoadingScreen from "../../src/components/LoadingScreen";
 
 export default function DeliveryHome() {
   const { user } = useAuth();
@@ -26,48 +28,49 @@ export default function DeliveryHome() {
       setCheckinStatus(status);
       setDeliveries(deliveriesData);
     } catch (error) {
-      console.error('Error fetching data:', error);
+      console.error("Error fetching data:", error);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  useEffect(() => { fetchData(); }, []);
 
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    fetchData();
-  }, []);
+  const onRefresh = useCallback(() => { setRefreshing(true); fetchData(); }, []);
 
   const handleCheckin = async () => {
     setActionLoading(true);
     try {
       await api.checkin();
-      Alert.alert('Success', 'Checked in successfully!');
-      fetchData();
+      setCheckinStatus({
+        checked_in: true,
+        checked_out: false,
+        checkin_time: new Date().toISOString(),
+      });
+      Alert.alert("✓ Checked In", "Your shift has started. Good luck!");
+      setTimeout(() => fetchData(), 2000);
     } catch (error: any) {
-      Alert.alert('Error', error.message);
+      Alert.alert("Error", error.message);
     } finally {
       setActionLoading(false);
     }
   };
 
   const handleCheckout = async () => {
-    Alert.alert('Checkout', 'Are you sure you want to end your shift?', [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert("End Shift", "Are you sure you want to end your shift?", [
+      { text: "Cancel", style: "cancel" },
       {
-        text: 'Checkout',
+        text: "End Shift", style: "destructive",
         onPress: async () => {
           setActionLoading(true);
           try {
             await api.checkout();
-            Alert.alert('Success', 'Checked out successfully!');
+            setCheckinStatus((prev: any) => ({ ...prev, checked_out: true }));
+            Alert.alert("Shift Ended", "Great work today!");
             fetchData();
           } catch (error: any) {
-            Alert.alert('Error', error.message);
+            Alert.alert("Error", error.message);
           } finally {
             setActionLoading(false);
           }
@@ -76,231 +79,300 @@ export default function DeliveryHome() {
     ]);
   };
 
-  if (loading) {
-    return <LoadingScreen />;
-  }
+  if (loading) return <LoadingScreen />;
 
-  const completedCount = deliveries.filter(d => d.status === 'delivered').length;
-  const pendingCount = deliveries.filter(d => d.status !== 'delivered').length;
-  const today = new Date().toLocaleDateString('en-IN', { weekday: 'long', month: 'long', day: 'numeric' });
+  const isOnDuty = checkinStatus?.checked_in && !checkinStatus?.checked_out;
+  const completedCount = deliveries.filter(d => d.status === "delivered").length;
+  const pendingCount = deliveries.filter(d => d.status !== "delivered").length;
+
+  const today = new Date().toLocaleDateString("en-IN", {
+    weekday: "long", month: "long", day: "numeric",
+  });
+
+  const getGreeting = () => {
+    const h = new Date().getHours();
+    if (h < 12) return "Good Morning";
+    if (h < 17) return "Good Afternoon";
+    return "Good Evening";
+  };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
       <ScrollView
-        style={styles.scrollView}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
+        {/* ── Header ── */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.greeting}>Welcome,</Text>
-            <Text style={styles.userName}>{user?.name || 'Partner'}</Text>
+            <Text style={styles.greeting}>{getGreeting()},</Text>
+            <Text style={styles.userName}>{user?.name || "Partner"} 👋</Text>
+            <Text style={styles.date}>{today}</Text>
           </View>
           <View style={styles.zoneBadge}>
-            <Ionicons name="location" size={16} color={Colors.primary} />
-            <Text style={styles.zoneText}>{user?.zone || 'Not Assigned'}</Text>
+            <Ionicons name="location" size={13} color={Colors.primary} />
+            <Text style={styles.zoneText}>{user?.zone || "No Zone"}</Text>
           </View>
         </View>
 
-        <Text style={styles.date}>{today}</Text>
-
-        {/* Check-in Card */}
-        <Card variant="elevated" style={[
-          styles.checkinCard,
-          { backgroundColor: checkinStatus?.checked_in ? Colors.secondary : Colors.primary }
-        ] as any}>
-          <View style={styles.checkinHeader}>
-            <Ionicons 
-              name={checkinStatus?.checked_in ? 'checkmark-circle' : 'time'} 
-              size={40} 
-              color={Colors.textInverse} 
-            />
-            <View style={styles.checkinInfo}>
-              <Text style={styles.checkinStatus}>
-                {checkinStatus?.checked_in 
-                  ? (checkinStatus?.checked_out ? 'Shift Completed' : 'On Duty')
-                  : 'Not Checked In'
-                }
+        {/* ── Shift Card ── */}
+        <View style={[styles.shiftCard, isOnDuty ? styles.shiftCardActive : styles.shiftCardIdle]}>
+          {/* Status Row */}
+          <View style={styles.shiftTop}>
+            <View style={styles.shiftStatusRow}>
+              <View style={[styles.pulseDot, { backgroundColor: isOnDuty ? '#4ade80' : 'rgba(255,255,255,0.4)' }]} />
+              <Text style={styles.shiftStatusText}>
+                {isOnDuty ? "On Duty" : "Off Duty"}
               </Text>
-              {checkinStatus?.checkin_time && (
-                <Text style={styles.checkinTime}>
-                  Started at {new Date(checkinStatus.checkin_time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
-                </Text>
-              )}
             </View>
+            {checkinStatus?.checkin_time && (
+              <Text style={styles.shiftTime}>
+                Since {new Date(checkinStatus.checkin_time).toLocaleTimeString("en-IN", {
+                  hour: "2-digit", minute: "2-digit"
+                })}
+              </Text>
+            )}
           </View>
-          {!checkinStatus?.checked_out && (
-            <Button
-              title={checkinStatus?.checked_in ? 'End Shift' : 'Start Shift'}
-              onPress={checkinStatus?.checked_in ? handleCheckout : handleCheckin}
-              variant="outline"
-              loading={actionLoading}
-              style={styles.checkinButton}
-              textStyle={{ color: Colors.textInverse }}
-            />
-          )}
-        </Card>
 
-        {/* Stats */}
-        <View style={styles.statsRow}>
-          <Card variant="outlined" style={styles.statCard}>
-            <Ionicons name="cube" size={24} color={Colors.accent} />
-            <Text style={styles.statValue}>{deliveries.length}</Text>
-            <Text style={styles.statLabel}>Total</Text>
-          </Card>
-          <Card variant="outlined" style={styles.statCard}>
-            <Ionicons name="checkmark-circle" size={24} color={Colors.success} />
-            <Text style={styles.statValue}>{completedCount}</Text>
-            <Text style={styles.statLabel}>Delivered</Text>
-          </Card>
-          <Card variant="outlined" style={styles.statCard}>
-            <Ionicons name="time" size={24} color={Colors.warning} />
-            <Text style={styles.statValue}>{pendingCount}</Text>
-            <Text style={styles.statLabel}>Pending</Text>
-          </Card>
+          <Text style={styles.shiftTitle}>
+            {isOnDuty ? "You're clocked in" : "Ready to start?"}
+          </Text>
+          <Text style={styles.shiftSubtitle}>
+            {isOnDuty
+              ? `${pendingCount} deliveries remaining`
+              : "Tap below to begin your shift"}
+          </Text>
+
+          <TouchableOpacity
+            style={styles.shiftBtn}
+            onPress={isOnDuty ? handleCheckout : handleCheckin}
+            disabled={actionLoading}
+          >
+            <Ionicons
+              name={isOnDuty ? "log-out-outline" : "play-circle-outline"}
+              size={18}
+              color={isOnDuty ? "#ef4444" : Colors.primary}
+            />
+            <Text style={[styles.shiftBtnText, { color: isOnDuty ? "#ef4444" : Colors.primary }]}>
+              {actionLoading ? "Please wait..." : isOnDuty ? "End Shift" : "Start Shift"}
+            </Text>
+          </TouchableOpacity>
         </View>
 
-        {/* Delivery Info */}
-        <Card variant="outlined" style={styles.infoCard}>
-          <View style={styles.infoHeader}>
-            <Ionicons name="information-circle" size={24} color={Colors.info} />
-            <Text style={styles.infoTitle}>Delivery Guidelines</Text>
+        {/* ── Stats ── */}
+        <View style={styles.statsGrid}>
+          <View style={[styles.statCard, { backgroundColor: '#EEF4FF' }]}>
+            <View style={[styles.statIcon, { backgroundColor: '#4F7EFF20' }]}>
+              <Ionicons name="cube-outline" size={18} color="#4F7EFF" />
+            </View>
+            <Text style={[styles.statVal, { color: '#4F7EFF' }]}>{deliveries.length}</Text>
+            <Text style={styles.statLabel}>Total</Text>
           </View>
-          <View style={styles.infoItem}>
-            <Ionicons name="time-outline" size={18} color={Colors.textSecondary} />
-            <Text style={styles.infoText}>Delivery window: 5:00 AM - 7:00 AM</Text>
+
+          <View style={[styles.statCard, { backgroundColor: '#F0FDF4' }]}>
+            <View style={[styles.statIcon, { backgroundColor: '#22c55e20' }]}>
+              <Ionicons name="checkmark-circle-outline" size={18} color="#22c55e" />
+            </View>
+            <Text style={[styles.statVal, { color: '#22c55e' }]}>{completedCount}</Text>
+            <Text style={styles.statLabel}>Delivered</Text>
           </View>
-          <View style={styles.infoItem}>
-            <Ionicons name="volume-mute-outline" size={18} color={Colors.textSecondary} />
-            <Text style={styles.infoText}>Silent delivery - Don't ring doorbell</Text>
+
+          <View style={[styles.statCard, { backgroundColor: '#FFFBEB' }]}>
+            <View style={[styles.statIcon, { backgroundColor: '#f59e0b20' }]}>
+              <Ionicons name="time-outline" size={18} color="#f59e0b" />
+            </View>
+            <Text style={[styles.statVal, { color: '#f59e0b' }]}>{pendingCount}</Text>
+            <Text style={styles.statLabel}>Pending</Text>
           </View>
-          <View style={styles.infoItem}>
-            <Ionicons name="camera-outline" size={18} color={Colors.textSecondary} />
-            <Text style={styles.infoText}>Take photo proof of delivery</Text>
+        </View>
+
+        {/* ── Progress Bar ── */}
+        {deliveries.length > 0 && (
+          <View style={styles.progressCard}>
+            <View style={styles.progressHeader}>
+              <Text style={styles.progressTitle}>Today's Progress</Text>
+              <Text style={styles.progressPercent}>
+                {Math.round((completedCount / deliveries.length) * 100)}%
+              </Text>
+            </View>
+            <View style={styles.progressBg}>
+              <View style={[
+                styles.progressFill,
+                { width: `${(completedCount / deliveries.length) * 100}%` }
+              ]} />
+            </View>
+            <Text style={styles.progressSub}>
+              {completedCount} of {deliveries.length} deliveries completed
+            </Text>
           </View>
-        </Card>
+        )}
+
+        {/* ── Guidelines ── */}
+        <View style={styles.guidelinesCard}>
+          <Text style={styles.guidelinesTitle}>Delivery Guidelines</Text>
+
+          {[
+            { icon: "time-outline",        color: "#4F7EFF", text: "Delivery window: 5:00 AM – 7:00 AM" },
+            { icon: "volume-mute-outline", color: "#f59e0b", text: "Silent delivery — don't ring doorbell" },
+            { icon: "camera-outline",      color: "#22c55e", text: "Take photo proof of delivery" },
+          ].map((item, i) => (
+            <View key={i} style={styles.guidelineRow}>
+              <View style={[styles.guidelineIcon, { backgroundColor: item.color + '18' }]}>
+                <Ionicons name={item.icon as any} size={15} color={item.color} />
+              </View>
+              <Text style={styles.guidelineText}>{item.text}</Text>
+            </View>
+          ))}
+        </View>
+
+        <View style={{ height: 30 }} />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  scrollView: {
-    flex: 1,
-  },
+  container: { flex: 1, backgroundColor: '#F8F7F4' },
+
+  /* ── Header ── */
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     paddingHorizontal: 20,
-    paddingTop: 16,
+    paddingTop: 14,
+    paddingBottom: 16,
   },
-  greeting: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-  },
-  userName: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: Colors.text,
-  },
+  greeting: { fontSize: 13, color: '#aaa', fontWeight: '500' },
+  userName: { fontSize: 22, fontWeight: '800', color: '#1A1A1A', letterSpacing: -0.3 },
+  date: { fontSize: 12, color: '#bbb', marginTop: 3 },
   zoneBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.primaryLight + '30',
+    gap: 5,
+    backgroundColor: Colors.primary + '15',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
-    gap: 4,
   },
-  zoneText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.primary,
-  },
-  date: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    paddingHorizontal: 20,
-    marginTop: 4,
-    marginBottom: 20,
-  },
-  checkinCard: {
+  zoneText: { fontSize: 12, fontWeight: '700', color: Colors.primary },
+
+  /* ── Shift Card ── */
+  shiftCard: {
     marginHorizontal: 20,
-    marginBottom: 20,
+    borderRadius: 22,
+    padding: 22,
+    marginBottom: 16,
+    shadowOpacity: 0.2,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 6,
   },
-  checkinHeader: {
+  shiftCardActive: {
+    backgroundColor: Colors.primary,
+    shadowColor: Colors.primary,
+  },
+  shiftCardIdle: {
+    backgroundColor: '#1A1A1A',
+    shadowColor: '#000',
+  },
+  shiftTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  shiftStatusRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  pulseDot: { width: 8, height: 8, borderRadius: 4 },
+  shiftStatusText: { fontSize: 12, fontWeight: '700', color: 'rgba(255,255,255,0.8)' },
+  shiftTime: { fontSize: 12, color: 'rgba(255,255,255,0.55)', fontWeight: '500' },
+  shiftTitle: { fontSize: 24, fontWeight: '800', color: '#fff', letterSpacing: -0.4, marginBottom: 4 },
+  shiftSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.65)', marginBottom: 20 },
+  shiftBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
-    marginBottom: 16,
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingVertical: 13,
   },
-  checkinInfo: {
-    flex: 1,
-  },
-  checkinStatus: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: Colors.textInverse,
-  },
-  checkinTime: {
-    fontSize: 14,
-    color: Colors.textInverse,
-    opacity: 0.9,
-    marginTop: 4,
-  },
-  checkinButton: {
-    borderColor: Colors.textInverse,
-  },
-  statsRow: {
+  shiftBtnText: { fontSize: 15, fontWeight: '700' },
+
+  /* ── Stats ── */
+  statsGrid: {
     flexDirection: 'row',
     paddingHorizontal: 20,
-    gap: 12,
-    marginBottom: 20,
+    gap: 10,
+    marginBottom: 14,
   },
   statCard: {
     flex: 1,
+    borderRadius: 16,
+    padding: 14,
     alignItems: 'center',
-    paddingVertical: 16,
+    gap: 4,
   },
-  statValue: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: Colors.text,
-    marginTop: 8,
+  statIcon: {
+    width: 34, height: 34, borderRadius: 10,
+    justifyContent: 'center', alignItems: 'center',
+    marginBottom: 4,
   },
-  statLabel: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    marginTop: 4,
-  },
-  infoCard: {
+  statVal: { fontSize: 24, fontWeight: '800', letterSpacing: -0.5 },
+  statLabel: { fontSize: 11, color: '#888', fontWeight: '600' },
+
+  /* ── Progress ── */
+  progressCard: {
+    backgroundColor: '#fff',
     marginHorizontal: 20,
-    marginBottom: 20,
+    borderRadius: 18,
+    padding: 18,
+    marginBottom: 14,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 1,
   },
-  infoHeader: {
+  progressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  progressTitle: { fontSize: 14, fontWeight: '700', color: '#1A1A1A' },
+  progressPercent: { fontSize: 14, fontWeight: '800', color: Colors.primary },
+  progressBg: {
+    height: 8, backgroundColor: '#F0F0F0',
+    borderRadius: 4, overflow: 'hidden', marginBottom: 8,
+  },
+  progressFill: {
+    height: 8, backgroundColor: '#22c55e', borderRadius: 4,
+  },
+  progressSub: { fontSize: 12, color: '#aaa', fontWeight: '500' },
+
+  /* ── Guidelines ── */
+  guidelinesCard: {
+    backgroundColor: '#fff',
+    marginHorizontal: 20,
+    borderRadius: 18,
+    padding: 18,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 1,
+  },
+  guidelinesTitle: {
+    fontSize: 14, fontWeight: '700', color: '#1A1A1A', marginBottom: 14,
+  },
+  guidelineRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 12,
     marginBottom: 12,
   },
-  infoTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.text,
+  guidelineIcon: {
+    width: 32, height: 32, borderRadius: 10,
+    justifyContent: 'center', alignItems: 'center',
   },
-  infoItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 8,
-  },
-  infoText: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-  },
+  guidelineText: { fontSize: 13, color: '#555', fontWeight: '500', flex: 1 },
 });

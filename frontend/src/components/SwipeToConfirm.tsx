@@ -1,11 +1,6 @@
-import React, { useRef } from 'react';
+import React, { useRef, useEffect } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  Animated,
-  PanResponder,
-  Dimensions,
+  View, Text, StyleSheet, Animated, PanResponder, Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -27,6 +22,13 @@ export default function SwipeToConfirm({
 }: Props) {
   const translateX = useRef(new Animated.Value(0)).current;
 
+  // ✅ Keep refs in sync with latest props so the stale closure is never an issue
+  const disabledRef = useRef(disabled);
+  const onSwipeSuccessRef = useRef(onSwipeSuccess);
+
+  useEffect(() => { disabledRef.current = disabled; }, [disabled]);
+  useEffect(() => { onSwipeSuccessRef.current = onSwipeSuccess; }, [onSwipeSuccess]);
+
   const fillWidth = translateX.interpolate({
     inputRange: [0, MAX_TRANSLATE],
     outputRange: [THUMB_SIZE, WIDTH],
@@ -40,27 +42,30 @@ export default function SwipeToConfirm({
 
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => !disabled,
-      onMoveShouldSetPanResponder: () => !disabled,
-
-      // 🔥 THIS IS THE KEY FIX
-      onStartShouldSetPanResponderCapture: () => true,
-      onMoveShouldSetPanResponderCapture: () => true,
+      // ✅ Read from ref, not the stale closure
+      onStartShouldSetPanResponder: () => !disabledRef.current,
+      onMoveShouldSetPanResponder: () => !disabledRef.current,
+      onStartShouldSetPanResponderCapture: () => !disabledRef.current,
+      onMoveShouldSetPanResponderCapture: () => !disabledRef.current,
       onPanResponderTerminationRequest: () => false,
 
       onPanResponderMove: (_, g) => {
+        if (disabledRef.current) return;
         if (g.dx >= 0 && g.dx <= MAX_TRANSLATE) {
           translateX.setValue(g.dx);
         }
       },
+
       onPanResponderRelease: (_, g) => {
+        if (disabledRef.current) return;
         if (g.dx > MAX_TRANSLATE * 0.85) {
           Animated.timing(translateX, {
             toValue: MAX_TRANSLATE,
             duration: 150,
             useNativeDriver: false,
           }).start(() => {
-            onSwipeSuccess();
+            // ✅ Always calls the latest version of the callback
+            onSwipeSuccessRef.current();
             Animated.timing(translateX, {
               toValue: 0,
               duration: 300,
@@ -79,26 +84,18 @@ export default function SwipeToConfirm({
 
   return (
     <View style={styles.wrapper}>
-      <View style={styles.container}>
-        <Animated.View
-          style={[
-            styles.fill,
-            {
-              width: fillWidth,
-              backgroundColor: fillColor,
-            },
-          ]}
-        />
+      {/* ✅ Visual dimming when disabled */}
+      <View style={[styles.container, disabled && styles.containerDisabled]}>
+        <Animated.View style={[styles.fill, { width: fillWidth, backgroundColor: fillColor }]} />
 
-        <Text style={styles.text}>{text}</Text>
+        <Text style={[styles.text, disabled && styles.textDisabled]}>{text}</Text>
 
         <Animated.View
           {...panResponder.panHandlers}
           style={[
             styles.thumb,
-            {
-              transform: [{ translateX }],
-            },
+            { transform: [{ translateX }] },
+            disabled && styles.thumbDisabled,
           ]}
         >
           <Ionicons name="chevron-forward" size={24} color="#fff" />
@@ -120,6 +117,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
   },
+  containerDisabled: {
+    opacity: 0.5,
+  },
   fill: {
     position: 'absolute',
     height: '100%',
@@ -131,6 +131,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#374151',
   },
+  textDisabled: {
+    color: '#9ca3af',
+  },
   thumb: {
     position: 'absolute',
     width: THUMB_SIZE,
@@ -141,5 +144,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     left: 4,
     elevation: 3,
+  },
+  thumbDisabled: {
+    backgroundColor: '#9ca3af',
   },
 });

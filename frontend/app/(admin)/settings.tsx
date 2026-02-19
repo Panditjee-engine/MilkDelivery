@@ -5,7 +5,6 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { Colors } from '../../src/constants/colors';
-import Card from '../../src/components/Card';
 
 export default function AdminSettingsScreen() {
   const { user, logout } = useAuth();
@@ -15,257 +14,259 @@ export default function AdminSettingsScreen() {
     Alert.alert('Logout', 'Are you sure you want to logout?', [
       { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Logout',
-        style: 'destructive',
-        onPress: async () => {
-          await logout();
-          router.replace('/');
-        },
+        text: 'Logout', style: 'destructive',
+        onPress: async () => { await logout(); router.replace('/'); },
       },
     ]);
   };
 
+  const SettingRow = ({
+    icon, iconBg, iconColor, label, value
+  }: {
+    icon: any; iconBg: string; iconColor: string; label: string; value: string;
+  }) => (
+    <TouchableOpacity style={styles.settingRow}>
+      <View style={[styles.settingIconBox, { backgroundColor: iconBg }]}>
+        <Ionicons name={icon} size={17} color={iconColor} />
+      </View>
+      <View style={styles.settingInfo}>
+        <Text style={styles.settingLabel}>{label}</Text>
+        <Text style={styles.settingValue}>{value}</Text>
+      </View>
+      <Ionicons name="chevron-forward" size={16} color="#ddd" />
+    </TouchableOpacity>
+  );
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Settings</Text>
-      </View>
+      <ScrollView showsVerticalScrollIndicator={false}>
 
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {/* Admin Profile */}
-        <Card variant="outlined" style={styles.profileCard}>
-          <View style={styles.profileHeader}>
+        {/* ── Header ── */}
+        <View style={styles.header}>
+          <Text style={styles.title}>Settings</Text>
+        </View>
+
+        {/* ── Profile Card ── */}
+        <View style={styles.profileCard}>
+          <View style={styles.avatarRing}>
             <View style={styles.avatar}>
-              <Ionicons name="shield-checkmark" size={32} color={Colors.textInverse} />
-            </View>
-            <View style={styles.profileInfo}>
-              <Text style={styles.profileName}>{user?.name}</Text>
-              <Text style={styles.profileEmail}>{user?.email}</Text>
-              <View style={styles.adminBadge}>
-                <Text style={styles.adminText}>Administrator</Text>
-              </View>
+              <Ionicons name="shield-checkmark" size={28} color="#fff" />
             </View>
           </View>
-        </Card>
 
-        {/* System Settings */}
-        <Card variant="outlined" style={styles.section}>
-          <Text style={styles.sectionTitle}>System Configuration</Text>
-          
-          <TouchableOpacity style={styles.settingItem}>
-            <View style={styles.settingIcon}>
-              <Ionicons name="time" size={20} color={Colors.primary} />
-            </View>
-            <View style={styles.settingInfo}>
-              <Text style={styles.settingLabel}>Order Cut-off Time</Text>
-              <Text style={styles.settingValue}>10:00 PM</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.settingItem}>
-            <View style={styles.settingIcon}>
-              <Ionicons name="bicycle" size={20} color={Colors.secondary} />
-            </View>
-            <View style={styles.settingInfo}>
-              <Text style={styles.settingLabel}>Delivery Window</Text>
-              <Text style={styles.settingValue}>5:00 AM - 7:00 AM</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.settingItem}>
-            <View style={styles.settingIcon}>
-              <Ionicons name="wallet" size={20} color={Colors.accent} />
-            </View>
-            <View style={styles.settingInfo}>
-              <Text style={styles.settingLabel}>Grace Period</Text>
-              <Text style={styles.settingValue}>1 day negative balance</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
-          </TouchableOpacity>
-        </Card>
-
-        {/* Business Info */}
-        <Card variant="outlined" style={styles.section}>
-          <Text style={styles.sectionTitle}>Business Information</Text>
-          
-          <TouchableOpacity style={styles.settingItem}>
-            <View style={styles.settingIcon}>
-              <Ionicons name="business" size={20} color={Colors.info} />
-            </View>
-            <View style={styles.settingInfo}>
-              <Text style={styles.settingLabel}>Business Name</Text>
-              <Text style={styles.settingValue}>FreshMilk</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.settingItem}>
-            <View style={styles.settingIcon}>
-              <Ionicons name="call" size={20} color={Colors.success} />
-            </View>
-            <View style={styles.settingInfo}>
-              <Text style={styles.settingLabel}>Support Contact</Text>
-              <Text style={styles.settingValue}>+91 9999999999</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
-          </TouchableOpacity>
-        </Card>
-
-        {/* App Info */}
-        <Card variant="outlined" style={styles.section}>
-          <Text style={styles.sectionTitle}>App Information</Text>
-          
-          <View style={styles.infoItem}>
-            <Text style={styles.infoLabel}>Version</Text>
-            <Text style={styles.infoValue}>1.0.0</Text>
+          <View style={styles.profileInfo}>
+            <Text style={styles.profileName}>{user?.name}</Text>
+            <Text style={styles.profileEmail}>{user?.email}</Text>
           </View>
-          
-          <View style={styles.infoItem}>
-            <Text style={styles.infoLabel}>Build</Text>
-            <Text style={styles.infoValue}>MVP</Text>
-          </View>
-        </Card>
 
-        {/* Logout */}
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Ionicons name="log-out" size={20} color={Colors.error} />
+          <View style={styles.adminBadge}>
+            <Ionicons name="shield-checkmark" size={11} color={Colors.primary} />
+            <Text style={styles.adminBadgeText}>Administrator</Text>
+          </View>
+        </View>
+
+        {/* ── System Config ── */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>System Configuration</Text>
+          </View>
+
+          <View style={styles.card}>
+            <SettingRow
+              icon="time-outline"
+              iconBg="#EEF4FF"
+              iconColor="#4F7EFF"
+              label="Order Cut-off Time"
+              value="10:00 PM"
+            />
+            <View style={styles.rowDivider} />
+            <SettingRow
+              icon="bicycle-outline"
+              iconBg="#F0FDF4"
+              iconColor="#22c55e"
+              label="Delivery Window"
+              value="5:00 AM – 7:00 AM"
+            />
+            <View style={styles.rowDivider} />
+            <SettingRow
+              icon="wallet-outline"
+              iconBg="#FFF4E6"
+              iconColor="#f59e0b"
+              label="Grace Period"
+              value="1 day negative balance"
+            />
+          </View>
+        </View>
+
+        {/* ── Business Info ── */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Business Information</Text>
+          </View>
+
+          <View style={styles.card}>
+            <SettingRow
+              icon="storefront-outline"
+              iconBg="#F5F3FF"
+              iconColor="#7c3aed"
+              label="Business Name"
+              value="GauSatva"
+            />
+            <View style={styles.rowDivider} />
+            <SettingRow
+              icon="call-outline"
+              iconBg="#ECFEFF"
+              iconColor="#0891b2"
+              label="Support Contact"
+              value="+91 9999999999"
+            />
+          </View>
+        </View>
+
+        {/* ── Logout ── */}
+        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+          <Ionicons name="log-out-outline" size={19} color="#ef4444" />
           <Text style={styles.logoutText}>Logout</Text>
         </TouchableOpacity>
+
+        <View style={{ height: 30 }} />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
+  container: { flex: 1, backgroundColor: '#F8F7F4' },
+
+  /* ── Header ── */
   header: {
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingTop: 14,
+    paddingBottom: 8,
   },
   title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: Colors.text,
+    fontSize: 26,
+    fontWeight: '800',
+    color: '#1A1A1A',
+    letterSpacing: -0.5,
   },
-  scrollView: {
-    flex: 1,
-  },
+
+  /* ── Profile Card ── */
   profileCard: {
+    backgroundColor: Colors.primary,
     marginHorizontal: 20,
-    marginBottom: 16,
-  },
-  profileHeader: {
-    flexDirection: 'row',
+    borderRadius: 22,
+    padding: 22,
+    marginBottom: 22,
     alignItems: 'center',
+    shadowColor: Colors.primary,
+    shadowOpacity: 0.3,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 6,
+  },
+  avatarRing: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    borderWidth: 3,
+    borderColor: 'rgba(255,255,255,0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
   },
   avatar: {
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: Colors.primary,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
   },
-  profileInfo: {
-    flex: 1,
-  },
+  profileInfo: { alignItems: 'center', marginBottom: 12 },
   profileName: {
     fontSize: 20,
-    fontWeight: '700',
-    color: Colors.text,
+    fontWeight: '800',
+    color: '#fff',
+    letterSpacing: -0.3,
   },
   profileEmail: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    marginTop: 2,
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.65)',
+    marginTop: 3,
   },
   adminBadge: {
-    marginTop: 8,
-    backgroundColor: Colors.primary + '20',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
   },
-  adminText: {
+  adminBadgeText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: Colors.primary,
+    fontWeight: '700',
+    color: '#fff',
   },
-  section: {
-    marginHorizontal: 20,
-    marginBottom: 16,
+
+  /* ── Sections ── */
+  section: { marginBottom: 16 },
+  sectionHeader: {
+    paddingHorizontal: 20,
+    marginBottom: 10,
   },
   sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.text,
-    marginBottom: 16,
-  },
-  settingItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  settingIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.surfaceSecondary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  settingInfo: {
-    flex: 1,
-  },
-  settingLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: Colors.text,
-  },
-  settingValue: {
     fontSize: 12,
-    color: Colors.textSecondary,
-    marginTop: 2,
+    fontWeight: '700',
+    color: '#bbb',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
   },
-  infoItem: {
+
+  /* ── Card ── */
+  card: {
+    backgroundColor: '#fff',
+    marginHorizontal: 20,
+    borderRadius: 18,
+    paddingHorizontal: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
+  },
+
+  /* ── Setting Row ── */
+  settingRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    alignItems: 'center',
+    paddingVertical: 14,
+    gap: 12,
   },
-  infoLabel: {
-    fontSize: 14,
-    color: Colors.textSecondary,
+  settingIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  infoValue: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: Colors.text,
-  },
-  logoutButton: {
+  settingInfo: { flex: 1 },
+  settingLabel: { fontSize: 14, fontWeight: '600', color: '#1A1A1A' },
+  settingValue: { fontSize: 12, color: '#aaa', marginTop: 2, fontWeight: '500' },
+  rowDivider: { height: 1, backgroundColor: '#F5F5F5', marginLeft: 48 },
+
+  /* ── Logout ── */
+  logoutBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    margin: 20,
+    marginHorizontal: 20,
+    marginTop: 8,
     padding: 16,
-    backgroundColor: Colors.error + '15',
-    borderRadius: 12,
+    backgroundColor: '#FEF2F2',
+    borderRadius: 16,
     gap: 8,
   },
-  logoutText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.error,
-  },
+  logoutText: { fontSize: 15, fontWeight: '700', color: '#ef4444' },
 });

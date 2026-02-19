@@ -2,6 +2,7 @@ import React from 'react';
 import { TouchableOpacity, Text, StyleSheet, ActivityIndicator, View, ViewStyle, TextStyle, StyleProp } from 'react-native';
 import { Colors } from '../constants/colors';
 
+
 interface ButtonProps {
   title: string;
   onPress: () => void;
@@ -9,8 +10,8 @@ interface ButtonProps {
   size?: 'small' | 'medium' | 'large';
   loading?: boolean;
   disabled?: boolean;
-  style?: ViewStyle;
-  textStyle?: TextStyle;
+   style?: StyleProp<ViewStyle>;     // ✅ CORRECT
+  textStyle?: StyleProp<TextStyle>; // ✅ CORRECT
   icon?: React.ReactNode;
 }
 

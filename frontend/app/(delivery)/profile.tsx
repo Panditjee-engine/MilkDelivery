@@ -5,7 +5,6 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { Colors } from '../../src/constants/colors';
-import Card from '../../src/components/Card';
 
 export default function DeliveryProfileScreen() {
   const { user, logout } = useAuth();
@@ -15,198 +14,247 @@ export default function DeliveryProfileScreen() {
     Alert.alert('Logout', 'Are you sure you want to logout?', [
       { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Logout',
-        style: 'destructive',
-        onPress: async () => {
-          await logout();
-          router.replace('/');
-        },
+        text: 'Logout', style: 'destructive',
+        onPress: async () => { await logout(); router.replace('/'); },
       },
     ]);
   };
 
+  const HelpRow = ({ icon, iconBg, iconColor, label }: {
+    icon: any; iconBg: string; iconColor: string; label: string;
+  }) => (
+    <TouchableOpacity style={styles.helpRow}>
+      <View style={[styles.helpIconBox, { backgroundColor: iconBg }]}>
+        <Ionicons name={icon} size={16} color={iconColor} />
+      </View>
+      <Text style={styles.helpLabel}>{label}</Text>
+      <Ionicons name="chevron-forward" size={15} color="#ddd" />
+    </TouchableOpacity>
+  );
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {/* Profile Header */}
-        <View style={styles.profileHeader}>
-          <View style={styles.avatar}>
-            <Ionicons name="bicycle" size={40} color={Colors.textInverse} />
+      <ScrollView showsVerticalScrollIndicator={false}>
+
+        {/* ── Hero Card ── */}
+        <View style={styles.heroCard}>
+          <View style={styles.avatarRing}>
+            <View style={styles.avatar}>
+              <Ionicons name="bicycle" size={30} color="#fff" />
+            </View>
           </View>
+
           <Text style={styles.userName}>{user?.name}</Text>
           <Text style={styles.userEmail}>{user?.email}</Text>
+
           <View style={styles.roleBadge}>
-            <Text style={styles.roleText}>Delivery Partner</Text>
+            <Ionicons name="bicycle" size={11} color="#fff" />
+            <Text style={styles.roleBadgeText}>Delivery Partner</Text>
           </View>
         </View>
 
-        {/* Zone Info */}
-        <Card variant="outlined" style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Ionicons name="location" size={20} color={Colors.primary} />
-            <Text style={styles.sectionTitle}>Assigned Zone</Text>
+        {/* ── Zone Card ── */}
+        <View style={styles.zoneCard}>
+          <View style={styles.zoneLeft}>
+            <View style={[styles.cardIconBox, { backgroundColor: '#EEF4FF' }]}>
+              <Ionicons name="location" size={18} color="#4F7EFF" />
+            </View>
+            <View>
+              <Text style={styles.zoneLabel}>Assigned Zone</Text>
+              <Text style={styles.zoneValue}>{user?.zone || 'Not Assigned'}</Text>
+            </View>
           </View>
-          <Text style={styles.zoneText}>{user?.zone || 'Not yet assigned'}</Text>
-          <Text style={styles.zoneHint}>Contact admin if zone assignment is needed</Text>
-        </Card>
+          {!user?.zone && (
+            <View style={styles.zonePill}>
+              <Text style={styles.zonePillText}>Contact Admin</Text>
+            </View>
+          )}
+        </View>
 
-        {/* Contact Info */}
-        <Card variant="outlined" style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Ionicons name="call" size={20} color={Colors.secondary} />
-            <Text style={styles.sectionTitle}>Contact Info</Text>
-          </View>
-          <View style={styles.contactItem}>
-            <Text style={styles.contactLabel}>Phone</Text>
-            <Text style={styles.contactValue}>{user?.phone || 'Not provided'}</Text>
-          </View>
-          <View style={styles.contactItem}>
-            <Text style={styles.contactLabel}>Email</Text>
-            <Text style={styles.contactValue}>{user?.email}</Text>
-          </View>
-        </Card>
+        {/* ── Contact Info ── */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Contact Information</Text>
+          <View style={styles.card}>
+            <View style={styles.contactRow}>
+              <View style={[styles.cardIconBox, { backgroundColor: '#F0FDF4' }]}>
+                <Ionicons name="call-outline" size={16} color="#22c55e" />
+              </View>
+              <View style={styles.contactInfo}>
+                <Text style={styles.contactLabel}>Phone</Text>
+                <Text style={styles.contactValue}>{user?.phone || 'Not provided'}</Text>
+              </View>
+            </View>
 
-        {/* Help */}
-        <Card variant="outlined" style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Ionicons name="help-circle" size={20} color={Colors.info} />
-            <Text style={styles.sectionTitle}>Help & Support</Text>
-          </View>
-          <TouchableOpacity style={styles.helpItem}>
-            <Text style={styles.helpText}>Delivery Guidelines</Text>
-            <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.helpItem}>
-            <Text style={styles.helpText}>Contact Support</Text>
-            <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.helpItem}>
-            <Text style={styles.helpText}>FAQs</Text>
-            <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
-          </TouchableOpacity>
-        </Card>
+            <View style={styles.rowDivider} />
 
-        {/* Logout */}
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Ionicons name="log-out" size={20} color={Colors.error} />
+            <View style={styles.contactRow}>
+              <View style={[styles.cardIconBox, { backgroundColor: '#FFF4E6' }]}>
+                <Ionicons name="mail-outline" size={16} color="#f59e0b" />
+              </View>
+              <View style={styles.contactInfo}>
+                <Text style={styles.contactLabel}>Email</Text>
+                <Text style={styles.contactValue}>{user?.email}</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* ── Help & Support ── */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Help & Support</Text>
+          <View style={styles.card}>
+            <HelpRow
+              icon="book-outline"
+              iconBg="#EEF4FF"
+              iconColor="#4F7EFF"
+              label="Delivery Guidelines"
+            />
+            <View style={styles.rowDivider} />
+            <HelpRow
+              icon="headset-outline"
+              iconBg="#F0FDF4"
+              iconColor="#22c55e"
+              label="Contact Support"
+            />
+            <View style={styles.rowDivider} />
+            <HelpRow
+              icon="help-circle-outline"
+              iconBg="#FFF4E6"
+              iconColor="#f59e0b"
+              label="FAQs"
+            />
+          </View>
+        </View>
+
+        {/* ── Logout ── */}
+        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+          <Ionicons name="log-out-outline" size={19} color="#ef4444" />
           <Text style={styles.logoutText}>Logout</Text>
         </TouchableOpacity>
+
+        <View style={{ height: 30 }} />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  profileHeader: {
+  container: { flex: 1, backgroundColor: '#F8F7F4' },
+
+  /* ── Hero ── */
+  heroCard: {
+    backgroundColor: Colors.primary,
+    marginHorizontal: 20,
+    marginTop: 16,
+    borderRadius: 24,
+    padding: 28,
     alignItems: 'center',
-    paddingVertical: 32,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-    backgroundColor: Colors.surface,
+    shadowColor: Colors.primary,
+    shadowOpacity: 0.3,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 6,
+    marginBottom: 14,
+  },
+  avatarRing: {
+    width: 80, height: 80, borderRadius: 40,
+    borderWidth: 3, borderColor: 'rgba(255,255,255,0.25)',
+    justifyContent: 'center', alignItems: 'center',
+    marginBottom: 14,
   },
   avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: Colors.secondary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
+    width: 66, height: 66, borderRadius: 33,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center', alignItems: 'center',
   },
   userName: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: Colors.text,
+    fontSize: 22, fontWeight: '800', color: '#fff', letterSpacing: -0.3,
   },
   userEmail: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    marginTop: 4,
+    fontSize: 13, color: 'rgba(255,255,255,0.65)', marginTop: 3, marginBottom: 14,
   },
   roleBadge: {
-    marginTop: 12,
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20,
+  },
+  roleBadgeText: { fontSize: 12, fontWeight: '700', color: '#fff' },
+
+  /* ── Zone Card ── */
+  zoneCard: {
+    backgroundColor: '#fff',
+    marginHorizontal: 20,
+    borderRadius: 18,
     paddingHorizontal: 16,
-    paddingVertical: 6,
-    backgroundColor: Colors.secondary + '20',
-    borderRadius: 20,
-  },
-  roleText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.secondary,
-  },
-  section: {
-    margin: 16,
-  },
-  sectionHeader: {
+    paddingVertical: 14,
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
-    gap: 8,
+    justifyContent: 'space-between',
+    marginBottom: 14,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 1,
   },
+  zoneLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  zoneLabel: { fontSize: 11, color: '#bbb', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
+  zoneValue: { fontSize: 16, fontWeight: '800', color: '#1A1A1A', marginTop: 2 },
+  zonePill: {
+    backgroundColor: '#FFF4E6', paddingHorizontal: 12,
+    paddingVertical: 6, borderRadius: 20,
+  },
+  zonePillText: { fontSize: 11, fontWeight: '700', color: '#f59e0b' },
+
+  /* ── Sections ── */
+  section: { marginBottom: 14 },
   sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.text,
+    fontSize: 11, fontWeight: '700', color: '#bbb',
+    textTransform: 'uppercase', letterSpacing: 0.8,
+    marginBottom: 8, marginLeft: 20,
   },
-  zoneText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: Colors.text,
+
+  /* ── Card ── */
+  card: {
+    backgroundColor: '#fff',
+    marginHorizontal: 20,
+    borderRadius: 18,
+    paddingHorizontal: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 1,
   },
-  zoneHint: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    marginTop: 4,
+  cardIconBox: {
+    width: 36, height: 36, borderRadius: 10,
+    justifyContent: 'center', alignItems: 'center',
   },
-  contactItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+  rowDivider: { height: 1, backgroundColor: '#F5F5F5', marginLeft: 48 },
+
+  /* ── Contact ── */
+  contactRow: {
+    flexDirection: 'row', alignItems: 'center',
+    gap: 12, paddingVertical: 14,
   },
-  contactLabel: {
-    fontSize: 14,
-    color: Colors.textSecondary,
+  contactInfo: { flex: 1 },
+  contactLabel: { fontSize: 11, color: '#bbb', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
+  contactValue: { fontSize: 14, fontWeight: '700', color: '#1A1A1A', marginTop: 2 },
+
+  /* ── Help ── */
+  helpRow: {
+    flexDirection: 'row', alignItems: 'center',
+    gap: 12, paddingVertical: 13,
   },
-  contactValue: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: Colors.text,
+  helpIconBox: {
+    width: 34, height: 34, borderRadius: 10,
+    justifyContent: 'center', alignItems: 'center',
   },
-  helpItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+  helpLabel: { flex: 1, fontSize: 14, fontWeight: '600', color: '#1A1A1A' },
+
+  /* ── Logout ── */
+  logoutBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    marginHorizontal: 20, padding: 16,
+    backgroundColor: '#FEF2F2', borderRadius: 16, gap: 8,
   },
-  helpText: {
-    fontSize: 14,
-    color: Colors.text,
-  },
-  logoutButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    margin: 16,
-    padding: 16,
-    backgroundColor: Colors.error + '15',
-    borderRadius: 12,
-    gap: 8,
-  },
-  logoutText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.error,
-  },
+  logoutText: { fontSize: 15, fontWeight: '700', color: '#ef4444' },
 });

@@ -1,12 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { api } from '../../src/services/api';
 import { Colors } from '../../src/constants/colors';
-import Card from '../../src/components/Card';
-import Button from '../../src/components/Button';
 import LoadingScreen from '../../src/components/LoadingScreen';
 
 export default function AdminDashboard() {
@@ -14,18 +12,16 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [stats, setStats] = useState<any>(null);
-  const [procurement, setProcurement] = useState<any>(null);
-  const [generating, setGenerating] = useState(false);
-
+  const [products, setProducts] = useState<any[]>([]);
 
   const fetchData = async () => {
     try {
-      const [dashboardData, procurementData] = await Promise.all([
+      const [dashboardData, productsData] = await Promise.all([
         api.getAdminDashboard(),
-        api.getProcurement(),
+        api.getProducts(),
       ]);
       setStats(dashboardData);
-      setProcurement(procurementData);
+      setProducts(productsData);
     } catch (error) {
       console.error('Error fetching dashboard:', error);
     } finally {
@@ -34,316 +30,358 @@ export default function AdminDashboard() {
     }
   };
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  useEffect(() => { fetchData(); }, []);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     fetchData();
   }, []);
 
-  const handleGenerateOrders = async () => {
-    Alert.alert(
-      'Generate Orders',
-      'This will create orders for tomorrow based on active subscriptions. Continue?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Generate',
-          onPress: async () => {
-            setGenerating(true);
-            try {
-              const result = await api.generateOrders();
-              Alert.alert(
-                'Success',
-                `Orders generated!\nCreated: ${result.orders_created}\nSkipped: ${result.orders_skipped}`
-              );
-              fetchData();
-            } catch (error: any) {
-              Alert.alert('Error', error.message);
-            } finally {
-              setGenerating(false);
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  if (loading) {
-    return <LoadingScreen />;
-  }
+  if (loading) return <LoadingScreen />;
 
   const today = new Date().toLocaleDateString('en-IN', {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
+    weekday: 'long', month: 'long', day: 'numeric',
   });
+
+  const deliveryRate = stats?.today_orders
+    ? Math.round((stats.delivered_today / stats.today_orders) * 100)
+    : 0;
+
+  const pending = (stats?.today_orders || 0) - (stats?.delivered_today || 0);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView
-        style={styles.scrollView}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         showsVerticalScrollIndicator={false}
       >
+        {/* ── Header ── */}
         <View style={styles.header}>
           <View>
             <Text style={styles.greeting}>Admin Dashboard</Text>
             <Text style={styles.userName}>{user?.name}</Text>
+            <Text style={styles.date}>{today}</Text>
           </View>
           <View style={styles.adminBadge}>
-            <Ionicons name="shield-checkmark" size={20} color={Colors.primary} />
+            <Ionicons name="shield-checkmark" size={22} color="#fff" />
           </View>
         </View>
 
-        <Text style={styles.date}>{today}</Text>
-
-        {/* Stats Grid */}
-        <View style={styles.statsGrid}>
-          <Card variant="elevated" style={{ ...styles.statCard, backgroundColor: Colors.primary }}>
-            <Ionicons name="people" size={28} color={Colors.textInverse} />
-            <Text style={styles.statValue}>{stats?.total_customers || 0}</Text>
-            <Text style={styles.statLabel}>Customers</Text>
-          </Card>
-          <Card variant="elevated" style={{ ...styles.statCard, backgroundColor: Colors.secondary }}>
-            <Ionicons name="bicycle" size={28} color={Colors.textInverse} />
-            <Text style={styles.statValue}>{stats?.total_delivery_partners || 0}</Text>
-            <Text style={styles.statLabel}>Partners</Text>
-          </Card>
-          <Card variant="elevated" style={{ ...styles.statCard, backgroundColor: Colors.accent }}>
-            <Ionicons name="repeat" size={28} color={Colors.textInverse} />
-            <Text style={styles.statValue}>{stats?.active_subscriptions || 0}</Text>
-            <Text style={styles.statLabel}>Active Subs</Text>
-          </Card>
-          <Card variant="elevated" style={{ ...styles.statCard, backgroundColor: Colors.info }}>
-            <Ionicons name="cash" size={28} color={Colors.textInverse} />
-            <Text style={styles.statValue}>₹{stats?.today_revenue || 0}</Text>
-            <Text style={styles.statLabel}>Revenue Today</Text>
-          </Card>
-        </View>
-
-        {/* Today's Orders */}
-        <Card variant="outlined" style={styles.ordersCard}>
-          <View style={styles.cardHeader}>
-            <Ionicons name="cube" size={24} color={Colors.primary} />
-            <Text style={styles.cardTitle}>Today's Orders</Text>
-          </View>
-          <View style={styles.ordersStats}>
-            <View style={styles.orderStat}>
-              <Text style={styles.orderStatValue}>{stats?.today_orders || 0}</Text>
-              <Text style={styles.orderStatLabel}>Total</Text>
+        {/* ── Revenue Hero Card ── */}
+        <View style={styles.revenueCard}>
+          <View style={styles.revenueLeft}>
+            <Text style={styles.revenueLabel}>Today's Revenue</Text>
+            <Text style={styles.revenueAmount}>₹{stats?.today_revenue || 0}</Text>
+            <View style={styles.revenueBadge}>
+              <Ionicons name="trending-up" size={12} color="#22c55e" />
+              <Text style={styles.revenueBadgeText}>Live</Text>
             </View>
-            <View style={styles.orderStatDivider} />
-            <View style={styles.orderStat}>
-              <Text style={[styles.orderStatValue, { color: Colors.success }]}>
+          </View>
+          <View style={styles.revenueIcon}>
+            <Ionicons name="cash" size={36} color="rgba(255,255,255,0.3)" />
+          </View>
+        </View>
+
+        {/* ── Stats Grid ── */}
+        <View style={styles.statsGrid}>
+
+          {/* Customers */}
+          <View style={[styles.statCard, { backgroundColor: '#EEF4FF' }]}>
+            <View style={[styles.statIcon, { backgroundColor: '#4F7EFF20' }]}>
+              <Ionicons name="people" size={20} color="#4F7EFF" />
+            </View>
+            <Text style={[styles.statValue, { color: '#4F7EFF' }]}>
+              {stats?.total_customers || 0}
+            </Text>
+            <Text style={styles.statLabel}>Customers</Text>
+          </View>
+
+          {/* Total Products */}
+          <View style={[styles.statCard, { backgroundColor: '#FFF4E6' }]}>
+            <View style={[styles.statIcon, { backgroundColor: '#F59E0B20' }]}>
+              <Ionicons name="cube" size={20} color="#f59e0b" />
+            </View>
+            <Text style={[styles.statValue, { color: '#f59e0b' }]}>
+              {products.length}
+            </Text>
+            <Text style={styles.statLabel}>Products</Text>
+          </View>
+
+          {/* Total Orders */}
+          <View style={[styles.statCard, { backgroundColor: '#F0F9FF' }]}>
+            <View style={[styles.statIcon, { backgroundColor: '#0EA5E920' }]}>
+              <Ionicons name="receipt" size={20} color="#0ea5e9" />
+            </View>
+            <Text style={[styles.statValue, { color: '#0ea5e9' }]}>
+              {stats?.today_orders || 0}
+            </Text>
+            <Text style={styles.statLabel}>Total Orders</Text>
+          </View>
+
+          {/* Total Delivered */}
+          <View style={[styles.statCard, { backgroundColor: '#F0FDF4' }]}>
+            <View style={[styles.statIcon, { backgroundColor: '#22c55e20' }]}>
+              <Ionicons name="checkmark-circle" size={20} color="#22c55e" />
+            </View>
+            <Text style={[styles.statValue, { color: '#22c55e' }]}>
+              {stats?.delivered_today || 0}
+            </Text>
+            <Text style={styles.statLabel}>Delivered</Text>
+          </View>
+
+        </View>
+
+        {/* ── Today's Order Progress ── */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <View style={[styles.cardIconBox, { backgroundColor: '#EEF4FF' }]}>
+              <Ionicons name="stats-chart" size={16} color="#4F7EFF" />
+            </View>
+            <Text style={styles.cardTitle}>Delivery Progress</Text>
+            <View style={styles.ratePill}>
+              <Text style={styles.rateText}>{deliveryRate}%</Text>
+            </View>
+          </View>
+
+          {/* Progress Bar */}
+          <View style={styles.progressBg}>
+            <View style={[styles.progressFill, { width: `${deliveryRate}%` }]} />
+          </View>
+
+          {/* 3 Stats */}
+          <View style={styles.progressStats}>
+            <View style={styles.progressStat}>
+              <Text style={styles.progressStatVal}>{stats?.today_orders || 0}</Text>
+              <Text style={styles.progressStatLabel}>Total</Text>
+            </View>
+            <View style={styles.progressDivider} />
+            <View style={styles.progressStat}>
+              <Text style={[styles.progressStatVal, { color: '#22c55e' }]}>
                 {stats?.delivered_today || 0}
               </Text>
-              <Text style={styles.orderStatLabel}>Delivered</Text>
+              <Text style={styles.progressStatLabel}>Delivered</Text>
             </View>
-            <View style={styles.orderStatDivider} />
-            <View style={styles.orderStat}>
-              <Text style={[styles.orderStatValue, { color: Colors.warning }]}>
-                {(stats?.today_orders || 0) - (stats?.delivered_today || 0)}
+            <View style={styles.progressDivider} />
+            <View style={styles.progressStat}>
+              <Text style={[styles.progressStatVal, { color: '#f59e0b' }]}>
+                {pending}
               </Text>
-              <Text style={styles.orderStatLabel}>Pending</Text>
+              <Text style={styles.progressStatLabel}>Pending</Text>
             </View>
           </View>
-        </Card>
+        </View>
 
-        {/* Midnight Run */}
-        <Card variant="outlined" style={styles.midnightCard}>
+        {/* ── Products Overview ── */}
+        <View style={styles.card}>
           <View style={styles.cardHeader}>
-            <Ionicons name="moon" size={24} color={Colors.primary} />
-            <Text style={styles.cardTitle}>Midnight Run</Text>
+            <View style={[styles.cardIconBox, { backgroundColor: '#FFF4E6' }]}>
+              <Ionicons name="cube-outline" size={16} color="#f59e0b" />
+            </View>
+            <Text style={styles.cardTitle}>Product Overview</Text>
           </View>
-          <Text style={styles.midnightDesc}>
-            Generate orders for tomorrow based on active subscriptions and wallet balances.
-          </Text>
-          <Button
-            title="Generate Tomorrow's Orders"
-            onPress={handleGenerateOrders}
-            loading={generating}
-            style={styles.generateButton}
-          />
-        </Card>
 
-        {/* Procurement Preview */}
-        <Card variant="outlined" style={styles.procurementCard}>
-          <View style={styles.cardHeader}>
-            <Ionicons name="clipboard" size={24} color={Colors.accent} />
-            <Text style={styles.cardTitle}>Tomorrow's Procurement</Text>
-          </View>
-          {procurement?.items?.length > 0 ? (
+          {products.length > 0 ? (
             <>
-              <Text style={styles.procurementDate}>For: {procurement.date}</Text>
-              {procurement.items.slice(0, 5).map((item: any) => (
-                <View key={item.product_id} style={styles.procurementItem}>
-                  <Text style={styles.procurementName}>{item.product_name}</Text>
-                  <Text style={styles.procurementQty}>
-                    {item.total_quantity} {item.unit}
-                  </Text>
+              {products.slice(0, 4).map((p, i) => (
+                <View
+                  key={p.id}
+                  style={[styles.productRow, i < Math.min(products.length, 4) - 1 && styles.productRowBorder]}
+                >
+                  <View style={styles.productDot} />
+                  <Text style={styles.productName} numberOfLines={1}>{p.name}</Text>
+                  <View style={[
+                    styles.availPill,
+                    { backgroundColor: p.is_available ? '#F0FDF4' : '#FEF2F2' }
+                  ]}>
+                    <Text style={[
+                      styles.availText,
+                      { color: p.is_available ? '#22c55e' : '#ef4444' }
+                    ]}>
+                      {p.is_available ? 'Active' : 'Off'}
+                    </Text>
+                  </View>
+                  <Text style={styles.productPrice}>₹{p.price}</Text>
                 </View>
               ))}
-              {procurement.items.length > 5 && (
-                <Text style={styles.moreItems}>+{procurement.items.length - 5} more items</Text>
+              {products.length > 4 && (
+                <Text style={styles.moreText}>+{products.length - 4} more products</Text>
               )}
             </>
           ) : (
-            <Text style={styles.noProcurement}>No procurement needed for tomorrow</Text>
+            <Text style={styles.emptyText}>No products added yet</Text>
           )}
-        </Card>
+        </View>
+
+        <View style={{ height: 30 }} />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  scrollView: {
-    flex: 1,
-  },
+  container: { flex: 1, backgroundColor: '#F8F7F4' },
+
+  /* ── Header ── */
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     paddingHorizontal: 20,
     paddingTop: 16,
+    paddingBottom: 16,
   },
-  greeting: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-  },
-  userName: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: Colors.text,
-  },
+  greeting: { fontSize: 12, color: '#aaa', fontWeight: '500' },
+  userName: { fontSize: 22, fontWeight: '800', color: '#1A1A1A', letterSpacing: -0.3 },
+  date: { fontSize: 12, color: '#bbb', marginTop: 3 },
   adminBadge: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.primaryLight + '30',
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    backgroundColor: Colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: Colors.primary,
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  date: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    paddingHorizontal: 20,
-    marginTop: 4,
-    marginBottom: 20,
+
+  /* ── Revenue Card ── */
+  revenueCard: {
+    marginHorizontal: 20,
+    marginBottom: 16,
+    backgroundColor: Colors.primary,
+    borderRadius: 20,
+    padding: 22,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    shadowColor: Colors.primary,
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 6,
   },
+  revenueLeft: { gap: 4 },
+  revenueLabel: { fontSize: 13, color: 'rgba(255,255,255,0.7)', fontWeight: '500' },
+  revenueAmount: { fontSize: 38, fontWeight: '800', color: '#fff', letterSpacing: -1 },
+  revenueBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(34,197,94,0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 20,
+    alignSelf: 'flex-start',
+  },
+  revenueBadgeText: { fontSize: 11, color: '#22c55e', fontWeight: '700' },
+  revenueIcon: { opacity: 0.6 },
+
+  /* ── Stats Grid ── */
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     paddingHorizontal: 16,
-    gap: 8,
+    gap: 10,
     marginBottom: 16,
   },
   statCard: {
-    width: '48%',
+    width: '47.5%',
+    borderRadius: 16,
+    padding: 16,
+    gap: 6,
+  },
+  statIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 20,
+    marginBottom: 4,
   },
-  statValue: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: Colors.textInverse,
-    marginTop: 8,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: Colors.textInverse,
-    opacity: 0.9,
-    marginTop: 4,
-  },
-  ordersCard: {
-    marginHorizontal: 20,
-    marginBottom: 16,
+  statValue: { fontSize: 28, fontWeight: '800', letterSpacing: -0.5 },
+  statLabel: { fontSize: 12, color: '#888', fontWeight: '600' },
+
+  /* ── Cards ── */
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    marginHorizontal: 16,
+    marginBottom: 14,
+    padding: 18,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
   },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
     marginBottom: 16,
   },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: Colors.text,
+  cardIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  ordersStats: {
+  cardTitle: { fontSize: 15, fontWeight: '700', color: '#1A1A1A', flex: 1 },
+  ratePill: {
+    backgroundColor: '#EEF4FF',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+  },
+  rateText: { fontSize: 12, fontWeight: '800', color: '#4F7EFF' },
+
+  /* Progress */
+  progressBg: {
+    height: 8,
+    backgroundColor: '#F0F0F0',
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginBottom: 16,
+  },
+  progressFill: {
+    height: 8,
+    backgroundColor: '#22c55e',
+    borderRadius: 4,
+  },
+  progressStats: {
     flexDirection: 'row',
     justifyContent: 'space-around',
   },
-  orderStat: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  orderStatValue: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: Colors.text,
-  },
-  orderStatLabel: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    marginTop: 4,
-  },
-  orderStatDivider: {
-    width: 1,
-    backgroundColor: Colors.border,
-  },
-  midnightCard: {
-    marginHorizontal: 20,
-    marginBottom: 16,
-  },
-  midnightDesc: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    marginBottom: 16,
-  },
-  generateButton: {},
-  procurementCard: {
-    marginHorizontal: 20,
-    marginBottom: 24,
-  },
-  procurementDate: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    marginBottom: 12,
-  },
-  procurementItem: {
+  progressStat: { alignItems: 'center', flex: 1 },
+  progressStatVal: { fontSize: 26, fontWeight: '800', color: '#1A1A1A' },
+  progressStatLabel: { fontSize: 11, color: '#aaa', marginTop: 3, fontWeight: '600' },
+  progressDivider: { width: 1, backgroundColor: '#F0F0F0' },
+
+  /* Products */
+  productRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    alignItems: 'center',
+    paddingVertical: 11,
+    gap: 10,
   },
-  procurementName: {
-    fontSize: 14,
-    color: Colors.text,
+  productRowBorder: { borderBottomWidth: 1, borderBottomColor: '#F5F5F5' },
+  productDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#f59e0b',
   },
-  procurementQty: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.primary,
+  productName: { flex: 1, fontSize: 14, fontWeight: '600', color: '#1A1A1A' },
+  availPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 20,
   },
-  moreItems: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  noProcurement: {
-    fontSize: 14,
-    color: Colors.textLight,
-    fontStyle: 'italic',
-  },
+  availText: { fontSize: 11, fontWeight: '700' },
+  productPrice: { fontSize: 13, fontWeight: '700', color: '#1A1A1A' },
+  moreText: { fontSize: 12, color: '#bbb', textAlign: 'center', marginTop: 10, fontWeight: '500' },
+  emptyText: { fontSize: 13, color: '#ccc', fontStyle: 'italic' },
 });

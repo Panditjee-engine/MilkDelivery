@@ -46,13 +46,20 @@ export default function AdminLayout() {
           tabBarIcon: ({ color, size }) => <Ionicons name="receipt" size={size} color={color} />,
         }}
       />
-      <Tabs.Screen
+      {/* <Tabs.Screen
         name="users"
         options={{
           title: 'Users',
           tabBarIcon: ({ color, size }) => <Ionicons name="people" size={size} color={color} />,
         }}
-      />
+      /> */}
+           <Tabs.Screen
+        name="wallet"
+        options={{
+          title: 'Wallet',
+          tabBarIcon: ({ color, size }) => <Ionicons name="wallet" size={size} color={color} />,
+        }}
+        />
       <Tabs.Screen
         name="settings"
         options={{
@@ -60,6 +67,7 @@ export default function AdminLayout() {
           tabBarIcon: ({ color, size }) => <Ionicons name="settings" size={size} color={color} />,
         }}
       />
-    </Tabs>
+ 
+    </Tabs>  
   );
 }
