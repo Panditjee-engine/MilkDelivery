@@ -4,46 +4,29 @@ import {
   Text,
   StyleSheet,
   ScrollView,
+  FlatList,
   TouchableOpacity,
   RefreshControl,
   Modal,
   Alert,
-  TextInput,
-  Animated,
+  Dimensions,
+  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../../src/services/api";
-import { Colors, CategoryColors } from "../../src/constants/colors";
-import ProductCard from "../../src/components/ProductCard";
+import { Colors } from "../../src/constants/colors";
 import Button from "../../src/components/Button";
 import LoadingScreen from "../../src/components/LoadingScreen";
 
+const SCREEN_WIDTH = Dimensions.get("window").width;
+const CARD_WIDTH = 160;
+
 const patterns = [
-  {
-    value: "daily",
-    label: "Daily",
-    description: "Every day",
-    icon: "sunny-outline",
-  },
-  {
-    value: "alternate",
-    label: "Alternate",
-    description: "Every other day",
-    icon: "repeat-outline",
-  },
-  {
-    value: "custom",
-    label: "Custom",
-    description: "Choose specific days",
-    icon: "calendar-outline",
-  },
-  {
-    value: "buy_once",
-    label: "Buy Once",
-    description: "One-time purchase",
-    icon: "bag-check-outline",
-  },
+  { value: "daily", label: "Daily", description: "Every day", icon: "sunny-outline" },
+  { value: "alternate", label: "Alternate", description: "Every other day", icon: "repeat-outline" },
+  { value: "custom", label: "Custom", description: "Choose specific days", icon: "calendar-outline" },
+  { value: "buy_once", label: "Buy Once", description: "One-time purchase", icon: "bag-check-outline" },
 ];
 
 const weekDays = [
@@ -56,9 +39,61 @@ const weekDays = [
   { value: 6, label: "S" },
 ];
 
+const CATEGORY_THEMES: Record<string, { bg: string; accent: string; icon: string }> = {
+  milk:       { bg: "#EAF4FF", accent: "#3B82F6", icon: "water" },
+  dairy:      { bg: "#FFF4E6", accent: "#F59E0B", icon: "ice-cream" },
+  bakery:     { bg: "#FEF2F2", accent: "#EF4444", icon: "pizza" },
+  fruits:     { bg: "#F0FDF4", accent: "#22C55E", icon: "nutrition" },
+  vegetables: { bg: "#F0FDF4", accent: "#16A34A", icon: "leaf" },
+  essentials: { bg: "#F5F3FF", accent: "#8B5CF6", icon: "basket" },
+  other:      { bg: "#F8F7F4", accent: "#6B7280", icon: "cube" },
+};
+
+function getCategoryTheme(category: string) {
+  return CATEGORY_THEMES[category?.toLowerCase()] || CATEGORY_THEMES.other;
+}
+
+// ── Modern Product Card ──────────────────────────────────────────────────────
+function ModernProductCard({ product, onPress }: { product: any; onPress: () => void }) {
+  const theme = getCategoryTheme(product.category);
+
+  return (
+    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.88}>
+
+      {/* Image / Icon */}
+      <View style={[styles.cardImageBox, { backgroundColor: theme.bg }]}>
+        {product.image ? (
+          <Image source={{ uri: product.image }} style={styles.cardImage} resizeMode="cover" />
+        ) : (
+          <View style={[styles.cardIconCircle, { backgroundColor: theme.accent + "22" }]}>
+            <Ionicons name={theme.icon as any} size={32} color={theme.accent} />
+          </View>
+        )}
+        {!product.is_available && (
+          <View style={styles.outOfStockBadge}>
+            <Text style={styles.outOfStockText}>Out of stock</Text>
+          </View>
+        )}
+      </View>
+
+      {/* Info */}
+      <View style={styles.cardBody}>
+        {/* Name + Unit on same row */}
+        <View style={styles.cardNameRow}>
+          <Text style={styles.cardName} numberOfLines={1}>{product.name}</Text>
+          <Text style={[styles.cardUnit, { color: theme.accent }]}>{product.unit}</Text>
+        </View>
+
+        {/* Price below */}
+        <Text style={[styles.cardPrice, { color: theme.accent }]}>₹{product.price}</Text>
+      </View>
+
+    </TouchableOpacity>
+  );
+}
+// ────────────────────────────────────────────────────────────────────────────
+
 export default function CatalogScreen() {
-  const [admins, setAdmins] = useState<any[]>([]);
-  const [selectedAdmin, setSelectedAdmin] = useState<any | null>(null);
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -73,21 +108,10 @@ export default function CatalogScreen() {
 
   const fetchData = async () => {
     try {
-      if (!selectedAdmin) {
-        const rawAdmins = await api.getAdmins();
-        const normalized = rawAdmins.map((a: any) => ({
-          ...a,
-          id: a.id || a._id || a.admin_id,
-        }));
-        setAdmins(normalized);
-        setLoading(false);
-        return;
-      }
-      const productsData = await api.getCatalogProducts(
-        selectedAdmin?.id,
-        selectedCategory || undefined,
-      );
-      const categoriesData = await api.getCategories();
+      const [productsData, categoriesData] = await Promise.all([
+        api.getCatalogProducts(undefined, selectedCategory || undefined),
+        api.getCategories(),
+      ]);
       setProducts(productsData);
       setCategories(categoriesData);
     } catch (error) {
@@ -98,14 +122,9 @@ export default function CatalogScreen() {
     }
   };
 
-  useEffect(() => {
-    fetchData();
-  }, [selectedAdmin, selectedCategory]);
+  useEffect(() => { fetchData(); }, [selectedCategory]);
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchData();
-  };
+  const onRefresh = () => { setRefreshing(true); fetchData(); };
 
   const openSubscriptionModal = (product: any) => {
     setSelectedProduct(product);
@@ -117,16 +136,13 @@ export default function CatalogScreen() {
 
   const toggleCustomDay = (day: number) => {
     setCustomDays((prev) =>
-      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day],
+      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]
     );
   };
 
   const handleSubscribe = async () => {
     if (pattern === "custom" && customDays.length === 0) {
-      Alert.alert(
-        "Select Days",
-        "Please select at least one day for delivery.",
-      );
+      Alert.alert("Select Days", "Please select at least one day for delivery.");
       return;
     }
     setSubmitting(true);
@@ -139,8 +155,7 @@ export default function CatalogScreen() {
         pattern,
         custom_days: pattern === "custom" ? customDays : null,
         start_date: tomorrow.toISOString().split("T")[0],
-        end_date:
-          pattern === "buy_once" ? tomorrow.toISOString().split("T")[0] : null,
+        end_date: pattern === "buy_once" ? tomorrow.toISOString().split("T")[0] : null,
       });
       Alert.alert("🎉 Success", "Your subscription has been created!");
       setModalVisible(false);
@@ -151,206 +166,137 @@ export default function CatalogScreen() {
     }
   };
 
+  const groupedProducts = React.useMemo(() => {
+    if (selectedCategory) {
+      const label = categories.find((c) => c.value === selectedCategory)?.label || selectedCategory;
+      return [{ value: selectedCategory, label, items: products }];
+    }
+    const map: Record<string, any[]> = {};
+    products.forEach((p) => {
+      const cat = p.category || "other";
+      if (!map[cat]) map[cat] = [];
+      map[cat].push(p);
+    });
+    return Object.entries(map).map(([catValue, items]) => ({
+      value: catValue,
+      label: categories.find((c) => c.value === catValue)?.label || catValue,
+      items,
+    }));
+  }, [products, selectedCategory, categories]);
+
   if (loading) return <LoadingScreen />;
+
+  const modalTheme = getCategoryTheme(selectedProduct?.category);
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* ─── ADMIN / SHOP LIST ─── */}
-      {!selectedAdmin && (
-        <>
-          <View style={styles.pageHeader}>
-            <Text style={styles.pageTitle}>Shops</Text>
-            <Text style={styles.pageSubtitle}>
-              Select a shop to browse products
+      {/* ─── HEADER ─── */}
+      <View style={styles.pageHeader}>
+        <Text style={styles.pageTitle}>Shop</Text>
+        <Text style={styles.pageSubtitle}>{products.length} products available</Text>
+      </View>
+
+      {/* ─── CATEGORY CHIPS ─── */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.categoryRow}
+        style={{ maxHeight: 44 }}
+      >
+        <TouchableOpacity
+          style={[styles.chip, !selectedCategory && styles.chipActive]}
+          onPress={() => setSelectedCategory(null)}
+        >
+          <Text style={[styles.chipText, !selectedCategory && styles.chipTextActive]}>All</Text>
+        </TouchableOpacity>
+        {categories.map((cat) => (
+          <TouchableOpacity
+            key={cat.value}
+            style={[styles.chip, selectedCategory === cat.value && styles.chipActive]}
+            onPress={() => setSelectedCategory(cat.value)}
+          >
+            <Text style={[styles.chipText, selectedCategory === cat.value && styles.chipTextActive]}>
+              {cat.label}
             </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+
+      {/* ─── PRODUCT SECTIONS ─── */}
+      <ScrollView
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 40 }}
+      >
+        {products.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Ionicons name="cube-outline" size={52} color="#ddd" />
+            <Text style={styles.emptyText}>No products found</Text>
           </View>
-
-          <ScrollView
-            contentContainerStyle={styles.adminList}
-            showsVerticalScrollIndicator={false}
-          >
-            {admins.map((admin, index) => (
-              <TouchableOpacity
-                key={admin.id}
-                style={styles.adminCard}
-                onPress={() => {
-                  setSelectedAdmin(admin);
-                  setSelectedCategory(null);
-                  setLoading(true);
-                }}
-                activeOpacity={0.85}
-              >
-                {/* Icon Circle */}
-                <View style={styles.adminIconCircle}>
-                  <Ionicons name="storefront" size={22} color="#fff" />
+        ) : (
+          groupedProducts.map(({ value, label, items }) => (
+            <View key={value} style={styles.categorySection}>
+              <View style={styles.categoryHeader}>
+                <View style={styles.categoryTitleRow}>
+                  <View style={[styles.categoryDot, { backgroundColor: getCategoryTheme(value).accent }]} />
+                  <Text style={styles.categoryTitle}>{label}</Text>
                 </View>
+                <Text style={styles.categoryCount}>{items.length} items</Text>
+              </View>
 
-                {/* Info */}
-                <View style={styles.adminInfo}>
-                  <Text style={styles.adminName}>
-                    {admin.shop_name || admin.name}
-                  </Text>
-                  {admin.address ? (
-                    <Text style={styles.adminAddress} numberOfLines={1}>
-                      <Ionicons
-                        name="location-outline"
-                        size={11}
-                        color="#aaa"
-                      />{" "}
-                      {typeof admin.address === "string"
-                        ? admin.address
-                        : admin.address?.tower || ""}
-                    </Text>
-                  ) : null}
-                </View>
-
-                <Ionicons name="chevron-forward" size={18} color="#ccc" />
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </>
-      )}
-
-      {/* ─── PRODUCT LIST ─── */}
-      {selectedAdmin && (
-        <>
-          {/* Header */}
-          <View style={styles.productHeader}>
-            <TouchableOpacity
-              style={styles.backBtn}
-              onPress={() => {
-                setSelectedAdmin(null);
-                setProducts([]);
-                setCategories([]);
-              }}
-            >
-              <Ionicons name="arrow-back" size={20} color={Colors.text} />
-            </TouchableOpacity>
-
-            <View style={styles.productHeaderText}>
-              <Text style={styles.pageTitle}>
-                {selectedAdmin.shop_name || selectedAdmin.name}
-              </Text>
-              <Text style={styles.pageSubtitle}>
-                {products.length} products available
-              </Text>
+              <FlatList
+                data={items}
+                horizontal
+                keyExtractor={(item) => item.id?.toString()}
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.horizontalList}
+                renderItem={({ item }) => (
+                  <ModernProductCard product={item} onPress={() => openSubscriptionModal(item)} />
+                )}
+              />
             </View>
-          </View>
-
-          {/* Category Chips */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.categoryRow}
-            style={{ maxHeight: 44 }} 
-          >
-            <TouchableOpacity
-              style={[styles.chip, !selectedCategory && styles.chipActive]}
-              onPress={() => setSelectedCategory(null)}
-            >
-              <Text
-                style={[
-                  styles.chipText,
-                  !selectedCategory && styles.chipTextActive,
-                ]}
-              >
-                All
-              </Text>
-            </TouchableOpacity>
-
-            {categories.map((cat) => (
-              <TouchableOpacity
-                key={cat.value}
-                style={[
-                  styles.chip,
-                  selectedCategory === cat.value && styles.chipActive,
-                ]}
-                onPress={() => setSelectedCategory(cat.value)}
-              >
-                <Text
-                  style={[
-                    styles.chipText,
-                    selectedCategory === cat.value && styles.chipTextActive,
-                  ]}
-                >
-                  {cat.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-
-          {/* Products Grid */}
-          <ScrollView
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-            }
-            showsVerticalScrollIndicator={false}
-          >
-            {products.length === 0 ? (
-              <View style={styles.emptyState}>
-                <Ionicons name="cube-outline" size={52} color="#ddd" />
-                <Text style={styles.emptyText}>No products found</Text>
-              </View>
-            ) : (
-              <View style={styles.productsGrid}>
-                {products.map((product) => (
-                  <ProductCard
-                    key={product.id}
-                    product={product}
-                    onPress={() => openSubscriptionModal(product)}
-                  />
-                ))}
-              </View>
-            )}
-          </ScrollView>
-        </>
-      )}
+          ))
+        )}
+      </ScrollView>
 
       {/* ─── SUBSCRIPTION MODAL ─── */}
       <Modal visible={modalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalSheet}>
-            {/* Drag Handle */}
             <View style={styles.dragHandle} />
 
-            {/* Modal Header */}
-            <View style={styles.modalHeader}>
-              <View>
+            <View style={[styles.modalProductHeader, { backgroundColor: modalTheme.bg }]}>
+              <View style={[styles.modalIconCircle, { backgroundColor: modalTheme.accent + "22" }]}>
+                <Ionicons name={modalTheme.icon as any} size={32} color={modalTheme.accent} />
+              </View>
+              <View style={{ flex: 1 }}>
                 <Text style={styles.modalTitle}>{selectedProduct?.name}</Text>
-                <Text style={styles.modalPrice}>
+                <Text style={[styles.modalPrice, { color: modalTheme.accent }]}>
                   ₹{selectedProduct?.price} / {selectedProduct?.unit}
                 </Text>
               </View>
-              <TouchableOpacity
-                style={styles.closeBtn}
-                onPress={() => setModalVisible(false)}
-              >
-                <Ionicons name="close" size={18} color={Colors.text} />
+              <TouchableOpacity style={styles.closeBtn} onPress={() => setModalVisible(false)}>
+                <Ionicons name="close" size={18} color="#555" />
               </TouchableOpacity>
             </View>
 
             <View style={styles.divider} />
 
             <ScrollView showsVerticalScrollIndicator={false}>
-              {/* Quantity */}
               <Text style={styles.sectionLabel}>Quantity</Text>
               <View style={styles.quantityRow}>
-                <TouchableOpacity
-                  style={styles.qtyBtn}
-                  onPress={() => setQuantity((q) => Math.max(1, q - 1))}
-                >
+                <TouchableOpacity style={styles.qtyBtn} onPress={() => setQuantity((q) => Math.max(1, q - 1))}>
                   <Ionicons name="remove" size={18} color={Colors.text} />
                 </TouchableOpacity>
                 <Text style={styles.qtyValue}>{quantity}</Text>
                 <TouchableOpacity
-                  style={styles.qtyBtn}
+                  style={[styles.qtyBtn, { backgroundColor: modalTheme.accent }]}
                   onPress={() => setQuantity((q) => q + 1)}
                 >
-                  <Ionicons name="add" size={18} color={Colors.text} />
+                  <Ionicons name="add" size={18} color="#fff" />
                 </TouchableOpacity>
               </View>
 
-              {/* Pattern */}
               <Text style={styles.sectionLabel}>Delivery Pattern</Text>
               <View style={styles.patternGrid}>
                 {patterns.map((p) => (
@@ -358,38 +304,29 @@ export default function CatalogScreen() {
                     key={p.value}
                     style={[
                       styles.patternCard,
-                      pattern === p.value && styles.patternCardActive,
+                      pattern === p.value && {
+                        ...styles.patternCardActive,
+                        backgroundColor: modalTheme.accent,
+                        borderColor: modalTheme.accent,
+                      },
                     ]}
                     onPress={() => setPattern(p.value)}
                   >
                     <Ionicons
                       name={p.icon as any}
                       size={20}
-                      color={pattern === p.value ? "#fff" : Colors.primary}
+                      color={pattern === p.value ? "#fff" : modalTheme.accent}
                     />
-                    <Text
-                      style={[
-                        styles.patternLabel,
-                        pattern === p.value && styles.patternLabelActive,
-                      ]}
-                    >
+                    <Text style={[styles.patternLabel, pattern === p.value && styles.patternLabelActive]}>
                       {p.label}
                     </Text>
-                    <Text
-                      style={[
-                        styles.patternDesc,
-                        pattern === p.value && {
-                          color: "rgba(255,255,255,0.75)",
-                        },
-                      ]}
-                    >
+                    <Text style={[styles.patternDesc, pattern === p.value && { color: "rgba(255,255,255,0.75)" }]}>
                       {p.description}
                     </Text>
                   </TouchableOpacity>
                 ))}
               </View>
 
-              {/* Custom Days */}
               {pattern === "custom" && (
                 <>
                   <Text style={styles.sectionLabel}>Select Days</Text>
@@ -399,18 +336,11 @@ export default function CatalogScreen() {
                         key={day.value}
                         style={[
                           styles.dayCircle,
-                          customDays.includes(day.value) &&
-                            styles.dayCircleActive,
+                          customDays.includes(day.value) && { backgroundColor: modalTheme.accent },
                         ]}
                         onPress={() => toggleCustomDay(day.value)}
                       >
-                        <Text
-                          style={[
-                            styles.dayLabel,
-                            customDays.includes(day.value) &&
-                              styles.dayLabelActive,
-                          ]}
-                        >
+                        <Text style={[styles.dayLabel, customDays.includes(day.value) && styles.dayLabelActive]}>
                           {day.label}
                         </Text>
                       </TouchableOpacity>
@@ -420,13 +350,11 @@ export default function CatalogScreen() {
               )}
 
               <View style={{ height: 20 }} />
-
               <Button
                 title={submitting ? "Creating..." : "Subscribe Now"}
                 onPress={handleSubscribe}
                 loading={submitting}
               />
-
               <View style={{ height: 16 }} />
             </ScrollView>
           </View>
@@ -437,284 +365,144 @@ export default function CatalogScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
+  container: { flex: 1, backgroundColor: "#F8F7F4" },
+
+  pageHeader: { paddingHorizontal: 24, paddingTop: 12, paddingBottom: 8 },
+  pageTitle: { fontSize: 26, fontWeight: "800", color: "#1A1A1A", letterSpacing: -0.5 },
+  pageSubtitle: { fontSize: 13, color: "#999", marginTop: 2 },
+
+  categoryRow: { paddingHorizontal: 20, paddingVertical: 6, gap: 8 },
+  chip: {
+    paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20,
+    backgroundColor: "#fff", borderWidth: 1, borderColor: "#eee", marginRight: 8,
+  },
+  chipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  chipText: { fontSize: 12, fontWeight: "600", color: "#888" },
+  chipTextActive: { color: "#fff" },
+
+  categorySection: { marginTop: 28 },
+  categoryHeader: {
+    flexDirection: "row", alignItems: "center",
+    justifyContent: "space-between", paddingHorizontal: 20, marginBottom: 12,
+  },
+  categoryTitleRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  categoryDot: { width: 8, height: 8, borderRadius: 4 },
+  categoryTitle: { fontSize: 16, fontWeight: "800", color: "#1A1A1A", letterSpacing: -0.2 },
+  categoryCount: { fontSize: 12, color: "#bbb", fontWeight: "600" },
+  horizontalList: { paddingLeft: 20, paddingRight: 8, gap: 12 },
+
+  /* ── Card ── */
+  card: {
+    width: CARD_WIDTH,
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOpacity: 0.07,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
+  cardImageBox: {
+    height: 120,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  cardImage: { width: "100%", height: "100%" },
+  cardIconCircle: {
+    width: 60, height: 60, borderRadius: 30,
+    justifyContent: "center", alignItems: "center",
+  },
+  outOfStockBadge: {
+    position: "absolute", bottom: 8, left: 8,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6,
+  },
+  outOfStockText: { color: "#fff", fontSize: 10, fontWeight: "700" },
+
+  cardBody: { padding: 10, paddingTop: 10, gap: 4 },
+
+  /* Name + Unit on same row */
+  cardNameRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 4,
+  },
+  cardName: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#1A1A1A",
     flex: 1,
-    backgroundColor: "#F8F7F4",
+  },
+  cardUnit: {
+    fontSize: 12,
+    fontWeight: "600",
   },
 
-  /* ── Page Header ── */
-  pageHeader: {
-    paddingHorizontal: 24,
-    paddingTop: 12,
-    paddingBottom: 8,
-  },
-  pageTitle: {
-    fontSize: 26,
+  /* Price below */
+  cardPrice: {
+    fontSize: 16,
     fontWeight: "800",
-    color: "#1A1A1A",
-    letterSpacing: -0.5,
-  },
-  pageSubtitle: {
-    fontSize: 13,
-    color: "#999",
     marginTop: 2,
   },
 
-  /* ── Admin List ── */
-  adminList: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 30,
-  },
-  adminCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-  },
-  adminIconCircle: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: Colors.primary,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 14,
-  },
-  adminInfo: {
-    flex: 1,
-  },
-  adminName: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#1A1A1A",
-  },
-  adminAddress: {
-    fontSize: 12,
-    color: "#aaa",
-    marginTop: 3,
-  },
-
-  /* ── Product Header ── */
-  productHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 8,
-    gap: 12,
-  },
-  backBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: "#fff",
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  productHeaderText: { flex: 1 },
-
-  /* ── Category Chips ── */
-  categoryRow: {
-    paddingHorizontal: 20,
-    paddingVertical: 6, // reduced from 10
-    gap: 8,
-  },
-  chip: {
-    paddingHorizontal: 14,
-    paddingVertical: 6, // reduced from 8
-    borderRadius: 20,
-    backgroundColor: "#fff",
-    borderWidth: 1,
-    borderColor: "#eee",
-    marginRight: 8,
-  },
-  chipActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  chipText: {
-    fontSize: 12, // reduced from 13
-    fontWeight: "600",
-    color: "#888",
-  },
-  chipTextActive: {
-    color: "#fff",
-  },
-
-  /* ── Products ── */
-  productsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 30,
-    justifyContent: "space-between",
-  },
-  emptyState: {
-    alignItems: "center",
-    paddingTop: 80,
-    gap: 12,
-  },
-  emptyText: {
-    fontSize: 15,
-    color: "#ccc",
-    fontWeight: "500",
-  },
+  /* ── Empty ── */
+  emptyState: { alignItems: "center", paddingTop: 80, gap: 12 },
+  emptyText: { fontSize: 15, color: "#ccc", fontWeight: "500" },
 
   /* ── Modal ── */
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.4)",
-    justifyContent: "flex-end",
-  },
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },
   modalSheet: {
-    backgroundColor: "#fff",
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingHorizontal: 24,
-    paddingTop: 12,
-    paddingBottom: 34,
-    maxHeight: "90%",
+    backgroundColor: "#fff", borderTopLeftRadius: 28, borderTopRightRadius: 28,
+    paddingHorizontal: 24, paddingTop: 12, paddingBottom: 34, maxHeight: "92%",
   },
   dragHandle: {
-    width: 40,
-    height: 4,
-    backgroundColor: "#E0E0E0",
-    borderRadius: 2,
-    alignSelf: "center",
-    marginBottom: 16,
+    width: 40, height: 4, backgroundColor: "#E0E0E0",
+    borderRadius: 2, alignSelf: "center", marginBottom: 16,
   },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
+  modalProductHeader: {
+    flexDirection: "row", alignItems: "center", gap: 14,
+    borderRadius: 16, padding: 14, marginBottom: 4,
   },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#1A1A1A",
-    letterSpacing: -0.3,
+  modalIconCircle: {
+    width: 56, height: 56, borderRadius: 16,
+    justifyContent: "center", alignItems: "center",
   },
-  modalPrice: {
-    fontSize: 14,
-    color: Colors.primary,
-    fontWeight: "600",
-    marginTop: 4,
-  },
+  modalTitle: { fontSize: 17, fontWeight: "800", color: "#1A1A1A", letterSpacing: -0.3, flexShrink: 1 },
+  modalPrice: { fontSize: 14, fontWeight: "700", marginTop: 3 },
   closeBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    backgroundColor: "#F0F0F0",
-    justifyContent: "center",
-    alignItems: "center",
+    width: 34, height: 34, borderRadius: 10,
+    backgroundColor: "rgba(0,0,0,0.07)", justifyContent: "center", alignItems: "center",
   },
-  divider: {
-    height: 1,
-    backgroundColor: "#F0F0F0",
-    marginVertical: 16,
-  },
+  divider: { height: 1, backgroundColor: "#F0F0F0", marginVertical: 16 },
 
-  /* ── Quantity ── */
   sectionLabel: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#999",
-    letterSpacing: 0.8,
-    textTransform: "uppercase",
-    marginBottom: 12,
-    marginTop: 4,
+    fontSize: 11, fontWeight: "700", color: "#bbb",
+    letterSpacing: 1, textTransform: "uppercase", marginBottom: 12, marginTop: 4,
   },
-  quantityRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 24,
-    gap: 20,
-  },
+  quantityRow: { flexDirection: "row", alignItems: "center", marginBottom: 24, gap: 20 },
   qtyBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: "#F5F5F5",
-    justifyContent: "center",
-    alignItems: "center",
+    width: 40, height: 40, borderRadius: 12,
+    backgroundColor: "#F5F5F5", justifyContent: "center", alignItems: "center",
   },
-  qtyValue: {
-    fontSize: 22,
-    fontWeight: "800",
-    color: "#1A1A1A",
-    minWidth: 30,
-    textAlign: "center",
-  },
+  qtyValue: { fontSize: 22, fontWeight: "800", color: "#1A1A1A", minWidth: 30, textAlign: "center" },
 
-  /* ── Pattern Cards ── */
-  patternGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-    marginBottom: 24,
-  },
+  patternGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 24 },
   patternCard: {
-    width: "47%",
-    padding: 14,
-    borderRadius: 16,
-    backgroundColor: "#F8F8F8",
-    borderWidth: 1.5,
-    borderColor: "transparent",
-    gap: 6,
+    width: "47%", padding: 14, borderRadius: 16,
+    backgroundColor: "#F8F8F8", borderWidth: 1.5, borderColor: "transparent", gap: 6,
   },
-  patternCardActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  patternLabel: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#1A1A1A",
-  },
-  patternLabelActive: {
-    color: "#fff",
-  },
-  patternDesc: {
-    fontSize: 11,
-    color: "#999",
-  },
+  patternCardActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  patternLabel: { fontSize: 14, fontWeight: "700", color: "#1A1A1A" },
+  patternLabelActive: { color: "#fff" },
+  patternDesc: { fontSize: 11, color: "#999" },
 
-  /* ── Custom Days ── */
-  daysRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 24,
-  },
+  daysRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 24 },
   dayCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#F5F5F5",
-    justifyContent: "center",
-    alignItems: "center",
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: "#F5F5F5", justifyContent: "center", alignItems: "center",
   },
-  dayCircleActive: {
-    backgroundColor: Colors.primary,
-  },
-  dayLabel: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#999",
-  },
-  dayLabelActive: {
-    color: "#fff",
-  },
+  dayLabel: { fontSize: 12, fontWeight: "700", color: "#999" },
+  dayLabelActive: { color: "#fff" },
 });

@@ -80,7 +80,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     borderRadius: 16,
     overflow: 'hidden',
-    width: '48%',
+    width: '100%',
     marginBottom: 16,
     shadowColor: Colors.shadow,
     shadowOffset: { width: 0, height: 2 },
