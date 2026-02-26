@@ -341,6 +341,219 @@ async cancelOrder(orderId: string) {
     return this.request<any>("/seed", { method: "POST" });
   }
 
+// ================= GAUSEVAK (COWS) =================
+
+// Create cow
+async createCow(data: any) {
+  return this.request<any>("/gausevak/cows", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+// Get all cows (with optional search)
+async getCows(search?: string) {
+  const params = new URLSearchParams();
+  if (search) params.append("search", search);
+
+  const query = params.toString() ? `?${params.toString()}` : "";
+  return this.request<any[]>(`/gausevak/cows${query}`);
+}
+
+// Get single cow (optional but useful)
+async getCow(id: string) {
+  return this.request<any>(`/gausevak/cows/${id}`);
+}
+
+// Update cow
+async updateCow(id: string, data: Partial<{
+  tag: string;
+  name: string;
+  breed: string;
+  weight: string;
+  father: string;
+  size: string;
+  boughtDate: string;
+  bornDate: string;
+  isActive: boolean;
+  isSold: boolean;
+  type: string;
+}>) {
+  return this.request<any>(`/gausevak/cows/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+// Delete cow
+async deleteCow(id: string) {
+  return this.request<any>(`/gausevak/cows/${id}`, {
+    method: "DELETE",
+  });
+}
+
+// ================= GAUSEVAK (INSEMINATION) =================
+
+async createInsemination(data: {
+  cowSrNo: string;
+  cowName: string;
+  inseminationDate: string;
+  pregnancyStatus: boolean;
+  pdDone: boolean;
+  pregnancyStatusDate?: string;
+  doctorName?: string;
+  actualCalvingDate?: string;
+  heatAfterCalvingDate?: string;
+}) {
+  return this.request<any>("/gausevak/inseminations", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+async getInseminations(search?: string) {
+  const params = new URLSearchParams();
+  if (search) params.append("search", search);
+  const query = params.toString() ? `?${params.toString()}` : "";
+  return this.request<any[]>(`/gausevak/inseminations${query}`);
+}
+
+async updateInsemination(id: string, data: Partial<{
+  cowSrNo: string;
+  cowName: string;
+  inseminationDate: string;
+  pregnancyStatus: boolean;
+  pdDone: boolean;
+  pregnancyStatusDate: string;
+  doctorName: string;
+  actualCalvingDate: string;
+  heatAfterCalvingDate: string;
+}>) {
+  return this.request<any>(`/gausevak/inseminations/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+async deleteInsemination(id: string) {
+  return this.request<any>(`/gausevak/inseminations/${id}`, {
+    method: "DELETE",
+  });
+}
+
+// ================= GAUSEVAK (SEMEN RECORDS) =================
+
+async createSemenRecord(data: {
+  bullSrNo: string;
+  bullName?: string;
+  breed?: string;
+  femalCalves: number;
+  maleCalves: number;
+  damaged: number;
+  conceptionCount: number;
+  totalDoses: number;
+  notes?: string;
+}) {
+  return this.request<any>("/gausevak/semen", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+async getSemenRecords(search?: string) {
+  const params = new URLSearchParams();
+  if (search) params.append("search", search);
+  const query = params.toString() ? `?${params.toString()}` : "";
+  return this.request<any[]>(`/gausevak/semen${query}`);
+}
+
+async updateSemenRecord(id: string, data: Partial<{
+  bullSrNo: string;
+  bullName: string;
+  breed: string;
+  femalCalves: number;
+  maleCalves: number;
+  damaged: number;
+  conceptionCount: number;
+  totalDoses: number;
+  notes: string;
+}>) {
+  return this.request<any>(`/gausevak/semen/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+async deleteSemenRecord(id: string) {
+  return this.request<any>(`/gausevak/semen/${id}`, {
+    method: "DELETE",
+  });
+}
+
+// ================= GAUSEVAK (MEDICAL RECORDS) =================
+
+async createMedicalRecord(data: {
+  cowSrNo: string;
+  cowName?: string;
+  cowAge?: string;
+  currentStatus: string;
+  lastVaccinationDate?: string;
+  nextVaccinationDate?: string;
+  vaccinationName?: string;
+  lastIssueName?: string;
+  lastIssueDate?: string;
+  currentIssueName?: string;
+  currentIssueDate?: string;
+  treatmentGiven?: string;
+  doctorName?: string;
+  medicineName?: string;
+  notes?: string;
+}) {
+  return this.request<any>("/gausevak/medical", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+async getMedicalRecords(search?: string, status?: string) {
+  const params = new URLSearchParams();
+  if (search) params.append("search", search);
+  if (status) params.append("status", status);
+  const query = params.toString() ? `?${params.toString()}` : "";
+  return this.request<any[]>(`/gausevak/medical${query}`);
+}
+
+async updateMedicalRecord(id: string, data: Partial<{
+  cowSrNo: string;
+  cowName: string;
+  cowAge: string;
+  currentStatus: string;
+  lastVaccinationDate: string;
+  nextVaccinationDate: string;
+  vaccinationName: string;
+  lastIssueName: string;
+  lastIssueDate: string;
+  currentIssueName: string;
+  currentIssueDate: string;
+  treatmentGiven: string;
+  doctorName: string;
+  medicineName: string;
+  notes: string;
+}>) {
+  return this.request<any>(`/gausevak/medical/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+async deleteMedicalRecord(id: string) {
+  return this.request<any>(`/gausevak/medical/${id}`, {
+    method: "DELETE",
+  });
+}
+
+///------------------------------Gausevak (Cows)------------------------------
+
   logout = async () => {
     this.setToken(null);
   };
