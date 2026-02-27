@@ -76,7 +76,6 @@ export default function DeliveriesScreen() {
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
 
-      {/* ── Header ── */}
       <View style={styles.header}>
         <Text style={styles.title}>Deliveries</Text>
         <View style={styles.headerBadges}>
@@ -99,13 +98,11 @@ export default function DeliveriesScreen() {
         contentContainerStyle={styles.listContent}
       >
 
-        {/* ── AVAILABLE ORDERS ── */}
         {availableOrders.length > 0 && (
           <Text style={styles.sectionLabel}>NEW ORDERS</Text>
         )}
         {availableOrders.map((order) => (
           <View key={order.id} style={styles.card}>
-            {/* Card Header */}
             <View style={styles.cardHeader}>
               <View style={styles.orderIdRow}>
                 <View style={[styles.iconBox, { backgroundColor: '#FFF4E6' }]}>
@@ -121,7 +118,6 @@ export default function DeliveriesScreen() {
 
             <View style={styles.divider} />
 
-            {/* Customer Info */}
             <Text style={styles.colLabel}>DELIVER TO</Text>
             <Text style={styles.personName}>{order.customer_name}</Text>
             {order.customer_phone && (
@@ -141,7 +137,6 @@ export default function DeliveriesScreen() {
 
             <View style={styles.divider} />
 
-            {/* Items */}
             <Text style={styles.colLabel}>ITEMS</Text>
             <View style={styles.itemsList}>
               {order.items?.map((item: any, i: number) => (
@@ -163,7 +158,6 @@ export default function DeliveriesScreen() {
           </View>
         ))}
 
-        {/* ── ACTIVE ORDERS ── */}
         {activeOrders.length > 0 && (
           <Text style={styles.sectionLabel}>ACTIVE</Text>
         )}
@@ -171,7 +165,6 @@ export default function DeliveriesScreen() {
           const sc = statusConfig[order.status] ?? statusConfig["assigned"];
           return (
             <View key={order.id} style={styles.card}>
-              {/* Header */}
               <View style={styles.cardHeader}>
                 <View style={styles.orderIdRow}>
                   <View style={[styles.iconBox, { backgroundColor: sc.bg }]}>
@@ -187,7 +180,6 @@ export default function DeliveriesScreen() {
 
               <View style={styles.divider} />
 
-              {/* Two col: Pickup + Deliver */}
               <View style={styles.twoCol}>
                 <View style={styles.col}>
                   <Text style={styles.colLabel}>PICKUP FROM</Text>
@@ -232,7 +224,6 @@ export default function DeliveriesScreen() {
 
               <View style={styles.divider} />
 
-              {/* Items */}
               <Text style={styles.colLabel}>ITEMS</Text>
               <View style={styles.itemsList}>
                 {order.items?.map((item: any, i: number) => (
@@ -244,7 +235,6 @@ export default function DeliveriesScreen() {
                 ))}
               </View>
 
-              {/* Action Buttons */}
               {order.status === "assigned" && (
                 <TouchableOpacity style={styles.actionBtn} onPress={() => openAdminOtpModal(order)}>
                   <Ionicons name="cube-outline" size={17} color="#fff" />
@@ -273,7 +263,6 @@ export default function DeliveriesScreen() {
           );
         })}
 
-        {/* ── COMPLETED ── */}
         {completedOrders.length > 0 && (
           <Text style={styles.sectionLabel}>COMPLETED</Text>
         )}
@@ -300,7 +289,6 @@ export default function DeliveriesScreen() {
           </View>
         ))}
 
-        {/* Empty State */}
         {deliveries.length === 0 && (
           <View style={styles.emptyState}>
             <Ionicons name="bicycle-outline" size={52} color="#ddd" />
@@ -312,7 +300,6 @@ export default function DeliveriesScreen() {
         <View style={{ height: 30 }} />
       </ScrollView>
 
-      {/* ── OTP MODAL ── */}
       <Modal
         visible={otpModal}
         transparent
@@ -338,7 +325,6 @@ export default function DeliveriesScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* OTP Boxes */}
             <TouchableOpacity
               activeOpacity={1}
               onPress={() => inputRef.current?.focus()}
@@ -397,7 +383,6 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8F7F4' },
   listContent: { paddingHorizontal: 16, paddingBottom: 20 },
 
-  /* ── Header ── */
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -419,14 +404,12 @@ const styles = StyleSheet.create({
   },
   activeBadgeText: { fontSize: 12, fontWeight: '700', color: '#2563eb' },
 
-  /* ── Section Label ── */
   sectionLabel: {
     fontSize: 11, fontWeight: '700', color: '#bbb',
     letterSpacing: 1, textTransform: 'uppercase',
     marginTop: 12, marginBottom: 10, marginLeft: 4,
   },
 
-  /* ── Card ── */
   card: {
     backgroundColor: '#fff',
     borderRadius: 20,
@@ -462,7 +445,6 @@ const styles = StyleSheet.create({
 
   divider: { height: 1, backgroundColor: '#F5F5F5', marginVertical: 12 },
 
-  /* ── Info ── */
   colLabel: {
     fontSize: 10, fontWeight: '700', color: '#bbb',
     letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 6,
@@ -473,19 +455,16 @@ const styles = StyleSheet.create({
   addressRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   addressText: { fontSize: 12, color: '#aaa', fontWeight: '500' },
 
-  /* ── Two Col ── */
   twoCol: { flexDirection: 'row' },
   col: { flex: 1 },
   colDivider: { width: 1, backgroundColor: '#F5F5F5', marginHorizontal: 12 },
 
-  /* ── Items ── */
   itemsList: { gap: 6, marginTop: 6, marginBottom: 14 },
   itemRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   itemDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.primary },
   itemText: { flex: 1, fontSize: 13, fontWeight: '500', color: '#333' },
   itemQty: { fontSize: 12, color: '#aaa', fontWeight: '600' },
 
-  /* ── Buttons ── */
   acceptBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -509,16 +488,13 @@ const styles = StyleSheet.create({
   },
   actionBtnText: { fontSize: 14, fontWeight: '700', color: '#fff' },
 
-  /* ── Completed ── */
   completedName: { fontSize: 12, color: '#aaa', marginTop: 2 },
   completedAmount: { fontSize: 16, fontWeight: '800', color: '#1A1A1A', textAlign: 'right' },
 
-  /* ── Empty ── */
   emptyState: { alignItems: 'center', paddingTop: 80, gap: 8 },
   emptyTitle: { fontSize: 16, fontWeight: '700', color: '#ccc' },
   emptyDesc: { fontSize: 13, color: '#ddd' },
 
-  /* ── OTP Modal ── */
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
   modalSheet: {
     backgroundColor: '#fff',

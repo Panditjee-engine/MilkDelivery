@@ -76,7 +76,6 @@ function getCategoryTheme(category: string) {
   return CATEGORY_THEMES[category?.toLowerCase()] || CATEGORY_THEMES.other;
 }
 
-// Formats unit: "2l" → "2 Litres", "500ml" → "500 ML", "1kg" → "1 KG", else capitalize
 function formatUnit(unit: string): string {
   if (!unit) return "";
   const lower = unit.toLowerCase().trim();
@@ -91,7 +90,6 @@ function formatUnit(unit: string): string {
   return unit.charAt(0).toUpperCase() + unit.slice(1);
 }
 
-// ── Modern Product Card ──────────────────────────────────────────────────────
 function ModernProductCard({
   product,
   onPress,
@@ -146,7 +144,6 @@ function ModernProductCard({
   );
 }
 
-// ── Main Screen ──────────────────────────────────────────────────────────────
 export default function CatalogScreen() {
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
@@ -266,7 +263,6 @@ export default function CatalogScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* ─── HEADER ─── */}
       <View style={styles.pageHeader}>
         <Text style={styles.pageTitle}>Shop</Text>
         <Text style={styles.pageSubtitle}>
@@ -274,7 +270,6 @@ export default function CatalogScreen() {
         </Text>
       </View>
 
-      {/* ─── CATEGORY CHIPS ─── */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -315,7 +310,6 @@ export default function CatalogScreen() {
         ))}
       </ScrollView>
 
-      {/* ─── PRODUCT SECTIONS ─── */}
       <ScrollView
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
@@ -362,13 +356,11 @@ export default function CatalogScreen() {
         )}
       </ScrollView>
 
-      {/* ─── SUBSCRIPTION MODAL ─── */}
       <Modal visible={modalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalSheet}>
             <View style={styles.dragHandle} />
 
-            {/* Product + Shop header */}
             <View
               style={[
                 styles.modalProductHeader,
@@ -388,7 +380,6 @@ export default function CatalogScreen() {
                 />
               </View>
               <View style={{ flex: 1 }}>
-                {/* Shop name — big, at top */}
                 {shopName && (
                   <Text style={styles.modalShopName}>{shopName}</Text>
                 )}
@@ -418,7 +409,6 @@ export default function CatalogScreen() {
             <View style={styles.divider} />
 
             <ScrollView showsVerticalScrollIndicator={false}>
-              {/* Quantity label then stepper */}
               <Text style={styles.sectionLabel}>Quantity</Text>
               <Text style={styles.quantityHint}>
                 How many{" "}
@@ -453,7 +443,6 @@ export default function CatalogScreen() {
                 </TouchableOpacity>
               </View>
 
-              {/* Pattern */}
               <Text style={styles.sectionLabel}>Delivery Pattern</Text>
               <View style={styles.patternGrid}>
                 {patterns.map((p) => (
@@ -496,7 +485,6 @@ export default function CatalogScreen() {
                 ))}
               </View>
 
-              {/* Custom Days */}
               {pattern === "custom" && (
                 <>
                   <Text style={styles.sectionLabel}>Select Days</Text>
@@ -587,7 +575,6 @@ const styles = StyleSheet.create({
   categoryCount: { fontSize: 12, color: "#bbb", fontWeight: "600" },
   horizontalList: { paddingLeft: 20, paddingRight: 8, gap: 12 },
 
-  /* ── Card ── */
   card: {
     width: CARD_WIDTH,
     backgroundColor: "#fff",
@@ -629,11 +616,9 @@ const styles = StyleSheet.create({
   cardUnit: { fontSize: 11, fontWeight: "700" },
   cardPrice: { fontSize: 16, fontWeight: "800", marginTop: 2 },
 
-  /* ── Empty ── */
   emptyState: { alignItems: "center", paddingTop: 80, gap: 12 },
   emptyText: { fontSize: 15, color: "#ccc", fontWeight: "500" },
 
-  /* ── Modal ── */
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.45)",
@@ -673,7 +658,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
-  /* Shop name — big, prominent */
   modalShopName: {
     fontSize: 16,
     fontWeight: "800",
@@ -714,7 +698,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 
-  /* Quantity hint text */
   quantityHint: { fontSize: 13, color: "#aaa", marginBottom: 14 },
 
   quantityRow: {
@@ -732,7 +715,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
-  /* Quantity value + unit stacked */
   qtyValueBox: { alignItems: "center", minWidth: 60 },
   qtyValue: { fontSize: 26, fontWeight: "800", color: "#1A1A1A" },
   qtyUnitLabel: { fontSize: 11, fontWeight: "700", marginTop: 1 },

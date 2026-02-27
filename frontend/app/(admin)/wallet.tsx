@@ -66,12 +66,10 @@ export default function AdminWalletScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        {/* ── Header ── */}
         <View style={styles.header}>
           <Text style={styles.title}>Wallet</Text>
         </View>
 
-        {/* ── Hero Balance Card ── */}
         <View style={styles.heroCard}>
           <View style={styles.heroTop}>
             <Text style={styles.heroLabel}>Total Balance</Text>
@@ -108,7 +106,6 @@ export default function AdminWalletScreen() {
           </View>
         </View>
 
-        {/* ── Quick Stats ── */}
         <View style={styles.quickStats}>
           <View style={[styles.quickStat, { backgroundColor: '#F0FDF4' }]}>
             <View style={[styles.quickStatIcon, { backgroundColor: '#22c55e20' }]}>
@@ -137,14 +134,12 @@ export default function AdminWalletScreen() {
           </View>
         </View>
 
-        {/* ── Transaction History ── */}
         <View style={styles.txHeader}>
           <View>
             <Text style={styles.txTitle}>Transactions</Text>
             <Text style={styles.txSub}>{filteredTx.length} records</Text>
           </View>
 
-          {/* Filter Chips */}
           <View style={styles.filterRow}>
             {(['ALL', 'credit', 'debit'] as const).map((f) => (
               <TouchableOpacity
@@ -213,13 +208,11 @@ export default function AdminWalletScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8F7F4' },
 
-  /* ── Header ── */
   header: {
     paddingHorizontal: 20, paddingTop: 14, paddingBottom: 8,
   },
   title: { fontSize: 26, fontWeight: '800', color: '#1A1A1A', letterSpacing: -0.5 },
 
-  /* ── Hero ── */
   heroCard: {
     margin: 20,
     backgroundColor: Colors.primary,
@@ -261,7 +254,6 @@ const styles = StyleSheet.create({
   heroStatLabel: { fontSize: 10, color: 'rgba(255,255,255,0.6)', fontWeight: '500' },
   heroStatVal: { fontSize: 14, fontWeight: '700', color: '#fff' },
 
-  /* ── Quick Stats ── */
   quickStats: {
     flexDirection: 'row',
     paddingHorizontal: 20, gap: 10, marginBottom: 20,
@@ -277,7 +269,6 @@ const styles = StyleSheet.create({
   quickStatVal: { fontSize: 18, fontWeight: '800' },
   quickStatLabel: { fontSize: 10, color: '#888', fontWeight: '600', textAlign: 'center' },
 
-  /* ── Tx Header ── */
   txHeader: {
     paddingHorizontal: 20, marginBottom: 12,
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end',
@@ -294,7 +285,6 @@ const styles = StyleSheet.create({
   filterChipText: { fontSize: 11, fontWeight: '600', color: '#aaa' },
   filterChipTextActive: { color: Colors.primary },
 
-  /* ── Tx List ── */
   txList: { paddingHorizontal: 16, gap: 8 },
   txCard: {
     flexDirection: 'row', alignItems: 'center',
@@ -315,7 +305,6 @@ const styles = StyleSheet.create({
   txAmount: { fontSize: 15, fontWeight: '800' },
   txBal: { fontSize: 10, color: '#bbb', marginTop: 3 },
 
-  /* ── Empty ── */
   emptyState: { alignItems: 'center', paddingVertical: 60, gap: 10 },
   emptyIcon: {
     width: 70, height: 70, borderRadius: 35,

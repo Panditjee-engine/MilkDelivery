@@ -55,7 +55,6 @@ export default function LoginScreen() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* Header */}
           <View style={styles.header}>
             <View style={styles.logoCircle}>
               <Image
@@ -71,7 +70,6 @@ export default function LoginScreen() {
             </Text>
           </View>
 
-          {/* Form */}
           <View style={styles.form}>
             <View style={styles.card}>
               <Input
@@ -129,7 +127,6 @@ export default function LoginScreen() {
             </View>
           </View>
 
-          {/* Footer */}
           <View style={styles.footer}>
             <Text style={styles.footerText}>
               Don't have an account?
@@ -141,7 +138,6 @@ export default function LoginScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Bottom Info */}
           <View style={styles.demoSection}>
             <Text style={styles.demoTitle}>Gauhum</Text>
             <Text style={styles.demoText}>

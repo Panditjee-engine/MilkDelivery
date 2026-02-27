@@ -125,7 +125,6 @@ export default function SubscriptionsScreen() {
                 <View
                   style={[styles.ticketCard, isDelivered && { opacity: 0.6 }]}
                 >
-                  {/* Header */}
                   <View style={styles.ticketHeader}>
                     <View>
                       <Text style={styles.productName}>
@@ -137,7 +136,6 @@ export default function SubscriptionsScreen() {
                     <Text style={styles.price}>₹{sub.product?.price}</Text>
                   </View>
 
-                  {/* Progress */}
                   <View style={styles.progressContainer}>
                     <View style={styles.progressBarBg}>
                       <View
@@ -150,7 +148,6 @@ export default function SubscriptionsScreen() {
                     <Text style={styles.progressLabel}>{sub.status}</Text>
                   </View>
 
-                  {/* Details */}
                   <View style={styles.detailsRow}>
                     <View>
                       <Text style={styles.smallLabel}>Pattern</Text>
@@ -170,7 +167,6 @@ export default function SubscriptionsScreen() {
                     </View>
                   </View>
 
-                  {/* OTP */}
                   {sub.delivery_otp && !isDelivered && (
                     <View style={styles.otpSection}>
                       <Text style={styles.smallLabel}>OTP</Text>
@@ -178,7 +174,6 @@ export default function SubscriptionsScreen() {
                     </View>
                   )}
 
-                  {/* Cancel only if not delivered */}
                   {!isDelivered && (
                     <TouchableOpacity
                       style={styles.cancelBtn}
@@ -188,7 +183,6 @@ export default function SubscriptionsScreen() {
                     </TouchableOpacity>
                   )}
 
-                  {/* Delivered Stamp */}
                   {isDelivered && (
                     <View style={styles.deliveredStamp}>
                       <Text style={styles.deliveredStampText}>DELIVERED</Text>

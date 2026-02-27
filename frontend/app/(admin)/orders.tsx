@@ -70,7 +70,6 @@ export default function AdminOrdersScreen() {
     return (
       <View style={styles.card}>
 
-        {/* ── Card Header ── */}
         <View style={styles.cardHeader}>
           <View style={styles.orderIdRow}>
             <View style={styles.receiptIcon}>
@@ -85,7 +84,6 @@ export default function AdminOrdersScreen() {
           </View>
         </View>
 
-        {/* ── Date + Slot ── */}
         {(item.delivery_date || item.delivery_slot) && (
           <View style={styles.dateRow}>
             <Ionicons name="calendar-outline" size={12} color="#aaa" />
@@ -97,7 +95,6 @@ export default function AdminOrdersScreen() {
 
         <View style={styles.divider} />
 
-        {/* ── Customer + Rider ── */}
         <View style={styles.twoCol}>
           <View style={styles.col}>
             <Text style={styles.colLabel}>CUSTOMER</Text>
@@ -135,7 +132,6 @@ export default function AdminOrdersScreen() {
 
         <View style={styles.divider} />
 
-        {/* ── Products ── */}
         <Text style={styles.colLabel}>ITEMS</Text>
         <View style={styles.itemsList}>
           {item.items?.map((p, i) => (
@@ -151,7 +147,6 @@ export default function AdminOrdersScreen() {
 
         <View style={styles.divider} />
 
-        {/* ── Footer ── */}
         <View style={styles.footer}>
           <View style={styles.otpBox}>
             <Text style={styles.otpLabel}>OTP</Text>
@@ -172,7 +167,6 @@ export default function AdminOrdersScreen() {
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
 
-      {/* ── Header ── */}
       <View style={styles.header}>
         <Text style={styles.title}>Orders</Text>
         <View style={styles.countBadge}>
@@ -180,7 +174,6 @@ export default function AdminOrdersScreen() {
         </View>
       </View>
 
-      {/* ── Filters ── */}
       <View style={styles.filterRow}>
         {FILTERS.map((f) => (
           <TouchableOpacity
@@ -195,7 +188,6 @@ export default function AdminOrdersScreen() {
         ))}
       </View>
 
-      {/* ── List ── */}
       <FlatList
         data={orders}
         keyExtractor={(item) => item.id}
@@ -218,7 +210,6 @@ export default function AdminOrdersScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8F7F4' },
 
-  /* ── Header ── */
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -236,7 +227,6 @@ const styles = StyleSheet.create({
   },
   countText: { fontSize: 13, fontWeight: '800', color: Colors.primary },
 
-  /* ── Filters ── */
   filterRow: {
     flexDirection: 'row',
     paddingHorizontal: 20,
@@ -258,10 +248,8 @@ const styles = StyleSheet.create({
   filterText: { fontSize: 13, fontWeight: '600', color: '#aaa' },
   filterTextActive: { color: Colors.primary },
 
-  /* ── List ── */
   list: { paddingHorizontal: 16, paddingBottom: 30 },
 
-  /* ── Card ── */
   card: {
     backgroundColor: '#fff',
     borderRadius: 20,
@@ -302,7 +290,6 @@ const styles = StyleSheet.create({
 
   divider: { height: 1, backgroundColor: '#F5F5F5', marginVertical: 14 },
 
-  /* ── Two Col ── */
   twoCol: { flexDirection: 'row' },
   col: { flex: 1 },
   colDivider: { width: 1, backgroundColor: '#F5F5F5', marginHorizontal: 14 },
@@ -316,14 +303,12 @@ const styles = StyleSheet.create({
   unassignedRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
   unassignedText: { fontSize: 13, color: '#f59e0b', fontWeight: '600' },
 
-  /* ── Items ── */
   itemsList: { gap: 6, marginTop: 8 },
   itemRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   itemDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.primary },
   itemName: { flex: 1, fontSize: 13, fontWeight: '500', color: '#333' },
   itemQty: { fontSize: 12, color: '#aaa', fontWeight: '600' },
 
-  /* ── Footer ── */
   footer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   otpBox: {
     backgroundColor: '#FFFBEB',
@@ -339,7 +324,6 @@ const styles = StyleSheet.create({
   amountLabel: { fontSize: 10, color: '#aaa', fontWeight: '600' },
   amountValue: { fontSize: 18, fontWeight: '800', color: '#1A1A1A' },
 
-  /* ── Empty ── */
   emptyState: { alignItems: 'center', paddingTop: 80, gap: 8 },
   emptyTitle: { fontSize: 16, fontWeight: '700', color: '#ccc' },
   emptyDesc: { fontSize: 13, color: '#ddd' },

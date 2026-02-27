@@ -224,7 +224,6 @@ function Header() {
   );
 }
 
-// ── Save as: app/(admin)/gausevak/index.tsx ──
 export default function GausevakScreen() {
   return (
     <View style={styles.screen}>

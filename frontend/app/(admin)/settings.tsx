@@ -41,12 +41,10 @@ export default function AdminSettingsScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView showsVerticalScrollIndicator={false}>
 
-        {/* ── Header ── */}
         <View style={styles.header}>
           <Text style={styles.title}>Settings</Text>
         </View>
 
-        {/* ── Profile Card ── */}
         <View style={styles.profileCard}>
           <View style={styles.avatarRing}>
             <View style={styles.avatar}>
@@ -65,7 +63,6 @@ export default function AdminSettingsScreen() {
           </View>
         </View>
 
-        {/* ── System Config ── */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>System Configuration</Text>
@@ -98,7 +95,6 @@ export default function AdminSettingsScreen() {
           </View>
         </View>
 
-        {/* ── Business Info ── */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Business Information</Text>
@@ -123,7 +119,6 @@ export default function AdminSettingsScreen() {
           </View>
         </View>
 
-        {/* ── Logout ── */}
         <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
           <Ionicons name="log-out-outline" size={19} color="#ef4444" />
           <Text style={styles.logoutText}>Logout</Text>
@@ -138,7 +133,6 @@ export default function AdminSettingsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8F7F4' },
 
-  /* ── Header ── */
   header: {
     paddingHorizontal: 20,
     paddingTop: 14,
@@ -151,7 +145,6 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
   },
 
-  /* ── Profile Card ── */
   profileCard: {
     backgroundColor: Colors.primary,
     marginHorizontal: 20,
@@ -210,7 +203,6 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
 
-  /* ── Sections ── */
   section: { marginBottom: 16 },
   sectionHeader: {
     paddingHorizontal: 20,
@@ -224,7 +216,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
   },
 
-  /* ── Card ── */
   card: {
     backgroundColor: '#fff',
     marginHorizontal: 20,
@@ -237,7 +228,6 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
 
-  /* ── Setting Row ── */
   settingRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -256,7 +246,6 @@ const styles = StyleSheet.create({
   settingValue: { fontSize: 12, color: '#aaa', marginTop: 2, fontWeight: '500' },
   rowDivider: { height: 1, backgroundColor: '#F5F5F5', marginLeft: 48 },
 
-  /* ── Logout ── */
   logoutBtn: {
     flexDirection: 'row',
     alignItems: 'center',

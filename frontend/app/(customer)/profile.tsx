@@ -129,7 +129,6 @@ export default function ProfileScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView showsVerticalScrollIndicator={false}>
 
-        {/* ── Hero Header ── */}
         <View style={styles.hero}>
           <View style={styles.avatarRing}>
             <View style={styles.avatar}>
@@ -158,7 +157,6 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* ── Delivery Address ── */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <View style={[styles.cardIconBox, { backgroundColor: '#EEF4FF' }]}>
@@ -199,7 +197,6 @@ export default function ProfileScreen() {
           )}
         </View>
 
-        {/* ── Vacation Mode ── */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <View style={[styles.cardIconBox, { backgroundColor: '#FFF4E6' }]}>
@@ -237,7 +234,6 @@ export default function ProfileScreen() {
           )}
         </View>
 
-        {/* ── Recent Orders ── */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <View style={[styles.cardIconBox, { backgroundColor: '#F0FDF4' }]}>
@@ -271,7 +267,6 @@ export default function ProfileScreen() {
           )}
         </View>
 
-        {/* ── Logout ── */}
         <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
           <Ionicons name="log-out-outline" size={20} color="#ef4444" />
           <Text style={styles.logoutText}>Logout</Text>
@@ -280,7 +275,6 @@ export default function ProfileScreen() {
         <View style={{ height: 30 }} />
       </ScrollView>
 
-      {/* ── Vacation Modal ── */}
       <Modal visible={vacationModal} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalSheet}>
@@ -326,7 +320,6 @@ export default function ProfileScreen() {
                 todayTextColor: Colors.primary,
                 selectedDayBackgroundColor: Colors.primary,
                 arrowColor: Colors.primary,
-                // borderRadius: 12,
               }}
             />
 
@@ -335,7 +328,6 @@ export default function ProfileScreen() {
         </View>
       </Modal>
 
-      {/* ── Edit Profile Modal ── */}
       <Modal visible={editModal} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalSheet}>
@@ -382,7 +374,6 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8F7F4' },
 
-  /* ── Hero ── */
   hero: {
     alignItems: 'center',
     paddingTop: 32,
@@ -434,8 +425,6 @@ const styles = StyleSheet.create({
     marginTop: 14,
   },
   editBtnText: { fontSize: 13, fontWeight: '700', color: '#fff' },
-
-  /* ── Cards ── */
   card: {
     backgroundColor: '#fff',
     borderRadius: 20,
@@ -471,7 +460,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
-  /* Address */
   addressBox: { gap: 8 },
   addressRow: { flexDirection: 'row', justifyContent: 'space-between' },
   addressKey: { fontSize: 13, color: '#aaa', fontWeight: '500' },
@@ -484,7 +472,6 @@ const styles = StyleSheet.create({
   },
   emptyAddressText: { fontSize: 14, color: Colors.primary, fontWeight: '600' },
 
-  /* Vacation */
   hintText: { fontSize: 12, color: '#bbb', marginBottom: 12, marginTop: -6 },
   vacationList: { gap: 8 },
   vacationChip: {
@@ -499,7 +486,6 @@ const styles = StyleSheet.create({
   vacationChipText: { flex: 1, fontSize: 13, fontWeight: '600', color: '#92400e' },
   emptyText: { fontSize: 13, color: '#ccc', fontStyle: 'italic' },
 
-  /* Orders */
   orderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12 },
   orderRowBorder: { borderBottomWidth: 1, borderBottomColor: '#F5F5F5' },
   orderDate: { fontSize: 14, fontWeight: '700', color: '#1A1A1A' },
@@ -509,7 +495,6 @@ const styles = StyleSheet.create({
   statusText: { fontSize: 11, fontWeight: '700', textTransform: 'capitalize' },
   orderAmt: { fontSize: 14, fontWeight: '800', color: '#1A1A1A' },
 
-  /* Logout */
   logoutBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -523,7 +508,6 @@ const styles = StyleSheet.create({
   },
   logoutText: { fontSize: 15, fontWeight: '700', color: '#ef4444' },
 
-  /* ── Modals ── */
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
   modalSheet: {
     backgroundColor: '#fff',
@@ -547,7 +531,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#F0F0F0', justifyContent: 'center', alignItems: 'center',
   },
 
-  /* Date Tabs */
   dateTabs: {
     flexDirection: 'row', alignItems: 'center',
     gap: 10, marginBottom: 16,

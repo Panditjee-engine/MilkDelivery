@@ -163,7 +163,6 @@ export default function CustomerHome() {
         api.getCatalogProducts(undefined, undefined),
       ]);
       setWalletBalance(walletData.balance);
-      // Most recent order = first in array
       setRecentOrder(ordersData?.[0] || null);
       setFeaturedProducts((productsData || []).slice(0, 6));
     } catch (error) {
@@ -252,7 +251,6 @@ export default function CustomerHome() {
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Header ── */}
         <View style={styles.header}>
           <View>
             <Text style={styles.greeting}>{getGreeting()},</Text>
@@ -267,7 +265,6 @@ export default function CustomerHome() {
           </TouchableOpacity>
         </View>
 
-        {/* ── Wallet Card ── */}
         <TouchableOpacity
           style={styles.walletCard}
           onPress={() => router.push("/(customer)/wallet")}
@@ -305,7 +302,6 @@ export default function CustomerHome() {
           </View>
         </TouchableOpacity>
 
-        {/* ── Recent Order ── */}
         <View style={styles.previewCard}>
           <View style={styles.previewHeader}>
             <View style={styles.previewTitleRow}>
@@ -325,7 +321,6 @@ export default function CustomerHome() {
 
           {recentOrder ? (
             <>
-              {/* Status badge */}
               <View style={styles.orderStatusRow}>
                 <View
                   style={[
@@ -350,7 +345,6 @@ export default function CustomerHome() {
                 </View>
               </View>
 
-              {/* Items */}
               {recentOrder.items
                 ?.slice(0, 3)
                 .map((item: any, index: number) => (
@@ -370,14 +364,12 @@ export default function CustomerHome() {
                   </View>
                 ))}
 
-              {/* More items indicator */}
               {recentOrder.items?.length > 3 && (
                 <Text style={styles.moreItems}>
                   +{recentOrder.items.length - 3} more items
                 </Text>
               )}
 
-              {/* Total */}
               <View style={styles.previewTotalRow}>
                 <Text style={styles.previewTotalLabel}>Total</Text>
                 <Text style={styles.previewTotalAmount}>
@@ -393,7 +385,6 @@ export default function CustomerHome() {
           )}
         </View>
 
-        {/* ── Featured Products ── */}
         {featuredProducts.length > 0 && (
           <View style={styles.featuredSection}>
             <View style={styles.featuredHeader}>
@@ -456,7 +447,6 @@ export default function CustomerHome() {
           </View>
         )}
 
-        {/* ── Quick Actions ── */}
         <Text style={styles.sectionTitle}>Quick Actions</Text>
         <View style={styles.quickActions}>
           <TouchableOpacity
@@ -497,7 +487,6 @@ export default function CustomerHome() {
           </TouchableOpacity>
         </View>
 
-        {/* ── Branding ── */}
         <View style={styles.brandingSection}>
           <View style={styles.brandingDivider} />
           <View style={styles.brandingContent}>
@@ -508,7 +497,6 @@ export default function CustomerHome() {
         </View>
       </ScrollView>
 
-      {/* ── Subscription Modal ── */}
       <Modal visible={modalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalSheet}>
@@ -743,7 +731,6 @@ const styles = StyleSheet.create({
   },
   okBadgeText: { fontSize: 11, color: "#22c55e", fontWeight: "700" },
 
-  /* ── Recent Order Card ── */
   previewCard: {
     marginHorizontal: 20,
     marginBottom: 24,
@@ -813,7 +800,6 @@ const styles = StyleSheet.create({
   noOrder: { alignItems: "center", paddingVertical: 24, gap: 8 },
   noOrderText: { fontSize: 14, color: "#bbb", fontWeight: "500" },
 
-  /* ── Featured ── */
   featuredSection: { marginBottom: 28 },
   featuredHeader: {
     flexDirection: "row",
@@ -863,7 +849,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
-  /* ── Mini Card ── */
   card: {
     width: CARD_WIDTH,
     backgroundColor: "#fff",
@@ -905,7 +890,6 @@ const styles = StyleSheet.create({
   cardUnit: { fontSize: 11, fontWeight: "600" },
   cardPrice: { fontSize: 15, fontWeight: "800" },
 
-  /* ── Quick Actions ── */
   sectionTitle: {
     fontSize: 16,
     fontWeight: "800",
@@ -946,7 +930,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
-  /* ── Branding ── */
   brandingSection: { alignItems: "center", paddingBottom: 36, paddingTop: 8 },
   brandingDivider: {
     width: 40,
@@ -974,7 +957,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
 
-  /* ── Modal ── */
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.45)",

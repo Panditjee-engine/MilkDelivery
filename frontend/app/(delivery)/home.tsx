@@ -102,7 +102,6 @@ export default function DeliveryHome() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        {/* ── Header ── */}
         <View style={styles.header}>
           <View>
             <Text style={styles.greeting}>{getGreeting()},</Text>
@@ -115,9 +114,7 @@ export default function DeliveryHome() {
           </View>
         </View>
 
-        {/* ── Shift Card ── */}
         <View style={[styles.shiftCard, isOnDuty ? styles.shiftCardActive : styles.shiftCardIdle]}>
-          {/* Status Row */}
           <View style={styles.shiftTop}>
             <View style={styles.shiftStatusRow}>
               <View style={[styles.pulseDot, { backgroundColor: isOnDuty ? '#4ade80' : 'rgba(255,255,255,0.4)' }]} />
@@ -159,7 +156,6 @@ export default function DeliveryHome() {
           </TouchableOpacity>
         </View>
 
-        {/* ── Stats ── */}
         <View style={styles.statsGrid}>
           <View style={[styles.statCard, { backgroundColor: '#EEF4FF' }]}>
             <View style={[styles.statIcon, { backgroundColor: '#4F7EFF20' }]}>
@@ -186,7 +182,6 @@ export default function DeliveryHome() {
           </View>
         </View>
 
-        {/* ── Progress Bar ── */}
         {deliveries.length > 0 && (
           <View style={styles.progressCard}>
             <View style={styles.progressHeader}>
@@ -207,7 +202,6 @@ export default function DeliveryHome() {
           </View>
         )}
 
-        {/* ── Guidelines ── */}
         <View style={styles.guidelinesCard}>
           <Text style={styles.guidelinesTitle}>Delivery Guidelines</Text>
 
@@ -234,7 +228,6 @@ export default function DeliveryHome() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8F7F4' },
 
-  /* ── Header ── */
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -257,7 +250,6 @@ const styles = StyleSheet.create({
   },
   zoneText: { fontSize: 12, fontWeight: '700', color: Colors.primary },
 
-  /* ── Shift Card ── */
   shiftCard: {
     marginHorizontal: 20,
     borderRadius: 22,
@@ -299,7 +291,6 @@ const styles = StyleSheet.create({
   },
   shiftBtnText: { fontSize: 15, fontWeight: '700' },
 
-  /* ── Stats ── */
   statsGrid: {
     flexDirection: 'row',
     paddingHorizontal: 20,
@@ -321,7 +312,6 @@ const styles = StyleSheet.create({
   statVal: { fontSize: 24, fontWeight: '800', letterSpacing: -0.5 },
   statLabel: { fontSize: 11, color: '#888', fontWeight: '600' },
 
-  /* ── Progress ── */
   progressCard: {
     backgroundColor: '#fff',
     marginHorizontal: 20,
@@ -350,7 +340,6 @@ const styles = StyleSheet.create({
   },
   progressSub: { fontSize: 12, color: '#aaa', fontWeight: '500' },
 
-  /* ── Guidelines ── */
   guidelinesCard: {
     backgroundColor: '#fff',
     marginHorizontal: 20,

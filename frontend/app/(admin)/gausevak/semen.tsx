@@ -127,7 +127,6 @@ function Counter({
   );
 }
 
-// ─── Field ────────────────────────────────────────────────────────────────────
 function Field({
   label,
   value,
@@ -269,7 +268,6 @@ function SemenFormModal({
           <View style={m.sheet}>
             <View style={m.handle} />
 
-            {/* Header */}
             <View style={m.header}>
               <View
                 style={[
@@ -303,7 +301,6 @@ function SemenFormModal({
               showsVerticalScrollIndicator={false}
               style={{ maxHeight: 500 }}
             >
-              {/* ── Bull Info ── */}
               <SectionHeader
                 title="Bull Information"
                 icon="male-outline"
@@ -331,7 +328,6 @@ function SemenFormModal({
                 icon="paw-outline"
               />
 
-              {/* ── Doses ── */}
               <SectionHeader
                 title="Semen Doses"
                 icon="flask-outline"
@@ -356,7 +352,6 @@ function SemenFormModal({
                 />
               </View>
 
-              {/* ── Calves ── */}
               <SectionHeader
                 title="Calves Born"
                 icon="star-outline"
@@ -381,7 +376,6 @@ function SemenFormModal({
                 />
               </View>
 
-              {/* ── Conception ── */}
               <SectionHeader
                 title="Conception"
                 icon="heart-outline"
@@ -421,7 +415,6 @@ function SemenFormModal({
                 </View>
               </View>
 
-              {/* ── Notes ── */}
               <SectionHeader
                 title="Notes"
                 icon="document-text-outline"
@@ -525,7 +518,6 @@ function SemenCard({
             </View>
             <Text style={c.breed}>{item.breed ?? "Unknown breed"}</Text>
           </View>
-          {/* Conception rate badge */}
           <View
             style={[
               c.rateBadge,
@@ -543,7 +535,6 @@ function SemenCard({
           />
         </View>
 
-        {/* Quick stats strip */}
         <View style={c.statsStrip}>
           <View style={c.stripItem}>
             <Text style={c.stripEmoji}>🐮</Text>
@@ -586,14 +577,10 @@ function SemenCard({
         </View>
       </TouchableOpacity>
 
-      {/* Expanded detail */}
       {expanded && (
         <>
           <View style={c.divider} />
-
-          {/* Detail grid */}
           <View style={c.detailGrid}>
-            {/* Female calves */}
             <View
               style={[
                 c.detailCell,
@@ -609,7 +596,6 @@ function SemenCard({
               </Text>
             </View>
 
-            {/* Male calves */}
             <View
               style={[
                 c.detailCell,
@@ -625,7 +611,6 @@ function SemenCard({
               </Text>
             </View>
 
-            {/* Total calves */}
             <View
               style={[
                 c.detailCell,
@@ -641,7 +626,6 @@ function SemenCard({
               </Text>
             </View>
 
-            {/* Total doses */}
             <View
               style={[
                 c.detailCell,
@@ -657,7 +641,6 @@ function SemenCard({
               </Text>
             </View>
 
-            {/* Damaged */}
             <View
               style={[
                 c.detailCell,
@@ -671,7 +654,6 @@ function SemenCard({
               <Text style={[c.detailLabel, { color: "#dc2626" }]}>Damaged</Text>
             </View>
 
-            {/* Conception rate */}
             <View
               style={[
                 c.detailCell,
@@ -686,7 +668,6 @@ function SemenCard({
             </View>
           </View>
 
-          {/* Conception bar */}
           {item.totalDoses > 0 && (
             <View style={c.barWrap}>
               <View style={c.barHeader}>
@@ -712,7 +693,6 @@ function SemenCard({
             </View>
           )}
 
-          {/* Notes */}
           {item.notes ? (
             <View style={c.notesBox}>
               <Ionicons name="chatbubble-outline" size={13} color="#6b7280" />
@@ -720,7 +700,6 @@ function SemenCard({
             </View>
           ) : null}
 
-          {/* Action buttons */}
           <View style={c.actionRow}>
             <TouchableOpacity
               style={[c.actionBtn, c.editBtn]}
@@ -815,7 +794,6 @@ export default function SemenRecordScreen() {
     setModal(true);
   };
 
-  // Summary stats
   const totalFemalCalves = records.reduce((s, r) => s + r.femalCalves, 0);
   const totalMaleCalves = records.reduce((s, r) => s + r.maleCalves, 0);
   const totalDoses = records.reduce((s, r) => s + r.totalDoses, 0);
@@ -829,7 +807,6 @@ export default function SemenRecordScreen() {
     <SafeAreaView style={s.screen}>
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
 
-      {/* ── Header ── */}
       <View
         style={[
           s.header,
@@ -858,7 +835,6 @@ export default function SemenRecordScreen() {
         )}
       </View>
 
-      {/* ── Stats strip ── */}
       <View style={s.statsRow}>
         {[
           { label: "Bulls", value: records.length, color: "#0891b2" },
@@ -885,7 +861,6 @@ export default function SemenRecordScreen() {
 
       {screen === "home" ? (
         <View style={s.homeBody}>
-          {/* Hero */}
           <View style={s.heroWrap}>
             <Text style={s.heroEmoji}>🐂</Text>
             <Text style={s.homeHeading}>Semen Records</Text>
@@ -934,7 +909,6 @@ export default function SemenRecordScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Quick summary cards */}
           {records.length > 0 && (
             <View style={s.summaryRow}>
               <View
@@ -984,7 +958,6 @@ export default function SemenRecordScreen() {
         </View>
       ) : (
         <View style={{ flex: 1 }}>
-          {/* Search */}
           <View style={s.searchWrap}>
             <Ionicons name="search-outline" size={15} color="#9ca3af" />
             <TextInput
@@ -1058,7 +1031,6 @@ export default function SemenRecordScreen() {
         </View>
       )}
 
-      {/* FAB on list screen */}
       {screen === "list" && (
         <TouchableOpacity onPress={openAdd} style={s.fab}>
           <Ionicons name="add" size={24} color="#fff" />
@@ -1085,7 +1057,6 @@ export default function SemenRecordScreen() {
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#f8fafc" },
   header: {
@@ -1290,7 +1261,6 @@ const s = StyleSheet.create({
   retryText: { fontSize: 13, fontWeight: "700", color: "#fff" },
 });
 
-// Card styles
 const c = StyleSheet.create({
   card: {
     backgroundColor: "#fff",
@@ -1441,7 +1411,6 @@ const c = StyleSheet.create({
   actionText: { fontSize: 13, fontWeight: "700" },
 });
 
-// Counter styles
 const ct = StyleSheet.create({
   wrap: {
     flex: 1,
@@ -1483,7 +1452,6 @@ const ct = StyleSheet.create({
   count: { fontSize: 18, fontWeight: "800", letterSpacing: -0.5 },
 });
 
-// Field styles
 const f = StyleSheet.create({
   wrap: { marginBottom: 12 },
   label: {
@@ -1518,7 +1486,6 @@ const f = StyleSheet.create({
   sectionTitle: { fontSize: 12, fontWeight: "700", letterSpacing: 0.2 },
 });
 
-// Modal styles
 const m = StyleSheet.create({
   overlay: {
     flex: 1,

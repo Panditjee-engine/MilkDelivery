@@ -19,9 +19,8 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { api } from "../../../src/services/api"; // 🔁 adjust path if needed
+import { api } from "../../../src/services/api"; 
 
-// ─── Types ────────────────────────────────────────────────────────────────────
 interface MedicalRecord {
   id: string;
   admin_id: string;
@@ -88,7 +87,6 @@ const EMPTY_FORM: MedicalForm = {
   notes: "",
 };
 
-// ─── Cow Selector ─────────────────────────────────────────────────────────────
 function CowSelector({
   value,
   onSelect,
@@ -272,7 +270,6 @@ function CowSelector({
   );
 }
 
-// ─── Status Toggle ────────────────────────────────────────────────────────────
 function StatusToggle({
   value,
   onChange,
@@ -314,7 +311,6 @@ function StatusToggle({
   );
 }
 
-// ─── Field ────────────────────────────────────────────────────────────────────
 function Field({
   label,
   value,
@@ -348,7 +344,6 @@ function Field({
   );
 }
 
-// ─── Section Header ───────────────────────────────────────────────────────────
 function Sec({
   title,
   icon,
@@ -366,7 +361,6 @@ function Sec({
   );
 }
 
-// ─── Form Body (shared by Add & Edit) ─────────────────────────────────────────
 function MedicalFormBody({
   form,
   setF,
@@ -386,7 +380,6 @@ function MedicalFormBody({
 
   return (
     <>
-      {/* ── Cow Identity ── */}
       <Sec title="Cow Identity" icon="paw-outline" color="#16a34a" />
       <CowSelector
         value={selectedCow}
@@ -395,7 +388,6 @@ function MedicalFormBody({
         onManual={onCowManual}
       />
 
-      {/* Auto-filled info row */}
       {form.cowName || form.cowAge ? (
         <View style={f.autoRow}>
           {form.cowName ? (
@@ -438,7 +430,6 @@ function MedicalFormBody({
         </View>
       ) : null}
 
-      {/* ── Current Status ── */}
       <Sec
         title="Current Health Status"
         icon="heart-outline"
@@ -449,7 +440,6 @@ function MedicalFormBody({
         onChange={setF("currentStatus")}
       />
 
-      {/* ── Vaccination ── */}
       <Sec
         title="Vaccination"
         icon="shield-checkmark-outline"
@@ -486,7 +476,6 @@ function MedicalFormBody({
         </View>
       </View>
 
-      {/* ── Issues ── */}
       <Sec title="Health Issues" icon="alert-circle-outline" color="#ea580c" />
       <View style={f.twoCol}>
         <View style={{ flex: 1 }}>
@@ -533,7 +522,6 @@ function MedicalFormBody({
         </View>
       </View>
 
-      {/* ── Treatment ── */}
       <Sec title="Treatment" icon="flask-outline" color="#0891b2" />
       <Field
         label="Treatment Given"
@@ -560,7 +548,6 @@ function MedicalFormBody({
         color="#0891b2"
       />
 
-      {/* ── Notes ── */}
       <Sec title="Notes" icon="document-text-outline" color="#6b7280" />
       <Field
         label="Additional Notes"
@@ -575,7 +562,6 @@ function MedicalFormBody({
   );
 }
 
-// ─── Form Modal ───────────────────────────────────────────────────────────────
 function MedicalFormModal({
   visible,
   onClose,
@@ -760,7 +746,6 @@ function MedicalFormModal({
   );
 }
 
-// ─── Detail Row ───────────────────────────────────────────────────────────────
 function DRow({
   icon,
   label,
@@ -786,7 +771,6 @@ function DRow({
   );
 }
 
-// ─── Medical Card ─────────────────────────────────────────────────────────────
 function MedicalCard({
   item,
   index,
@@ -827,7 +811,6 @@ function MedicalCard({
 
   return (
     <Animated.View style={[c.card, { opacity, transform: [{ translateY }] }]}>
-      {/* Status bar accent */}
       <View style={[c.accent, { backgroundColor: statusColor }]} />
 
       <View style={{ padding: 14 }}>
@@ -835,7 +818,6 @@ function MedicalCard({
           onPress={() => setExpanded((e) => !e)}
           activeOpacity={0.85}
         >
-          {/* Top row */}
           <View style={c.topRow}>
             <View
               style={[
@@ -891,7 +873,6 @@ function MedicalCard({
             />
           </View>
 
-          {/* Quick chips */}
           <View style={c.chips}>
             {item.vaccinationName && (
               <View
@@ -943,12 +924,10 @@ function MedicalCard({
           </View>
         </TouchableOpacity>
 
-        {/* Expanded */}
         {expanded && (
           <>
             <View style={c.divider} />
 
-            {/* Vaccination section */}
             <Text style={c.secLabel}>💉 Vaccination</Text>
             <DRow
               icon="medkit-outline"
@@ -969,7 +948,6 @@ function MedicalCard({
               color="#16a34a"
             />
 
-            {/* Issues section */}
             <Text style={c.secLabel}>🩹 Health Issues</Text>
             <DRow
               icon="bandage-outline"
@@ -996,7 +974,6 @@ function MedicalCard({
               color="#dc2626"
             />
 
-            {/* Treatment section */}
             <Text style={c.secLabel}>🔬 Treatment</Text>
             <DRow
               icon="medical-outline"
@@ -1017,7 +994,6 @@ function MedicalCard({
               color="#0891b2"
             />
 
-            {/* Notes */}
             {item.notes && (
               <View style={c.notesBox}>
                 <Ionicons name="chatbubble-outline" size={13} color="#64748b" />
@@ -1025,7 +1001,6 @@ function MedicalCard({
               </View>
             )}
 
-            {/* Actions */}
             <View style={c.actionRow}>
               <TouchableOpacity
                 style={[c.actionBtn, c.editBtn]}
@@ -1051,7 +1026,6 @@ function MedicalCard({
   );
 }
 
-// ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function MedicalScreen() {
   const router = useRouter();
   const [records, setRecords] = useState<MedicalRecord[]>([]);
@@ -1147,7 +1121,6 @@ export default function MedicalScreen() {
     <SafeAreaView style={s.screen}>
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
 
-      {/* ── Header ── */}
       <View
         style={[
           s.header,
@@ -1176,7 +1149,6 @@ export default function MedicalScreen() {
         )}
       </View>
 
-      {/* ── Stats strip ── */}
       <View style={s.statsRow}>
         {[
           { label: "Total", value: records.length, color: "#0f172a" },
@@ -1204,7 +1176,6 @@ export default function MedicalScreen() {
           contentContainerStyle={s.homeBody}
           showsVerticalScrollIndicator={false}
         >
-          {/* Hero */}
           <View style={s.heroWrap}>
             <Text style={s.heroEmoji}>🏥</Text>
             <Text style={s.homeHeading}>Medical Records</Text>
@@ -1213,7 +1184,6 @@ export default function MedicalScreen() {
             </Text>
           </View>
 
-          {/* Action buttons */}
           <View style={s.btnGroup}>
             <TouchableOpacity
               onPress={openAdd}
@@ -1254,7 +1224,6 @@ export default function MedicalScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Summary cards */}
           {records.length > 0 && (
             <View style={s.summaryRow}>
               <TouchableOpacity
@@ -1314,7 +1283,6 @@ export default function MedicalScreen() {
         </ScrollView>
       ) : (
         <View style={{ flex: 1 }}>
-          {/* Search + filter */}
           <View style={s.searchWrap}>
             <Ionicons name="search-outline" size={15} color="#9ca3af" />
             <TextInput
@@ -1331,7 +1299,6 @@ export default function MedicalScreen() {
             )}
           </View>
 
-          {/* Filter tabs */}
           <View style={s.filterRow}>
             {(["all", "healthy", "unhealthy"] as const).map((f) => (
               <TouchableOpacity
@@ -1439,7 +1406,6 @@ export default function MedicalScreen() {
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#f8fafc" },
   header: {
@@ -1898,7 +1864,6 @@ const m = StyleSheet.create({
   },
 });
 
-// Status toggle styles
 const st = StyleSheet.create({
   wrap: { flexDirection: "row", gap: 10, marginBottom: 12 },
   btn: {
@@ -1919,7 +1884,6 @@ const st = StyleSheet.create({
   activeText: { color: "#fff" },
 });
 
-// Cow selector styles
 const cs = StyleSheet.create({
   wrap: { marginBottom: 12 },
   label: {

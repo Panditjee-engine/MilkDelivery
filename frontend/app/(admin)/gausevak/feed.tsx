@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -10,91 +10,62 @@ import {
   TextInput,
   Animated,
   SafeAreaView,
+  ActivityIndicator,
+  RefreshControl,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { api } from "../../../src/services/api";
 
-// ─── Data ─────────────────────────────────────────────────────────────────────
-const FEED_DATA = [
-  {
-    id: "1",
-    srNo: "GS-001",
-    name: "Kamdhenu",
-    morning: "fed",
-    evening: "fed",
-    morningNote: "5 kg dry fodder",
-    eveningNote: "4 kg green grass",
-  },
-  {
-    id: "2",
-    srNo: "GS-002",
-    name: "Nandini",
-    morning: "fed",
-    evening: "pending",
-    morningNote: "4 kg silage",
-    eveningNote: "—",
-  },
-  {
-    id: "3",
-    srNo: "GS-003",
-    name: "Ganga",
-    morning: "missed",
-    evening: "pending",
-    morningNote: "—",
-    eveningNote: "—",
-  },
-  {
-    id: "4",
-    srNo: "GS-004",
-    name: "Saraswati",
-    morning: "fed",
-    evening: "fed",
-    morningNote: "3 kg concentrates",
-    eveningNote: "5 kg dry fodder",
-  },
-  {
-    id: "5",
-    srNo: "GS-005",
-    name: "Lakshmi",
-    morning: "fed",
-    evening: "pending",
-    morningNote: "6 kg green grass",
-    eveningNote: "—",
-  },
-  {
-    id: "6",
-    srNo: "GS-006",
-    name: "Durga",
-    morning: "missed",
-    evening: "missed",
-    morningNote: "—",
-    eveningNote: "—",
-  },
-  {
-    id: "7",
-    srNo: "GS-007",
-    name: "Parvati",
-    morning: "fed",
-    evening: "fed",
-    morningNote: "4 kg silage",
-    eveningNote: "3 kg concentrates",
-  },
-  {
-    id: "8",
-    srNo: "GS-008",
-    name: "Radha",
-    morning: "fed",
-    evening: "pending",
-    morningNote: "5 kg dry fodder",
-    eveningNote: "—",
-  },
-];
+type FeedStatus = "fed" | "pending";
+type Shift = "morning" | "evening";
 
-type FeedStatus = "fed" | "pending" | "missed";
+interface CowFeedRow {
+  id: string;
+  srNo: string;
+  name: string;
+  breed: string;
+  morning: FeedStatus;
+  evening: FeedStatus;
+  morningNote: string;
+  eveningNote: string;
+}
+
+interface Summary {
+  total: number;
+  both_fed: number;
+  morning_fed: number;
+  evening_fed: number;
+  not_fed_at_all: number;
+}
+
+function todayStr() {
+  return new Date().toISOString().split("T")[0];
+}
+
+function mapToCowRows(cows: any[]): CowFeedRow[] {
+  return cows.map((c) => ({
+    id: c.cow_id,
+    srNo: c.cow_tag || c.cow_id,
+    name: c.cow_name || "Unknown",
+    breed: c.breed || "",
+    morning: c.morning_fed ? "fed" : "pending",
+    evening: c.evening_fed ? "fed" : "pending",
+    morningNote: c.morning_worker ? `By ${c.morning_worker}` : "—",
+    eveningNote: c.evening_worker ? `By ${c.evening_worker}` : "—",
+  }));
+}
 
 const STATUS_CFG: Record<
   FeedStatus,
-  { color: string; bg: string; border: string; icon: string; label: string }
+  {
+    color: string;
+    bg: string;
+    border: string;
+    icon: string;
+    label: string;
+  }
 > = {
   fed: {
     color: "#16a34a",
@@ -110,18 +81,10 @@ const STATUS_CFG: Record<
     icon: "time",
     label: "Pending",
   },
-  missed: {
-    color: "#dc2626",
-    bg: "#fff1f2",
-    border: "#fecdd3",
-    icon: "close-circle",
-    label: "Missed",
-  },
 };
 
-const FILTERS = ["All", "Fed", "Pending", "Missed"];
+const FILTERS = ["All", "Both Fed", "Pending"] as const;
 
-// ─── Feed Status Badge ────────────────────────────────────────────────────────
 function FeedBadge({
   status,
   note,
@@ -163,28 +126,29 @@ function FeedBadge({
   );
 }
 
-// ─── Feed Card ────────────────────────────────────────────────────────────────
 function FeedCard({
   item,
   index,
+  activeShift,
 }: {
-  item: (typeof FEED_DATA)[0];
+  item: CowFeedRow;
   index: number;
+  activeShift: Shift | "both";
 }) {
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(16)).current;
 
-  React.useEffect(() => {
+  useEffect(() => {
     Animated.parallel([
       Animated.timing(opacity, {
         toValue: 1,
-        duration: 300,
-        delay: index * 55,
+        duration: 280,
+        delay: index * 50,
         useNativeDriver: true,
       }),
       Animated.spring(translateY, {
         toValue: 0,
-        delay: index * 55,
+        delay: index * 50,
         tension: 70,
         friction: 12,
         useNativeDriver: true,
@@ -192,31 +156,40 @@ function FeedCard({
     ]).start();
   }, []);
 
-  const morningCfg = STATUS_CFG[item.morning as FeedStatus];
-  const eveningCfg = STATUS_CFG[item.evening as FeedStatus];
-
   const bothFed = item.morning === "fed" && item.evening === "fed";
-  const anyMissed = item.morning === "missed" || item.evening === "missed";
+  const shiftStatus =
+    activeShift === "morning"
+      ? item.morning
+      : activeShift === "evening"
+        ? item.evening
+        : bothFed
+          ? "fed"
+          : "pending";
 
-  const overallColor = anyMissed ? "#dc2626" : bothFed ? "#16a34a" : "#d97706";
-  const overallBg = anyMissed ? "#fff1f2" : bothFed ? "#f0fdf4" : "#fffbeb";
-  const overallBorder = anyMissed ? "#fecdd3" : bothFed ? "#86efac" : "#fcd34d";
-  const overallLabel = anyMissed
-    ? "Needs Attention"
-    : bothFed
-      ? "Fully Fed"
-      : "Partially Fed";
+  const overallColor = shiftStatus === "fed" ? "#16a34a" : "#d97706";
+  const overallBg = shiftStatus === "fed" ? "#f0fdf4" : "#fffbeb";
+  const overallBorder = shiftStatus === "fed" ? "#86efac" : "#fcd34d";
+  const overallLabel =
+    activeShift !== "both"
+      ? shiftStatus === "fed"
+        ? "Fed"
+        : "Pending"
+      : bothFed
+        ? "Fully Fed"
+        : "Partially Fed";
 
   return (
     <Animated.View style={[s.card, { opacity, transform: [{ translateY }] }]}>
-      {/* Card Header */}
       <View style={s.cardHeader}>
         <View style={s.cowAvatarWrap}>
           <Text style={{ fontSize: 22 }}>🐄</Text>
         </View>
         <View style={{ flex: 1, marginLeft: 10 }}>
           <Text style={s.cowName}>{item.name}</Text>
-          <Text style={s.cowSr}>{item.srNo}</Text>
+          <Text style={s.cowSr}>
+            {item.srNo}
+            {item.breed ? ` · ${item.breed}` : ""}
+          </Text>
         </View>
         <View
           style={[
@@ -231,67 +204,71 @@ function FeedCard({
         </View>
       </View>
 
-      {/* Divider */}
       <View style={s.divider} />
 
-      {/* Session cards */}
       <View style={s.sessionsRow}>
-        <FeedBadge
-          status={item.morning as FeedStatus}
-          note={item.morningNote}
-          session="Morning"
-        />
-        <FeedBadge
-          status={item.evening as FeedStatus}
-          note={item.eveningNote}
-          session="Evening"
-        />
+        {(activeShift === "both" || activeShift === "morning") && (
+          <FeedBadge
+            status={item.morning}
+            note={item.morningNote}
+            session="Morning"
+          />
+        )}
+        {(activeShift === "both" || activeShift === "evening") && (
+          <FeedBadge
+            status={item.evening}
+            note={item.eveningNote}
+            session="Evening"
+          />
+        )}
       </View>
     </Animated.View>
   );
 }
 
-// ─── Summary Strip ────────────────────────────────────────────────────────────
-function SummaryStrip({ data }: { data: typeof FEED_DATA }) {
-  const allFed = data.filter(
-    (d) => d.morning === "fed" && d.evening === "fed",
-  ).length;
-  const partial = data.filter(
-    (d) =>
-      (d.morning === "fed" || d.evening === "fed") &&
-      !(d.morning === "fed" && d.evening === "fed"),
-  ).length;
-  const missed = data.filter(
-    (d) => d.morning === "missed" || d.evening === "missed",
-  ).length;
+function SummaryStrip({
+  summary,
+  activeShift,
+}: {
+  summary: Summary;
+  activeShift: Shift | "both";
+}) {
+  const fedCount =
+    activeShift === "morning"
+      ? summary.morning_fed
+      : activeShift === "evening"
+        ? summary.evening_fed
+        : summary.both_fed;
+  const fedLabel = activeShift === "both" ? "Both Fed" : "Fed";
+  const pending = summary.total - fedCount;
 
   return (
     <View style={s.summary}>
       {[
         {
-          label: "Fully Fed",
-          value: allFed,
+          label: fedLabel,
+          value: fedCount,
           color: "#16a34a",
           bg: "#f0fdf4",
           icon: "checkmark-circle",
         },
         {
-          label: "Partial",
-          value: partial,
+          label: "Pending",
+          value: pending,
           color: "#d97706",
           bg: "#fffbeb",
           icon: "time",
         },
         {
-          label: "Missed",
-          value: missed,
+          label: "No Feed",
+          value: summary.not_fed_at_all,
           color: "#dc2626",
           bg: "#fff1f2",
           icon: "close-circle",
         },
         {
           label: "Total",
-          value: data.length,
+          value: summary.total,
           color: "#2563eb",
           bg: "#eff6ff",
           icon: "list",
@@ -307,28 +284,145 @@ function SummaryStrip({ data }: { data: typeof FEED_DATA }) {
   );
 }
 
-// ─── Main Screen ──────────────────────────────────────────────────────────────
-export default function FeedScreen() {
+function ShiftToggle({
+  active,
+  onChange,
+}: {
+  active: Shift | "both";
+  onChange: (s: Shift | "both") => void;
+}) {
+  const options: { key: Shift | "both"; label: string; icon: string }[] = [
+    { key: "both", label: "Both", icon: "grid-outline" },
+    { key: "morning", label: "Morning", icon: "sunny-outline" },
+    { key: "evening", label: "Evening", icon: "moon-outline" },
+  ];
+  return (
+    <View style={s.shiftToggle}>
+      {options.map((o) => {
+        const isActive = active === o.key;
+        return (
+          <TouchableOpacity
+            key={o.key}
+            style={[s.shiftBtn, isActive && s.shiftBtnActive]}
+            onPress={() => onChange(o.key)}
+          >
+            <Ionicons
+              name={o.icon as any}
+              size={14}
+              color={isActive ? "#fff" : "#6b7280"}
+            />
+            <Text style={[s.shiftBtnText, isActive && s.shiftBtnTextActive]}>
+              {o.label}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+}
+
+export default function AdminFeedScreen() {
   const router = useRouter();
-  const [search, setSearch] = useState("");
-  const [activeFilter, setActiveFilter] = useState("All");
   const today = new Date().toLocaleDateString("en-IN", {
     weekday: "long",
     day: "numeric",
     month: "long",
   });
 
-  const filtered = FEED_DATA.filter((d) => {
+  const [cowRows, setCowRows] = useState<CowFeedRow[]>([]);
+  const [summary, setSummary] = useState<Summary>({
+    total: 0,
+    both_fed: 0,
+    morning_fed: 0,
+    evening_fed: 0,
+    not_fed_at_all: 0,
+  });
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [activeShift, setActiveShift] = useState<Shift | "both">("both");
+  const [search, setSearch] = useState("");
+  const [activeFilter, setActiveFilter] =
+    useState<(typeof FILTERS)[number]>("All");
+
+  const fetchAll = useCallback(
+    async (shift?: Shift) => {
+      try {
+        const authToken = await AsyncStorage.getItem("access_token");
+
+        if (!authToken) {
+          console.log("No admin token in AsyncStorage");
+          setLoading(false);
+          return;
+        }
+        api.setToken(authToken);
+
+        const params = new URLSearchParams();
+        params.append("date", todayStr());
+        if (shift) params.append("shift", shift);
+
+        const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL || "";
+        const url = `${BASE_URL}/api/admin/feed?${params.toString()}`;
+
+        const response = await fetch(url, {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${authToken}`, 
+          },
+        });
+
+        if (!response.ok) {
+          const err = await response
+            .json()
+            .catch(() => ({ detail: "Request failed" }));
+          throw new Error(err.detail || "Request failed");
+        }
+
+        const data = await response.json();
+        setSummary(data.summary);
+        setCowRows(mapToCowRows(data.cows));
+      } catch (e) {
+        console.log("admin feed fetch error:", e);
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [activeShift],
+  );
+
+  useEffect(() => {
+    const shift = activeShift === "both" ? undefined : activeShift;
+    fetchAll(shift);
+  }, [activeShift]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    const shift = activeShift === "both" ? undefined : activeShift;
+    fetchAll(shift);
+  };
+
+  const filtered = cowRows.filter((d) => {
     const matchSearch =
       d.name.toLowerCase().includes(search.toLowerCase()) ||
       d.srNo.toLowerCase().includes(search.toLowerCase());
+
+    const shiftStatus =
+      activeShift === "morning"
+        ? d.morning
+        : activeShift === "evening"
+          ? d.evening
+          : d.morning === "fed" && d.evening === "fed"
+            ? "fed"
+            : "pending";
+
     const matchFilter =
       activeFilter === "All" ||
-      (activeFilter === "Fed" && d.morning === "fed" && d.evening === "fed") ||
-      (activeFilter === "Missed" &&
-        (d.morning === "missed" || d.evening === "missed")) ||
-      (activeFilter === "Pending" &&
-        (d.morning === "pending" || d.evening === "pending"));
+      (activeFilter === "Both Fed" &&
+        d.morning === "fed" &&
+        d.evening === "fed") ||
+      (activeFilter === "Pending" && shiftStatus === "pending");
+
     return matchSearch && matchFilter;
   });
 
@@ -336,7 +430,6 @@ export default function FeedScreen() {
     <SafeAreaView style={s.screen}>
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
 
-      {/* ── Header ── */}
       <View
         style={[
           s.header,
@@ -353,72 +446,95 @@ export default function FeedScreen() {
           <Text style={s.headerTitle}>Feed Status</Text>
           <Text style={s.headerSub}>{today}</Text>
         </View>
-        <TouchableOpacity style={s.refreshBtn}>
+        <TouchableOpacity style={s.refreshBtn} onPress={onRefresh}>
           <Ionicons name="refresh-outline" size={18} color="#6b7280" />
         </TouchableOpacity>
       </View>
 
-      {/* ── Summary ── */}
-      <SummaryStrip data={FEED_DATA} />
+      {loading ? (
+        <View style={s.loadingWrap}>
+          <ActivityIndicator size="large" color="#16a34a" />
+          <Text style={s.loadingText}>Loading feed status...</Text>
+        </View>
+      ) : (
+        <>
+          <SummaryStrip summary={summary} activeShift={activeShift} />
 
-      {/* ── Search ── */}
-      <View style={s.searchWrap}>
-        <Ionicons name="search-outline" size={15} color="#9ca3af" />
-        <TextInput
-          style={s.searchInput}
-          placeholder="Search cow name or Sr. No..."
-          placeholderTextColor="#d1d5db"
-          value={search}
-          onChangeText={setSearch}
-        />
-        {search.length > 0 && (
-          <TouchableOpacity onPress={() => setSearch("")}>
-            <Ionicons name="close-circle" size={15} color="#9ca3af" />
-          </TouchableOpacity>
-        )}
-      </View>
-
-      {/* ── Filters ── */}
-      <View style={s.filterRow}>
-        {FILTERS.map((f) => {
-          const active = activeFilter === f;
-          return (
-            <TouchableOpacity
-              key={f}
-              onPress={() => setActiveFilter(f)}
-              style={[s.filterChip, active && s.filterChipActive]}
-            >
-              <Text style={[s.filterText, active && s.filterTextActive]}>
-                {f}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-
-      {/* ── List ── */}
-      <FlatList
-        data={filtered}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={s.listContent}
-        showsVerticalScrollIndicator={false}
-        renderItem={({ item, index }) => <FeedCard item={item} index={index} />}
-        ListEmptyComponent={
-          <View style={s.empty}>
-            <Text style={{ fontSize: 40 }}>🌾</Text>
-            <Text style={s.emptyText}>No records found</Text>
+          <View style={s.controlsRow}>
+            <ShiftToggle active={activeShift} onChange={setActiveShift} />
           </View>
-        }
-        ListFooterComponent={<View style={{ height: 100 }} />}
-      />
+
+          <View style={s.searchWrap}>
+            <Ionicons name="search-outline" size={15} color="#9ca3af" />
+            <TextInput
+              style={s.searchInput}
+              placeholder="Search cow name or tag..."
+              placeholderTextColor="#d1d5db"
+              value={search}
+              onChangeText={setSearch}
+            />
+            {search.length > 0 && (
+              <TouchableOpacity onPress={() => setSearch("")}>
+                <Ionicons name="close-circle" size={15} color="#9ca3af" />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          <View style={s.filterRow}>
+            {FILTERS.map((f) => {
+              const active = activeFilter === f;
+              return (
+                <TouchableOpacity
+                  key={f}
+                  onPress={() => setActiveFilter(f)}
+                  style={[s.filterChip, active && s.filterChipActive]}
+                >
+                  <Text style={[s.filterText, active && s.filterTextActive]}>
+                    {f}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          <FlatList
+            data={filtered}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={s.listContent}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor="#16a34a"
+              />
+            }
+            renderItem={({ item, index }) => (
+              <FeedCard item={item} index={index} activeShift={activeShift} />
+            )}
+            ListEmptyComponent={
+              <View style={s.empty}>
+                <Text style={{ fontSize: 40 }}>🌾</Text>
+                <Text style={s.emptyText}>No records found</Text>
+              </View>
+            }
+            ListFooterComponent={<View style={{ height: 100 }} />}
+          />
+        </>
+      )}
     </SafeAreaView>
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#f9fafb" },
-
+  loadingWrap: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+  },
+  loadingText: { color: "#6b7280", fontSize: 14, fontWeight: "600" },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -460,8 +576,6 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#e5e7eb",
   },
-
-  // Summary
   summary: {
     flexDirection: "row",
     backgroundColor: "#fff",
@@ -485,12 +599,31 @@ const s = StyleSheet.create({
     fontWeight: "600",
     textAlign: "center",
   },
-
-  // Search
+  controlsRow: { paddingHorizontal: 14, paddingTop: 12, paddingBottom: 4 },
+  shiftToggle: {
+    flexDirection: "row",
+    backgroundColor: "#f3f4f6",
+    borderRadius: 12,
+    padding: 3,
+    gap: 2,
+  },
+  shiftBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  shiftBtnActive: { backgroundColor: "#111827" },
+  shiftBtnText: { fontSize: 12, fontWeight: "700", color: "#6b7280" },
+  shiftBtnTextActive: { color: "#fff" },
   searchWrap: {
     flexDirection: "row",
     alignItems: "center",
-    margin: 14,
+    marginHorizontal: 14,
+    marginTop: 10,
     marginBottom: 8,
     backgroundColor: "#fff",
     borderRadius: 12,
@@ -501,8 +634,6 @@ const s = StyleSheet.create({
     gap: 8,
   },
   searchInput: { flex: 1, color: "#111827", fontSize: 14 },
-
-  // Filters
   filterRow: {
     flexDirection: "row",
     paddingHorizontal: 14,
@@ -520,10 +651,7 @@ const s = StyleSheet.create({
   filterChipActive: { backgroundColor: "#111827", borderColor: "#111827" },
   filterText: { fontSize: 12, color: "#6b7280", fontWeight: "600" },
   filterTextActive: { color: "#fff" },
-
   listContent: { paddingHorizontal: 14 },
-
-  // Card
   card: {
     backgroundColor: "#fff",
     borderRadius: 18,
@@ -567,8 +695,6 @@ const s = StyleSheet.create({
   overallDot: { width: 6, height: 6, borderRadius: 3 },
   overallText: { fontSize: 11, fontWeight: "700" },
   divider: { height: 1, backgroundColor: "#f3f4f6", marginVertical: 12 },
-
-  // Sessions
   sessionsRow: { flexDirection: "row", gap: 10 },
   sessionCard: { flex: 1, borderRadius: 12, padding: 12, borderWidth: 1 },
   sessionTop: {
@@ -595,7 +721,6 @@ const s = StyleSheet.create({
   },
   statusLabel: { fontSize: 13, fontWeight: "700" },
   noteText: { fontSize: 11, color: "#6b7280", fontWeight: "500", marginTop: 2 },
-
   empty: { alignItems: "center", paddingTop: 60, gap: 10 },
   emptyText: { fontSize: 15, color: "#9ca3af", fontWeight: "600" },
 });

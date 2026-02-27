@@ -55,7 +55,6 @@ export default function AdminDashboard() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Header ── */}
         <View style={styles.header}>
           <View>
             <Text style={styles.greeting}>Admin Dashboard</Text>
@@ -67,7 +66,6 @@ export default function AdminDashboard() {
           </View>
         </View>
 
-        {/* ── Revenue Hero Card ── */}
         <View style={styles.revenueCard}>
           <View style={styles.revenueLeft}>
             <Text style={styles.revenueLabel}>Today's Revenue</Text>
@@ -82,10 +80,8 @@ export default function AdminDashboard() {
           </View>
         </View>
 
-        {/* ── Stats Grid ── */}
         <View style={styles.statsGrid}>
 
-          {/* Customers */}
           <View style={[styles.statCard, { backgroundColor: '#EEF4FF' }]}>
             <View style={[styles.statIcon, { backgroundColor: '#4F7EFF20' }]}>
               <Ionicons name="people" size={20} color="#4F7EFF" />
@@ -96,7 +92,6 @@ export default function AdminDashboard() {
             <Text style={styles.statLabel}>Customers</Text>
           </View>
 
-          {/* Total Products */}
           <View style={[styles.statCard, { backgroundColor: '#FFF4E6' }]}>
             <View style={[styles.statIcon, { backgroundColor: '#F59E0B20' }]}>
               <Ionicons name="cube" size={20} color="#f59e0b" />
@@ -107,7 +102,6 @@ export default function AdminDashboard() {
             <Text style={styles.statLabel}>Products</Text>
           </View>
 
-          {/* Total Orders */}
           <View style={[styles.statCard, { backgroundColor: '#F0F9FF' }]}>
             <View style={[styles.statIcon, { backgroundColor: '#0EA5E920' }]}>
               <Ionicons name="receipt" size={20} color="#0ea5e9" />
@@ -118,7 +112,6 @@ export default function AdminDashboard() {
             <Text style={styles.statLabel}>Total Orders</Text>
           </View>
 
-          {/* Total Delivered */}
           <View style={[styles.statCard, { backgroundColor: '#F0FDF4' }]}>
             <View style={[styles.statIcon, { backgroundColor: '#22c55e20' }]}>
               <Ionicons name="checkmark-circle" size={20} color="#22c55e" />
@@ -131,7 +124,6 @@ export default function AdminDashboard() {
 
         </View>
 
-        {/* ── Today's Order Progress ── */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <View style={[styles.cardIconBox, { backgroundColor: '#EEF4FF' }]}>
@@ -143,12 +135,10 @@ export default function AdminDashboard() {
             </View>
           </View>
 
-          {/* Progress Bar */}
           <View style={styles.progressBg}>
             <View style={[styles.progressFill, { width: `${deliveryRate}%` }]} />
           </View>
 
-          {/* 3 Stats */}
           <View style={styles.progressStats}>
             <View style={styles.progressStat}>
               <Text style={styles.progressStatVal}>{stats?.today_orders || 0}</Text>
@@ -171,7 +161,6 @@ export default function AdminDashboard() {
           </View>
         </View>
 
-        {/* ── Products Overview ── */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <View style={[styles.cardIconBox, { backgroundColor: '#FFF4E6' }]}>
@@ -221,7 +210,6 @@ export default function AdminDashboard() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8F7F4' },
 
-  /* ── Header ── */
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -246,7 +234,6 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
 
-  /* ── Revenue Card ── */
   revenueCard: {
     marginHorizontal: 20,
     marginBottom: 16,
@@ -278,7 +265,6 @@ const styles = StyleSheet.create({
   revenueBadgeText: { fontSize: 11, color: '#22c55e', fontWeight: '700' },
   revenueIcon: { opacity: 0.6 },
 
-  /* ── Stats Grid ── */
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -303,7 +289,6 @@ const styles = StyleSheet.create({
   statValue: { fontSize: 28, fontWeight: '800', letterSpacing: -0.5 },
   statLabel: { fontSize: 12, color: '#888', fontWeight: '600' },
 
-  /* ── Cards ── */
   card: {
     backgroundColor: '#fff',
     borderRadius: 20,
@@ -338,7 +323,6 @@ const styles = StyleSheet.create({
   },
   rateText: { fontSize: 12, fontWeight: '800', color: '#4F7EFF' },
 
-  /* Progress */
   progressBg: {
     height: 8,
     backgroundColor: '#F0F0F0',
@@ -360,7 +344,6 @@ const styles = StyleSheet.create({
   progressStatLabel: { fontSize: 11, color: '#aaa', marginTop: 3, fontWeight: '600' },
   progressDivider: { width: 1, backgroundColor: '#F0F0F0' },
 
-  /* Products */
   productRow: {
     flexDirection: 'row',
     alignItems: 'center',
