@@ -10,9 +10,15 @@ import {
   TextInput,
   Animated,
   SafeAreaView,
+  LayoutAnimation,
+  UIManager,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+
+if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 const FEED_DATA = [
@@ -133,12 +139,7 @@ function FeedBadge({
 }) {
   const cfg = STATUS_CFG[status];
   return (
-    <View
-      style={[
-        s.sessionCard,
-        { backgroundColor: cfg.bg, borderColor: cfg.border },
-      ]}
-    >
+    <View style={[s.sessionCard, { backgroundColor: cfg.bg, borderColor: cfg.border }]}>
       <View style={s.sessionTop}>
         <View style={s.sessionIconWrap}>
           <Ionicons
@@ -171,6 +172,8 @@ function FeedCard({
   item: (typeof FEED_DATA)[0];
   index: number;
 }) {
+  const [expanded, setExpanded] = useState(false);
+
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(16)).current;
 
@@ -192,25 +195,24 @@ function FeedCard({
     ]).start();
   }, []);
 
-  const morningCfg = STATUS_CFG[item.morning as FeedStatus];
-  const eveningCfg = STATUS_CFG[item.evening as FeedStatus];
+  const toggle = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setExpanded((prev) => !prev);
+  };
 
   const bothFed = item.morning === "fed" && item.evening === "fed";
   const anyMissed = item.morning === "missed" || item.evening === "missed";
 
   const overallColor = anyMissed ? "#dc2626" : bothFed ? "#16a34a" : "#d97706";
-  const overallBg = anyMissed ? "#fff1f2" : bothFed ? "#f0fdf4" : "#fffbeb";
-  const overallBorder = anyMissed ? "#fecdd3" : bothFed ? "#86efac" : "#fcd34d";
-  const overallLabel = anyMissed
-    ? "Needs Attention"
-    : bothFed
-      ? "Fully Fed"
-      : "Partially Fed";
+  const overallBg    = anyMissed ? "#fff1f2" : bothFed ? "#f0fdf4" : "#fffbeb";
+  const overallBorder= anyMissed ? "#fecdd3" : bothFed ? "#86efac" : "#fcd34d";
+  const overallLabel = anyMissed ? "Needs Attention" : bothFed ? "Fully Fed" : "Partially Fed";
 
   return (
     <Animated.View style={[s.card, { opacity, transform: [{ translateY }] }]}>
-      {/* Card Header */}
-      <View style={s.cardHeader}>
+
+      {/* ── Tappable Header (always visible) ── */}
+      <TouchableOpacity onPress={toggle} activeOpacity={0.7} style={s.cardHeader}>
         <View style={s.cowAvatarWrap}>
           <Text style={{ fontSize: 22 }}>🐄</Text>
         </View>
@@ -218,44 +220,43 @@ function FeedCard({
           <Text style={s.cowName}>{item.name}</Text>
           <Text style={s.cowSr}>{item.srNo}</Text>
         </View>
-        <View
-          style={[
-            s.overallBadge,
-            { backgroundColor: overallBg, borderColor: overallBorder },
-          ]}
-        >
+        <View style={[s.overallBadge, { backgroundColor: overallBg, borderColor: overallBorder }]}>
           <View style={[s.overallDot, { backgroundColor: overallColor }]} />
-          <Text style={[s.overallText, { color: overallColor }]}>
-            {overallLabel}
-          </Text>
+          <Text style={[s.overallText, { color: overallColor }]}>{overallLabel}</Text>
         </View>
-      </View>
-
-      {/* Divider */}
-      <View style={s.divider} />
-
-      {/* Session cards */}
-      <View style={s.sessionsRow}>
-        <FeedBadge
-          status={item.morning as FeedStatus}
-          note={item.morningNote}
-          session="Morning"
+        <Ionicons
+          name={expanded ? "chevron-up" : "chevron-down"}
+          size={16}
+          color="#bbb"
+          style={{ marginLeft: 8 }}
         />
-        <FeedBadge
-          status={item.evening as FeedStatus}
-          note={item.eveningNote}
-          session="Evening"
-        />
-      </View>
+      </TouchableOpacity>
+
+      {/* ── Expanded Content ── */}
+      {expanded && (
+        <>
+          <View style={s.divider} />
+          <View style={s.sessionsRow}>
+            <FeedBadge
+              status={item.morning as FeedStatus}
+              note={item.morningNote}
+              session="Morning"
+            />
+            <FeedBadge
+              status={item.evening as FeedStatus}
+              note={item.eveningNote}
+              session="Evening"
+            />
+          </View>
+        </>
+      )}
     </Animated.View>
   );
 }
 
 // ─── Summary Strip ────────────────────────────────────────────────────────────
 function SummaryStrip({ data }: { data: typeof FEED_DATA }) {
-  const allFed = data.filter(
-    (d) => d.morning === "fed" && d.evening === "fed",
-  ).length;
+  const allFed = data.filter((d) => d.morning === "fed" && d.evening === "fed").length;
   const partial = data.filter(
     (d) =>
       (d.morning === "fed" || d.evening === "fed") &&
@@ -268,34 +269,10 @@ function SummaryStrip({ data }: { data: typeof FEED_DATA }) {
   return (
     <View style={s.summary}>
       {[
-        {
-          label: "Fully Fed",
-          value: allFed,
-          color: "#16a34a",
-          bg: "#f0fdf4",
-          icon: "checkmark-circle",
-        },
-        {
-          label: "Partial",
-          value: partial,
-          color: "#d97706",
-          bg: "#fffbeb",
-          icon: "time",
-        },
-        {
-          label: "Missed",
-          value: missed,
-          color: "#dc2626",
-          bg: "#fff1f2",
-          icon: "close-circle",
-        },
-        {
-          label: "Total",
-          value: data.length,
-          color: "#2563eb",
-          bg: "#eff6ff",
-          icon: "list",
-        },
+        { label: "Fully Fed", value: allFed,       color: "#16a34a", bg: "#f0fdf4", icon: "checkmark-circle" },
+        { label: "Partial",   value: partial,       color: "#d97706", bg: "#fffbeb", icon: "time"             },
+        { label: "Missed",    value: missed,        color: "#dc2626", bg: "#fff1f2", icon: "close-circle"     },
+        { label: "Total",     value: data.length,   color: "#2563eb", bg: "#eff6ff", icon: "list"             },
       ].map((st, i) => (
         <View key={i} style={[s.summaryItem, { backgroundColor: st.bg }]}>
           <Ionicons name={st.icon as any} size={16} color={st.color} />
@@ -324,11 +301,9 @@ export default function FeedScreen() {
       d.srNo.toLowerCase().includes(search.toLowerCase());
     const matchFilter =
       activeFilter === "All" ||
-      (activeFilter === "Fed" && d.morning === "fed" && d.evening === "fed") ||
-      (activeFilter === "Missed" &&
-        (d.morning === "missed" || d.evening === "missed")) ||
-      (activeFilter === "Pending" &&
-        (d.morning === "pending" || d.evening === "pending"));
+      (activeFilter === "Fed"     && d.morning === "fed"    && d.evening === "fed") ||
+      (activeFilter === "Missed"  && (d.morning === "missed"  || d.evening === "missed")) ||
+      (activeFilter === "Pending" && (d.morning === "pending" || d.evening === "pending"));
     return matchSearch && matchFilter;
   });
 
@@ -340,10 +315,7 @@ export default function FeedScreen() {
       <View
         style={[
           s.header,
-          {
-            paddingTop:
-              Platform.OS === "ios" ? 0 : (StatusBar.currentHeight ?? 0),
-          },
+          { paddingTop: Platform.OS === "ios" ? 0 : (StatusBar.currentHeight ?? 0) },
         ]}
       >
         <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
@@ -388,9 +360,7 @@ export default function FeedScreen() {
               onPress={() => setActiveFilter(f)}
               style={[s.filterChip, active && s.filterChipActive]}
             >
-              <Text style={[s.filterText, active && s.filterTextActive]}>
-                {f}
-              </Text>
+              <Text style={[s.filterText, active && s.filterTextActive]}>{f}</Text>
             </TouchableOpacity>
           );
         })}
@@ -429,93 +399,40 @@ const s = StyleSheet.create({
     borderBottomColor: "#f3f4f6",
   },
   backBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "#f9fafb",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: "#f9fafb", alignItems: "center", justifyContent: "center",
+    borderWidth: 1, borderColor: "#e5e7eb",
   },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#111827",
-    letterSpacing: -0.3,
-  },
-  headerSub: {
-    fontSize: 12,
-    color: "#9ca3af",
-    fontWeight: "500",
-    marginTop: 1,
-  },
+  headerTitle: { fontSize: 18, fontWeight: "800", color: "#111827", letterSpacing: -0.3 },
+  headerSub: { fontSize: 12, color: "#9ca3af", fontWeight: "500", marginTop: 1 },
   refreshBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "#f9fafb",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: "#f9fafb", alignItems: "center", justifyContent: "center",
+    borderWidth: 1, borderColor: "#e5e7eb",
   },
 
-  // Summary
   summary: {
-    flexDirection: "row",
-    backgroundColor: "#fff",
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    gap: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f3f4f6",
+    flexDirection: "row", backgroundColor: "#fff",
+    paddingHorizontal: 12, paddingVertical: 12, gap: 8,
+    borderBottomWidth: 1, borderBottomColor: "#f3f4f6",
   },
-  summaryItem: {
-    flex: 1,
-    alignItems: "center",
-    paddingVertical: 10,
-    borderRadius: 12,
-    gap: 3,
-  },
+  summaryItem: { flex: 1, alignItems: "center", paddingVertical: 10, borderRadius: 12, gap: 3 },
   summaryValue: { fontSize: 17, fontWeight: "800", letterSpacing: -0.3 },
-  summaryLabel: {
-    fontSize: 9,
-    color: "#9ca3af",
-    fontWeight: "600",
-    textAlign: "center",
-  },
+  summaryLabel: { fontSize: 9, color: "#9ca3af", fontWeight: "600", textAlign: "center" },
 
-  // Search
   searchWrap: {
-    flexDirection: "row",
-    alignItems: "center",
-    margin: 14,
-    marginBottom: 8,
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 8,
+    flexDirection: "row", alignItems: "center",
+    margin: 14, marginBottom: 8,
+    backgroundColor: "#fff", borderRadius: 12,
+    borderWidth: 1, borderColor: "#e5e7eb",
+    paddingHorizontal: 12, paddingVertical: 10, gap: 8,
   },
   searchInput: { flex: 1, color: "#111827", fontSize: 14 },
 
-  // Filters
-  filterRow: {
-    flexDirection: "row",
-    paddingHorizontal: 14,
-    gap: 8,
-    marginBottom: 12,
-  },
+  filterRow: { flexDirection: "row", paddingHorizontal: 14, gap: 8, marginBottom: 12 },
   filterChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 20,
-    backgroundColor: "#fff",
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
+    paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20,
+    backgroundColor: "#fff", borderWidth: 1, borderColor: "#e5e7eb",
   },
   filterChipActive: { backgroundColor: "#111827", borderColor: "#111827" },
   filterText: { fontSize: 12, color: "#6b7280", fontWeight: "600" },
@@ -523,76 +440,38 @@ const s = StyleSheet.create({
 
   listContent: { paddingHorizontal: 14 },
 
-  // Card
   card: {
-    backgroundColor: "#fff",
-    borderRadius: 18,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "#f3f4f6",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
+    backgroundColor: "#fff", borderRadius: 18, padding: 16, marginBottom: 12,
+    borderWidth: 1, borderColor: "#f3f4f6",
+    shadowColor: "#000", shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05, shadowRadius: 6, elevation: 2,
   },
   cardHeader: { flexDirection: "row", alignItems: "center" },
   cowAvatarWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: "#f9fafb",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
+    width: 44, height: 44, borderRadius: 12,
+    backgroundColor: "#f9fafb", alignItems: "center", justifyContent: "center",
+    borderWidth: 1, borderColor: "#e5e7eb",
   },
-  cowName: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#111827",
-    letterSpacing: -0.2,
-  },
+  cowName: { fontSize: 15, fontWeight: "700", color: "#111827", letterSpacing: -0.2 },
   cowSr: { fontSize: 12, color: "#9ca3af", fontWeight: "500", marginTop: 1 },
   overallBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 20,
-    borderWidth: 1,
+    flexDirection: "row", alignItems: "center", gap: 5,
+    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, borderWidth: 1,
   },
   overallDot: { width: 6, height: 6, borderRadius: 3 },
   overallText: { fontSize: 11, fontWeight: "700" },
   divider: { height: 1, backgroundColor: "#f3f4f6", marginVertical: 12 },
 
-  // Sessions
   sessionsRow: { flexDirection: "row", gap: 10 },
   sessionCard: { flex: 1, borderRadius: 12, padding: 12, borderWidth: 1 },
-  sessionTop: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    marginBottom: 8,
-  },
+  sessionTop: { flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 8 },
   sessionIconWrap: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
-    backgroundColor: "rgba(0,0,0,0.05)",
-    alignItems: "center",
-    justifyContent: "center",
+    width: 22, height: 22, borderRadius: 6,
+    backgroundColor: "rgba(0,0,0,0.05)", alignItems: "center", justifyContent: "center",
   },
   sessionLabel: { flex: 1, fontSize: 11, fontWeight: "700", color: "#374151" },
   statusDot: { width: 7, height: 7, borderRadius: 4 },
-  sessionBottom: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    marginBottom: 4,
-  },
+  sessionBottom: { flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 4 },
   statusLabel: { fontSize: 13, fontWeight: "700" },
   noteText: { fontSize: 11, color: "#6b7280", fontWeight: "500", marginTop: 2 },
 

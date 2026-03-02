@@ -27,6 +27,7 @@ export default function ProfileScreen() {
   const [editPhone, setEditPhone] = useState(user?.phone || '');
   const [editAddress, setEditAddress] = useState(user?.address || { tower: '', flat: '', floor: '' });
   const [saving, setSaving] = useState(false);
+  const [expandedOrders, setExpandedOrders] = useState<Record<string, boolean>>({});
 
   useEffect(() => { fetchData(); }, []);
 
@@ -41,6 +42,10 @@ export default function ProfileScreen() {
     } catch (error) {
       console.error('Error fetching data:', error);
     }
+  };
+
+  const toggleOrder = (id: string) => {
+    setExpandedOrders(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
   const handleLogout = () => {
@@ -123,7 +128,14 @@ export default function ProfileScreen() {
   };
 
   const statusColor = (status: string) =>
-    status === 'delivered' ? '#22c55e' : status === 'out_for_delivery' ? '#f59e0b' : '#94a3b8';
+    status === 'delivered' ? '#22c55e'
+    : status === 'out_for_delivery' ? '#f59e0b'
+    : '#94a3b8';
+
+  const statusBg = (status: string) =>
+    status === 'delivered' ? '#F0FDF4'
+    : status === 'out_for_delivery' ? '#FFFBEB'
+    : '#F8FAFC';
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -138,21 +150,15 @@ export default function ProfileScreen() {
               </Text>
             </View>
           </View>
-
           <Text style={styles.userName}>{user?.name}</Text>
           <Text style={styles.userEmail}>{user?.email}</Text>
-
           {user?.phone && (
             <View style={styles.phoneBadge}>
               <Ionicons name="call-outline" size={12} color="#666" />
               <Text style={styles.phoneText}>{user.phone}</Text>
             </View>
           )}
-
-          <TouchableOpacity
-            style={styles.editBtn}
-            onPress={() => setEditModal(true)}
-          >
+          <TouchableOpacity style={styles.editBtn} onPress={() => setEditModal(true)}>
             <Ionicons name="pencil" size={14} color="#fff" />
             <Text style={styles.editBtnText}>Edit Profile</Text>
           </TouchableOpacity>
@@ -166,7 +172,6 @@ export default function ProfileScreen() {
             </View>
             <Text style={styles.cardTitle}>Delivery Address</Text>
           </View>
-
           {user?.address && (user.address.tower || user.address.flat) ? (
             <View style={styles.addressBox}>
               {user.address.tower && (
@@ -189,10 +194,7 @@ export default function ProfileScreen() {
               )}
             </View>
           ) : (
-            <TouchableOpacity
-              style={styles.emptyAddress}
-              onPress={() => setEditModal(true)}
-            >
+            <TouchableOpacity style={styles.emptyAddress} onPress={() => setEditModal(true)}>
               <Ionicons name="add-circle-outline" size={20} color={Colors.primary} />
               <Text style={styles.emptyAddressText}>Add delivery address</Text>
             </TouchableOpacity>
@@ -206,18 +208,11 @@ export default function ProfileScreen() {
               <Ionicons name="airplane" size={18} color="#f59e0b" />
             </View>
             <Text style={styles.cardTitle}>Vacation Mode</Text>
-            <TouchableOpacity
-              style={styles.addIconBtn}
-              onPress={() => setVacationModal(true)}
-            >
+            <TouchableOpacity style={styles.addIconBtn} onPress={() => setVacationModal(true)}>
               <Ionicons name="add" size={18} color={Colors.primary} />
             </TouchableOpacity>
           </View>
-
-          <Text style={styles.hintText}>
-            Deliveries are skipped automatically on these dates.
-          </Text>
-
+          <Text style={styles.hintText}>Deliveries are skipped automatically on these dates.</Text>
           {vacations.length > 0 ? (
             <View style={styles.vacationList}>
               {vacations.map((v) => (
@@ -247,25 +242,92 @@ export default function ProfileScreen() {
           </View>
 
           {orders.length > 0 ? (
-            orders.slice(0, 5).map((order, i) => (
-              <View
-                key={order.id}
-                style={[styles.orderRow, i < Math.min(orders.length, 5) - 1 && styles.orderRowBorder]}
-              >
-                <View>
-                  <Text style={styles.orderDate}>{formatDate(order.delivery_date)}</Text>
-                  <Text style={styles.orderItems}>{order.items?.length || 0} items</Text>
-                </View>
-                <View style={styles.orderRight}>
-                  <View style={[styles.statusPill, { backgroundColor: statusColor(order.status) + '20' }]}>
-                    <Text style={[styles.statusText, { color: statusColor(order.status) }]}>
-                      {order.status?.replace(/_/g, ' ')}
-                    </Text>
+            <View style={styles.ordersContainer}>
+              {orders.slice(0, 5).map((order) => {
+                const isExpanded = expandedOrders[order.id];
+                const sc = statusColor(order.status);
+                const sb = statusBg(order.status);
+
+                return (
+                  <View key={order.id} style={styles.orderCard}>
+
+                    {/* ── Order Header (always visible) ── */}
+                    <TouchableOpacity
+                      onPress={() => toggleOrder(order.id)}
+                      activeOpacity={0.7}
+                      style={styles.orderCardHeader}
+                    >
+                      {/* Left: date + item count */}
+                      <View style={styles.orderMeta}>
+                        <View style={styles.orderDateRow}>
+                          <Ionicons name="calendar-outline" size={12} color="#aaa" />
+                          <Text style={styles.orderDate}>{formatDate(order.delivery_date)}</Text>
+                        </View>
+                        <Text style={styles.orderItemCount}>
+                          {order.items?.length || 0} item{order.items?.length !== 1 ? 's' : ''}
+                        </Text>
+                      </View>
+
+                      {/* Right: status + amount + chevron */}
+                      <View style={styles.orderHeaderRight}>
+                        <View style={[styles.statusPill, { backgroundColor: sb }]}>
+                          <View style={[styles.statusDot, { backgroundColor: sc }]} />
+                          <Text style={[styles.statusText, { color: sc }]}>
+                            {order.status?.replace(/_/g, ' ')}
+                          </Text>
+                        </View>
+                        <Text style={styles.orderAmt}>₹{order.total_amount}</Text>
+                        <Ionicons
+                          name={isExpanded ? 'chevron-up' : 'chevron-down'}
+                          size={14}
+                          color="#ccc"
+                        />
+                      </View>
+                    </TouchableOpacity>
+
+                    {/* ── Expanded: per-product cards ── */}
+                    {isExpanded && (
+                      <View style={styles.itemsContainer}>
+                        <View style={styles.itemsDivider} />
+                        {order.items?.map((item: any, idx: number) => (
+                          <View key={idx} style={styles.productCard}>
+                            {/* Product icon */}
+                            <View style={styles.productIconBox}>
+                              <Ionicons name="cube-outline" size={18} color={Colors.primary} />
+                            </View>
+
+                            {/* Product details */}
+                            <View style={styles.productInfo}>
+                              <Text style={styles.productName}>{item.product_name}</Text>
+                              <View style={styles.productMetaRow}>
+                                <View style={styles.productMetaChip}>
+                                  <Text style={styles.productMetaLabel}>Qty</Text>
+                                  <Text style={styles.productMetaValue}>{item.quantity}</Text>
+                                </View>
+                                <View style={[styles.productMetaChip, { backgroundColor: '#F0FDF4' }]}>
+                                  <Text style={[styles.productMetaLabel, { color: '#16a34a' }]}>Price</Text>
+                                  <Text style={[styles.productMetaValue, { color: '#16a34a' }]}>₹{item.price}</Text>
+                                </View>
+                                <View style={[styles.productMetaChip, { backgroundColor: '#EFF6FF' }]}>
+                                  <Text style={[styles.productMetaLabel, { color: '#2563eb' }]}>Total</Text>
+                                  <Text style={[styles.productMetaValue, { color: '#2563eb' }]}>₹{item.price * item.quantity}</Text>
+                                </View>
+                              </View>
+                              {item.subscription_id && (
+                                <View style={styles.subRow}>
+                                  <Ionicons name="repeat-outline" size={11} color="#a78bfa" />
+                                  <Text style={styles.subText}>Subscription</Text>
+                                </View>
+                              )}
+                            </View>
+                          </View>
+                        ))}
+                      </View>
+                    )}
                   </View>
-                  <Text style={styles.orderAmt}>₹{order.total_amount}</Text>
-                </View>
-              </View>
-            ))
+                );
+              })}
+            </View>
           ) : (
             <Text style={styles.emptyText}>No orders yet</Text>
           )}
@@ -291,7 +353,6 @@ export default function ProfileScreen() {
                 <Ionicons name="close" size={16} color="#666" />
               </TouchableOpacity>
             </View>
-
             <View style={styles.dateTabs}>
               <TouchableOpacity
                 style={[styles.dateTab, selectingStart && styles.dateTabActive]}
@@ -313,7 +374,6 @@ export default function ProfileScreen() {
                 </Text>
               </TouchableOpacity>
             </View>
-
             <Calendar
               minDate={new Date().toISOString().split('T')[0]}
               markedDates={getMarkedDates()}
@@ -322,14 +382,8 @@ export default function ProfileScreen() {
                 if (selectingStart) { setStartDate(day.dateString); setSelectingStart(false); }
                 else { setEndDate(day.dateString); }
               }}
-              theme={{
-                todayTextColor: Colors.primary,
-                selectedDayBackgroundColor: Colors.primary,
-                arrowColor: Colors.primary,
-                // borderRadius: 12,
-              }}
+              theme={{ todayTextColor: Colors.primary, selectedDayBackgroundColor: Colors.primary, arrowColor: Colors.primary }}
             />
-
             <Button title="Save Vacation" onPress={handleAddVacation} style={{ marginTop: 16 }} />
           </View>
         </View>
@@ -346,11 +400,9 @@ export default function ProfileScreen() {
                 <Ionicons name="close" size={16} color="#666" />
               </TouchableOpacity>
             </View>
-
             <ScrollView showsVerticalScrollIndicator={false}>
               <Input label="Name" value={editName} onChangeText={setEditName} placeholder="Your name" />
               <Input label="Phone" value={editPhone} onChangeText={setEditPhone} placeholder="Phone number" keyboardType="phone-pad" />
-
               <Text style={styles.addressSectionLabel}>Delivery Address</Text>
               <Input
                 label="Tower / Building"
@@ -384,91 +436,41 @@ const styles = StyleSheet.create({
 
   /* ── Hero ── */
   hero: {
-    alignItems: 'center',
-    paddingTop: 32,
-    paddingBottom: 28,
-    paddingHorizontal: 20,
-    backgroundColor: '#fff',
-    marginBottom: 16,
+    alignItems: 'center', paddingTop: 32, paddingBottom: 28,
+    paddingHorizontal: 20, backgroundColor: '#fff', marginBottom: 16,
   },
   avatarRing: {
-    width: 92,
-    height: 92,
-    borderRadius: 46,
-    borderWidth: 3,
-    borderColor: Colors.primary + '30',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 14,
+    width: 92, height: 92, borderRadius: 46,
+    borderWidth: 3, borderColor: Colors.primary + '30',
+    justifyContent: 'center', alignItems: 'center', marginBottom: 14,
   },
-  avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: Colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  avatar: { width: 80, height: 80, borderRadius: 40, backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center' },
   avatarText: { fontSize: 32, fontWeight: '800', color: '#fff' },
   userName: { fontSize: 22, fontWeight: '800', color: '#1A1A1A', letterSpacing: -0.3 },
   userEmail: { fontSize: 13, color: '#aaa', marginTop: 3 },
   phoneBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: '#F5F5F5',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 20,
-    marginTop: 8,
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: '#F5F5F5', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, marginTop: 8,
   },
   phoneText: { fontSize: 12, color: '#666', fontWeight: '500' },
   editBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: Colors.primary,
-    paddingHorizontal: 18,
-    paddingVertical: 9,
-    borderRadius: 20,
-    marginTop: 14,
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: Colors.primary, paddingHorizontal: 18, paddingVertical: 9, borderRadius: 20, marginTop: 14,
   },
   editBtnText: { fontSize: 13, fontWeight: '700', color: '#fff' },
 
   /* ── Cards ── */
   card: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    marginHorizontal: 16,
-    marginBottom: 14,
-    padding: 18,
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 1,
+    backgroundColor: '#fff', borderRadius: 20,
+    marginHorizontal: 16, marginBottom: 14, padding: 18,
+    shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 1,
   },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 14,
-  },
-  cardIconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 },
+  cardIconBox: { width: 36, height: 36, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
   cardTitle: { fontSize: 15, fontWeight: '700', color: '#1A1A1A', flex: 1 },
   addIconBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: Colors.primary + '15',
-    justifyContent: 'center',
-    alignItems: 'center',
+    width: 32, height: 32, borderRadius: 10,
+    backgroundColor: Colors.primary + '15', justifyContent: 'center', alignItems: 'center',
   },
 
   /* Address */
@@ -476,95 +478,105 @@ const styles = StyleSheet.create({
   addressRow: { flexDirection: 'row', justifyContent: 'space-between' },
   addressKey: { fontSize: 13, color: '#aaa', fontWeight: '500' },
   addressVal: { fontSize: 13, color: '#1A1A1A', fontWeight: '600' },
-  emptyAddress: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 4,
-  },
+  emptyAddress: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
   emptyAddressText: { fontSize: 14, color: Colors.primary, fontWeight: '600' },
 
   /* Vacation */
   hintText: { fontSize: 12, color: '#bbb', marginBottom: 12, marginTop: -6 },
   vacationList: { gap: 8 },
   vacationChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#FFF9EC',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: '#FFF9EC', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9,
   },
   vacationChipText: { flex: 1, fontSize: 13, fontWeight: '600', color: '#92400e' },
   emptyText: { fontSize: 13, color: '#ccc', fontStyle: 'italic' },
 
-  /* Orders */
-  orderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12 },
-  orderRowBorder: { borderBottomWidth: 1, borderBottomColor: '#F5F5F5' },
-  orderDate: { fontSize: 14, fontWeight: '700', color: '#1A1A1A' },
-  orderItems: { fontSize: 12, color: '#aaa', marginTop: 2 },
-  orderRight: { alignItems: 'flex-end', gap: 4 },
-  statusPill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 },
+  /* ── Orders ── */
+  ordersContainer: { gap: 10 },
+
+  orderCard: {
+    backgroundColor: '#FAFAFA',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
+    overflow: 'hidden',
+  },
+  orderCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 14,
+  },
+  orderMeta: { gap: 3 },
+  orderDateRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  orderDate: { fontSize: 13, fontWeight: '700', color: '#1A1A1A' },
+  orderItemCount: { fontSize: 11, color: '#aaa', fontWeight: '500' },
+  orderHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  statusPill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 20 },
+  statusDot: { width: 6, height: 6, borderRadius: 3 },
   statusText: { fontSize: 11, fontWeight: '700', textTransform: 'capitalize' },
   orderAmt: { fontSize: 14, fontWeight: '800', color: '#1A1A1A' },
 
+  /* Per-product items */
+  itemsContainer: { paddingHorizontal: 12, paddingBottom: 12, gap: 8 },
+  itemsDivider: { height: 1, backgroundColor: '#EFEFEF', marginBottom: 10 },
+
+  productCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 12,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
+  },
+  productIconBox: {
+    width: 36, height: 36, borderRadius: 10,
+    backgroundColor: Colors.primary + '12',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  productInfo: { flex: 1, gap: 6 },
+  productName: { fontSize: 14, fontWeight: '700', color: '#1A1A1A' },
+  productMetaRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
+  productMetaChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: '#F5F5F5', borderRadius: 8,
+    paddingHorizontal: 8, paddingVertical: 4,
+  },
+  productMetaLabel: { fontSize: 10, fontWeight: '600', color: '#999' },
+  productMetaValue: { fontSize: 12, fontWeight: '800', color: '#1A1A1A' },
+  subRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+  subText: { fontSize: 11, color: '#a78bfa', fontWeight: '600' },
+
   /* Logout */
   logoutBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginHorizontal: 16,
-    marginTop: 4,
-    padding: 16,
-    backgroundColor: '#FEF2F2',
-    borderRadius: 16,
-    gap: 8,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    marginHorizontal: 16, marginTop: 4, padding: 16,
+    backgroundColor: '#FEF2F2', borderRadius: 16, gap: 8,
   },
   logoutText: { fontSize: 15, fontWeight: '700', color: '#ef4444' },
 
   /* ── Modals ── */
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
   modalSheet: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    padding: 24,
-    paddingBottom: 36,
-    maxHeight: '92%',
+    backgroundColor: '#fff', borderTopLeftRadius: 28, borderTopRightRadius: 28,
+    padding: 24, paddingBottom: 36, maxHeight: '92%',
   },
-  dragHandle: {
-    width: 40, height: 4, backgroundColor: '#E0E0E0',
-    borderRadius: 2, alignSelf: 'center', marginBottom: 20,
-  },
-  modalHeader: {
-    flexDirection: 'row', justifyContent: 'space-between',
-    alignItems: 'center', marginBottom: 20,
-  },
+  dragHandle: { width: 40, height: 4, backgroundColor: '#E0E0E0', borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   modalTitle: { fontSize: 20, fontWeight: '800', color: '#1A1A1A' },
-  closeBtn: {
-    width: 32, height: 32, borderRadius: 10,
-    backgroundColor: '#F0F0F0', justifyContent: 'center', alignItems: 'center',
-  },
-
-  /* Date Tabs */
-  dateTabs: {
-    flexDirection: 'row', alignItems: 'center',
-    gap: 10, marginBottom: 16,
-  },
-  dateTab: {
-    flex: 1, backgroundColor: '#F8F8F8',
-    borderRadius: 12, padding: 12,
-    borderWidth: 1.5, borderColor: 'transparent',
-  },
+  closeBtn: { width: 32, height: 32, borderRadius: 10, backgroundColor: '#F0F0F0', justifyContent: 'center', alignItems: 'center' },
+  dateTabs: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16 },
+  dateTab: { flex: 1, backgroundColor: '#F8F8F8', borderRadius: 12, padding: 12, borderWidth: 1.5, borderColor: 'transparent' },
   dateTabActive: { borderColor: Colors.primary, backgroundColor: Colors.primary + '08' },
   dateTabLabel: { fontSize: 11, color: '#aaa', fontWeight: '600', textTransform: 'uppercase' },
   dateTabValue: { fontSize: 15, fontWeight: '700', color: '#1A1A1A', marginTop: 4 },
   dateTabValueActive: { color: Colors.primary },
-
-  addressSectionLabel: {
-    fontSize: 13, fontWeight: '700', color: '#999',
-    textTransform: 'uppercase', letterSpacing: 0.8,
-    marginTop: 8, marginBottom: 8,
-  },
+  addressSectionLabel: { fontSize: 13, fontWeight: '700', color: '#999', textTransform: 'uppercase', letterSpacing: 0.8, marginTop: 8, marginBottom: 8 },
 });
