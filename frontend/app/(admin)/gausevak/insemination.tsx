@@ -69,6 +69,25 @@ const EMPTY_FORM: FormData = {
   heatAfterCalvingDate: "",
 };
 
+const PAGE_SIZE = 4;
+
+// ── Auto-calculate expected calving date (insemination + 9 months + 9 days) ──
+function calcExpectedCalving(dateStr: string): string {
+  if (!dateStr || dateStr.length < 8) return "";
+  const parts = dateStr.split("/");
+  if (parts.length !== 3) return "";
+  const [dd, mm, yyyy] = parts;
+  if (!dd || !mm || !yyyy || yyyy.length < 4) return "";
+  const d = new Date(Number(yyyy), Number(mm) - 1, Number(dd));
+  if (isNaN(d.getTime())) return "";
+  d.setMonth(d.getMonth() + 9);
+  d.setDate(d.getDate() + 9);
+  const day = String(d.getDate()).padStart(2, "0");
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const year = d.getFullYear();
+  return `${day}/${month}/${year}`;
+}
+
 function getStatus(r: InseminationRecord) {
   if (r.actualCalvingDate)
     return {
@@ -113,29 +132,65 @@ function CowSelector({
   onClear: () => void;
 }) {
   const [modalOpen, setModalOpen] = useState(false);
-  const [cows, setCows] = useState<Cow[]>([]);
+  const [allCows, setAllCows] = useState<Cow[]>([]);
+  const [visibleCows, setVisibleCows] = useState<Cow[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const initialLoadDone = useRef(false);
 
   const loadCows = async (q?: string) => {
     setLoading(true);
+    setPage(0);
     try {
+      await api.init();
       const data = await api.getCows(q);
-      setCows(data);
-    } catch {
-      setCows([]);
+      setAllCows(data);
+      const first = data.slice(0, PAGE_SIZE);
+      setVisibleCows(first);
+      setHasMore(data.length > PAGE_SIZE);
+    } catch (e) {
+      setAllCows([]);
+      setVisibleCows([]);
+      setHasMore(false);
     } finally {
       setLoading(false);
     }
   };
 
+  const loadMore = () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    const nextPage = page + 1;
+    const nextSlice = allCows.slice(0, (nextPage + 1) * PAGE_SIZE);
+    setVisibleCows(nextSlice);
+    setPage(nextPage);
+    setHasMore(nextSlice.length < allCows.length);
+    setLoadingMore(false);
+  };
+
   const open = () => {
+    initialLoadDone.current = false;
+    setSearch("");
     setModalOpen(true);
-    loadCows();
+    loadCows().then(() => {
+      initialLoadDone.current = true;
+    });
+  };
+
+  const close = () => {
+    setModalOpen(false);
+    setSearch("");
+    setPage(0);
+    setAllCows([]);
+    setVisibleCows([]);
+    initialLoadDone.current = false;
   };
 
   useEffect(() => {
-    if (!modalOpen) return;
+    if (!modalOpen || !initialLoadDone.current) return;
     const t = setTimeout(() => loadCows(search || undefined), 350);
     return () => clearTimeout(t);
   }, [search]);
@@ -170,92 +225,135 @@ function CowSelector({
       <Modal
         visible={modalOpen}
         transparent
-        animationType="slide"
-        onRequestClose={() => setModalOpen(false)}
+        animationType="fade"
+        onRequestClose={close}
       >
-        <View style={cs.overlay}>
-          <View style={cs.sheet}>
-            <View style={cs.sheetHandle} />
-            <View style={cs.sheetHeader}>
-              <Text style={cs.sheetTitle}>Select Cow</Text>
-              <TouchableOpacity
-                onPress={() => {
-                  setModalOpen(false);
-                  setSearch("");
-                }}
-                style={cs.sheetClose}
-              >
-                <Ionicons name="close" size={18} color="#6b7280" />
-              </TouchableOpacity>
-            </View>
-
-            <View style={cs.searchRow}>
-              <Ionicons name="search-outline" size={15} color="#9ca3af" />
-              <TextInput
-                style={cs.searchInput}
-                placeholder="Search tag or name..."
-                placeholderTextColor="#d1d5db"
-                value={search}
-                onChangeText={setSearch}
-                autoFocus
-              />
-              {search.length > 0 && (
-                <TouchableOpacity onPress={() => setSearch("")}>
-                  <Ionicons name="close-circle" size={15} color="#9ca3af" />
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
+          <TouchableOpacity
+            style={cs.overlay}
+            activeOpacity={1}
+            onPress={close}
+          >
+            <TouchableOpacity
+              activeOpacity={1}
+              style={cs.sheet}
+              onPress={() => {}}
+            >
+              <View style={cs.sheetHeader}>
+                <Text style={cs.sheetTitle}>Select Cow</Text>
+                <TouchableOpacity onPress={close} style={cs.sheetClose}>
+                  <Ionicons name="close" size={18} color="#6b7280" />
                 </TouchableOpacity>
-              )}
-            </View>
-
-            {loading ? (
-              <View style={cs.loadingWrap}>
-                <ActivityIndicator color="#7c3aed" />
-                <Text style={cs.loadingText}>Loading cows...</Text>
               </View>
-            ) : (
-              <FlatList
-                data={cows}
-                keyExtractor={(item) => item.id}
-                style={{ maxHeight: 380 }}
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingBottom: 20 }}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                    style={cs.cowRow}
-                    onPress={() => {
-                      onSelect(item);
-                      setModalOpen(false);
-                      setSearch("");
-                    }}
-                    activeOpacity={0.75}
-                  >
-                    <View style={cs.cowEmoji}>
-                      <Text style={{ fontSize: 20 }}>
-                        {item.type === "newborn" ? "🐮" : "🐄"}
-                      </Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={cs.cowTag}>{item.tag}</Text>
-                      <Text style={cs.cowName}>
-                        {item.name} · {item.breed}
-                      </Text>
-                    </View>
-                    <Ionicons
-                      name="chevron-forward"
-                      size={14}
-                      color="#d1d5db"
-                    />
+
+              <View style={cs.searchRow}>
+                <Ionicons name="search-outline" size={15} color="#9ca3af" />
+                <TextInput
+                  style={cs.searchInput}
+                  placeholder="Search tag or name..."
+                  placeholderTextColor="#d1d5db"
+                  value={search}
+                  onChangeText={(text) => {
+                    if (initialLoadDone.current) setSearch(text);
+                  }}
+                  autoFocus={false}
+                />
+                {search.length > 0 && (
+                  <TouchableOpacity onPress={() => setSearch("")}>
+                    <Ionicons name="close-circle" size={15} color="#9ca3af" />
                   </TouchableOpacity>
                 )}
-                ListEmptyComponent={
-                  <View style={cs.emptyWrap}>
-                    <Text style={{ fontSize: 32 }}>🐄</Text>
-                    <Text style={cs.emptyText}>No cows found</Text>
-                  </View>
-                }
-              />
-            )}
-          </View>
-        </View>
+              </View>
+
+              {!loading && allCows.length > 0 && (
+                <Text style={cs.countHint}>
+                  Showing {visibleCows.length} of {allCows.length} cows
+                </Text>
+              )}
+
+              {loading ? (
+                <View style={cs.loadingWrap}>
+                  <ActivityIndicator color="#7c3aed" size="large" />
+                  <Text style={cs.loadingText}>Loading cows...</Text>
+                </View>
+              ) : (
+                <FlatList
+                  data={visibleCows}
+                  keyExtractor={(item) => item.id}
+                  style={cs.list}
+                  showsVerticalScrollIndicator={true}
+                  keyboardShouldPersistTaps="handled"
+                  contentContainerStyle={{ paddingBottom: 8 }}
+                  onEndReached={loadMore}
+                  onEndReachedThreshold={0.5}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity
+                      style={cs.cowRow}
+                      onPress={() => {
+                        onSelect(item);
+                        close();
+                      }}
+                      activeOpacity={0.75}
+                    >
+                      <View style={cs.cowEmoji}>
+                        <Text style={{ fontSize: 20 }}>
+                          {item.type === "newborn" ? "🐮" : "🐄"}
+                        </Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={cs.cowTag}>{item.tag}</Text>
+                        <Text style={cs.cowName}>
+                          {item.name} · {item.breed}
+                        </Text>
+                      </View>
+                      <Ionicons
+                        name="chevron-forward"
+                        size={14}
+                        color="#d1d5db"
+                      />
+                    </TouchableOpacity>
+                  )}
+                  ListFooterComponent={
+                    loadingMore ? (
+                      <View style={cs.footerLoader}>
+                        <ActivityIndicator size="small" color="#7c3aed" />
+                        <Text style={cs.footerLoaderText}>Loading more...</Text>
+                      </View>
+                    ) : hasMore ? (
+                      <TouchableOpacity
+                        style={cs.loadMoreBtn}
+                        onPress={loadMore}
+                      >
+                        <Ionicons
+                          name="chevron-down-circle-outline"
+                          size={16}
+                          color="#7c3aed"
+                        />
+                        <Text style={cs.loadMoreText}>
+                          Load more ({allCows.length - visibleCows.length}{" "}
+                          remaining)
+                        </Text>
+                      </TouchableOpacity>
+                    ) : visibleCows.length > 0 ? (
+                      <Text style={cs.endText}>
+                        ✓ All {allCows.length} cows loaded
+                      </Text>
+                    ) : null
+                  }
+                  ListEmptyComponent={
+                    <View style={cs.emptyWrap}>
+                      <Text style={{ fontSize: 32 }}>🐄</Text>
+                      <Text style={cs.emptyText}>No cows found</Text>
+                    </View>
+                  }
+                />
+              )}
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </KeyboardAvoidingView>
       </Modal>
     </>
   );
@@ -362,6 +460,8 @@ function RecordFormBody({
     ? { tag: form.cowSrNo, name: form.cowName }
     : null;
 
+  const expectedCalving = calcExpectedCalving(form.inseminationDate);
+
   return (
     <>
       <SectionHeader
@@ -369,7 +469,6 @@ function RecordFormBody({
         icon="paw-outline"
         color="#2563eb"
       />
-
       <CowSelector
         value={selectedCow}
         onSelect={onCowSelect}
@@ -399,6 +498,7 @@ function RecordFormBody({
         icon="flask-outline"
         color="#7c3aed"
       />
+
       <Field
         label="Insemination Date"
         value={form.inseminationDate}
@@ -406,6 +506,28 @@ function RecordFormBody({
         placeholder="DD/MM/YYYY"
         icon="calendar-outline"
       />
+
+      {/* ── Auto-calculated Expected Calving Date ── */}
+      {!!expectedCalving && (
+        <View style={f.expectedWrap}>
+          <Text style={f.label}>EXPECTED CALVING DATE</Text>
+          <View style={f.expectedRow}>
+            <Ionicons
+              name="calendar"
+              size={15}
+              color="#16a34a"
+              style={{ marginRight: 8 }}
+            />
+            <Text style={f.expectedText}>{expectedCalving}</Text>
+            <View style={f.expectedBadge}>
+              <Text style={f.expectedBadgeText}>9M + 9D</Text>
+            </View>
+          </View>
+          <Text style={f.expectedHint}>
+            Auto-calculated · Insemination + 9 months 9 days
+          </Text>
+        </View>
+      )}
 
       <SectionHeader
         title="Pregnancy Status"
@@ -486,22 +608,16 @@ function AddModal({
 }) {
   const [form, setForm] = useState<FormData>(EMPTY_FORM);
   const [submitting, setSub] = useState(false);
-
   const setF = (k: keyof FormData) => (v: any) =>
     setForm((p) => ({ ...p, [k]: v }));
-
-  const handleCowSelect = (cow: Cow) => {
+  const handleCowSelect = (cow: Cow) =>
     setForm((p) => ({ ...p, cowSrNo: cow.tag, cowName: cow.name }));
-  };
-  const handleCowClear = () => {
+  const handleCowClear = () =>
     setForm((p) => ({ ...p, cowSrNo: "", cowName: "" }));
-  };
-
   const reset = () => {
     setForm(EMPTY_FORM);
     onClose();
   };
-
   const submit = async () => {
     if (!form.cowSrNo || !form.inseminationDate) {
       Alert.alert(
@@ -534,9 +650,7 @@ function AddModal({
       setSub(false);
     }
   };
-
   const canSubmit = !!form.cowSrNo && !!form.inseminationDate;
-
   return (
     <Modal
       visible={visible}
@@ -564,6 +678,7 @@ function AddModal({
             <ScrollView
               showsVerticalScrollIndicator={false}
               style={{ maxHeight: 480 }}
+              keyboardShouldPersistTaps="handled"
             >
               <RecordFormBody
                 form={form}
@@ -613,7 +728,6 @@ function EditModal({
 }) {
   const [form, setForm] = useState<FormData>(EMPTY_FORM);
   const [submitting, setSub] = useState(false);
-
   useEffect(() => {
     if (record) {
       setForm({
@@ -629,17 +743,12 @@ function EditModal({
       });
     }
   }, [record]);
-
   const setF = (k: keyof FormData) => (v: any) =>
     setForm((p) => ({ ...p, [k]: v }));
-
-  const handleCowSelect = (cow: Cow) => {
+  const handleCowSelect = (cow: Cow) =>
     setForm((p) => ({ ...p, cowSrNo: cow.tag, cowName: cow.name }));
-  };
-  const handleCowClear = () => {
+  const handleCowClear = () =>
     setForm((p) => ({ ...p, cowSrNo: "", cowName: "" }));
-  };
-
   const save = async () => {
     if (!record || !form.cowSrNo || !form.inseminationDate) return;
     setSub(true);
@@ -666,9 +775,7 @@ function EditModal({
       setSub(false);
     }
   };
-
   const canSave = !!form.cowSrNo && !!form.inseminationDate;
-
   return (
     <Modal
       visible={visible}
@@ -702,6 +809,7 @@ function EditModal({
             <ScrollView
               showsVerticalScrollIndicator={false}
               style={{ maxHeight: 480 }}
+              keyboardShouldPersistTaps="handled"
             >
               <RecordFormBody
                 form={form}
@@ -775,6 +883,7 @@ function InseminationCard({
   const translateY = useRef(new Animated.Value(16)).current;
   const [expanded, setExpanded] = useState(false);
   const status = getStatus(item);
+  const expectedCalving = calcExpectedCalving(item.inseminationDate);
 
   useEffect(() => {
     Animated.parallel([
@@ -835,6 +944,20 @@ function InseminationCard({
             <Ionicons name="flask-outline" size={10} color="#7c3aed" />
             <Text style={c.pillText}>{item.inseminationDate}</Text>
           </View>
+          {/* Expected calving pill */}
+          {!!expectedCalving && !item.actualCalvingDate && (
+            <View
+              style={[
+                c.pill,
+                { backgroundColor: "#f0fdf4", borderColor: "#86efac" },
+              ]}
+            >
+              <Ionicons name="calendar" size={10} color="#16a34a" />
+              <Text style={[c.pillText, { color: "#16a34a" }]}>
+                Exp. {expectedCalving}
+              </Text>
+            </View>
+          )}
           <View
             style={[
               c.pill,
@@ -882,7 +1005,15 @@ function InseminationCard({
             value={item.inseminationDate}
             color="#7c3aed"
           />
-
+          {/* Expected calving in expanded view */}
+          {!!expectedCalving && (
+            <DetailRow
+              icon="calendar"
+              label="Expected Calving"
+              value={expectedCalving}
+              color="#16a34a"
+            />
+          )}
           <Text style={c.section}>❤️ Pregnancy Status</Text>
           <DetailRow
             icon="heart"
@@ -890,7 +1021,6 @@ function InseminationCard({
             value={item.pregnancyStatus ? "Pregnant ✓" : "Not Confirmed"}
             color={item.pregnancyStatus ? "#e11d48" : "#9ca3af"}
           />
-
           <Text style={c.section}>🩺 PD Details</Text>
           <DetailRow
             icon="checkmark-circle-outline"
@@ -914,7 +1044,6 @@ function InseminationCard({
               />
             </>
           )}
-
           <Text style={c.section}>🍼 Calving</Text>
           <DetailRow
             icon="calendar-outline"
@@ -928,7 +1057,6 @@ function InseminationCard({
             value={item.heatAfterCalvingDate || "—"}
             color={item.heatAfterCalvingDate ? "#d97706" : "#9ca3af"}
           />
-
           <View style={c.actionRow}>
             <TouchableOpacity
               style={[c.actionBtn, c.editBtn]}
@@ -1024,6 +1152,9 @@ export default function InseminationScreen() {
     calved: records.filter((r) => !!r.actualCalvingDate).length,
   };
 
+  const ANDROID_STATUS_BAR =
+    Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0;
+
   return (
     <SafeAreaView style={s.screen}>
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
@@ -1033,7 +1164,7 @@ export default function InseminationScreen() {
           s.header,
           {
             paddingTop:
-              Platform.OS === "ios" ? 0 : (StatusBar.currentHeight ?? 0),
+              Platform.OS === "android" ? ANDROID_STATUS_BAR + 14 : 14,
           },
         ]}
       >
@@ -1193,7 +1324,6 @@ export default function InseminationScreen() {
           setScreen("list");
         }}
       />
-
       <EditModal
         visible={editModal}
         record={editingRecord}
@@ -1543,7 +1673,6 @@ const f = StyleSheet.create({
     paddingVertical: 11,
   },
   readOnlyText: { flex: 1, color: "#7c3aed", fontSize: 14, fontWeight: "600" },
-  autobadge: {},
   autoBadge: {
     backgroundColor: "#7c3aed",
     borderRadius: 6,
@@ -1555,6 +1684,38 @@ const f = StyleSheet.create({
     fontWeight: "800",
     color: "#fff",
     letterSpacing: 0.4,
+  },
+
+  // ── Expected calving styles ──
+  expectedWrap: { marginBottom: 12 },
+  expectedRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f0fdf4",
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: "#86efac",
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+  },
+  expectedText: { flex: 1, color: "#16a34a", fontSize: 14, fontWeight: "700" },
+  expectedBadge: {
+    backgroundColor: "#16a34a",
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  expectedBadgeText: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: "#fff",
+    letterSpacing: 0.4,
+  },
+  expectedHint: {
+    fontSize: 11,
+    color: "#9ca3af",
+    marginTop: 4,
+    paddingLeft: 2,
   },
 });
 
@@ -1686,29 +1847,26 @@ const cs = StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.45)",
-    justifyContent: "flex-end",
+    justifyContent: "flex-start",
+    paddingTop:
+      Platform.OS === "ios" ? 60 : (StatusBar.currentHeight ?? 0) + 16,
+    paddingBottom: 16,
   },
   sheet: {
     backgroundColor: "#fff",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 20,
-    paddingBottom: Platform.OS === "ios" ? 36 : 24,
+    borderRadius: 20,
+    marginHorizontal: 16,
+    minHeight: 300,
     maxHeight: "80%",
-  },
-  sheetHandle: {
-    width: 36,
-    height: 4,
-    backgroundColor: "#e5e7eb",
-    borderRadius: 2,
-    alignSelf: "center",
-    marginBottom: 16,
+    overflow: "hidden",
   },
   sheetHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 14,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 10,
   },
   sheetTitle: { fontSize: 16, fontWeight: "800", color: "#111827" },
   sheetClose: {
@@ -1729,16 +1887,25 @@ const cs = StyleSheet.create({
     borderColor: "#e5e7eb",
     paddingHorizontal: 12,
     paddingVertical: 10,
-    marginBottom: 12,
+    marginHorizontal: 16,
+    marginBottom: 4,
   },
   searchInput: { flex: 1, color: "#111827", fontSize: 14 },
+  countHint: {
+    fontSize: 11,
+    color: "#9ca3af",
+    fontWeight: "500",
+    paddingHorizontal: 16,
+    paddingBottom: 4,
+  },
+  list: { flexGrow: 0 },
   cowRow: {
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: 12,
-    paddingHorizontal: 4,
+    paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#f9fafb",
+    borderBottomColor: "#f3f4f6",
     gap: 12,
   },
   cowEmoji: {
@@ -1757,4 +1924,22 @@ const cs = StyleSheet.create({
   loadingText: { fontSize: 13, color: "#9ca3af" },
   emptyWrap: { paddingVertical: 40, alignItems: "center", gap: 8 },
   emptyText: { fontSize: 14, color: "#9ca3af", fontWeight: "600" },
+  footerLoader: { paddingVertical: 14, alignItems: "center", gap: 4 },
+  footerLoaderText: { fontSize: 11, color: "#9ca3af" },
+  loadMoreBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 14,
+    borderTopWidth: 1,
+    borderTopColor: "#f3f4f6",
+  },
+  loadMoreText: { fontSize: 13, fontWeight: "700", color: "#7c3aed" },
+  endText: {
+    fontSize: 11,
+    color: "#d1d5db",
+    textAlign: "center",
+    paddingVertical: 12,
+  },
 });

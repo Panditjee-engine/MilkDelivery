@@ -12,6 +12,10 @@ import {
   SafeAreaView,
   ActivityIndicator,
   RefreshControl,
+  Modal,
+  ScrollView,
+  KeyboardAvoidingView,
+  Alert,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -20,6 +24,15 @@ import { api } from "../../../src/services/api";
 
 type FeedStatus = "fed" | "pending";
 type Shift = "morning" | "evening";
+
+const FEED_SUGGESTIONS = [
+  "Dry Fodder",
+  "Green Fodder",
+  "Concentrate",
+  "Silage",
+  "Mixed Feed",
+  "Mineral Mix",
+];
 
 interface CowFeedRow {
   id: string;
@@ -30,6 +43,10 @@ interface CowFeedRow {
   evening: FeedStatus;
   morningNote: string;
   eveningNote: string;
+  morningFeedType?: string;
+  morningQuantity?: number;
+  eveningFeedType?: string;
+  eveningQuantity?: number;
 }
 
 interface Summary {
@@ -54,18 +71,16 @@ function mapToCowRows(cows: any[]): CowFeedRow[] {
     evening: c.evening_fed ? "fed" : "pending",
     morningNote: c.morning_worker ? `By ${c.morning_worker}` : "—",
     eveningNote: c.evening_worker ? `By ${c.evening_worker}` : "—",
+    morningFeedType: c.morning_feed_type || undefined,
+    morningQuantity: c.morning_quantity_kg ?? undefined,
+    eveningFeedType: c.evening_feed_type || undefined,
+    eveningQuantity: c.evening_quantity_kg ?? undefined,
   }));
 }
 
 const STATUS_CFG: Record<
   FeedStatus,
-  {
-    color: string;
-    bg: string;
-    border: string;
-    icon: string;
-    label: string;
-  }
+  { color: string; bg: string; border: string; icon: string; label: string }
 > = {
   fed: {
     color: "#16a34a",
@@ -85,14 +100,219 @@ const STATUS_CFG: Record<
 
 const FILTERS = ["All", "Both Fed", "Pending"] as const;
 
+function FeedDetailModal({
+  visible,
+  cow,
+  shift,
+  currentFeedType,
+  currentQuantity,
+  onClose,
+  onSave,
+}: {
+  visible: boolean;
+  cow: CowFeedRow | null;
+  shift: Shift;
+  currentFeedType?: string;
+  currentQuantity?: number;
+  onClose: () => void;
+  onSave: (feedType: string, quantity: number) => void;
+}) {
+  const [selectedType, setSelectedType] = useState<string>("");
+  const [quantity, setQuantity] = useState<string>("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (visible) {
+      setSelectedType(currentFeedType || "");
+      setQuantity(currentQuantity ? String(currentQuantity) : "");
+    }
+  }, [visible, currentFeedType, currentQuantity]);
+
+  const handleSave = async () => {
+    if (!selectedType) {
+      Alert.alert("Required", "Please select a feed type");
+      return;
+    }
+    if (!quantity || isNaN(Number(quantity)) || Number(quantity) <= 0) {
+      Alert.alert("Required", "Please enter a valid quantity");
+      return;
+    }
+    setSaving(true);
+    try {
+      await onSave(selectedType, Number(quantity));
+      onClose();
+    } catch (e: any) {
+      Alert.alert("Error", e?.message || "Failed to save");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!cow) return null;
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <View style={fd.overlay}>
+          <View style={fd.sheet}>
+            <View style={fd.handle} />
+
+            <View style={fd.header}>
+              <View>
+                <Text style={fd.title}>Feed Details</Text>
+                <Text style={fd.sub}>
+                  {cow.name} ·{" "}
+                  {shift === "morning" ? "☀️ Morning" : "🌙 Evening"}
+                </Text>
+              </View>
+              <TouchableOpacity style={fd.closeBtn} onPress={onClose}>
+                <Ionicons name="close" size={18} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={fd.sectionLabel}>FEED TYPE</Text>
+            <View style={fd.feedInputWrap}>
+              <Ionicons
+                name="leaf-outline"
+                size={16}
+                color="#9ca3af"
+                style={{ marginRight: 8 }}
+              />
+              <TextInput
+                style={fd.feedInput}
+                value={selectedType}
+                onChangeText={setSelectedType}
+                placeholder="Type feed name e.g. Dry Fodder"
+                placeholderTextColor="#d1d5db"
+              />
+              {selectedType.length > 0 && (
+                <TouchableOpacity onPress={() => setSelectedType("")}>
+                  <Ionicons name="close-circle" size={16} color="#9ca3af" />
+                </TouchableOpacity>
+              )}
+            </View>
+            
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={{ marginTop: 8, marginBottom: 4 }}
+            >
+              {FEED_SUGGESTIONS.map((s) => (
+                <TouchableOpacity
+                  key={s}
+                  style={[
+                    fd.suggestionChip,
+                    selectedType === s && fd.suggestionChipActive,
+                  ]}
+                  onPress={() => setSelectedType(s)}
+                >
+                  <Text
+                    style={[
+                      fd.suggestionText,
+                      selectedType === s && fd.suggestionTextActive,
+                    ]}
+                  >
+                    {s}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            <Text style={[fd.sectionLabel, { marginTop: 16 }]}>
+              QUANTITY (KG)
+            </Text>
+            <View style={fd.quantityRow}>
+              <TouchableOpacity
+                style={fd.qBtn}
+                onPress={() => {
+                  const v = Math.max(0, (Number(quantity) || 0) - 0.5);
+                  setQuantity(String(v));
+                }}
+              >
+                <Ionicons name="remove" size={20} color="#374151" />
+              </TouchableOpacity>
+              <TextInput
+                style={fd.qInput}
+                value={quantity}
+                onChangeText={setQuantity}
+                keyboardType="decimal-pad"
+                placeholder="0.0"
+                placeholderTextColor="#d1d5db"
+              />
+              <TouchableOpacity
+                style={fd.qBtn}
+                onPress={() =>
+                  setQuantity(String((Number(quantity) || 0) + 0.5))
+                }
+              >
+                <Ionicons name="add" size={20} color="#374151" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Quick quantity chips */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={{ marginTop: 10, marginBottom: 20 }}
+            >
+              {["5", "10", "15", "20", "25", "30"].map((q) => (
+                <TouchableOpacity
+                  key={q}
+                  style={[fd.qChip, quantity === q && fd.qChipActive]}
+                  onPress={() => setQuantity(q)}
+                >
+                  <Text
+                    style={[fd.qChipText, quantity === q && fd.qChipTextActive]}
+                  >
+                    {q} kg
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            <TouchableOpacity
+              style={[fd.saveBtn, saving && { opacity: 0.65 }]}
+              onPress={handleSave}
+              disabled={saving}
+            >
+              {saving ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="save-outline" size={18} color="#fff" />
+                  <Text style={fd.saveBtnText}>Save Feed Details</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
 function FeedBadge({
   status,
   note,
   session,
+  feedType,
+  quantity,
+  onEdit,
 }: {
   status: FeedStatus;
   note: string;
   session: string;
+  feedType?: string;
+  quantity?: number;
+  onEdit: () => void;
 }) {
   const cfg = STATUS_CFG[status];
   return (
@@ -117,6 +337,34 @@ function FeedBadge({
         <Ionicons name={cfg.icon as any} size={16} color={cfg.color} />
         <Text style={[s.statusLabel, { color: cfg.color }]}>{cfg.label}</Text>
       </View>
+
+      {feedType && quantity !== undefined && (
+        <Text style={s.feedSummaryText}>
+          🌾 {feedType} · {quantity} kg
+        </Text>
+      )}
+      <TouchableOpacity
+        style={[
+          s.feedActionBtn,
+          feedType ? s.feedActionBtnUpdate : s.feedActionBtnAdd,
+        ]}
+        onPress={onEdit}
+      >
+        <Ionicons
+          name={feedType ? "pencil" : "add"}
+          size={13}
+          color={feedType ? "#2563eb" : "#16a34a"}
+        />
+        <Text
+          style={[
+            s.feedActionBtnText,
+            { color: feedType ? "#2563eb" : "#16a34a" },
+          ]}
+        >
+          {feedType ? "Update Feed" : "Add Feed"}
+        </Text>
+      </TouchableOpacity>
+
       {note !== "—" && (
         <Text style={s.noteText} numberOfLines={1}>
           {note}
@@ -130,10 +378,12 @@ function FeedCard({
   item,
   index,
   activeShift,
+  onEditFeed,
 }: {
   item: CowFeedRow;
   index: number;
   activeShift: Shift | "both";
+  onEditFeed: (cow: CowFeedRow, shift: Shift) => void;
 }) {
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(16)).current;
@@ -212,6 +462,9 @@ function FeedCard({
             status={item.morning}
             note={item.morningNote}
             session="Morning"
+            feedType={item.morningFeedType}
+            quantity={item.morningQuantity}
+            onEdit={() => onEditFeed(item, "morning")}
           />
         )}
         {(activeShift === "both" || activeShift === "evening") && (
@@ -219,6 +472,9 @@ function FeedCard({
             status={item.evening}
             note={item.eveningNote}
             session="Evening"
+            feedType={item.eveningFeedType}
+            quantity={item.eveningQuantity}
+            onEdit={() => onEditFeed(item, "evening")}
           />
         )}
       </View>
@@ -344,41 +600,35 @@ export default function AdminFeedScreen() {
   const [activeFilter, setActiveFilter] =
     useState<(typeof FILTERS)[number]>("All");
 
+  // Feed detail modal state
+  const [modalVisible, setModalVisible] = useState(false);
+  const [editingCow, setEditingCow] = useState<CowFeedRow | null>(null);
+  const [editingShift, setEditingShift] = useState<Shift>("morning");
+
   const fetchAll = useCallback(
     async (shift?: Shift) => {
       try {
         const authToken = await AsyncStorage.getItem("access_token");
-
         if (!authToken) {
-          console.log("No admin token in AsyncStorage");
           setLoading(false);
           return;
         }
-        api.setToken(authToken);
+        const data = await api.getAdminFeedLogs(authToken, todayStr(), shift);
 
-        const params = new URLSearchParams();
-        params.append("date", todayStr());
-        if (shift) params.append("shift", shift);
-
-        const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL || "";
-        const url = `${BASE_URL}/api/admin/feed?${params.toString()}`;
-
-        const response = await fetch(url, {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${authToken}`, 
-          },
-        });
-
-        if (!response.ok) {
-          const err = await response
-            .json()
-            .catch(() => ({ detail: "Request failed" }));
-          throw new Error(err.detail || "Request failed");
+        if (!data) {
+          console.log("getAdminFeedLogs returned null/undefined");
+          setLoading(false);
+          setRefreshing(false);
+          return;
         }
 
-        const data = await response.json();
+        if (!data.summary || !data.cows) {
+          console.log("Unexpected response shape:", JSON.stringify(data));
+          setLoading(false);
+          setRefreshing(false);
+          return;
+        }
+
         setSummary(data.summary);
         setCowRows(mapToCowRows(data.cows));
       } catch (e) {
@@ -398,8 +648,43 @@ export default function AdminFeedScreen() {
 
   const onRefresh = () => {
     setRefreshing(true);
-    const shift = activeShift === "both" ? undefined : activeShift;
-    fetchAll(shift);
+    fetchAll(activeShift === "both" ? undefined : activeShift);
+  };
+
+  const handleEditFeed = (cow: CowFeedRow, shift: Shift) => {
+    setEditingCow(cow);
+    setEditingShift(shift);
+    setModalVisible(true);
+  };
+
+  const handleSaveFeed = async (feedType: string, quantity: number) => {
+    if (!editingCow) return;
+    await (api as any).updateAdminFeedDetails(
+      editingCow.id,
+      todayStr(),
+      editingShift,
+      feedType,
+      quantity,
+    );
+
+    setCowRows((prev) =>
+      prev.map((row) => {
+        if (row.id !== editingCow.id) return row;
+        if (editingShift === "morning") {
+          return {
+            ...row,
+            morningFeedType: feedType,
+            morningQuantity: quantity,
+          };
+        } else {
+          return {
+            ...row,
+            eveningFeedType: feedType,
+            eveningQuantity: quantity,
+          };
+        }
+      }),
+    );
   };
 
   const filtered = cowRows.filter((d) => {
@@ -510,7 +795,12 @@ export default function AdminFeedScreen() {
               />
             }
             renderItem={({ item, index }) => (
-              <FeedCard item={item} index={index} activeShift={activeShift} />
+              <FeedCard
+                item={item}
+                index={index}
+                activeShift={activeShift}
+                onEditFeed={handleEditFeed}
+              />
             )}
             ListEmptyComponent={
               <View style={s.empty}>
@@ -522,9 +812,147 @@ export default function AdminFeedScreen() {
           />
         </>
       )}
+
+      <FeedDetailModal
+        visible={modalVisible}
+        cow={editingCow}
+        shift={editingShift}
+        currentFeedType={
+          editingShift === "morning"
+            ? editingCow?.morningFeedType
+            : editingCow?.eveningFeedType
+        }
+        currentQuantity={
+          editingShift === "morning"
+            ? editingCow?.morningQuantity
+            : editingCow?.eveningQuantity
+        }
+        onClose={() => setModalVisible(false)}
+        onSave={handleSaveFeed}
+      />
     </SafeAreaView>
   );
 }
+
+const fd = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "flex-end",
+  },
+  sheet: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: 20,
+    paddingBottom: Platform.OS === "ios" ? 36 : 24,
+  },
+  handle: {
+    width: 36,
+    height: 4,
+    backgroundColor: "#e5e7eb",
+    borderRadius: 2,
+    alignSelf: "center",
+    marginBottom: 20,
+  },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 20,
+  },
+  title: { fontSize: 20, fontWeight: "800", color: "#111827" },
+  sub: { fontSize: 13, color: "#9ca3af", marginTop: 3 },
+  closeBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#f5f5f5",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#bbb",
+    letterSpacing: 1,
+    marginBottom: 10,
+  },
+  feedInputWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1.5,
+    borderColor: "#e5e7eb",
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    backgroundColor: "#fafafa",
+    marginBottom: 4,
+  },
+  feedInput: {
+    flex: 1,
+    paddingVertical: 13,
+    fontSize: 15,
+    color: "#111827",
+  },
+  suggestionChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: "#e5e7eb",
+    backgroundColor: "#fafafa",
+    marginRight: 8,
+  },
+  suggestionChipActive: { borderColor: "#16a34a", backgroundColor: "#f0fdf4" },
+  suggestionText: { fontSize: 12, fontWeight: "600", color: "#888" },
+  suggestionTextActive: { color: "#16a34a" },
+  quantityRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f9fafb",
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: "#e5e7eb",
+    overflow: "hidden",
+  },
+  qBtn: {
+    width: 48,
+    height: 52,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#f3f4f6",
+  },
+  qInput: {
+    flex: 1,
+    textAlign: "center",
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#111827",
+    paddingVertical: 12,
+  },
+  qChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: "#e5e7eb",
+    backgroundColor: "#f9fafb",
+    marginRight: 8,
+  },
+  qChipActive: { borderColor: "#16a34a", backgroundColor: "#f0fdf4" },
+  qChipText: { fontSize: 13, fontWeight: "600", color: "#6b7280" },
+  qChipTextActive: { color: "#16a34a" },
+  saveBtn: {
+    backgroundColor: "#16a34a",
+    borderRadius: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 15,
+  },
+  saveBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
+});
 
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#f9fafb" },
@@ -721,6 +1149,27 @@ const s = StyleSheet.create({
   },
   statusLabel: { fontSize: 13, fontWeight: "700" },
   noteText: { fontSize: 11, color: "#6b7280", fontWeight: "500", marginTop: 2 },
+
+  feedSummaryText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#374151",
+    marginTop: 6,
+    marginBottom: 4,
+  },
+  feedActionBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    marginTop: 8,
+    borderRadius: 8,
+    paddingVertical: 7,
+    borderWidth: 1.5,
+  },
+  feedActionBtnAdd: { backgroundColor: "#f0fdf4", borderColor: "#86efac" },
+  feedActionBtnUpdate: { backgroundColor: "#eff6ff", borderColor: "#bfdbfe" },
+  feedActionBtnText: { fontSize: 12, fontWeight: "700" },
   empty: { alignItems: "center", paddingTop: 60, gap: 10 },
   emptyText: { fontSize: 15, color: "#9ca3af", fontWeight: "600" },
 });

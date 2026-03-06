@@ -12,12 +12,14 @@ import {
   SafeAreaView,
   ActivityIndicator,
   RefreshControl,
+  Modal,
+  KeyboardAvoidingView,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { api } from "../../../src/services/api";
 
+// ─── Types ────────────────────────────────────────────────────────────────────
 interface MilkRow {
   id: string;
   srNo: string;
@@ -26,6 +28,8 @@ interface MilkRow {
   eveningLiters: number;
   morningWorker: string | null;
   eveningWorker: string | null;
+  dailyCapacity: number;
+  peak: { date: string; total: number } | null;
 }
 
 interface Summary {
@@ -36,17 +40,19 @@ interface Summary {
   total_cows: number;
 }
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 function todayStr() {
   return new Date().toISOString().split("T")[0];
 }
 
-const today = new Date().toLocaleDateString("en-IN", {
+const todayLabel = new Date().toLocaleDateString("en-IN", {
   weekday: "long",
   day: "numeric",
   month: "long",
   year: "numeric",
 });
 
+// ─── ShiftCard ────────────────────────────────────────────────────────────────
 function ShiftCard({
   session,
   liters,
@@ -58,7 +64,6 @@ function ShiftCard({
 }) {
   const isMorning = session === "Morning";
   const isEmpty = liters === 0;
-
   const color = isEmpty ? "#9ca3af" : isMorning ? "#d97706" : "#6366f1";
   const bg = isEmpty ? "#f9fafb" : isMorning ? "#fffbeb" : "#eef2ff";
   const border = isEmpty ? "#e5e7eb" : isMorning ? "#fcd34d" : "#c7d2fe";
@@ -102,7 +107,145 @@ function ShiftCard({
   );
 }
 
-function MilkCard({ item, index }: { item: MilkRow; index: number }) {
+// ─── CapacityBar ──────────────────────────────────────────────────────────────
+function CapacityBar({ total, capacity }: { total: number; capacity: number }) {
+  const pct = capacity > 0 ? Math.min(total / capacity, 1) : 0;
+  const barColor = pct >= 1 ? "#16a34a" : pct >= 0.7 ? "#d97706" : "#ef4444";
+  const barBg = pct >= 1 ? "#dcfce7" : pct >= 0.7 ? "#fef3c7" : "#fee2e2";
+  const label =
+    pct >= 1 ? "At Capacity" : pct >= 0.7 ? "Good Yield" : "Below Target";
+
+  return (
+    <View style={cap.wrap}>
+      <View style={cap.labelRow}>
+        <Text style={cap.title}>Daily Capacity</Text>
+        <Text style={[cap.pctText, { color: barColor }]}>
+          {total.toFixed(1)} / {capacity.toFixed(1)} L
+        </Text>
+      </View>
+      <View style={[cap.track, { backgroundColor: barBg }]}>
+        <View
+          style={[
+            cap.fill,
+            { width: `${pct * 100}%`, backgroundColor: barColor },
+          ]}
+        />
+      </View>
+      <Text style={[cap.status, { color: barColor }]}>{label}</Text>
+    </View>
+  );
+}
+
+// ─── PeakBadge ────────────────────────────────────────────────────────────────
+function PeakBadge({ peak }: { peak: { date: string; total: number } | null }) {
+  if (!peak) return null;
+  const d = new Date(peak.date).toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+  });
+  return (
+    <View style={pk.wrap}>
+      <Ionicons name="trophy" size={11} color="#b45309" />
+      <Text style={pk.text}>
+        Peak: <Text style={pk.val}>{peak.total.toFixed(1)} L</Text> on {d}
+      </Text>
+    </View>
+  );
+}
+
+// ─── CapacityModal ────────────────────────────────────────────────────────────
+function CapacityModal({
+  visible,
+  cow,
+  currentCapacity,
+  onSave,
+  onClose,
+}: {
+  visible: boolean;
+  cow: MilkRow | null;
+  currentCapacity: number;
+  onSave: (val: number) => void;
+  onClose: () => void;
+}) {
+  const [val, setVal] = useState(
+    currentCapacity > 0 ? currentCapacity.toString() : "",
+  );
+
+  // Sync input when modal opens with current capacity
+  useEffect(() => {
+    setVal(currentCapacity > 0 ? currentCapacity.toString() : "");
+  }, [currentCapacity, visible]);
+
+  const handleSave = () => {
+    const n = parseFloat(val);
+    if (!isNaN(n) && n > 0) onSave(n);
+  };
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        style={md.overlay}
+      >
+        <TouchableOpacity
+          style={md.backdrop}
+          activeOpacity={1}
+          onPress={onClose}
+        />
+        <View style={md.sheet}>
+          <View style={md.handle} />
+          <Text style={md.title}>Set Milking Capacity</Text>
+          {cow && (
+            <Text style={md.sub}>
+              🐄 {cow.name} · {cow.srNo}
+            </Text>
+          )}
+          <Text style={md.hint}>
+            Enter the expected maximum daily milk yield for this cow (in
+            litres).
+          </Text>
+          <View style={md.inputRow}>
+            <TextInput
+              style={md.input}
+              value={val}
+              onChangeText={setVal}
+              keyboardType="decimal-pad"
+              placeholder="e.g. 20"
+              placeholderTextColor="#d1d5db"
+              autoFocus
+            />
+            <Text style={md.unit}>L / day</Text>
+          </View>
+          <View style={md.btnRow}>
+            <TouchableOpacity style={md.cancel} onPress={onClose}>
+              <Text style={md.cancelText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={md.save} onPress={handleSave}>
+              <Ionicons name="checkmark" size={16} color="#fff" />
+              <Text style={md.saveText}>Save Capacity</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+// ─── MilkCard ─────────────────────────────────────────────────────────────────
+function MilkCard({
+  item,
+  index,
+  onSetCapacity,
+}: {
+  item: MilkRow;
+  index: number;
+  onSetCapacity: (cow: MilkRow) => void;
+}) {
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(16)).current;
 
@@ -128,6 +271,10 @@ function MilkCard({ item, index }: { item: MilkRow; index: number }) {
   const isHighYield = total >= 15;
   const isNil = total === 0;
 
+  // Read directly from item — updated optimistically on save
+  const capacity = item.dailyCapacity ?? 0;
+  const peak = item.peak ?? null;
+
   const totalColor = isNil ? "#9ca3af" : isHighYield ? "#16a34a" : "#2563eb";
   const totalBg = isNil ? "#f9fafb" : isHighYield ? "#f0fdf4" : "#eff6ff";
   const totalBorder = isNil ? "#e5e7eb" : isHighYield ? "#86efac" : "#bfdbfe";
@@ -142,19 +289,40 @@ function MilkCard({ item, index }: { item: MilkRow; index: number }) {
           <Text style={s.cowName}>{item.name}</Text>
           <Text style={s.cowSr}>{item.srNo}</Text>
         </View>
-        <View
-          style={[
-            s.totalBadge,
-            { backgroundColor: totalBg, borderColor: totalBorder },
-          ]}
-        >
-          <Ionicons name="water" size={12} color={totalColor} />
-          <Text style={[s.totalText, { color: totalColor }]}>
-            {total.toFixed(1)} L
-          </Text>
-          <Text style={[s.totalSub, { color: totalColor + "88" }]}>Total</Text>
+        <View style={{ alignItems: "flex-end", gap: 6 }}>
+          <View
+            style={[
+              s.totalBadge,
+              { backgroundColor: totalBg, borderColor: totalBorder },
+            ]}
+          >
+            <Ionicons name="water" size={12} color={totalColor} />
+            <Text style={[s.totalText, { color: totalColor }]}>
+              {total.toFixed(1)} L
+            </Text>
+            <Text style={[s.totalSub, { color: totalColor + "88" }]}>
+              Today
+            </Text>
+          </View>
+
+          {/* Capacity button — shows current value or "Set cap" */}
+          <TouchableOpacity
+            style={s.capacityBtn}
+            onPress={() => onSetCapacity(item)}
+          >
+            <Ionicons name="settings-outline" size={11} color="#6b7280" />
+            <Text style={s.capacityBtnText}>
+              {capacity > 0 ? `${capacity.toFixed(0)}L cap` : "Set cap"}
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
+
+      {/* Capacity progress bar — only shown when capacity is set */}
+      {capacity > 0 && <CapacityBar total={total} capacity={capacity} />}
+
+      {/* Peak badge — only shown when history exists */}
+      {peak && <PeakBadge peak={peak} />}
 
       <View style={s.divider} />
 
@@ -174,6 +342,7 @@ function MilkCard({ item, index }: { item: MilkRow; index: number }) {
   );
 }
 
+// ─── SummaryBar ───────────────────────────────────────────────────────────────
 function SummaryBar({ summary }: { summary: Summary }) {
   return (
     <View style={s.summaryBar}>
@@ -217,9 +386,9 @@ function SummaryBar({ summary }: { summary: Summary }) {
   );
 }
 
+// ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function MilkYieldScreen() {
   const router = useRouter();
-
   const [milkRows, setMilkRows] = useState<MilkRow[]>([]);
   const [summary, setSummary] = useState<Summary>({
     total_morning: 0,
@@ -234,35 +403,11 @@ export default function MilkYieldScreen() {
   const [sortBy, setSortBy] = useState<
     "name" | "total" | "morning" | "evening"
   >("name");
+  const [modalCow, setModalCow] = useState<MilkRow | null>(null);
 
   const fetchAll = useCallback(async () => {
     try {
-      const authToken = await AsyncStorage.getItem("access_token");
-      if (!authToken) {
-        setLoading(false);
-        return;
-      }
-
-      const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL || "";
-      const url = `${BASE_URL}/api/admin/milk?date=${todayStr()}`;
-
-      const response = await fetch(url, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${authToken}`,
-        },
-      });
-
-      if (!response.ok) {
-        const err = await response
-          .json()
-          .catch(() => ({ detail: "Request failed" }));
-        throw new Error(err.detail || "Request failed");
-      }
-
-      const data = await response.json();
-
+      const data = await api.getMilkDashboard(todayStr());
       setSummary(data.summary);
       setMilkRows(
         data.cows.map((c: any) => ({
@@ -273,6 +418,8 @@ export default function MilkYieldScreen() {
           eveningLiters: c.evening_liters ?? 0,
           morningWorker: c.morning_worker ?? null,
           eveningWorker: c.evening_worker ?? null,
+          dailyCapacity: c.daily_capacity_liters ?? 0,
+          peak: c.peak ?? null,
         })),
       );
     } catch (e) {
@@ -290,6 +437,34 @@ export default function MilkYieldScreen() {
   const onRefresh = () => {
     setRefreshing(true);
     fetchAll();
+  };
+
+  const handleSetCapacity = (cow: MilkRow) => setModalCow(cow);
+
+  const handleSaveCapacity = async (val: number) => {
+    if (!modalCow) return;
+
+    // Snapshot for rollback
+    const snapshot = milkRows;
+
+    // 1️⃣ Optimistic update — card shows new capacity instantly
+    setMilkRows((prev) =>
+      prev.map((row) =>
+        row.id === modalCow.id ? { ...row, dailyCapacity: val } : row,
+      ),
+    );
+
+    // 2️⃣ Close modal right away — feels instant
+    setModalCow(null);
+
+    try {
+      // 3️⃣ Persist to backend in background
+      await api.setCowCapacity(modalCow.id, val);
+    } catch (e) {
+      // 4️⃣ Revert if API fails
+      console.log("capacity save error:", e);
+      setMilkRows(snapshot);
+    }
   };
 
   const filtered = milkRows
@@ -310,25 +485,23 @@ export default function MilkYieldScreen() {
       return a.name.localeCompare(b.name);
     });
 
+  // Always read current capacity from live state so modal pre-fills correctly
+  const modalCurrentCapacity = modalCow
+    ? (milkRows.find((r) => r.id === modalCow.id)?.dailyCapacity ?? 0)
+    : 0;
+
   return (
     <SafeAreaView style={s.screen}>
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
 
-      <View
-        style={[
-          s.header,
-          {
-            paddingTop:
-              Platform.OS === "ios" ? 0 : (StatusBar.currentHeight ?? 0),
-          },
-        ]}
-      >
+      {/* Header */}
+      <View style={s.header}>
         <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
           <Ionicons name="arrow-back" size={20} color="#111827" />
         </TouchableOpacity>
         <View style={{ flex: 1, marginLeft: 12 }}>
           <Text style={s.headerTitle}>Milk Yield</Text>
-          <Text style={s.headerSub}>{today}</Text>
+          <Text style={s.headerSub}>{todayLabel}</Text>
         </View>
         <TouchableOpacity style={s.refreshBtn} onPress={onRefresh}>
           <Ionicons name="refresh-outline" size={18} color="#6b7280" />
@@ -344,6 +517,7 @@ export default function MilkYieldScreen() {
         <>
           <SummaryBar summary={summary} />
 
+          {/* Search */}
           <View style={s.searchWrap}>
             <Ionicons name="search-outline" size={15} color="#9ca3af" />
             <TextInput
@@ -360,8 +534,9 @@ export default function MilkYieldScreen() {
             )}
           </View>
 
+          {/* Sort */}
           <View style={s.sortRow}>
-            <Text style={s.sortLabel}>Sort by:</Text>
+            <Text style={s.sortLabel}>Sort:</Text>
             {(["name", "total", "morning", "evening"] as const).map((opt) => (
               <TouchableOpacity
                 key={opt}
@@ -393,7 +568,11 @@ export default function MilkYieldScreen() {
               />
             }
             renderItem={({ item, index }) => (
-              <MilkCard item={item} index={index} />
+              <MilkCard
+                item={item}
+                index={index}
+                onSetCapacity={handleSetCapacity}
+              />
             )}
             ListEmptyComponent={
               <View style={s.empty}>
@@ -405,9 +584,21 @@ export default function MilkYieldScreen() {
           />
         </>
       )}
+
+      <CapacityModal
+        visible={!!modalCow}
+        cow={modalCow}
+        currentCapacity={modalCurrentCapacity}
+        onSave={handleSaveCapacity}
+        onClose={() => setModalCow(null)}
+      />
     </SafeAreaView>
   );
 }
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
+const ANDROID_STATUS_BAR =
+  Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0;
 
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#f9fafb" },
@@ -423,6 +614,7 @@ const s = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 16,
     paddingVertical: 14,
+    paddingTop: Platform.OS === "android" ? ANDROID_STATUS_BAR + 14 : 14,
     backgroundColor: "#fff",
     borderBottomWidth: 1,
     borderBottomColor: "#f3f4f6",
@@ -550,13 +742,25 @@ const s = StyleSheet.create({
   totalBadge: {
     alignItems: "center",
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 6,
     borderRadius: 14,
     borderWidth: 1,
     gap: 2,
   },
   totalText: { fontSize: 14, fontWeight: "800", letterSpacing: -0.3 },
   totalSub: { fontSize: 9, fontWeight: "600" },
+  capacityBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: "#f9fafb",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+  },
+  capacityBtnText: { fontSize: 10, color: "#6b7280", fontWeight: "600" },
   divider: { height: 1, backgroundColor: "#f3f4f6", marginVertical: 12 },
   shiftsRow: { flexDirection: "row", gap: 10 },
   empty: { alignItems: "center", paddingTop: 60, gap: 10 },
@@ -594,4 +798,98 @@ const sh = StyleSheet.create({
     color: "#9ca3af",
     overflow: "hidden",
   },
+});
+
+const cap = StyleSheet.create({
+  wrap: { marginTop: 12, marginBottom: 4 },
+  labelRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 6,
+  },
+  title: { fontSize: 11, color: "#6b7280", fontWeight: "600" },
+  pctText: { fontSize: 11, fontWeight: "700" },
+  track: { height: 7, borderRadius: 6, overflow: "hidden" },
+  fill: { height: "100%", borderRadius: 6 },
+  status: { fontSize: 10, fontWeight: "700", marginTop: 4 },
+});
+
+const pk = StyleSheet.create({
+  wrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginTop: 8,
+    backgroundColor: "#fef3c7",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    alignSelf: "flex-start",
+    borderWidth: 1,
+    borderColor: "#fde68a",
+  },
+  text: { fontSize: 11, color: "#92400e", fontWeight: "600" },
+  val: { fontWeight: "800", color: "#b45309" },
+});
+
+const md = StyleSheet.create({
+  overlay: { flex: 1, justifyContent: "flex-end" },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.4)",
+  },
+  sheet: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    paddingBottom: Platform.OS === "ios" ? 40 : 28,
+  },
+  handle: {
+    width: 36,
+    height: 4,
+    backgroundColor: "#e5e7eb",
+    borderRadius: 2,
+    alignSelf: "center",
+    marginBottom: 20,
+  },
+  title: { fontSize: 18, fontWeight: "800", color: "#111827", marginBottom: 4 },
+  sub: { fontSize: 13, color: "#6b7280", fontWeight: "600", marginBottom: 8 },
+  hint: { fontSize: 12, color: "#9ca3af", marginBottom: 20, lineHeight: 18 },
+  inputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: "#f9fafb",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginBottom: 20,
+  },
+  input: { flex: 1, fontSize: 24, fontWeight: "800", color: "#111827" },
+  unit: { fontSize: 14, color: "#9ca3af", fontWeight: "600" },
+  btnRow: { flexDirection: "row", gap: 12 },
+  cancel: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: "#f9fafb",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+  },
+  cancelText: { fontSize: 14, fontWeight: "700", color: "#6b7280" },
+  save: {
+    flex: 2,
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: "#111827",
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 6,
+  },
+  saveText: { fontSize: 14, fontWeight: "700", color: "#fff" },
 });

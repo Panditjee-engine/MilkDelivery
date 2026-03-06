@@ -19,7 +19,11 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { api } from "../../../src/services/api"; 
+import { api } from "../../../src/services/api";
+
+// ─────────────────────────────────────────────
+// INTERFACES
+// ─────────────────────────────────────────────
 
 interface MedicalRecord {
   id: string;
@@ -69,6 +73,10 @@ interface MedicalForm {
   notes: string;
 }
 
+// ─────────────────────────────────────────────
+// CONSTANTS
+// ─────────────────────────────────────────────
+
 const EMPTY_FORM: MedicalForm = {
   cowSrNo: "",
   cowName: "",
@@ -87,6 +95,132 @@ const EMPTY_FORM: MedicalForm = {
   notes: "",
 };
 
+const PAGE_SIZE = 4;
+
+const VACCINE_OPTIONS = [
+  { label: "FMD", desc: "Foot & Mouth Disease", color: "#7c3aed" },
+  { label: "BQ", desc: "Black Quarter", color: "#0891b2" },
+  { label: "HS", desc: "Hemorrhagic Septicemia", color: "#ea580c" },
+];
+
+const TREATMENT_OPTIONS = [
+  { label: "Homeopathic", value: "Homeopathic" },
+  { label: "Ethnovetary", value: "Ethnovetary" },
+  { label: "Antibiotic", value: "Antibiotic" },
+];
+
+const CALF_VACCINE_SCHEDULE = [
+  { label: "15 Days", days: 15 },
+  { label: "1 Month", days: 30 },
+  { label: "2 Months", days: 60 },
+  { label: "3 Months", days: 90 },
+  { label: "6 Months", days: 180 },
+];
+
+// ─────────────────────────────────────────────
+// HELPERS
+// ─────────────────────────────────────────────
+
+function getCalfVaccineDates(bornDate: string) {
+  const parts = bornDate.split("/");
+  let base: Date | null = null;
+  if (parts.length === 3) {
+    base = new Date(+parts[2], +parts[1] - 1, +parts[0]);
+  }
+  if (!base || isNaN(base.getTime())) return null;
+
+  return CALF_VACCINE_SCHEDULE.map((s) => {
+    const d = new Date(base!);
+    d.setDate(d.getDate() + s.days);
+    const dd = String(d.getDate()).padStart(2, "0");
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const yyyy = d.getFullYear();
+    return { label: s.label, date: `${dd}/${mm}/${yyyy}`, days: s.days };
+  });
+}
+
+// ─────────────────────────────────────────────
+// VACCINE NAME PICKER
+// ─────────────────────────────────────────────
+
+function VaccinePicker({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const [focused, setFocused] = useState(false);
+
+  return (
+    <View style={vp.wrap}>
+      <Text style={f.label}>VACCINE NAME</Text>
+      <View style={vp.chipRow}>
+        {VACCINE_OPTIONS.map((opt) => {
+          const active = value === opt.label;
+          return (
+            <TouchableOpacity
+              key={opt.label}
+              style={[
+                vp.chip,
+                active && {
+                  backgroundColor: opt.color,
+                  borderColor: opt.color,
+                },
+              ]}
+              onPress={() => onChange(active ? "" : opt.label)}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name="shield-checkmark"
+                size={11}
+                color={active ? "#fff" : opt.color}
+              />
+              <Text style={[vp.chipLabel, active && { color: "#fff" }]}>
+                {opt.label}
+              </Text>
+              {active && <Ionicons name="checkmark" size={11} color="#fff" />}
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {VACCINE_OPTIONS.find((o) => o.label === value) && (
+        <Text style={vp.descHint}>
+          {VACCINE_OPTIONS.find((o) => o.label === value)?.desc}
+        </Text>
+      )}
+
+      <View style={[vp.inputRow, focused && vp.inputFocused]}>
+        <Ionicons
+          name="medkit-outline"
+          size={14}
+          color={focused ? "#7c3aed" : "#9ca3af"}
+          style={{ marginRight: 8 }}
+        />
+        <TextInput
+          style={vp.input}
+          value={value}
+          onChangeText={onChange}
+          placeholder="Or type custom vaccine name..."
+          placeholderTextColor="#d1d5db"
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+        />
+        {value.length > 0 && (
+          <TouchableOpacity onPress={() => onChange("")}>
+            <Ionicons name="close-circle" size={15} color="#9ca3af" />
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+  );
+}
+
+// ─────────────────────────────────────────────
+// COW SELECTOR
+// ─────────────────────────────────────────────
+
 function CowSelector({
   value,
   onSelect,
@@ -98,28 +232,69 @@ function CowSelector({
   onClear: () => void;
   onManual: (tag: string) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const [cows, setCows] = useState<CowOption[]>([]);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [allCows, setAllCows] = useState<CowOption[]>([]);
+  const [visibleCows, setVisibleCows] = useState<CowOption[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
-  const [manualTag, setManual] = useState("");
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const initialLoadDone = useRef(false);
 
   const loadCows = async (q?: string) => {
     setLoading(true);
+    setPage(0);
     try {
-      setCows(await api.getCows(q));
-    } catch {
-      setCows([]);
+      await api.init();
+      const data = await api.getCows(q);
+      setAllCows(data);
+      const first = data.slice(0, PAGE_SIZE);
+      setVisibleCows(first);
+      setHasMore(data.length > PAGE_SIZE);
+    } catch (e) {
+      setAllCows([]);
+      setVisibleCows([]);
+      setHasMore(false);
     } finally {
       setLoading(false);
     }
   };
 
+  const loadMore = () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    const nextPage = page + 1;
+    const nextSlice = allCows.slice(0, (nextPage + 1) * PAGE_SIZE);
+    setVisibleCows(nextSlice);
+    setPage(nextPage);
+    setHasMore(nextSlice.length < allCows.length);
+    setLoadingMore(false);
+  };
+
+  const open = () => {
+    initialLoadDone.current = false;
+    setSearch("");
+    setModalOpen(true);
+    loadCows().then(() => {
+      initialLoadDone.current = true;
+    });
+  };
+
+  const close = () => {
+    setModalOpen(false);
+    setSearch("");
+    setPage(0);
+    setAllCows([]);
+    setVisibleCows([]);
+    initialLoadDone.current = false;
+  };
+
   useEffect(() => {
-    if (!open) return;
+    if (!modalOpen || !initialLoadDone.current) return;
     const t = setTimeout(() => loadCows(search || undefined), 350);
     return () => clearTimeout(t);
-  }, [search, open]);
+  }, [search]);
 
   return (
     <>
@@ -145,130 +320,184 @@ function CowSelector({
           <View style={cs.row}>
             <TouchableOpacity
               style={cs.selectBtn}
-              onPress={() => {
-                setOpen(true);
-                loadCows();
-              }}
+              onPress={open}
               activeOpacity={0.8}
             >
               <Ionicons name="search-outline" size={14} color="#16a34a" />
               <Text style={cs.selectBtnText}>Select Cow</Text>
             </TouchableOpacity>
             <Text style={cs.orText}>or</Text>
-            <View style={cs.manualRow}>
-              <TextInput
-                style={cs.manualInput}
-                placeholder="Enter Sr. No."
-                placeholderTextColor="#d1d5db"
-                value={manualTag}
-                onChangeText={setManual}
-              />
-              <TouchableOpacity
-                style={[cs.manualBtn, !manualTag.trim() && { opacity: 0.4 }]}
-                disabled={!manualTag.trim()}
-                onPress={() => {
-                  onManual(manualTag.trim());
-                  setManual("");
-                }}
-              >
-                <Ionicons name="arrow-forward" size={14} color="#fff" />
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity
+              style={cs.manualTagBtn}
+              onPress={open}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="keypad-outline" size={14} color="#6b7280" />
+              <Text style={cs.manualTagBtnText}>Enter Sr. No.</Text>
+            </TouchableOpacity>
           </View>
         )}
       </View>
 
       <Modal
-        visible={open}
+        visible={modalOpen}
         transparent
-        animationType="slide"
-        onRequestClose={() => setOpen(false)}
+        animationType="fade"
+        onRequestClose={close}
       >
-        <View style={cs.overlay}>
-          <View style={cs.sheet}>
-            <View style={cs.handle} />
-            <View style={cs.sheetHeader}>
-              <Text style={cs.sheetTitle}>Select Cow</Text>
-              <TouchableOpacity
-                onPress={() => {
-                  setOpen(false);
-                  setSearch("");
-                }}
-                style={cs.sheetClose}
-              >
-                <Ionicons name="close" size={18} color="#6b7280" />
-              </TouchableOpacity>
-            </View>
-            <View style={cs.searchBox}>
-              <Ionicons name="search-outline" size={14} color="#9ca3af" />
-              <TextInput
-                style={cs.searchInput}
-                placeholder="Search tag or name..."
-                placeholderTextColor="#d1d5db"
-                value={search}
-                onChangeText={setSearch}
-                autoFocus
-              />
-              {search.length > 0 && (
-                <TouchableOpacity onPress={() => setSearch("")}>
-                  <Ionicons name="close-circle" size={14} color="#9ca3af" />
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
+          <TouchableOpacity
+            style={cs.overlay}
+            activeOpacity={1}
+            onPress={close}
+          >
+            <TouchableOpacity
+              activeOpacity={1}
+              style={cs.sheet}
+              onPress={() => {}}
+            >
+              <View style={cs.sheetHeader}>
+                <Text style={cs.sheetTitle}>Select Cow</Text>
+                <TouchableOpacity onPress={close} style={cs.sheetClose}>
+                  <Ionicons name="close" size={18} color="#6b7280" />
                 </TouchableOpacity>
-              )}
-            </View>
-            {loading ? (
-              <View style={cs.loadBox}>
-                <ActivityIndicator color="#16a34a" />
-                <Text style={cs.loadText}>Loading...</Text>
               </View>
-            ) : (
-              <FlatList
-                data={cows}
-                keyExtractor={(i) => i.id}
-                style={{ maxHeight: 380 }}
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingBottom: 20 }}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                    style={cs.cowRow}
-                    onPress={() => {
-                      onSelect(item);
-                      setOpen(false);
-                      setSearch("");
-                    }}
-                    activeOpacity={0.75}
-                  >
-                    <View style={cs.cowIcon}>
-                      <Text style={{ fontSize: 20 }}>
-                        {item.type === "newborn" ? "🐮" : "🐄"}
-                      </Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={cs.cowTag}>{item.tag}</Text>
-                      <Text style={cs.cowMeta}>
-                        {item.name} · {item.breed} · {item.age || "—"}
-                      </Text>
-                    </View>
-                    <Ionicons
-                      name="chevron-forward"
-                      size={14}
-                      color="#d1d5db"
-                    />
+              <View style={cs.searchBox}>
+                <Ionicons name="search-outline" size={14} color="#9ca3af" />
+                <TextInput
+                  style={cs.searchInput}
+                  placeholder="Search tag or name..."
+                  placeholderTextColor="#d1d5db"
+                  value={search}
+                  onChangeText={(text) => {
+                    if (initialLoadDone.current) setSearch(text);
+                  }}
+                  autoFocus={false}
+                />
+                {search.length > 0 && (
+                  <TouchableOpacity onPress={() => setSearch("")}>
+                    <Ionicons name="close-circle" size={14} color="#9ca3af" />
                   </TouchableOpacity>
                 )}
-                ListEmptyComponent={
-                  <View style={cs.emptyBox}>
-                    <Text style={{ fontSize: 32 }}>🐄</Text>
-                    <Text style={cs.emptyText}>No cows found</Text>
-                  </View>
-                }
-              />
-            )}
-          </View>
-        </View>
+              </View>
+              {search.trim().length > 0 &&
+                visibleCows.length === 0 &&
+                !loading && (
+                  <TouchableOpacity
+                    style={cs.useManualBtn}
+                    onPress={() => {
+                      onManual(search.trim());
+                      close();
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons
+                      name="add-circle-outline"
+                      size={15}
+                      color="#16a34a"
+                    />
+                    <Text style={cs.useManualText}>
+                      Use "{search.trim()}" as Sr. No.
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              {!loading && allCows.length > 0 && (
+                <Text style={cs.countHint}>
+                  Showing {visibleCows.length} of {allCows.length} cows
+                </Text>
+              )}
+              {loading ? (
+                <View style={cs.loadBox}>
+                  <ActivityIndicator color="#16a34a" size="large" />
+                  <Text style={cs.loadText}>Loading cows...</Text>
+                </View>
+              ) : (
+                <FlatList
+                  data={visibleCows}
+                  keyExtractor={(i) => i.id}
+                  style={cs.list}
+                  showsVerticalScrollIndicator={true}
+                  keyboardShouldPersistTaps="handled"
+                  contentContainerStyle={{ paddingBottom: 8 }}
+                  onEndReached={loadMore}
+                  onEndReachedThreshold={0.5}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity
+                      style={cs.cowRow}
+                      onPress={() => {
+                        onSelect(item);
+                        close();
+                      }}
+                      activeOpacity={0.75}
+                    >
+                      <View style={cs.cowIcon}>
+                        <Text style={{ fontSize: 20 }}>
+                          {item.type === "newborn" ? "🐮" : "🐄"}
+                        </Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={cs.cowTag}>{item.tag}</Text>
+                        <Text style={cs.cowMeta}>
+                          {item.name} · {item.breed}
+                          {item.age ? ` · ${item.age}` : ""}
+                        </Text>
+                      </View>
+                      <Ionicons
+                        name="chevron-forward"
+                        size={14}
+                        color="#d1d5db"
+                      />
+                    </TouchableOpacity>
+                  )}
+                  ListFooterComponent={
+                    loadingMore ? (
+                      <View style={cs.footerLoader}>
+                        <ActivityIndicator size="small" color="#16a34a" />
+                        <Text style={cs.footerLoaderText}>Loading more...</Text>
+                      </View>
+                    ) : hasMore ? (
+                      <TouchableOpacity
+                        style={cs.loadMoreBtn}
+                        onPress={loadMore}
+                      >
+                        <Ionicons
+                          name="chevron-down-circle-outline"
+                          size={16}
+                          color="#16a34a"
+                        />
+                        <Text style={cs.loadMoreText}>
+                          Load more ({allCows.length - visibleCows.length}{" "}
+                          remaining)
+                        </Text>
+                      </TouchableOpacity>
+                    ) : visibleCows.length > 0 ? (
+                      <Text style={cs.endText}>
+                        ✓ All {allCows.length} cows loaded
+                      </Text>
+                    ) : null
+                  }
+                  ListEmptyComponent={
+                    <View style={cs.emptyBox}>
+                      <Text style={{ fontSize: 32 }}>🐄</Text>
+                      <Text style={cs.emptyText}>No cows found</Text>
+                    </View>
+                  }
+                />
+              )}
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </KeyboardAvoidingView>
       </Modal>
     </>
   );
 }
+
+// ─────────────────────────────────────────────
+// STATUS TOGGLE
+// ─────────────────────────────────────────────
 
 function StatusToggle({
   value,
@@ -310,6 +539,10 @@ function StatusToggle({
     </View>
   );
 }
+
+// ─────────────────────────────────────────────
+// FIELD
+// ─────────────────────────────────────────────
 
 function Field({
   label,
@@ -360,6 +593,174 @@ function Sec({
     </View>
   );
 }
+
+// ─────────────────────────────────────────────
+// CALF VACCINE CARD (Home screen)
+// ─────────────────────────────────────────────
+
+function CalfVaccineCard({ record }: { record: MedicalRecord }) {
+  const [expanded, setExpanded] = useState(false);
+  const vaccineDates = record.cowAge
+    ? getCalfVaccineDates(record.cowAge)
+    : null;
+  if (!vaccineDates) return null;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const nextDue = vaccineDates.find((v) => {
+    const parts = v.date.split("/");
+    const d = new Date(+parts[2], +parts[1] - 1, +parts[0]);
+    return d >= today;
+  });
+
+  return (
+    <View style={cv.card}>
+      <View style={cv.accentBar} />
+      <TouchableOpacity
+        style={cv.header}
+        onPress={() => setExpanded((e) => !e)}
+        activeOpacity={0.85}
+      >
+        <View style={cv.avatarWrap}>
+          <Text style={{ fontSize: 22 }}>🐮</Text>
+        </View>
+        <View style={{ flex: 1, marginLeft: 10 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <Text style={cv.name}>{record.cowName || record.cowSrNo}</Text>
+            <View style={cv.calfBadge}>
+              <Text style={cv.calfBadgeText}>Calf</Text>
+            </View>
+          </View>
+          <Text style={cv.srNo}>{record.cowSrNo}</Text>
+          {nextDue ? (
+            <View style={cv.nextDueRow}>
+              <Ionicons name="time-outline" size={11} color="#ea580c" />
+              <Text style={cv.nextDueText}>
+                Next: {nextDue.label} — {nextDue.date}
+              </Text>
+            </View>
+          ) : (
+            <View style={cv.nextDueRow}>
+              <Ionicons name="checkmark-circle" size={11} color="#16a34a" />
+              <Text style={[cv.nextDueText, { color: "#16a34a" }]}>
+                All vaccines completed
+              </Text>
+            </View>
+          )}
+        </View>
+        <Ionicons
+          name={expanded ? "chevron-up" : "chevron-down"}
+          size={15}
+          color="#cbd5e1"
+        />
+      </TouchableOpacity>
+
+      {expanded && (
+        <View style={cv.scheduleWrap}>
+          <View style={cv.divider} />
+          <Text style={cv.scheduleTitle}>💉 Vaccination Schedule</Text>
+          {vaccineDates.map((v, i) => {
+            const parts = v.date.split("/");
+            const vDate = new Date(+parts[2], +parts[1] - 1, +parts[0]);
+            const isPast = vDate < today;
+            const isNext = nextDue?.label === v.label;
+
+            return (
+              <View key={i} style={cv.scheduleRow}>
+                <View style={cv.lineCol}>
+                  <View
+                    style={[
+                      cv.dot,
+                      {
+                        backgroundColor: isPast
+                          ? "#16a34a"
+                          : isNext
+                            ? "#ea580c"
+                            : "#e2e8f0",
+                        borderColor: isPast
+                          ? "#16a34a"
+                          : isNext
+                            ? "#ea580c"
+                            : "#cbd5e1",
+                      },
+                    ]}
+                  />
+                  {i < vaccineDates.length - 1 && (
+                    <View
+                      style={[
+                        cv.line,
+                        { backgroundColor: isPast ? "#bbf7d0" : "#e2e8f0" },
+                      ]}
+                    />
+                  )}
+                </View>
+                <View style={cv.scheduleContent}>
+                  <Text
+                    style={[
+                      cv.scheduleLabel,
+                      isNext && { color: "#ea580c", fontWeight: "800" },
+                      isPast && { color: "#16a34a" },
+                    ]}
+                  >
+                    {v.label}
+                  </Text>
+                  <View
+                    style={[
+                      cv.dateBadge,
+                      {
+                        backgroundColor: isPast
+                          ? "#f0fdf4"
+                          : isNext
+                            ? "#fff7ed"
+                            : "#f8fafc",
+                        borderColor: isPast
+                          ? "#bbf7d0"
+                          : isNext
+                            ? "#fed7aa"
+                            : "#e2e8f0",
+                      },
+                    ]}
+                  >
+                    {isPast && (
+                      <Ionicons name="checkmark" size={10} color="#16a34a" />
+                    )}
+                    {isNext && (
+                      <Ionicons name="alert-circle" size={10} color="#ea580c" />
+                    )}
+                    {!isPast && !isNext && (
+                      <Ionicons
+                        name="calendar-outline"
+                        size={10}
+                        color="#94a3b8"
+                      />
+                    )}
+                    <Text
+                      style={[
+                        cv.dateText,
+                        isPast
+                          ? { color: "#16a34a" }
+                          : isNext
+                            ? { color: "#ea580c" }
+                            : { color: "#64748b" },
+                      ]}
+                    >
+                      {v.date}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      )}
+    </View>
+  );
+}
+
+// ─────────────────────────────────────────────
+// MEDICAL FORM BODY
+// ─────────────────────────────────────────────
 
 function MedicalFormBody({
   form,
@@ -445,14 +846,11 @@ function MedicalFormBody({
         icon="shield-checkmark-outline"
         color="#7c3aed"
       />
-      <Field
-        label="Vaccine Name"
+      <VaccinePicker
         value={form.vaccinationName}
         onChange={setF("vaccinationName")}
-        placeholder="e.g. FMD, BQ, HS"
-        icon="medkit-outline"
-        color="#7c3aed"
       />
+
       <View style={f.twoCol}>
         <View style={{ flex: 1 }}>
           <Field
@@ -523,14 +921,59 @@ function MedicalFormBody({
       </View>
 
       <Sec title="Treatment" icon="flask-outline" color="#0891b2" />
-      <Field
-        label="Treatment Given"
-        value={form.treatmentGiven}
-        onChange={setF("treatmentGiven")}
-        placeholder="e.g. Antibiotic"
-        icon="medical-outline"
-        color="#0891b2"
-      />
+
+      {/* Treatment Given Chips */}
+      <View style={{ marginBottom: 12 }}>
+        <Text style={f.label}>TREATMENT GIVEN</Text>
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          {TREATMENT_OPTIONS.map((opt) => {
+            const isSelected = form.treatmentGiven === opt.value;
+            return (
+              <TouchableOpacity
+                key={opt.value}
+                onPress={() =>
+                  setF("treatmentGiven")(isSelected ? "" : opt.value)
+                }
+                style={{
+                  flex: 1,
+                  paddingVertical: 11,
+                  paddingHorizontal: 6,
+                  borderRadius: 12,
+                  borderWidth: 1.5,
+                  borderColor: isSelected ? "#0891b2" : "#e2e8f0",
+                  backgroundColor: isSelected ? "#ecfeff" : "#f8fafc",
+                  alignItems: "center",
+                }}
+                activeOpacity={0.8}
+              >
+                <Ionicons
+                  name={
+                    opt.value === "Homeopathic"
+                      ? "leaf-outline"
+                      : opt.value === "Ethnovetary"
+                        ? "flask-outline"
+                        : "medical-outline"
+                  }
+                  size={14}
+                  color={isSelected ? "#0891b2" : "#9ca3af"}
+                  style={{ marginBottom: 3 }}
+                />
+                <Text
+                  style={{
+                    fontSize: 11,
+                    fontWeight: "700",
+                    color: isSelected ? "#0891b2" : "#6b7280",
+                    textAlign: "center",
+                  }}
+                >
+                  {opt.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
+
       <Field
         label="Medicine Name"
         value={form.medicineName}
@@ -561,6 +1004,10 @@ function MedicalFormBody({
     </>
   );
 }
+
+// ─────────────────────────────────────────────
+// MEDICAL FORM MODAL
+// ─────────────────────────────────────────────
 
 function MedicalFormModal({
   visible,
@@ -604,14 +1051,13 @@ function MedicalFormModal({
   const setF = (k: keyof MedicalForm) => (v: any) =>
     setForm((p) => ({ ...p, [k]: v }));
 
-  const handleCowSelect = (c: CowOption) => {
+  const handleCowSelect = (c: CowOption) =>
     setForm((p) => ({
       ...p,
       cowSrNo: c.tag,
       cowName: c.name,
       cowAge: c.age || "",
     }));
-  };
   const handleCowClear = () =>
     setForm((p) => ({ ...p, cowSrNo: "", cowName: "", cowAge: "" }));
   const handleCowManual = (tag: string) =>
@@ -647,12 +1093,10 @@ function MedicalFormModal({
         medicineName: n(form.medicineName),
         notes: n(form.notes),
       };
-
       const result: MedicalRecord =
         isEdit && editRecord
           ? await api.updateMedicalRecord(editRecord.id, payload)
           : await api.createMedicalRecord(payload);
-
       onSave(result);
       reset();
     } catch (err: any) {
@@ -701,10 +1145,10 @@ function MedicalFormModal({
                 <Ionicons name="close" size={18} color="#6b7280" />
               </TouchableOpacity>
             </View>
-
             <ScrollView
               showsVerticalScrollIndicator={false}
               style={{ maxHeight: 520 }}
+              keyboardShouldPersistTaps="handled"
             >
               <MedicalFormBody
                 form={form}
@@ -714,7 +1158,6 @@ function MedicalFormModal({
                 onCowManual={handleCowManual}
               />
             </ScrollView>
-
             <TouchableOpacity
               onPress={submit}
               style={[
@@ -746,6 +1189,10 @@ function MedicalFormModal({
   );
 }
 
+// ─────────────────────────────────────────────
+// DETAIL ROW
+// ─────────────────────────────────────────────
+
 function DRow({
   icon,
   label,
@@ -771,6 +1218,10 @@ function DRow({
   );
 }
 
+// ─────────────────────────────────────────────
+// MEDICAL CARD
+// ─────────────────────────────────────────────
+
 function MedicalCard({
   item,
   index,
@@ -790,6 +1241,9 @@ function MedicalCard({
   const statusColor = isHealthy ? "#16a34a" : "#dc2626";
   const statusBg = isHealthy ? "#f0fdf4" : "#fff1f2";
   const statusBorder = isHealthy ? "#bbf7d0" : "#fecdd3";
+  const vaccinePreset = VACCINE_OPTIONS.find(
+    (o) => o.label === item.vaccinationName,
+  );
 
   useEffect(() => {
     Animated.parallel([
@@ -809,10 +1263,37 @@ function MedicalCard({
     ]).start();
   }, []);
 
+  // Treatment chip color
+  const treatmentColor =
+    item.treatmentGiven === "Homeopathic"
+      ? "#16a34a"
+      : item.treatmentGiven === "Ethnovetary"
+        ? "#7c3aed"
+        : item.treatmentGiven === "Antibiotic"
+          ? "#0891b2"
+          : "#6b7280";
+
+  const treatmentBg =
+    item.treatmentGiven === "Homeopathic"
+      ? "#f0fdf4"
+      : item.treatmentGiven === "Ethnovetary"
+        ? "#faf5ff"
+        : item.treatmentGiven === "Antibiotic"
+          ? "#ecfeff"
+          : "#f8fafc";
+
+  const treatmentBorder =
+    item.treatmentGiven === "Homeopathic"
+      ? "#bbf7d0"
+      : item.treatmentGiven === "Ethnovetary"
+        ? "#e9d5ff"
+        : item.treatmentGiven === "Antibiotic"
+          ? "#a5f3fc"
+          : "#e2e8f0";
+
   return (
     <Animated.View style={[c.card, { opacity, transform: [{ translateY }] }]}>
       <View style={[c.accent, { backgroundColor: statusColor }]} />
-
       <View style={{ padding: 14 }}>
         <TouchableOpacity
           onPress={() => setExpanded((e) => !e)}
@@ -878,17 +1359,34 @@ function MedicalCard({
               <View
                 style={[
                   c.chip,
-                  { backgroundColor: "#faf5ff", borderColor: "#e9d5ff" },
+                  {
+                    backgroundColor: vaccinePreset
+                      ? vaccinePreset.color + "15"
+                      : "#faf5ff",
+                    borderColor: vaccinePreset
+                      ? vaccinePreset.color + "55"
+                      : "#e9d5ff",
+                  },
                 ]}
               >
                 <Ionicons
-                  name="shield-checkmark-outline"
+                  name="shield-checkmark"
                   size={10}
-                  color="#7c3aed"
+                  color={vaccinePreset?.color ?? "#7c3aed"}
                 />
-                <Text style={[c.chipText, { color: "#7c3aed" }]}>
+                <Text
+                  style={[
+                    c.chipText,
+                    { color: vaccinePreset?.color ?? "#7c3aed" },
+                  ]}
+                >
                   {item.vaccinationName}
                 </Text>
+                {vaccinePreset && (
+                  <Text style={[c.chipSubText, { color: vaccinePreset.color }]}>
+                    · {vaccinePreset.desc}
+                  </Text>
+                )}
               </View>
             )}
             {item.currentIssueName && (
@@ -905,6 +1403,26 @@ function MedicalCard({
                 />
                 <Text style={[c.chipText, { color: "#ea580c" }]}>
                   {item.currentIssueName}
+                </Text>
+              </View>
+            )}
+            {item.treatmentGiven && (
+              <View
+                style={[
+                  c.chip,
+                  {
+                    backgroundColor: treatmentBg,
+                    borderColor: treatmentBorder,
+                  },
+                ]}
+              >
+                <Ionicons
+                  name="medical-outline"
+                  size={10}
+                  color={treatmentColor}
+                />
+                <Text style={[c.chipText, { color: treatmentColor }]}>
+                  {item.treatmentGiven}
                 </Text>
               </View>
             )}
@@ -927,13 +1445,12 @@ function MedicalCard({
         {expanded && (
           <>
             <View style={c.divider} />
-
             <Text style={c.secLabel}>💉 Vaccination</Text>
             <DRow
-              icon="medkit-outline"
+              icon="shield-checkmark-outline"
               label="Vaccine"
               value={item.vaccinationName}
-              color="#7c3aed"
+              color={vaccinePreset?.color ?? "#7c3aed"}
             />
             <DRow
               icon="calendar-outline"
@@ -947,7 +1464,6 @@ function MedicalCard({
               value={item.nextVaccinationDate}
               color="#16a34a"
             />
-
             <Text style={c.secLabel}>🩹 Health Issues</Text>
             <DRow
               icon="bandage-outline"
@@ -973,7 +1489,6 @@ function MedicalCard({
               value={item.currentIssueDate}
               color="#dc2626"
             />
-
             <Text style={c.secLabel}>🔬 Treatment</Text>
             <DRow
               icon="medical-outline"
@@ -993,14 +1508,12 @@ function MedicalCard({
               value={item.doctorName}
               color="#0891b2"
             />
-
             {item.notes && (
               <View style={c.notesBox}>
                 <Ionicons name="chatbubble-outline" size={13} color="#64748b" />
                 <Text style={c.notesText}>{item.notes}</Text>
               </View>
             )}
-
             <View style={c.actionRow}>
               <TouchableOpacity
                 style={[c.actionBtn, c.editBtn]}
@@ -1025,6 +1538,10 @@ function MedicalCard({
     </Animated.View>
   );
 }
+
+// ─────────────────────────────────────────────
+// MAIN SCREEN
+// ─────────────────────────────────────────────
 
 export default function MedicalScreen() {
   const router = useRouter();
@@ -1116,17 +1633,25 @@ export default function MedicalScreen() {
   const unhealthy = records.filter(
     (r) => r.currentStatus === "unhealthy",
   ).length;
+  const ANDROID_STATUS_BAR =
+    Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0;
+
+  // Calves with valid born dates for schedule
+  const calfRecords = records.filter(
+    (r) => r.cowAge && getCalfVaccineDates(r.cowAge) !== null,
+  );
 
   return (
     <SafeAreaView style={s.screen}>
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
 
+      {/* ── Header ── */}
       <View
         style={[
           s.header,
           {
             paddingTop:
-              Platform.OS === "ios" ? 0 : (StatusBar.currentHeight ?? 0),
+              Platform.OS === "android" ? ANDROID_STATUS_BAR + 14 : 14,
           },
         ]}
       >
@@ -1149,6 +1674,7 @@ export default function MedicalScreen() {
         )}
       </View>
 
+      {/* ── Stats bar ── */}
       <View style={s.statsRow}>
         {[
           { label: "Total", value: records.length, color: "#0f172a" },
@@ -1170,12 +1696,14 @@ export default function MedicalScreen() {
         ))}
       </View>
 
+      {/* ── Home screen ── */}
       {screen === "home" ? (
         <ScrollView
           style={{ flex: 1 }}
           contentContainerStyle={s.homeBody}
           showsVerticalScrollIndicator={false}
         >
+          {/* Hero */}
           <View style={s.heroWrap}>
             <Text style={s.heroEmoji}>🏥</Text>
             <Text style={s.homeHeading}>Medical Records</Text>
@@ -1184,6 +1712,7 @@ export default function MedicalScreen() {
             </Text>
           </View>
 
+          {/* Action buttons */}
           <View style={s.btnGroup}>
             <TouchableOpacity
               onPress={openAdd}
@@ -1203,7 +1732,6 @@ export default function MedicalScreen() {
                 <Ionicons name="add" size={18} color="#fff" />
               </View>
             </TouchableOpacity>
-
             <TouchableOpacity
               onPress={() => setScreen("list")}
               style={s.bigBtn}
@@ -1224,6 +1752,7 @@ export default function MedicalScreen() {
             </TouchableOpacity>
           </View>
 
+          {/* Summary cards */}
           {records.length > 0 && (
             <View style={s.summaryRow}>
               <TouchableOpacity
@@ -1280,8 +1809,34 @@ export default function MedicalScreen() {
               </View>
             </View>
           )}
+
+          {/* ── Calf Vaccine Schedule Section ── */}
+          {calfRecords.length > 0 && (
+            <View style={{ marginTop: 22 }}>
+              {/* Section header */}
+              <View style={s.calfSectionHeader}>
+                <View
+                  style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+                >
+                  <Text style={{ fontSize: 18 }}>🐮</Text>
+                  <Text style={s.calfSectionTitle}>Calf Vaccine Schedule</Text>
+                </View>
+                <View style={s.calfCountBadge}>
+                  <Text style={s.calfCountText}>{calfRecords.length}</Text>
+                </View>
+              </View>
+              <Text style={s.calfSectionSub}>
+                Auto-calculated from calf birth date
+              </Text>
+
+              {calfRecords.map((r) => (
+                <CalfVaccineCard key={r.id} record={r} />
+              ))}
+            </View>
+          )}
         </ScrollView>
       ) : (
+        /* ── List screen ── */
         <View style={{ flex: 1 }}>
           <View style={s.searchWrap}>
             <Ionicons name="search-outline" size={15} color="#9ca3af" />
@@ -1298,24 +1853,23 @@ export default function MedicalScreen() {
               </TouchableOpacity>
             )}
           </View>
-
           <View style={s.filterRow}>
-            {(["all", "healthy", "unhealthy"] as const).map((f) => (
+            {(["all", "healthy", "unhealthy"] as const).map((fil) => (
               <TouchableOpacity
-                key={f}
-                style={[s.filterTab, filterStatus === f && s.filterTabActive]}
-                onPress={() => setFilter(f)}
+                key={fil}
+                style={[s.filterTab, filterStatus === fil && s.filterTabActive]}
+                onPress={() => setFilter(fil)}
                 activeOpacity={0.8}
               >
                 <Text
                   style={[
                     s.filterTabText,
-                    filterStatus === f && s.filterTabTextActive,
+                    filterStatus === fil && s.filterTabTextActive,
                   ]}
                 >
-                  {f === "all"
+                  {fil === "all"
                     ? "All"
-                    : f === "healthy"
+                    : fil === "healthy"
                       ? "✅ Healthy"
                       : "⚠️ Unhealthy"}
                 </Text>
@@ -1406,6 +1960,46 @@ export default function MedicalScreen() {
   );
 }
 
+// ─────────────────────────────────────────────
+// STYLES
+// ─────────────────────────────────────────────
+
+const vp = StyleSheet.create({
+  wrap: { marginBottom: 12 },
+  chipRow: { flexDirection: "row", gap: 8, marginBottom: 8 },
+  chip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: "#f8fafc",
+    borderWidth: 1.5,
+    borderColor: "#e2e8f0",
+  },
+  chipLabel: { fontSize: 13, fontWeight: "800", color: "#374151" },
+  descHint: {
+    fontSize: 11,
+    color: "#7c3aed",
+    fontWeight: "600",
+    marginBottom: 6,
+    paddingLeft: 2,
+  },
+  inputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f8fafc",
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: "#e2e8f0",
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+  },
+  inputFocused: { borderColor: "#7c3aed", backgroundColor: "#fff" },
+  input: { flex: 1, color: "#0f172a", fontSize: 14, fontWeight: "500" },
+});
+
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#f8fafc" },
   header: {
@@ -1464,8 +2058,8 @@ const s = StyleSheet.create({
     fontWeight: "600",
     textTransform: "uppercase",
   },
-  homeBody: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 40 },
-  heroWrap: { alignItems: "center", marginBottom: 28 },
+  homeBody: { paddingHorizontal: 16, paddingTop: 20, paddingBottom: 50 },
+  heroWrap: { alignItems: "center", marginBottom: 24 },
   heroEmoji: { fontSize: 52, marginBottom: 10 },
   homeHeading: {
     fontSize: 22,
@@ -1482,7 +2076,7 @@ const s = StyleSheet.create({
     textAlign: "center",
     lineHeight: 20,
   },
-  btnGroup: { gap: 12, marginBottom: 24 },
+  btnGroup: { gap: 12, marginBottom: 20 },
   bigBtn: {
     backgroundColor: "#fff",
     borderRadius: 18,
@@ -1520,7 +2114,7 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  summaryRow: { flexDirection: "row", gap: 10 },
+  summaryRow: { flexDirection: "row", gap: 10, marginBottom: 4 },
   summaryCard: {
     flex: 1,
     borderRadius: 14,
@@ -1532,6 +2126,35 @@ const s = StyleSheet.create({
   summaryEmoji: { fontSize: 22 },
   summaryCount: { fontSize: 20, fontWeight: "800", letterSpacing: -0.5 },
   summaryLabel: { fontSize: 10, fontWeight: "700", textTransform: "uppercase" },
+  // Calf section
+  calfSectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 4,
+  },
+  calfSectionTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#0f172a",
+    letterSpacing: -0.3,
+  },
+  calfSectionSub: {
+    fontSize: 12,
+    color: "#94a3b8",
+    fontWeight: "500",
+    marginBottom: 12,
+  },
+  calfCountBadge: {
+    backgroundColor: "#fff7ed",
+    borderRadius: 20,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderWidth: 1,
+    borderColor: "#fed7aa",
+  },
+  calfCountText: { fontSize: 12, fontWeight: "700", color: "#ea580c" },
+  // List screen
   searchWrap: {
     flexDirection: "row",
     alignItems: "center",
@@ -1692,7 +2315,8 @@ const c = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
   },
-  chipText: { fontSize: 10, fontWeight: "600" },
+  chipText: { fontSize: 10, fontWeight: "700" },
+  chipSubText: { fontSize: 9, fontWeight: "500", opacity: 0.8 },
   divider: { height: 1, backgroundColor: "#f1f5f9", marginVertical: 12 },
   secLabel: {
     fontSize: 11,
@@ -1729,6 +2353,89 @@ const c = StyleSheet.create({
   editBtn: { backgroundColor: "#fff7ed", borderColor: "#fed7aa" },
   deleteBtn: { backgroundColor: "#fff1f2", borderColor: "#fecdd3" },
   actionText: { fontSize: 13, fontWeight: "700" },
+});
+
+const cv = StyleSheet.create({
+  card: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: "#fed7aa",
+    overflow: "hidden",
+    shadowColor: "#ea580c",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  accentBar: { height: 3, backgroundColor: "#ea580c", width: "100%" },
+  header: { flexDirection: "row", alignItems: "center", padding: 14 },
+  avatarWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: "#fff7ed",
+    borderWidth: 1.5,
+    borderColor: "#fed7aa",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  name: { fontSize: 14, fontWeight: "800", color: "#0f172a" },
+  srNo: { fontSize: 11, color: "#94a3b8", fontWeight: "500", marginTop: 1 },
+  calfBadge: {
+    backgroundColor: "#fff7ed",
+    borderRadius: 20,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: "#fed7aa",
+  },
+  calfBadgeText: { fontSize: 10, fontWeight: "700", color: "#ea580c" },
+  nextDueRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 4,
+  },
+  nextDueText: { fontSize: 11, color: "#ea580c", fontWeight: "600" },
+  divider: { height: 1, backgroundColor: "#fef3c7", marginBottom: 12 },
+  scheduleWrap: { paddingHorizontal: 14, paddingBottom: 16 },
+  scheduleTitle: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#92400e",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: 14,
+  },
+  scheduleRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    marginBottom: 0,
+  },
+  lineCol: { alignItems: "center", width: 16 },
+  dot: { width: 10, height: 10, borderRadius: 5, borderWidth: 2, marginTop: 2 },
+  line: { width: 2, height: 22, marginTop: 2 },
+  scheduleContent: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingBottom: 14,
+  },
+  scheduleLabel: { fontSize: 13, fontWeight: "600", color: "#64748b" },
+  dateBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  dateText: { fontSize: 12, fontWeight: "700" },
 });
 
 const d = StyleSheet.create({
@@ -1908,30 +2615,33 @@ const cs = StyleSheet.create({
   },
   selectBtnText: { fontSize: 13, fontWeight: "700", color: "#16a34a" },
   orText: { fontSize: 12, color: "#94a3b8", fontWeight: "500" },
-  manualRow: {
+  manualTagBtn: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
+    gap: 6,
     backgroundColor: "#f8fafc",
     borderRadius: 12,
     borderWidth: 1.5,
     borderColor: "#e2e8f0",
-    overflow: "hidden",
-  },
-  manualInput: {
-    flex: 1,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingVertical: 11,
-    color: "#0f172a",
-    fontSize: 13,
   },
-  manualBtn: {
-    width: 38,
-    height: 42,
-    backgroundColor: "#16a34a",
+  manualTagBtnText: { fontSize: 13, fontWeight: "600", color: "#6b7280" },
+  useManualBtn: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "#f0fdf4",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#bbf7d0",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginHorizontal: 16,
+    marginBottom: 6,
   },
+  useManualText: { fontSize: 13, fontWeight: "700", color: "#16a34a" },
   selected: {
     flexDirection: "row",
     alignItems: "center",
@@ -1947,29 +2657,26 @@ const cs = StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.45)",
-    justifyContent: "flex-end",
+    justifyContent: "flex-start",
+    paddingTop:
+      Platform.OS === "ios" ? 60 : (StatusBar.currentHeight ?? 0) + 16,
+    paddingBottom: 16,
   },
   sheet: {
     backgroundColor: "#fff",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 20,
-    paddingBottom: Platform.OS === "ios" ? 36 : 24,
+    borderRadius: 20,
+    marginHorizontal: 16,
+    minHeight: 300,
     maxHeight: "80%",
-  },
-  handle: {
-    width: 36,
-    height: 4,
-    backgroundColor: "#e2e8f0",
-    borderRadius: 2,
-    alignSelf: "center",
-    marginBottom: 16,
+    overflow: "hidden",
   },
   sheetHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 14,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 10,
   },
   sheetTitle: { fontSize: 16, fontWeight: "800", color: "#0f172a" },
   sheetClose: {
@@ -1990,14 +2697,23 @@ const cs = StyleSheet.create({
     borderColor: "#e2e8f0",
     paddingHorizontal: 12,
     paddingVertical: 10,
-    marginBottom: 10,
+    marginHorizontal: 16,
+    marginBottom: 4,
   },
   searchInput: { flex: 1, color: "#0f172a", fontSize: 14 },
+  countHint: {
+    fontSize: 11,
+    color: "#94a3b8",
+    fontWeight: "500",
+    paddingHorizontal: 16,
+    paddingBottom: 4,
+  },
+  list: { flexGrow: 0 },
   cowRow: {
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: 12,
-    paddingHorizontal: 4,
+    paddingHorizontal: 16,
     borderBottomWidth: 1,
     borderBottomColor: "#f8fafc",
     gap: 10,
@@ -2018,4 +2734,22 @@ const cs = StyleSheet.create({
   loadText: { fontSize: 13, color: "#94a3b8" },
   emptyBox: { paddingVertical: 40, alignItems: "center", gap: 8 },
   emptyText: { fontSize: 14, color: "#94a3b8", fontWeight: "600" },
+  footerLoader: { paddingVertical: 14, alignItems: "center", gap: 4 },
+  footerLoaderText: { fontSize: 11, color: "#94a3b8" },
+  loadMoreBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 14,
+    borderTopWidth: 1,
+    borderTopColor: "#f1f5f9",
+  },
+  loadMoreText: { fontSize: 13, fontWeight: "700", color: "#16a34a" },
+  endText: {
+    fontSize: 11,
+    color: "#cbd5e1",
+    textAlign: "center",
+    paddingVertical: 12,
+  },
 });

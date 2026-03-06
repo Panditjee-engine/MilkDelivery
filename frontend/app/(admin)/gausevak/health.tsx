@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   Alert,
+  Platform,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -22,12 +23,12 @@ interface CowRow {
   cow_name: string;
   cow_tag: string;
   breed: string;
-  status: string; 
+  status: string;
   worker_name: string | null;
   reported: boolean;
   date: string;
-  checkupDone: boolean; 
-  markedHealthy: boolean; 
+  checkupDone: boolean;
+  markedHealthy: boolean;
 }
 
 interface Summary {
@@ -182,7 +183,7 @@ function CowCard({
             <Ionicons
               name={item.checkupDone ? "checkmark-circle" : "ellipse-outline"}
               size={13}
-              color={item.checkupDone ? "#7c3aed" : "#7c3aed"}
+              color="#7c3aed"
             />
             <Text style={[cc.actionText, { color: "#7c3aed" }]}>
               {item.checkupDone ? "Checkup Done ✓" : "Mark Checkup"}
@@ -211,6 +212,14 @@ function CowCard({
   );
 }
 
+const TODAY = new Date().toISOString().split("T")[0];
+const fmtDate = (iso: string) =>
+  new Date(iso).toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+
 export default function CowHealthScreen() {
   const router = useRouter();
 
@@ -227,13 +236,10 @@ export default function CowHealthScreen() {
   const [filter, setFilter] = useState<
     "all" | "healthy" | "unhealthy" | "not_reported"
   >("all");
-  const [selectedDate, setSelectedDate] = useState(
-    () => new Date().toISOString().split("T")[0],
-  );
 
   const fetchAll = useCallback(async () => {
     try {
-      const res = await api.getAdminHealthLogs(selectedDate);
+      const res = await api.getAdminHealthLogs(TODAY);
       setSummary(
         res.summary ?? { total: 0, healthy: 0, unhealthy: 0, not_reported: 0 },
       );
@@ -245,17 +251,17 @@ export default function CowHealthScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [selectedDate]);
+  }, []);
 
   useEffect(() => {
     setLoading(true);
     fetchAll();
-  }, [selectedDate]);
+  }, []);
+
   const onRefresh = () => {
     setRefreshing(true);
     fetchAll();
   };
-
 
   const handleCheckup = (cowId: string) =>
     setRows((prev) =>
@@ -295,19 +301,6 @@ export default function CowHealthScreen() {
             : isNotReported(r.status);
     return matchSearch && matchFilter;
   });
-
-  const shiftDate = (d: number) => {
-    const dt = new Date(selectedDate);
-    dt.setDate(dt.getDate() + d);
-    setSelectedDate(dt.toISOString().split("T")[0]);
-  };
-  const isToday = selectedDate === new Date().toISOString().split("T")[0];
-  const fmtDate = (iso: string) =>
-    new Date(iso).toLocaleDateString("en-IN", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-    });
 
   const FILTERS = [
     {
@@ -351,7 +344,7 @@ export default function CowHealthScreen() {
         <View style={{ flex: 1, marginLeft: 12 }}>
           <Text style={s.headerTitle}>Cow Health</Text>
           <Text style={s.headerSub}>
-            {rows.length} cows · {fmtDate(selectedDate)}
+            {rows.length} cows · {fmtDate(TODAY)}
           </Text>
         </View>
         <TouchableOpacity style={s.refreshBtn} onPress={onRefresh}>
@@ -359,57 +352,12 @@ export default function CowHealthScreen() {
         </TouchableOpacity>
       </View>
 
-      <View style={s.dateNav}>
-        <TouchableOpacity style={s.dateArrow} onPress={() => shiftDate(-1)}>
-          <Ionicons name="chevron-back" size={18} color="#374151" />
-        </TouchableOpacity>
-        <View style={{ alignItems: "center", gap: 3 }}>
-          <Text style={s.dateLabel}>{fmtDate(selectedDate)}</Text>
-          {isToday && (
-            <View style={s.todayPill}>
-              <Text style={s.todayText}>Today</Text>
-            </View>
-          )}
-        </View>
-        <TouchableOpacity
-          style={[s.dateArrow, isToday && { borderColor: "#f3f4f6" }]}
-          onPress={() => !isToday && shiftDate(1)}
-          disabled={isToday}
-        >
-          <Ionicons
-            name="chevron-forward"
-            size={18}
-            color={isToday ? "#d1d5db" : "#374151"}
-          />
-        </TouchableOpacity>
-      </View>
-
       <View style={s.statsRow}>
         {[
-          {
-            label: "Total",
-            value: summary.total,
-            color: "#6b7280",
-            icon: "list",
-          },
-          {
-            label: "Healthy",
-            value: summary.healthy,
-            color: "#16a34a",
-            icon: "heart",
-          },
-          {
-            label: "Sick",
-            value: summary.unhealthy,
-            color: "#dc2626",
-            icon: "alert-circle",
-          },
-          {
-            label: "No Report",
-            value: summary.not_reported,
-            color: "#9ca3af",
-            icon: "ellipse",
-          },
+          { label: "Total", value: summary.total, color: "#6b7280", icon: "list" },
+          { label: "Healthy", value: summary.healthy, color: "#16a34a", icon: "heart" },
+          { label: "Sick", value: summary.unhealthy, color: "#dc2626", icon: "alert-circle" },
+          { label: "No Report", value: summary.not_reported, color: "#9ca3af", icon: "ellipse" },
         ].map((st, i, arr) => (
           <View
             key={i}
@@ -428,14 +376,7 @@ export default function CowHealthScreen() {
       </View>
 
       {loading ? (
-        <View
-          style={{
-            flex: 1,
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 12,
-          }}
-        >
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 12 }}>
           <ActivityIndicator size="large" color="#16a34a" />
           <Text style={{ color: "#6b7280", fontSize: 14, fontWeight: "600" }}>
             Loading...
@@ -468,10 +409,7 @@ export default function CowHealthScreen() {
                   onPress={() => setFilter(fl.key)}
                   style={[
                     s.chip,
-                    active && {
-                      backgroundColor: fl.color,
-                      borderColor: fl.color,
-                    },
+                    active && { backgroundColor: fl.color, borderColor: fl.color },
                   ]}
                 >
                   <Ionicons
@@ -479,9 +417,7 @@ export default function CowHealthScreen() {
                     size={11}
                     color={active ? "#fff" : fl.color}
                   />
-                  <Text
-                    style={[s.chipText, { color: active ? "#fff" : "#374151" }]}
-                  >
+                  <Text style={[s.chipText, { color: active ? "#fff" : "#374151" }]}>
                     {fl.label}
                   </Text>
                   <View
@@ -490,12 +426,7 @@ export default function CowHealthScreen() {
                       active && { backgroundColor: "rgba(255,255,255,0.25)" },
                     ]}
                   >
-                    <Text
-                      style={[
-                        s.chipBadgeText,
-                        { color: active ? "#fff" : "#6b7280" },
-                      ]}
-                    >
+                    <Text style={[s.chipBadgeText, { color: active ? "#fff" : "#6b7280" }]}>
                       {fl.count}
                     </Text>
                   </View>
@@ -533,9 +464,7 @@ export default function CowHealthScreen() {
                 <Text style={{ fontSize: 44 }}>🐄</Text>
                 <Text style={s.emptyTitle}>No cows found</Text>
                 <Text style={s.emptyText}>
-                  {search
-                    ? "No results for your search"
-                    : `No data for ${fmtDate(selectedDate)}`}
+                  {search ? "No results for your search" : "No data for today"}
                 </Text>
               </View>
             }
@@ -546,6 +475,8 @@ export default function CowHealthScreen() {
   );
 }
 
+const ANDROID_STATUS_BAR = Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0;
+
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#f9fafb" },
   header: {
@@ -553,6 +484,7 @@ const s = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 16,
     paddingVertical: 14,
+    paddingTop: Platform.OS === "android" ? ANDROID_STATUS_BAR + 14 : 14,
     backgroundColor: "#fff",
     borderBottomWidth: 1,
     borderBottomColor: "#f3f4f6",
@@ -589,34 +521,6 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#86efac",
   },
-  dateNav: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: "#fff",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f3f4f6",
-  },
-  dateArrow: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    backgroundColor: "#f9fafb",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-  },
-  dateLabel: { fontSize: 14, fontWeight: "700", color: "#111827" },
-  todayPill: {
-    backgroundColor: "#dcfce7",
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 1,
-  },
-  todayText: { fontSize: 10, fontWeight: "700", color: "#16a34a" },
   statsRow: {
     flexDirection: "row",
     backgroundColor: "#fff",
