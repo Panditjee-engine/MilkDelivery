@@ -657,35 +657,32 @@ export default function AdminFeedScreen() {
     setModalVisible(true);
   };
 
-  const handleSaveFeed = async (feedType: string, quantity: number) => {
-    if (!editingCow) return;
-    await (api as any).updateAdminFeedDetails(
-      editingCow.id,
-      todayStr(),
-      editingShift,
-      feedType,
-      quantity,
-    );
+ const handleSaveFeed = async (feedType: string, quantity: number) => {
+  if (!editingCow) return;
 
-    setCowRows((prev) =>
-      prev.map((row) => {
-        if (row.id !== editingCow.id) return row;
-        if (editingShift === "morning") {
-          return {
-            ...row,
-            morningFeedType: feedType,
-            morningQuantity: quantity,
-          };
-        } else {
-          return {
-            ...row,
-            eveningFeedType: feedType,
-            eveningQuantity: quantity,
-          };
-        }
-      }),
-    );
-  };
+  const authToken = await AsyncStorage.getItem("access_token");
+  if (!authToken) return;
+  api.setToken(authToken);
+
+  await api.updateAdminFeedDetails(
+    editingCow.id,
+    todayStr(),
+    editingShift,
+    feedType,
+    quantity,
+  );
+
+  setCowRows((prev) =>
+    prev.map((row) => {
+      if (row.id !== editingCow.id) return row;
+      if (editingShift === "morning") {
+        return { ...row, morningFeedType: feedType, morningQuantity: quantity };
+      } else {
+        return { ...row, eveningFeedType: feedType, eveningQuantity: quantity };
+      }
+    }),
+  );
+};
 
   const filtered = cowRows.filter((d) => {
     const matchSearch =
