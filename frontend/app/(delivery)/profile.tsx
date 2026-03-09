@@ -36,7 +36,6 @@ export default function DeliveryProfileScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView showsVerticalScrollIndicator={false}>
 
-        {/* ── Hero Card ── */}
         <View style={styles.heroCard}>
           <View style={styles.avatarRing}>
             <View style={styles.avatar}>
@@ -53,7 +52,6 @@ export default function DeliveryProfileScreen() {
           </View>
         </View>
 
-        {/* ── Zone Card ── */}
         <View style={styles.zoneCard}>
           <View style={styles.zoneLeft}>
             <View style={[styles.cardIconBox, { backgroundColor: '#EEF4FF' }]}>
@@ -71,7 +69,6 @@ export default function DeliveryProfileScreen() {
           )}
         </View>
 
-        {/* ── Contact Info ── */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Contact Information</Text>
           <View style={styles.card}>
@@ -99,7 +96,6 @@ export default function DeliveryProfileScreen() {
           </View>
         </View>
 
-        {/* ── Help & Support ── */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Help & Support</Text>
           <View style={styles.card}>
@@ -126,7 +122,6 @@ export default function DeliveryProfileScreen() {
           </View>
         </View>
 
-        {/* ── Logout ── */}
         <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
           <Ionicons name="log-out-outline" size={19} color="#ef4444" />
           <Text style={styles.logoutText}>Logout</Text>
@@ -141,7 +136,6 @@ export default function DeliveryProfileScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8F7F4' },
 
-  /* ── Hero ── */
   heroCard: {
     backgroundColor: Colors.primary,
     marginHorizontal: 20,
@@ -180,7 +174,6 @@ const styles = StyleSheet.create({
   },
   roleBadgeText: { fontSize: 12, fontWeight: '700', color: '#fff' },
 
-  /* ── Zone Card ── */
   zoneCard: {
     backgroundColor: '#fff',
     marginHorizontal: 20,
@@ -205,7 +198,6 @@ const styles = StyleSheet.create({
   },
   zonePillText: { fontSize: 11, fontWeight: '700', color: '#f59e0b' },
 
-  /* ── Sections ── */
   section: { marginBottom: 14 },
   sectionTitle: {
     fontSize: 11, fontWeight: '700', color: '#bbb',
@@ -213,7 +205,6 @@ const styles = StyleSheet.create({
     marginBottom: 8, marginLeft: 20,
   },
 
-  /* ── Card ── */
   card: {
     backgroundColor: '#fff',
     marginHorizontal: 20,
@@ -230,7 +221,6 @@ const styles = StyleSheet.create({
   },
   rowDivider: { height: 1, backgroundColor: '#F5F5F5', marginLeft: 48 },
 
-  /* ── Contact ── */
   contactRow: {
     flexDirection: 'row', alignItems: 'center',
     gap: 12, paddingVertical: 14,
@@ -239,7 +229,6 @@ const styles = StyleSheet.create({
   contactLabel: { fontSize: 11, color: '#bbb', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
   contactValue: { fontSize: 14, fontWeight: '700', color: '#1A1A1A', marginTop: 2 },
 
-  /* ── Help ── */
   helpRow: {
     flexDirection: 'row', alignItems: 'center',
     gap: 12, paddingVertical: 13,
@@ -250,7 +239,6 @@ const styles = StyleSheet.create({
   },
   helpLabel: { flex: 1, fontSize: 14, fontWeight: '600', color: '#1A1A1A' },
 
-  /* ── Logout ── */
   logoutBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     marginHorizontal: 20, padding: 16,

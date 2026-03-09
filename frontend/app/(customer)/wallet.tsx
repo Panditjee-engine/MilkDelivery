@@ -84,7 +84,6 @@ export default function WalletScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        {/* ── Hero Balance Card ── */}
         <View style={styles.heroCard}>
           <View style={styles.heroTop}>
             <Text style={styles.heroLabel}>Total Balance</Text>
@@ -96,7 +95,6 @@ export default function WalletScreen() {
 
           <Text style={styles.heroAmount}>₹{balance.toFixed(2)}</Text>
 
-          {/* Stats Row */}
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
               <View style={styles.statIconGreen}>
@@ -121,7 +119,6 @@ export default function WalletScreen() {
             </View>
           </View>
 
-          {/* Add Money Button */}
           <TouchableOpacity
             style={styles.addMoneyBtn}
             onPress={() => setRechargeModal(true)}
@@ -131,7 +128,6 @@ export default function WalletScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* ── Transactions ── */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Transaction History</Text>
           <Text style={styles.sectionSub}>{transactions.length} transactions</Text>
@@ -149,7 +145,6 @@ export default function WalletScreen() {
           <View style={styles.txList}>
             {transactions.slice().reverse().map((tx, index) => (
               <View key={tx.id || index} style={styles.txCard}>
-                {/* Icon */}
                 <View style={[
                   styles.txIcon,
                   tx.type === 'credit' ? styles.txIconGreen : styles.txIconRed
@@ -161,13 +156,11 @@ export default function WalletScreen() {
                   />
                 </View>
 
-                {/* Info */}
                 <View style={styles.txInfo}>
                   <Text style={styles.txDesc}>{tx.description}</Text>
                   <Text style={styles.txDate}>{formatDate(tx.created_at)}</Text>
                 </View>
 
-                {/* Amount */}
                 <View style={styles.txRight}>
                   <Text style={[
                     styles.txAmount,
@@ -185,7 +178,6 @@ export default function WalletScreen() {
         <View style={{ height: 30 }} />
       </ScrollView>
 
-      {/* ── Recharge Modal ── */}
       <Modal visible={rechargeModal} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalSheet}>
@@ -202,7 +194,6 @@ export default function WalletScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Amount Input */}
             <View style={styles.amountBox}>
               <Text style={styles.rupeeSymbol}>₹</Text>
               <TextInput
@@ -216,7 +207,6 @@ export default function WalletScreen() {
               />
             </View>
 
-            {/* Quick Amounts */}
             <Text style={styles.quickLabel}>Quick Select</Text>
             <View style={styles.quickRow}>
               {quickAmounts.map((amt) => (
@@ -259,7 +249,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8F7F4',
   },
 
-  /* ── Hero Card ── */
   heroCard: {
     margin: 20,
     backgroundColor: Colors.primary,
@@ -304,7 +293,6 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
 
-  /* Stats */
   statsRow: {
     flexDirection: 'row',
     backgroundColor: 'rgba(255,255,255,0.12)',
@@ -350,7 +338,6 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
 
-  /* Add Money */
   addMoneyBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -366,7 +353,6 @@ const styles = StyleSheet.create({
     color: Colors.primary,
   },
 
-  /* ── Section Header ── */
   section: {
     flexDirection: 'row',
     alignItems: 'baseline',
@@ -385,7 +371,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 
-  /* ── Transaction List ── */
   txList: {
     paddingHorizontal: 20,
     gap: 10,
@@ -443,7 +428,6 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
 
-  /* ── Empty ── */
   emptyState: {
     alignItems: 'center',
     paddingVertical: 60,
@@ -468,7 +452,6 @@ const styles = StyleSheet.create({
     color: '#ccc',
   },
 
-  /* ── Modal ── */
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.4)',
@@ -509,7 +492,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
-  /* Amount Input */
   amountBox: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -532,7 +514,6 @@ const styles = StyleSheet.create({
     paddingVertical: 18,
   },
 
-  /* Quick Amounts */
   quickLabel: {
     fontSize: 12,
     fontWeight: '700',

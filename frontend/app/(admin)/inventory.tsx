@@ -118,7 +118,6 @@ export default function InventoryScreen() {
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
 
-      {/* ── Header ── */}
       <View style={styles.header}>
         <View>
           <Text style={styles.title}>Inventory</Text>
@@ -131,7 +130,6 @@ export default function InventoryScreen() {
         )}
       </View>
 
-      {/* ── Summary Strip ── */}
       <View style={styles.summaryStrip}>
         <View style={styles.summaryItem}>
           <Text style={styles.summaryVal}>{products.length}</Text>
@@ -149,7 +147,6 @@ export default function InventoryScreen() {
         </View>
       </View>
 
-      {/* ── Product List ── */}
       <ScrollView
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
@@ -164,7 +161,6 @@ export default function InventoryScreen() {
         ) : (
           products.map((product) => (
             <View key={product.id} style={styles.productCard}>
-              {/* Image */}
               {product.image ? (
                 <Image source={{ uri: product.image }} style={styles.productImage} />
               ) : (
@@ -173,7 +169,6 @@ export default function InventoryScreen() {
                 </View>
               )}
 
-              {/* Info */}
               <View style={styles.productInfo}>
                 <Text style={styles.productName} numberOfLines={1}>{product.name}</Text>
                 <Text style={styles.productMeta}>{product.unit} · ₹{product.price}</Text>
@@ -194,13 +189,11 @@ export default function InventoryScreen() {
                 </View>
               </View>
 
-              {/* Stock Badge */}
               <View style={styles.stockBadge}>
                 <Text style={styles.stockVal}>{product.stock}</Text>
                 <Text style={styles.stockLabel}>stock</Text>
               </View>
 
-              {/* Actions */}
               {isAdmin && (
                 <View style={styles.actions}>
                   <TouchableOpacity
@@ -227,7 +220,6 @@ export default function InventoryScreen() {
         <View style={{ height: 20 }} />
       </ScrollView>
 
-      {/* ── Add Product Modal ── */}
       <Modal visible={addModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalSheet}>
@@ -242,7 +234,6 @@ export default function InventoryScreen() {
 
             <ScrollView showsVerticalScrollIndicator={false}>
 
-              {/* Image Picker */}
               <TouchableOpacity style={styles.imagePicker} onPress={pickImageFromGallery}>
                 {newProduct.image ? (
                   <Image source={{ uri: newProduct.image }} style={styles.previewImage} />
@@ -254,7 +245,6 @@ export default function InventoryScreen() {
                 )}
               </TouchableOpacity>
 
-              {/* Fields */}
               <Text style={styles.fieldLabel}>Product Name</Text>
               <TextInput
                 style={styles.input}
@@ -348,7 +338,6 @@ export default function InventoryScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8F7F4' },
 
-  /* ── Header ── */
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -372,7 +361,6 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
 
-  /* ── Summary ── */
   summaryStrip: {
     flexDirection: 'row',
     backgroundColor: '#fff',
@@ -390,7 +378,6 @@ const styles = StyleSheet.create({
   summaryLabel: { fontSize: 11, color: '#aaa', fontWeight: '600', marginTop: 2 },
   summaryDivider: { width: 1, backgroundColor: '#F0F0F0' },
 
-  /* ── Product Cards ── */
   listContent: { paddingHorizontal: 16 },
   productCard: {
     flexDirection: 'row',
@@ -444,12 +431,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center',
   },
 
-  /* ── Empty ── */
   emptyState: { alignItems: 'center', paddingTop: 80, gap: 8 },
   emptyTitle: { fontSize: 16, fontWeight: '700', color: '#ccc' },
   emptyDesc: { fontSize: 13, color: '#ddd' },
 
-  /* ── Modal ── */
+
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
   modalSheet: {
     backgroundColor: '#fff',
@@ -472,7 +458,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#F0F0F0', justifyContent: 'center', alignItems: 'center',
   },
 
-  /* Image Picker */
   imagePicker: {
     borderRadius: 16,
     overflow: 'hidden',
@@ -491,7 +476,6 @@ const styles = StyleSheet.create({
   imagePickerText: { fontSize: 13, color: '#aaa', fontWeight: '500' },
   previewImage: { width: '100%', height: 150 },
 
-  /* Fields */
   fieldLabel: {
     fontSize: 12, fontWeight: '700', color: '#999',
     textTransform: 'uppercase', letterSpacing: 0.6,
@@ -507,7 +491,6 @@ const styles = StyleSheet.create({
   },
   row: { flexDirection: 'row' },
 
-  /* Categories */
   categoryRow: { marginBottom: 16 },
   catChip: {
     paddingHorizontal: 14, paddingVertical: 8,

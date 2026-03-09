@@ -189,10 +189,112 @@ export default function AdminOrdersScreen() {
 
   if (loading) return <LoadingScreen />;
 
+<<<<<<< HEAD
+=======
+  const renderOrder = ({ item }: { item: Order }) => {
+    const sc = statusConfig[item.status] ?? statusConfig["UNASSIGNED"];
+
+    return (
+      <View style={styles.card}>
+
+        <View style={styles.cardHeader}>
+          <View style={styles.orderIdRow}>
+            <View style={styles.receiptIcon}>
+              <Ionicons name="receipt-outline" size={14} color={Colors.primary} />
+            </View>
+            <Text style={styles.orderId}>#{item.id.slice(-6).toUpperCase()}</Text>
+          </View>
+
+          <View style={[styles.statusPill, { backgroundColor: sc.bg }]}>
+            <Ionicons name={sc.icon} size={11} color={sc.color} />
+            <Text style={[styles.statusText, { color: sc.color }]}>{sc.label}</Text>
+          </View>
+        </View>
+
+        {(item.delivery_date || item.delivery_slot) && (
+          <View style={styles.dateRow}>
+            <Ionicons name="calendar-outline" size={12} color="#aaa" />
+            <Text style={styles.dateText}>
+              {item.delivery_date}  {item.delivery_slot && `· ${item.delivery_slot}`}
+            </Text>
+          </View>
+        )}
+
+        <View style={styles.divider} />
+
+        <View style={styles.twoCol}>
+          <View style={styles.col}>
+            <Text style={styles.colLabel}>CUSTOMER</Text>
+            <Text style={styles.colName}>{item.customer_name ?? "Unknown"}</Text>
+            {item.customer_phone && (
+              <View style={styles.phoneRow}>
+                <Ionicons name="call-outline" size={11} color="#aaa" />
+                <Text style={styles.phoneText}>{item.customer_phone}</Text>
+              </View>
+            )}
+          </View>
+
+          <View style={styles.colDivider} />
+
+          <View style={styles.col}>
+            <Text style={styles.colLabel}>RIDER</Text>
+            {item.delivery_partner_name ? (
+              <>
+                <Text style={styles.colName}>{item.delivery_partner_name}</Text>
+                {item.delivery_partner_phone && (
+                  <View style={styles.phoneRow}>
+                    <Ionicons name="call-outline" size={11} color="#aaa" />
+                    <Text style={styles.phoneText}>{item.delivery_partner_phone}</Text>
+                  </View>
+                )}
+              </>
+            ) : (
+              <View style={styles.unassignedRow}>
+                <Ionicons name="time-outline" size={13} color="#f59e0b" />
+                <Text style={styles.unassignedText}>Not assigned</Text>
+              </View>
+            )}
+          </View>
+        </View>
+
+        <View style={styles.divider} />
+
+        <Text style={styles.colLabel}>ITEMS</Text>
+        <View style={styles.itemsList}>
+          {item.items?.map((p, i) => (
+            <View key={i} style={styles.itemRow}>
+              <View style={styles.itemDot} />
+              <Text style={styles.itemName}>{p.product_name}</Text>
+              {p.quantity && (
+                <Text style={styles.itemQty}>×{p.quantity}</Text>
+              )}
+            </View>
+          ))}
+        </View>
+
+        <View style={styles.divider} />
+
+        <View style={styles.footer}>
+          <View style={styles.otpBox}>
+            <Text style={styles.otpLabel}>OTP</Text>
+            <Text style={styles.otpValue}>{item.admin_otp ?? "----"}</Text>
+          </View>
+
+          {item.total_amount !== undefined && (
+            <View style={styles.amountBox}>
+              <Text style={styles.amountLabel}>Total</Text>
+              <Text style={styles.amountValue}>₹{item.total_amount}</Text>
+            </View>
+          )}
+        </View>
+      </View>
+    );
+  };
+
+>>>>>>> d0ef3950fe532a7f2ddb13147f25a8b1958d9b5a
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
 
-      {/* ── Header ── */}
       <View style={styles.header}>
         <Text style={styles.title}>Orders</Text>
         <View style={styles.countBadge}>
@@ -200,7 +302,6 @@ export default function AdminOrdersScreen() {
         </View>
       </View>
 
-      {/* ── Filters ── */}
       <View style={styles.filterRow}>
         {FILTERS.map((f) => (
           <TouchableOpacity
@@ -215,7 +316,6 @@ export default function AdminOrdersScreen() {
         ))}
       </View>
 
-      {/* ── List ── */}
       <FlatList
         data={orders}
         keyExtractor={(item) => item.id}
@@ -249,7 +349,16 @@ const styles = StyleSheet.create({
   },
   countText: { fontSize: 13, fontWeight: '800', color: Colors.primary },
 
+<<<<<<< HEAD
   filterRow: { flexDirection: 'row', paddingHorizontal: 20, gap: 8, marginBottom: 14 },
+=======
+  filterRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    gap: 8,
+    marginBottom: 14,
+  },
+>>>>>>> d0ef3950fe532a7f2ddb13147f25a8b1958d9b5a
   filterChip: {
     paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20,
     backgroundColor: '#fff', borderWidth: 1.5, borderColor: 'transparent',

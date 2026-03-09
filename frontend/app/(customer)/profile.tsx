@@ -141,7 +141,6 @@ export default function ProfileScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView showsVerticalScrollIndicator={false}>
 
-        {/* ── Hero Header ── */}
         <View style={styles.hero}>
           <View style={styles.avatarRing}>
             <View style={styles.avatar}>
@@ -164,7 +163,6 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* ── Delivery Address ── */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <View style={[styles.cardIconBox, { backgroundColor: '#EEF4FF' }]}>
@@ -201,7 +199,6 @@ export default function ProfileScreen() {
           )}
         </View>
 
-        {/* ── Vacation Mode ── */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <View style={[styles.cardIconBox, { backgroundColor: '#FFF4E6' }]}>
@@ -232,7 +229,6 @@ export default function ProfileScreen() {
           )}
         </View>
 
-        {/* ── Recent Orders ── */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <View style={[styles.cardIconBox, { backgroundColor: '#F0FDF4' }]}>
@@ -333,7 +329,6 @@ export default function ProfileScreen() {
           )}
         </View>
 
-        {/* ── Logout ── */}
         <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
           <Ionicons name="log-out-outline" size={20} color="#ef4444" />
           <Text style={styles.logoutText}>Logout</Text>
@@ -342,7 +337,6 @@ export default function ProfileScreen() {
         <View style={{ height: 30 }} />
       </ScrollView>
 
-      {/* ── Vacation Modal ── */}
       <Modal visible={vacationModal} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalSheet}>
@@ -382,14 +376,21 @@ export default function ProfileScreen() {
                 if (selectingStart) { setStartDate(day.dateString); setSelectingStart(false); }
                 else { setEndDate(day.dateString); }
               }}
+<<<<<<< HEAD
               theme={{ todayTextColor: Colors.primary, selectedDayBackgroundColor: Colors.primary, arrowColor: Colors.primary }}
+=======
+              theme={{
+                todayTextColor: Colors.primary,
+                selectedDayBackgroundColor: Colors.primary,
+                arrowColor: Colors.primary,
+              }}
+>>>>>>> d0ef3950fe532a7f2ddb13147f25a8b1958d9b5a
             />
             <Button title="Save Vacation" onPress={handleAddVacation} style={{ marginTop: 16 }} />
           </View>
         </View>
       </Modal>
 
-      {/* ── Edit Profile Modal ── */}
       <Modal visible={editModal} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalSheet}>
@@ -434,7 +435,6 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8F7F4' },
 
-  /* ── Hero ── */
   hero: {
     alignItems: 'center', paddingTop: 32, paddingBottom: 28,
     paddingHorizontal: 20, backgroundColor: '#fff', marginBottom: 16,
@@ -458,8 +458,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary, paddingHorizontal: 18, paddingVertical: 9, borderRadius: 20, marginTop: 14,
   },
   editBtnText: { fontSize: 13, fontWeight: '700', color: '#fff' },
-
-  /* ── Cards ── */
   card: {
     backgroundColor: '#fff', borderRadius: 20,
     marginHorizontal: 16, marginBottom: 14, padding: 18,
@@ -473,7 +471,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary + '15', justifyContent: 'center', alignItems: 'center',
   },
 
-  /* Address */
   addressBox: { gap: 8 },
   addressRow: { flexDirection: 'row', justifyContent: 'space-between' },
   addressKey: { fontSize: 13, color: '#aaa', fontWeight: '500' },
@@ -481,7 +478,6 @@ const styles = StyleSheet.create({
   emptyAddress: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
   emptyAddressText: { fontSize: 14, color: Colors.primary, fontWeight: '600' },
 
-  /* Vacation */
   hintText: { fontSize: 12, color: '#bbb', marginBottom: 12, marginTop: -6 },
   vacationList: { gap: 8 },
   vacationChip: {
@@ -491,6 +487,7 @@ const styles = StyleSheet.create({
   vacationChipText: { flex: 1, fontSize: 13, fontWeight: '600', color: '#92400e' },
   emptyText: { fontSize: 13, color: '#ccc', fontStyle: 'italic' },
 
+<<<<<<< HEAD
   /* ── Orders ── */
   ordersContainer: { gap: 10 },
 
@@ -555,6 +552,17 @@ const styles = StyleSheet.create({
   subText: { fontSize: 11, color: '#a78bfa', fontWeight: '600' },
 
   /* Logout */
+=======
+  orderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12 },
+  orderRowBorder: { borderBottomWidth: 1, borderBottomColor: '#F5F5F5' },
+  orderDate: { fontSize: 14, fontWeight: '700', color: '#1A1A1A' },
+  orderItems: { fontSize: 12, color: '#aaa', marginTop: 2 },
+  orderRight: { alignItems: 'flex-end', gap: 4 },
+  statusPill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 },
+  statusText: { fontSize: 11, fontWeight: '700', textTransform: 'capitalize' },
+  orderAmt: { fontSize: 14, fontWeight: '800', color: '#1A1A1A' },
+
+>>>>>>> d0ef3950fe532a7f2ddb13147f25a8b1958d9b5a
   logoutBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     marginHorizontal: 16, marginTop: 4, padding: 16,
@@ -562,7 +570,6 @@ const styles = StyleSheet.create({
   },
   logoutText: { fontSize: 15, fontWeight: '700', color: '#ef4444' },
 
-  /* ── Modals ── */
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
   modalSheet: {
     backgroundColor: '#fff', borderTopLeftRadius: 28, borderTopRightRadius: 28,
@@ -571,9 +578,26 @@ const styles = StyleSheet.create({
   dragHandle: { width: 40, height: 4, backgroundColor: '#E0E0E0', borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   modalTitle: { fontSize: 20, fontWeight: '800', color: '#1A1A1A' },
+<<<<<<< HEAD
   closeBtn: { width: 32, height: 32, borderRadius: 10, backgroundColor: '#F0F0F0', justifyContent: 'center', alignItems: 'center' },
   dateTabs: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16 },
   dateTab: { flex: 1, backgroundColor: '#F8F8F8', borderRadius: 12, padding: 12, borderWidth: 1.5, borderColor: 'transparent' },
+=======
+  closeBtn: {
+    width: 32, height: 32, borderRadius: 10,
+    backgroundColor: '#F0F0F0', justifyContent: 'center', alignItems: 'center',
+  },
+
+  dateTabs: {
+    flexDirection: 'row', alignItems: 'center',
+    gap: 10, marginBottom: 16,
+  },
+  dateTab: {
+    flex: 1, backgroundColor: '#F8F8F8',
+    borderRadius: 12, padding: 12,
+    borderWidth: 1.5, borderColor: 'transparent',
+  },
+>>>>>>> d0ef3950fe532a7f2ddb13147f25a8b1958d9b5a
   dateTabActive: { borderColor: Colors.primary, backgroundColor: Colors.primary + '08' },
   dateTabLabel: { fontSize: 11, color: '#aaa', fontWeight: '600', textTransform: 'uppercase' },
   dateTabValue: { fontSize: 15, fontWeight: '700', color: '#1A1A1A', marginTop: 4 },

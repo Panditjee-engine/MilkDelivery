@@ -15,6 +15,7 @@ interface User {
 
 interface AuthContextType {
   user: User | null;
+  token: string | null;   
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (data: any) => Promise<void>;
@@ -25,7 +26,8 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user,    setUser]    = useState<User | null>(null);
+  const [token,   setToken]   = useState<string | null>(null); 
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -33,40 +35,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const checkAuth = async () => {
-  try {
-    await api.init();
-    const token = await AsyncStorage.getItem('access_token');
+    try {
+      await api.init();
+      const storedToken = await AsyncStorage.getItem('access_token');
 
-    if (token) {
-      const userData = await api.getMe();
-      setUser(userData);
-    } else {
+      if (storedToken) {
+        setToken(storedToken);          
+        api.setToken(storedToken);     
+        const userData = await api.getMe();
+        setUser(userData);
+      } else {
+        setToken(null);                 
+        setUser(null);
+      }
+    } catch (error) {
+      console.log('Auth check failed:', error);
       setUser(null);
+      setToken(null);                   
+      await AsyncStorage.removeItem('access_token');
+    } finally {
+      setLoading(false);
     }
-  } catch (error) {
-    console.log('Auth check failed:', error);
-    setUser(null);
-    await AsyncStorage.removeItem('access_token');
-  } finally {
-    setLoading(false);
-  }
-};
+  };
+
   const login = async (email: string, password: string) => {
     const response = await api.login(email, password);
+    setToken(response.access_token);    
     setUser(response.user);
   };
 
   const register = async (data: any) => {
     const response = await api.register(data);
+    setToken(response.access_token);    
     setUser(response.user);
   };
 
-const logout = async () => {
-  console.log('LOGOUT FUNCTION CALLED');
-  await api.logout();
-  setUser(null);
-};
-
+  const logout = async () => {
+    console.log('LOGOUT FUNCTION CALLED');
+    await api.logout();
+    setToken(null);                    
+    setUser(null);
+  };
 
   const updateUser = (data: Partial<User>) => {
     if (user) {
@@ -75,7 +84,7 @@ const logout = async () => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, updateUser }}>
+    <AuthContext.Provider value={{ user, token, loading, login, register, logout, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

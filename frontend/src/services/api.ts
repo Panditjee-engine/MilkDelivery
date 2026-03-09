@@ -52,7 +52,6 @@ class ApiService {
     return response.json();
   }
 
-  // Auth
   async login(email: string, password: string) {
     const data = await this.request<any>("/auth/login", {
       method: "POST",
@@ -82,8 +81,6 @@ class ApiService {
     });
   }
 
-  //add - 26 Jun 2024
-  // Public catalog products (any user can see)
   async getCatalogProducts(adminId?: string, category?: string) {
     const params = new URLSearchParams();
 
@@ -112,7 +109,6 @@ class ApiService {
     return this.request<any[]>("/categories");
   }
 
-  // Subscriptions
   async getSubscriptions() {
     return this.request<any[]>("/subscriptions");
   }
@@ -144,7 +140,6 @@ class ApiService {
     });
   }
 
-  // Vacations
   async getVacations() {
     return this.request<any[]>("/vacations");
   }
@@ -162,7 +157,6 @@ class ApiService {
     });
   }
 
-  // Wallet
   async getWallet() {
     return this.request<any>("/wallet");
   }
@@ -178,7 +172,6 @@ class ApiService {
     });
   }
 
-  // Orders
   async getOrders() {
     return this.request<any[]>("/orders");
   }
@@ -191,7 +184,6 @@ class ApiService {
     return this.request<any>("/orders/tomorrow/preview");
   }
 
-  // Delivery Partner
   async checkin() {
     return this.request<any>("/delivery/checkin", { method: "POST" });
   }
@@ -245,7 +237,6 @@ async cancelOrder(orderId: string) {
     return this.request<any>("/delivery/status");
   }
 
-  // Admin
   async getAdminDashboard() {
     return this.request<any>("/admin/dashboard");
   }
@@ -318,7 +309,6 @@ async cancelOrder(orderId: string) {
     });
   }
 
-  // Admin list (for catalog)
   async getAdmins() {
     return this.request<any[]>("/catalog/admins");
   }
@@ -336,14 +326,10 @@ async cancelOrder(orderId: string) {
     });
   }
 
-  // Seed data
   async seedData() {
     return this.request<any>("/seed", { method: "POST" });
   }
 
-// ================= GAUSEVAK (COWS) =================
-
-// Create cow
 async createCow(data: any) {
   return this.request<any>("/gausevak/cows", {
     method: "POST",
@@ -351,7 +337,6 @@ async createCow(data: any) {
   });
 }
 
-// Get all cows (with optional search)
 async getCows(search?: string) {
   const params = new URLSearchParams();
   if (search) params.append("search", search);
@@ -360,12 +345,10 @@ async getCows(search?: string) {
   return this.request<any[]>(`/gausevak/cows${query}`);
 }
 
-// Get single cow (optional but useful)
 async getCow(id: string) {
   return this.request<any>(`/gausevak/cows/${id}`);
 }
 
-// Update cow
 async updateCow(id: string, data: Partial<{
   tag: string;
   name: string;
@@ -385,14 +368,11 @@ async updateCow(id: string, data: Partial<{
   });
 }
 
-// Delete cow
 async deleteCow(id: string) {
   return this.request<any>(`/gausevak/cows/${id}`, {
     method: "DELETE",
   });
 }
-
-// ================= GAUSEVAK (INSEMINATION) =================
 
 async createInsemination(data: {
   cowSrNo: string;
@@ -441,8 +421,6 @@ async deleteInsemination(id: string) {
   });
 }
 
-// ================= GAUSEVAK (SEMEN RECORDS) =================
-
 async createSemenRecord(data: {
   bullSrNo: string;
   bullName?: string;
@@ -489,8 +467,6 @@ async deleteSemenRecord(id: string) {
     method: "DELETE",
   });
 }
-
-// ================= GAUSEVAK (MEDICAL RECORDS) =================
 
 async createMedicalRecord(data: {
   cowSrNo: string;
@@ -552,6 +528,220 @@ async deleteMedicalRecord(id: string) {
   });
 }
 
+async getFeedLogs(date: string, shift: 'morning' | 'evening') {
+  return this.request<any[]>(`/worker/feed?date=${date}&shift=${shift}`);
+}
+
+async markFed(data: { cow_id: string; cow_name: string; cow_tag: string; date: string; shift: 'morning' | 'evening' }) {
+  return this.request<any>('/worker/feed', { method: 'POST', body: JSON.stringify(data) });
+}
+
+async unmarkFed(cow_id: string, date: string, shift: 'morning' | 'evening') {
+  return this.request<any>(`/worker/feed?cow_id=${cow_id}&date=${date}&shift=${shift}`, { method: 'DELETE' });
+}
+
+async getAdminFeedLogs(token: string, date?: string, shift?: 'morning' | 'evening') {
+  const params = new URLSearchParams();
+  if (date)  params.append('date',  date);
+  if (shift) params.append('shift', shift);
+  const query = params.toString() ? `?${params.toString()}` : '';
+
+  const url = `${API_BASE}/api/admin/feed${query}`;
+  console.log("Fetching admin feed:", url);
+
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+  });
+
+  const text = await response.text();
+  console.log("Feed response status:", response.status, "body:", text.slice(0, 200));
+
+  if (!response.ok) {
+    throw new Error(`Feed API error ${response.status}: ${text}`);
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(`Feed API returned invalid JSON: ${text.slice(0, 100)}`);
+  }
+}
+
+async getAdminMilkLogs(date?: string) {
+  const params = new URLSearchParams();
+  if (date) params.append('date', date);
+  const query = params.toString() ? `?${params.toString()}` : '';
+  return this.request<{
+    date: string;
+    summary: {
+      total_morning: number;
+      total_evening: number;
+      grand_total:   number;
+      active_cows:   number;
+      total_cows:    number;
+    };
+    cows: Array<{
+      cow_id:         string;
+      cow_name:       string;
+      cow_tag:        string;
+      breed:          string;
+      morning_liters: number;
+      morning_worker: string | null;
+      evening_liters: number;
+      evening_worker: string | null;
+      total_liters:   number;
+      date:           string;
+    }>;
+  }>(`/admin/milk${query}`);
+}
+
+async getAdminHealthLogs(date?: string) {
+  const params = new URLSearchParams();
+  if (date) params.append("date", date);
+  const query = params.toString() ? `?${params.toString()}` : "";
+  return this.request<any>(`/admin/health${query}`);
+}
+
+async getWorkerHealthLogs(date?: string) {
+  const params = new URLSearchParams();
+  if (date) params.append("date", date);
+  const query = params.toString() ? `?${params.toString()}` : "";
+  return this.request<any[]>(`/worker/health${query}`);
+}
+
+async getAdminWorkers() {
+  return this.request<any[]>("/admin/workers");
+}
+
+async createWorker(data: {
+  name: string;
+  email: string;
+  password: string;
+  phone?: string;
+  designation?: string;
+  farm_name?: string;
+}) {
+  return this.request<any>("/admin/workers", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+async updateAdminFeedDetails(cow_id: string, date: string, shift: string, feed_type?: string, quantity_kg?: number) {
+  const params = new URLSearchParams({ date, shift });
+  if (feed_type) params.append("feed_type", feed_type);
+  if (quantity_kg !== undefined) params.append("quantity_kg", String(quantity_kg));
+  return this.request<any>(`/admin/feed/${cow_id}?${params.toString()}`, {
+    method: "PUT",
+  });
+}
+
+// ===================== COW CAPACITY =====================
+
+async getCowCapacity(cowId: string) {
+  return this.request<{
+    cow_id: string;
+    daily_capacity_liters: number | null;
+  }>(`/gausevak/cows/${cowId}/capacity`);
+}
+
+async setCowCapacity(cowId: string, dailyCapacityLiters: number) {
+  return this.request<{
+    success: boolean;
+    cow_id: string;
+    daily_capacity_liters: number;
+  }>(`/gausevak/cows/${cowId}/capacity`, {
+    method: "PUT",
+    body: JSON.stringify({ daily_capacity_liters: dailyCapacityLiters }),
+  });
+}
+
+async deleteCowCapacity(cowId: string) {
+  return this.request<{
+    success: boolean;
+    cow_id: string;
+  }>(`/gausevak/cows/${cowId}/capacity`, {
+    method: "DELETE",
+  });
+}
+
+// ===================== MILK HISTORY + PEAK =====================
+
+async getCowMilkHistory(cowId: string, days: number = 90) {
+  return this.request<{
+    cow_id: string;
+    history: Array<{
+      date: string;
+      morning: number;
+      evening: number;
+      total: number;
+    }>;
+    peak: { date: string; total: number } | null;
+  }>(`/gausevak/cows/${cowId}/milk-history?days=${days}`);
+}
+
+// ===================== MILK DASHBOARD (replaces getAdminMilkLogs) =====================
+
+async getMilkDashboard(date?: string) {
+  const params = new URLSearchParams();
+  if (date) params.append("date", date);
+  const query = params.toString() ? `?${params.toString()}` : "";
+  return this.request<{
+    date: string;
+    summary: {
+      total_morning: number;
+      total_evening: number;
+      grand_total: number;
+      active_cows: number;
+      total_cows: number;
+    };
+    cows: Array<{
+      cow_id: string;
+      cow_name: string;
+      cow_tag: string;
+      breed: string;
+      morning_liters: number;
+      morning_worker: string | null;
+      evening_liters: number;
+      evening_worker: string | null;
+      total_liters: number;
+      daily_capacity_liters: number | null;
+      peak: { date: string; total: number } | null;
+      date: string;
+    }>;
+  }>(`/admin/milk/dashboard${query}`);
+}
+
+// Already works for bulls — no changes needed to these:
+// api.createCow({ ...fields, type: "bull" })
+// api.updateCow(id, { ...fields })
+// api.deleteCow(id)
+// api.getCows(search)   ← returns bulls too, filter by type on frontend
+
+// ADD these two new methods:
+
+async updateBullSemen(bullId: string, data: {
+  totalDoses?: number;
+  semenAvailable?: boolean;
+  lastUsedDate?: string;
+  successRate?: number;
+}) {
+  return this.request<any>(`/gausevak/bulls/${bullId}/semen`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+async useBullSemen(bullId: string, dosesUsed: number = 1) {
+  return this.request<{ remaining_doses: number; semenAvailable: boolean }>(
+    `/gausevak/bulls/${bullId}/use-semen?doses_used=${dosesUsed}`,
+    { method: "POST" }
+  );
+}
 ///------------------------------Gausevak (Cows)------------------------------
 
   logout = async () => {

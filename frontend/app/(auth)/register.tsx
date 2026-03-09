@@ -112,7 +112,6 @@ export default function RegisterScreen() {
             <Text style={styles.subtitle}>Join FreshMilk today</Text>
           </View>
 
-          {/* Role Selection */}
           <View style={styles.roleSection}>
             <Text style={styles.sectionTitle}></Text>
 
@@ -167,7 +166,6 @@ export default function RegisterScreen() {
             </View>
           </View>
 
-          {/* Form */}
           <View style={styles.form}>
             <View style={styles.formCard}>
               <Input
@@ -318,7 +316,6 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
   },
 
-  /* Role */
   roleSection: {
     marginBottom: 24,
   },
@@ -349,7 +346,6 @@ const styles = StyleSheet.create({
   },
   roleCardActive: {
     borderColor: Colors.primary,
-    // backgroundColor: Colors.primary + '10',
     elevation: 8,
   },
   roleLabel: {
@@ -381,7 +377,6 @@ const styles = StyleSheet.create({
     color: Colors.primary,
   },
 
-  /* Form */
   form: {
     marginBottom: 24,
   },
@@ -400,7 +395,6 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
 
-  /* Footer */
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',

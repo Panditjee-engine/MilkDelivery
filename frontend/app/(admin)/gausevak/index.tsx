@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import React, { useRef, useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -9,10 +9,12 @@ import {
   Animated,
   Platform,
   StatusBar,
+  ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import { api } from "../../../src/services/api";
 
 const MENU = [
   {
@@ -33,7 +35,7 @@ const MENU = [
     gradient: ["#1b4332", "#40916c"] as const,
     accent: "#74c69d",
   },
-     {
+  {
     id: "milkyield",
     title: "Milkyield",
     subtitle: "Milk Yield Records",
@@ -78,7 +80,15 @@ const MENU = [
     gradient: ["#1c2b3a", "#243b55"] as const,
     accent: "#56b4d3",
   },
-
+  {
+  id: "workers",
+  title: "Workers",
+  subtitle: "Farm staff",
+  icon: "people",
+  route: "/(admin)/gausevak/workers",
+  gradient: ["#1a2e1a", "#2d5a27"] as const,
+  accent: "#a3d977",
+},
 ];
 
 function MenuCard({ item, index }: { item: (typeof MENU)[0]; index: number }) {
@@ -173,7 +183,41 @@ function MenuCard({ item, index }: { item: (typeof MENU)[0]; index: number }) {
   );
 }
 
+interface CowStats {
+  total: number;
+  active: number;
+  inactive: number;
+}
+
 function Header() {
+  const [stats, setStats] = useState<CowStats | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchCowStats = async () => {
+      try {
+        const cows = await api.getCows();
+        const total = cows.length;
+        const active = cows.filter((c: any) => c.isActive && !c.isSold).length;
+        const inactive = total - active;
+        setStats({ total, active, inactive });
+      } catch (error) {
+        console.error("Failed to fetch cow stats:", error);
+        setStats({ total: 0, active: 0, inactive: 0 });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCowStats();
+  }, []);
+
+  const statItems = [
+    { label: "Total Cows", value: stats?.total ?? "-" },
+    { label: "Active", value: stats?.active ?? "-" },
+    { label: "Inactive", value: stats?.inactive ?? "-" },
+  ];
+
   return (
     <View style={styles.headerWrapper}>
       <StatusBar barStyle="light-content" />
@@ -207,24 +251,29 @@ function Header() {
             <View style={styles.notifDot} />
           </TouchableOpacity>
         </View>
+
         <View style={styles.statsRow}>
-          {[
-            { label: "Total Cows", value: "142" },
-            { label: "Healthy", value: "138" },
-            { label: "Alerts", value: "4" },
-          ].map((stat, i) => (
-            <View key={i} style={[styles.statItem, i < 2 && styles.statBorder]}>
-              <Text style={styles.statValue}>{stat.value}</Text>
-              <Text style={styles.statLabel}>{stat.label}</Text>
+          {loading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="small" color="#7ca9d4" />
             </View>
-          ))}
+          ) : (
+            statItems.map((stat, i) => (
+              <View
+                key={i}
+                style={[styles.statItem, i < statItems.length - 1 && styles.statBorder]}
+              >
+                <Text style={styles.statValue}>{String(stat.value)}</Text>
+                <Text style={styles.statLabel}>{stat.label}</Text>
+              </View>
+            ))
+          )}
         </View>
       </LinearGradient>
     </View>
   );
 }
 
-// ── Save as: app/(admin)/gausevak/index.tsx ──
 export default function GausevakScreen() {
   return (
     <View style={styles.screen}>
@@ -246,16 +295,17 @@ const IS_IOS = Platform.OS === "ios";
 const STATUS_BAR_HEIGHT = IS_IOS ? 0 : (StatusBar.currentHeight ?? 0);
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#ffffff" },
+  screen: { flex: 1, backgroundColor: "#F8F7F4" },
   listContent: { paddingHorizontal: 12, paddingTop: 10 },
   headerWrapper: {
     paddingTop: IS_IOS ? 56 : STATUS_BAR_HEIGHT + 16,
-    paddingHorizontal: 16,
+    paddingHorizontal: 5,
     paddingBottom: 8,
   },
   headerCard: {
     borderRadius: 24,
     padding: 20,
+    paddingHorizontal: 20,
     borderWidth: 1,
     borderColor: "#1e3a5f",
     overflow: "hidden",
@@ -357,6 +407,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#1e3a5f",
     overflow: "hidden",
+    minHeight: 56,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
   },
   statItem: { flex: 1, alignItems: "center", paddingVertical: 12 },
   statBorder: { borderRightWidth: 1, borderRightColor: "#1e3a5f" },

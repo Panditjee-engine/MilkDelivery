@@ -63,8 +63,18 @@ function formatUnit(unit: string): string {
   return unit.charAt(0).toUpperCase() + unit.slice(1);
 }
 
+<<<<<<< HEAD
 // ── Product Card ─────────────────────────────────────────────────────────────
 function ModernProductCard({ product, onPress }: { product: any; onPress: () => void }) {
+=======
+function ModernProductCard({
+  product,
+  onPress,
+}: {
+  product: any;
+  onPress: () => void;
+}) {
+>>>>>>> d0ef3950fe532a7f2ddb13147f25a8b1958d9b5a
   const theme = getCategoryTheme(product.category);
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.88}>
@@ -93,7 +103,6 @@ function ModernProductCard({ product, onPress }: { product: any; onPress: () => 
   );
 }
 
-// ── Main Screen ──────────────────────────────────────────────────────────────
 export default function CatalogScreen() {
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
@@ -198,13 +207,11 @@ export default function CatalogScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* ─── HEADER ─── */}
       <View style={styles.pageHeader}>
         <Text style={styles.pageTitle}>Shop</Text>
         <Text style={styles.pageSubtitle}>{products.length} products available</Text>
       </View>
 
-      {/* ─── CATEGORY CHIPS ─── */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -230,7 +237,6 @@ export default function CatalogScreen() {
         ))}
       </ScrollView>
 
-      {/* ─── PRODUCT SECTIONS ─── */}
       <ScrollView
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         showsVerticalScrollIndicator={false}
@@ -281,18 +287,42 @@ export default function CatalogScreen() {
         )}
       </ScrollView>
 
-      {/* ─── SUBSCRIPTION MODAL ─── */}
       <Modal visible={modalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalSheet}>
             <View style={styles.dragHandle} />
 
+<<<<<<< HEAD
             <View style={[styles.modalProductHeader, { backgroundColor: modalTheme.bg }]}>
               <View style={[styles.modalIconCircle, { backgroundColor: modalTheme.accent + "22" }]}>
                 <Ionicons name={modalTheme.icon as any} size={32} color={modalTheme.accent} />
               </View>
               <View style={{ flex: 1 }}>
                 {shopName && <Text style={styles.modalShopName}>{shopName}</Text>}
+=======
+            <View
+              style={[
+                styles.modalProductHeader,
+                { backgroundColor: modalTheme.bg },
+              ]}
+            >
+              <View
+                style={[
+                  styles.modalIconCircle,
+                  { backgroundColor: modalTheme.accent + "22" },
+                ]}
+              >
+                <Ionicons
+                  name={modalTheme.icon as any}
+                  size={32}
+                  color={modalTheme.accent}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                {shopName && (
+                  <Text style={styles.modalShopName}>{shopName}</Text>
+                )}
+>>>>>>> d0ef3950fe532a7f2ddb13147f25a8b1958d9b5a
                 <Text style={styles.modalTitle}>{selectedProduct?.name}</Text>
                 <View style={styles.modalMetaRow}>
                   <Text style={[styles.modalPrice, { color: modalTheme.accent }]}>₹{selectedProduct?.price}</Text>
@@ -427,6 +457,7 @@ const styles = StyleSheet.create({
   emptyState: { alignItems: "center", paddingTop: 80, gap: 12 },
   emptyText: { fontSize: 15, color: "#ccc", fontWeight: "500" },
 
+<<<<<<< HEAD
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },
   modalSheet: { backgroundColor: "#fff", borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 24, paddingTop: 12, paddingBottom: 34, maxHeight: "92%" },
   dragHandle: { width: 40, height: 4, backgroundColor: "#E0E0E0", borderRadius: 2, alignSelf: "center", marginBottom: 16 },
@@ -434,16 +465,103 @@ const styles = StyleSheet.create({
   modalIconCircle: { width: 56, height: 56, borderRadius: 16, justifyContent: "center", alignItems: "center" },
   modalShopName: { fontSize: 16, fontWeight: "800", color: "#1A1A1A", letterSpacing: -0.3, marginBottom: 2 },
   modalTitle: { fontSize: 13, fontWeight: "600", color: "#555", marginBottom: 4 },
+=======
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "flex-end",
+  },
+  modalSheet: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    paddingBottom: 34,
+    maxHeight: "92%",
+  },
+  dragHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: "#E0E0E0",
+    borderRadius: 2,
+    alignSelf: "center",
+    marginBottom: 16,
+  },
+
+  modalProductHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 4,
+  },
+  modalIconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  modalShopName: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#1A1A1A",
+    letterSpacing: -0.3,
+    marginBottom: 2,
+  },
+
+  modalTitle: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#555",
+    marginBottom: 4,
+  },
+
+>>>>>>> d0ef3950fe532a7f2ddb13147f25a8b1958d9b5a
   modalMetaRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   modalPrice: { fontSize: 15, fontWeight: "800" },
   modalDot: { fontSize: 14, color: "#ccc" },
   modalUnit: { fontSize: 13, fontWeight: "600" },
   closeBtn: { width: 34, height: 34, borderRadius: 10, backgroundColor: "rgba(0,0,0,0.07)", justifyContent: "center", alignItems: "center" },
   divider: { height: 1, backgroundColor: "#F0F0F0", marginVertical: 16 },
+<<<<<<< HEAD
   sectionLabel: { fontSize: 11, fontWeight: "700", color: "#bbb", letterSpacing: 1, textTransform: "uppercase", marginBottom: 6, marginTop: 4 },
   quantityHint: { fontSize: 13, color: "#aaa", marginBottom: 14 },
   quantityRow: { flexDirection: "row", alignItems: "center", marginBottom: 24, gap: 20 },
   qtyBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: "#F5F5F5", justifyContent: "center", alignItems: "center" },
+=======
+
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#bbb",
+    letterSpacing: 1,
+    textTransform: "uppercase",
+    marginBottom: 6,
+    marginTop: 4,
+  },
+
+  quantityHint: { fontSize: 13, color: "#aaa", marginBottom: 14 },
+
+  quantityRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 24,
+    gap: 20,
+  },
+  qtyBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: "#F5F5F5",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+>>>>>>> d0ef3950fe532a7f2ddb13147f25a8b1958d9b5a
   qtyValueBox: { alignItems: "center", minWidth: 60 },
   qtyValue: { fontSize: 26, fontWeight: "800", color: "#1A1A1A" },
   qtyUnitLabel: { fontSize: 11, fontWeight: "700", marginTop: 1 },
