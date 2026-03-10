@@ -2,6 +2,11 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const API_BASE = process.env.EXPO_PUBLIC_BACKEND_URL || "";
 
+export interface FeedItem {
+  feed_type: string;
+  quantity_kg: number;
+}
+
 class ApiService {
   private token: string | null = null;
 
@@ -631,12 +636,35 @@ async createWorker(data: {
   });
 }
 
-async updateAdminFeedDetails(cow_id: string, date: string, shift: string, feed_type?: string, quantity_kg?: number) {
+async updateAdminFeedDetails(
+  cowId: string,
+  date: string,
+  shift: string,
+  feeds: FeedItem[],
+  saveAsDefault = false,
+) {
   const params = new URLSearchParams({ date, shift });
-  if (feed_type) params.append("feed_type", feed_type);
-  if (quantity_kg !== undefined) params.append("quantity_kg", String(quantity_kg));
-  return this.request<any>(`/admin/feed/${cow_id}?${params.toString()}`, {
+  return this.request<any>(`/admin/feed/${cowId}?${params.toString()}`, {
     method: "PUT",
+    body: JSON.stringify({
+      feeds,
+      save_as_default: saveAsDefault,
+    }),
+  });
+}
+
+async getCowDefaultFeed(cowId: string) {
+  return this.request<{
+    cow_id: string;
+    morning_feeds: FeedItem[];
+    evening_feeds: FeedItem[];
+  }>(`/gausevak/cows/${cowId}/default-feed`);
+}
+
+async setCowDefaultFeed(cowId: string, morningFeeds: FeedItem[], eveningFeeds: FeedItem[]) {
+  return this.request<any>(`/gausevak/cows/${cowId}/default-feed`, {
+    method: "PUT",
+    body: JSON.stringify({ morning_feeds: morningFeeds, evening_feeds: eveningFeeds }),
   });
 }
 
