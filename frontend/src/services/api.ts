@@ -668,8 +668,6 @@ async setCowDefaultFeed(cowId: string, morningFeeds: FeedItem[], eveningFeeds: F
   });
 }
 
-// ===================== COW CAPACITY =====================
-
 async getCowCapacity(cowId: string) {
   return this.request<{
     cow_id: string;
@@ -697,8 +695,6 @@ async deleteCowCapacity(cowId: string) {
   });
 }
 
-// ===================== MILK HISTORY + PEAK =====================
-
 async getCowMilkHistory(cowId: string, days: number = 90) {
   return this.request<{
     cow_id: string;
@@ -711,8 +707,6 @@ async getCowMilkHistory(cowId: string, days: number = 90) {
     peak: { date: string; total: number } | null;
   }>(`/gausevak/cows/${cowId}/milk-history?days=${days}`);
 }
-
-// ===================== MILK DASHBOARD (replaces getAdminMilkLogs) =====================
 
 async getMilkDashboard(date?: string) {
   const params = new URLSearchParams();
@@ -744,14 +738,6 @@ async getMilkDashboard(date?: string) {
   }>(`/admin/milk/dashboard${query}`);
 }
 
-// Already works for bulls — no changes needed to these:
-// api.createCow({ ...fields, type: "bull" })
-// api.updateCow(id, { ...fields })
-// api.deleteCow(id)
-// api.getCows(search)   ← returns bulls too, filter by type on frontend
-
-// ADD these two new methods:
-
 async updateBullSemen(bullId: string, data: {
   totalDoses?: number;
   semenAvailable?: boolean;
@@ -770,7 +756,29 @@ async useBullSemen(bullId: string, dosesUsed: number = 1) {
     { method: "POST" }
   );
 }
-///------------------------------Gausevak (Cows)------------------------------
+
+async generateCowQR(cowId: string) {
+  return this.request<any>(`/gausevak/cows/${cowId}/qr`, {
+    method: "POST",
+  });
+}
+
+//Twilio OTP Authentication
+
+async sendOtp(phone: string) {
+  return this.request<any>("/auth/send-otp", {
+    method: "POST",
+    body: JSON.stringify({ phone }),
+  });
+}
+
+async verifyOtp(phone: string, otp: string) {
+  return this.request<any>("/auth/verify-otp", {
+    method: "POST",
+    body: JSON.stringify({ phone, otp }),
+  });
+}
+//------------------------------------------------------------//
 
   logout = async () => {
     this.setToken(null);

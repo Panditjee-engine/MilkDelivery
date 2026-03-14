@@ -17,6 +17,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   Alert,
+  Image,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -51,6 +52,8 @@ interface Cow {
   successRate?: number;
   purpose?: string;
   damYield?: number;
+  // QR code field
+  qrCode?: string;
 }
 
 interface CowForm {
@@ -983,6 +986,70 @@ function EditCowModal({
   );
 }
 
+// ── QR Modal ──────────────────────────────────────────────────────────────────
+function QRModal({
+  visible,
+  onClose,
+  cow,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  cow: Cow | null;
+}) {
+  if (!cow) return null;
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <TouchableOpacity
+        style={qr.overlay}
+        activeOpacity={1}
+        onPress={onClose}
+      >
+        <TouchableOpacity activeOpacity={1} style={qr.card}>
+          {/* Header */}
+          <View style={qr.header}>
+            <Text style={{ fontSize: 22 }}>
+              {cow.type === "bull" ? "🐂" : cow.type === "newborn" ? "🐮" : "🐄"}
+            </Text>
+            <View style={{ flex: 1, marginLeft: 10 }}>
+              <Text style={qr.name}>{cow.name}</Text>
+              <Text style={qr.tag}>TAG: {cow.tag}</Text>
+            </View>
+            <TouchableOpacity onPress={onClose} style={qr.closeBtn}>
+              <Ionicons name="close" size={16} color="#6b7280" />
+            </TouchableOpacity>
+          </View>
+
+          {/* QR Image */}
+          <View style={qr.qrWrap}>
+            {cow.qrCode ? (
+              <Image
+                source={{ uri: cow.qrCode }}
+                style={qr.qrImage}
+                resizeMode="contain"
+              />
+            ) : (
+              <View style={qr.qrPlaceholder}>
+                <Ionicons name="qr-code-outline" size={48} color="#d1d5db" />
+              </View>
+            )}
+          </View>
+
+          <Text style={qr.hint}>Scan to identify this animal</Text>
+
+          <TouchableOpacity onPress={onClose} style={qr.doneBtn}>
+            <Text style={qr.doneBtnText}>Done</Text>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
+  );
+}
+
 function DetailItem({
   icon,
   label,
@@ -1006,15 +1073,19 @@ function CowCard({
   index,
   onEdit,
   onDelete,
+  onUpdate,
 }: {
   item: Cow;
   index: number;
   onEdit: (cow: Cow) => void;
   onDelete: (cow: Cow) => void;
+  onUpdate: (cow: Cow) => void;
 }) {
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(16)).current;
   const [expanded, setExpanded] = useState(false);
+  const [qrLoading, setQrLoading] = useState(false);
+  const [qrVisible, setQrVisible] = useState(false);
   const st = STATUS[derivedStatus(item)];
   const isBull = item.type === "bull";
   const activeDays = getActiveDays(item.activeSince);
@@ -1036,6 +1107,26 @@ function CowCard({
       }),
     ]).start();
   }, []);
+
+  const handleQR = async () => {
+    // If QR already exists just show the modal
+    if (item.qrCode) {
+      setQrVisible(true);
+      return;
+    }
+    // Generate QR for the first time
+    setQrLoading(true);
+    try {
+      const updated: Cow = await api.generateCowQR(item.id);
+      onUpdate(updated);
+      // Small delay so state has propagated before showing modal
+      setTimeout(() => setQrVisible(true), 100);
+    } catch (err: any) {
+      Alert.alert("Error", err.message ?? "Failed to generate QR.");
+    } finally {
+      setQrLoading(false);
+    }
+  };
 
   return (
     <Animated.View
@@ -1371,6 +1462,7 @@ function CowCard({
             </>
           )}
 
+          {/* ── Action Row with QR button ── */}
           <View style={c.actionRow}>
             <TouchableOpacity
               style={[c.actionBtn, c.editBtn]}
@@ -1380,6 +1472,30 @@ function CowCard({
               <Ionicons name="create-outline" size={15} color="#2563eb" />
               <Text style={[c.actionText, { color: "#2563eb" }]}>Edit</Text>
             </TouchableOpacity>
+
+            {/* QR Button — "Gen QR" first time, "View QR" after */}
+            <TouchableOpacity
+              style={[c.actionBtn, c.qrBtn]}
+              onPress={handleQR}
+              activeOpacity={0.8}
+              disabled={qrLoading}
+            >
+              {qrLoading ? (
+                <ActivityIndicator size="small" color="#7c3aed" />
+              ) : (
+                <>
+                  <Ionicons
+                    name={item.qrCode ? "qr-code" : "qr-code-outline"}
+                    size={15}
+                    color="#7c3aed"
+                  />
+                  <Text style={[c.actionText, { color: "#7c3aed" }]}>
+                    {item.qrCode ? "View QR" : "Gen QR"}
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+
             <TouchableOpacity
               style={[c.actionBtn, c.deleteBtn]}
               onPress={() => onDelete(item)}
@@ -1391,6 +1507,13 @@ function CowCard({
           </View>
         </>
       )}
+
+      {/* QR View Modal — rendered outside expanded block so it always mounts */}
+      <QRModal
+        visible={qrVisible}
+        onClose={() => setQrVisible(false)}
+        cow={item}
+      />
     </Animated.View>
   );
 }
@@ -1681,6 +1804,11 @@ export default function CowsScreen() {
                   index={index}
                   onEdit={(cow) => setEditCow(cow)}
                   onDelete={handleDelete}
+                  onUpdate={(updated) =>
+                    setCows((prev) =>
+                      prev.map((c) => (c.id === updated.id ? updated : c)),
+                    )
+                  }
                 />
               )}
               ListEmptyComponent={
@@ -2024,7 +2152,7 @@ const c = StyleSheet.create({
     borderWidth: 1,
   },
   pillText: { fontSize: 11, fontWeight: "600" },
-  actionRow: { flexDirection: "row", gap: 10 },
+  actionRow: { flexDirection: "row", gap: 8 },
   actionBtn: {
     flex: 1,
     flexDirection: "row",
@@ -2037,6 +2165,8 @@ const c = StyleSheet.create({
   },
   editBtn: { backgroundColor: "#eff6ff", borderColor: "#bfdbfe" },
   deleteBtn: { backgroundColor: "#fff1f2", borderColor: "#fecdd3" },
+  // NEW: QR button style — purple tint matching bull colour
+  qrBtn: { backgroundColor: "#f5f3ff", borderColor: "#ddd6fe" },
   actionText: { fontSize: 13, fontWeight: "700" },
 });
 
@@ -2269,5 +2399,94 @@ const m = StyleSheet.create({
     fontWeight: "800",
     color: "#fff",
     letterSpacing: -0.2,
+  },
+});
+
+// ── QR Modal styles ────────────────────────────────────────────────────────────
+const qr = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  card: {
+    backgroundColor: "#fff",
+    borderRadius: 24,
+    padding: 24,
+    alignItems: "center",
+    width: 300,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    elevation: 12,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    width: "100%",
+    marginBottom: 16,
+  },
+  name: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#111827",
+    letterSpacing: -0.2,
+  },
+  tag: {
+    fontSize: 11,
+    color: "#9ca3af",
+    fontWeight: "600",
+    marginTop: 1,
+  },
+  closeBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#f3f4f6",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  qrWrap: {
+    width: 210,
+    height: 210,
+    borderRadius: 16,
+    overflow: "hidden",
+    backgroundColor: "#f9fafb",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+  },
+  qrImage: {
+    width: 210,
+    height: 210,
+  },
+  qrPlaceholder: {
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
+    height: "100%",
+  },
+  hint: {
+    fontSize: 11,
+    color: "#9ca3af",
+    fontWeight: "500",
+    marginTop: 14,
+    marginBottom: 4,
+  },
+  doneBtn: {
+    marginTop: 14,
+    backgroundColor: "#111827",
+    borderRadius: 12,
+    paddingHorizontal: 32,
+    paddingVertical: 11,
+  },
+  doneBtnText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 13,
+    letterSpacing: 0.2,
   },
 });

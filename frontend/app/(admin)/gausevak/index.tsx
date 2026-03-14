@@ -10,11 +10,13 @@ import {
   Platform,
   StatusBar,
   ActivityIndicator,
+  Modal,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { api } from "../../../src/services/api";
+import Scanner from "../../../src/components/Scanner";
 
 const MENU = [
   {
@@ -81,14 +83,14 @@ const MENU = [
     accent: "#56b4d3",
   },
   {
-  id: "workers",
-  title: "Workers",
-  subtitle: "Farm staff",
-  icon: "people",
-  route: "/(admin)/gausevak/workers",
-  gradient: ["#1a2e1a", "#2d5a27"] as const,
-  accent: "#a3d977",
-},
+    id: "workers",
+    title: "Workers",
+    subtitle: "Farm staff",
+    icon: "people",
+    route: "/(admin)/gausevak/workers",
+    gradient: ["#1a2e1a", "#2d5a27"] as const,
+    accent: "#a3d977",
+  },
 ];
 
 function MenuCard({ item, index }: { item: (typeof MENU)[0]; index: number }) {
@@ -190,8 +192,10 @@ interface CowStats {
 }
 
 function Header() {
+  const router = useRouter();
   const [stats, setStats] = useState<CowStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showScanner, setShowScanner] = useState(false);
 
   useEffect(() => {
     const fetchCowStats = async () => {
@@ -208,7 +212,6 @@ function Header() {
         setLoading(false);
       }
     };
-
     fetchCowStats();
   }, []);
 
@@ -217,6 +220,15 @@ function Header() {
     { label: "Active", value: stats?.active ?? "-" },
     { label: "Inactive", value: stats?.inactive ?? "-" },
   ];
+
+  // ── When scan succeeds: close modal → navigate to result page ──
+  const handleScanned = (data: string) => {
+    setShowScanner(false);
+    router.push({
+      pathname: "/(admin)/gausevak/scanner-result",
+      params: { data },
+    } as any);
+  };
 
   return (
     <View style={styles.headerWrapper}>
@@ -244,12 +256,24 @@ function Header() {
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.heading}>Gausevak</Text>
-            <Text style={styles.subheading}>Cattle care, simplified</Text>
+            <Text style={styles.subheading}>Cattle care</Text>
           </View>
-          <TouchableOpacity style={styles.notifBtn}>
-            <Ionicons name="notifications-outline" size={20} color="#7ca9d4" />
-            <View style={styles.notifDot} />
-          </TouchableOpacity>
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <TouchableOpacity
+              style={styles.notifBtn}
+              onPress={() => setShowScanner(true)}
+            >
+              <Ionicons name="qr-code-outline" size={20} color="#7ca9d4" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.notifBtn}>
+              <Ionicons
+                name="notifications-outline"
+                size={20}
+                color="#7ca9d4"
+              />
+              <View style={styles.notifDot} />
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View style={styles.statsRow}>
@@ -261,7 +285,10 @@ function Header() {
             statItems.map((stat, i) => (
               <View
                 key={i}
-                style={[styles.statItem, i < statItems.length - 1 && styles.statBorder]}
+                style={[
+                  styles.statItem,
+                  i < statItems.length - 1 && styles.statBorder,
+                ]}
               >
                 <Text style={styles.statValue}>{String(stat.value)}</Text>
                 <Text style={styles.statLabel}>{stat.label}</Text>
@@ -270,6 +297,15 @@ function Header() {
           )}
         </View>
       </LinearGradient>
+
+      <Modal visible={showScanner} animationType="slide">
+        <Scanner
+          title="Scan Cow Tag"
+          subtitle="Scan the QR code on cow's ear tag"
+          onScanned={handleScanned}
+          onClose={() => setShowScanner(false)}
+        />
+      </Modal>
     </View>
   );
 }
