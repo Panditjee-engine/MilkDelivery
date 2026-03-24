@@ -366,6 +366,7 @@ async updateCow(id: string, data: Partial<{
   isActive: boolean;
   isSold: boolean;
   type: string;
+  milkActive: boolean;   // ← ADD THIS
 }>) {
   return this.request<any>(`/gausevak/cows/${id}`, {
     method: "PUT",
@@ -763,25 +764,172 @@ async generateCowQR(cowId: string) {
   });
 }
 
-//Twilio OTP Authentication
+// Authentication
 
-async sendOtp(phone: string) {
-  return this.request<any>("/auth/send-otp", {
+async verifyFirebaseToken(idToken: string) {
+  return this.request<any>("/auth/verify-firebase", {
     method: "POST",
-    body: JSON.stringify({ phone }),
+    body: JSON.stringify({ id_token: idToken }),
   });
 }
 
-async verifyOtp(phone: string, otp: string) {
-  return this.request<any>("/auth/verify-otp", {
-    method: "POST",
-    body: JSON.stringify({ phone, otp }),
+//Worker Apis-------------------
+async workerGetCows() {
+  const token = await AsyncStorage.getItem('worker_token');
+  const response = await fetch(`${API_BASE}/api/worker/cows`, {
+    headers: { 'Authorization': `Bearer ${token}` },
   });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.detail || 'Failed to fetch cows');
+  return data;
+}
+
+async workerGetTodayHealthLogs() {
+  const today = new Date().toISOString().split('T')[0];
+  const token = await AsyncStorage.getItem('worker_token');
+  const response = await fetch(`${API_BASE}/api/worker/health?date=${today}`, {
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.detail || 'Failed to fetch health logs');
+  return data;
+}
+
+async workerAddHealthLog(data: {
+  cow_id: string;
+  cow_name: string;
+  cow_tag: string;
+  status: string;
+  date: string;
+}) {
+  const token = await AsyncStorage.getItem('worker_token');
+  const response = await fetch(`${API_BASE}/api/worker/health`, {
+    method: 'POST',
+    headers: { 
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.detail || 'Failed to save health log');
+  return result;
+}
+
+
+async workerGetFeedStatus(date: string, shift: 'morning' | 'evening') {
+  const token = await AsyncStorage.getItem('worker_token');
+  const response = await fetch(`${API_BASE}/api/worker/feed?date=${date}&shift=${shift}`, {
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.detail || 'Failed to fetch feed status');
+  return data;
+}
+
+async workerMarkFed(data: {
+  cow_id: string;
+  cow_name: string;
+  cow_tag: string;
+  date: string;
+  shift: 'morning' | 'evening';
+}) {
+  const token = await AsyncStorage.getItem('worker_token');
+  const response = await fetch(`${API_BASE}/api/worker/feed`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.detail || 'Failed to mark fed');
+  return result;
+}
+
+async workerUnmarkFed(cow_id: string, date: string, shift: 'morning' | 'evening') {
+  const token = await AsyncStorage.getItem('worker_token');
+  const response = await fetch(
+    `${API_BASE}/api/worker/feed?cow_id=${cow_id}&date=${date}&shift=${shift}`,
+    {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` },
+    }
+  );
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.detail || 'Failed to unmark fed');
+  return result;
+}
+
+async workerGetShiftStatus() {
+  const token = await AsyncStorage.getItem('worker_token');
+  const response = await fetch(`${API_BASE}/api/worker/milk/shift-status`, {
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.detail || 'Failed to fetch shift status');
+  return data;
+}
+
+async workerGetTodayMilk() {
+  const token = await AsyncStorage.getItem('worker_token');
+  const response = await fetch(`${API_BASE}/api/worker/milk/today`, {
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.detail || 'Failed to fetch today milk');
+  return data;
+}
+
+async workerAddMilk(data: {
+  cow_id: string;
+  cow_name: string;
+  cow_tag: string;
+  quantity: number;
+  shift: 'morning' | 'evening';
+  date: string;
+  notes?: string;
+}) {
+  const token = await AsyncStorage.getItem('worker_token');
+  const response = await fetch(`${API_BASE}/api/worker/milk`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.detail || 'Failed to save milk entry');
+  return result;
+}
+
+async workerLogin(identifier: string, password: string) {
+  const response = await fetch(`${API_BASE}/api/worker/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: identifier, password }),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.detail || 'Worker login failed');
+
+  await AsyncStorage.setItem('worker_token', data.access_token);
+  await AsyncStorage.setItem('worker_data', JSON.stringify(data.worker));
+
+  return data;
+}
+
+async workerLogout() {
+  await AsyncStorage.removeItem('worker_token');
+  await AsyncStorage.removeItem('worker_data');
 }
 //------------------------------------------------------------//
 
   logout = async () => {
     this.setToken(null);
+    await AsyncStorage.removeItem('worker_token');
+    await AsyncStorage.removeItem('worker_data');
   };
 }
 

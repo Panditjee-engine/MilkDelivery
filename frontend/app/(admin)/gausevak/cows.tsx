@@ -44,7 +44,8 @@ interface Cow {
   type: CowType;
   created_at: string;
   pregnancyStatus?: PregnancyStatus;
-  activeSince?: string; // DD/MM/YYYY — set when isActive toggled ON
+  activeSince?: string;
+  milkActive?: boolean; // ← ADDED
   // Bull-specific fields
   semenAvailable?: boolean;
   totalDoses?: number;
@@ -69,6 +70,7 @@ interface CowForm {
   isActive: boolean;
   isSold: boolean;
   type: CowType;
+  milkActive: boolean; // ← ADDED
   semenAvailable: boolean;
   totalDoses: string;
   lastUsedDate: string;
@@ -90,6 +92,7 @@ const EMPTY_FORM: CowForm = {
   isActive: true,
   isSold: false,
   type: "mature",
+  milkActive: false, // ← ADDED
   semenAvailable: false,
   totalDoses: "",
   lastUsedDate: "",
@@ -150,7 +153,6 @@ function ActiveDaysBadge({
   const days = getActiveDays(activeSince);
   if (days === null) return null;
 
-  // Color coding based on milestone
   const color =
     days >= 365
       ? "#7c3aed"
@@ -524,6 +526,7 @@ function CowFormFields({
               icon="calendar-outline"
             />
           )}
+          {/* ── TOGGLES — non-bull ── */}
           <View style={m.toggleCard}>
             <Toggle
               label="Active Status"
@@ -537,6 +540,14 @@ function CowFormFields({
               value={form.isSold}
               onChange={setF("isSold")}
               color="#dc2626"
+            />
+            {/* ← ADDED: Milk Recording toggle, non-bull only */}
+            <View style={m.divider} />
+            <Toggle
+              label="Milk Recording"
+              value={form.milkActive}
+              onChange={setF("milkActive")}
+              color="#0891b2"
             />
           </View>
         </>
@@ -602,7 +613,7 @@ function AddCowModal({
         isActive: form.isActive,
         isSold: form.isSold,
         type: form.type,
-        // Auto-set activeSince today if registering as active
+        milkActive: !isBull ? form.milkActive : undefined, // ← ADDED
         activeSince: form.isActive ? getTodayStr() : undefined,
         ...(isBull && {
           semenAvailable: form.semenAvailable,
@@ -843,6 +854,7 @@ function EditCowModal({
         isActive: cow.isActive,
         isSold: cow.isSold,
         type: cow.type,
+        milkActive: cow.milkActive ?? false, // ← ADDED
         semenAvailable: cow.semenAvailable ?? false,
         totalDoses: cow.totalDoses?.toString() ?? "",
         lastUsedDate: cow.lastUsedDate ?? "",
@@ -866,15 +878,11 @@ function EditCowModal({
     try {
       const isBull = form.type === "bull";
 
-      // Determine activeSince:
-      // Toggled OFF → ON: set today (fresh count)
-      // Toggled ON → OFF: clear
-      // No change: keep original
       let activeSince: string | undefined | null = originalActiveSince.current;
       if (!originalIsActive.current && form.isActive) {
         activeSince = getTodayStr();
       } else if (originalIsActive.current && !form.isActive) {
-        activeSince = null; // backend should clear
+        activeSince = null;
       }
 
       const payload: any = {
@@ -890,6 +898,7 @@ function EditCowModal({
         isSold: form.isSold,
         type: form.type,
         activeSince: activeSince ?? undefined,
+        milkActive: !isBull ? form.milkActive : undefined, // ← ADDED
         ...(isBull && {
           semenAvailable: form.semenAvailable,
           totalDoses: form.totalDoses ? parseInt(form.totalDoses) : undefined,
@@ -986,7 +995,6 @@ function EditCowModal({
   );
 }
 
-// ── QR Modal ──────────────────────────────────────────────────────────────────
 function QRModal({
   visible,
   onClose,
@@ -1010,7 +1018,6 @@ function QRModal({
         onPress={onClose}
       >
         <TouchableOpacity activeOpacity={1} style={qr.card}>
-          {/* Header */}
           <View style={qr.header}>
             <Text style={{ fontSize: 22 }}>
               {cow.type === "bull" ? "🐂" : cow.type === "newborn" ? "🐮" : "🐄"}
@@ -1023,8 +1030,6 @@ function QRModal({
               <Ionicons name="close" size={16} color="#6b7280" />
             </TouchableOpacity>
           </View>
-
-          {/* QR Image */}
           <View style={qr.qrWrap}>
             {cow.qrCode ? (
               <Image
@@ -1038,9 +1043,7 @@ function QRModal({
               </View>
             )}
           </View>
-
           <Text style={qr.hint}>Scan to identify this animal</Text>
-
           <TouchableOpacity onPress={onClose} style={qr.doneBtn}>
             <Text style={qr.doneBtnText}>Done</Text>
           </TouchableOpacity>
@@ -1109,17 +1112,14 @@ function CowCard({
   }, []);
 
   const handleQR = async () => {
-    // If QR already exists just show the modal
     if (item.qrCode) {
       setQrVisible(true);
       return;
     }
-    // Generate QR for the first time
     setQrLoading(true);
     try {
       const updated: Cow = await api.generateCowQR(item.id);
       onUpdate(updated);
-      // Small delay so state has propagated before showing modal
       setTimeout(() => setQrVisible(true), 100);
     } catch (err: any) {
       Alert.alert("Error", err.message ?? "Failed to generate QR.");
@@ -1194,7 +1194,6 @@ function CowCard({
                 )}
               </View>
             </View>
-            {/* Tag + inline active days mini badge */}
             <View
               style={{
                 flexDirection: "row",
@@ -1232,7 +1231,6 @@ function CowCard({
         <>
           <View style={c.divider} />
 
-          {/* ── Active Days Full Badge ── */}
           <ActiveDaysBadge
             activeSince={item.activeSince}
             isActive={item.isActive}
@@ -1458,11 +1456,35 @@ function CowCard({
                     </Text>
                   </View>
                 )}
+
+                {/* ← ADDED: Milk Recording pill — non-bull only */}
+                <View
+                  style={[
+                    c.pill,
+                    {
+                      backgroundColor: item.milkActive ? "#ecfeff" : "#f9fafb",
+                      borderColor: item.milkActive ? "#a5f3fc" : "#e5e7eb",
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name="water-outline"
+                    size={12}
+                    color={item.milkActive ? "#0891b2" : "#9ca3af"}
+                  />
+                  <Text
+                    style={[
+                      c.pillText,
+                      { color: item.milkActive ? "#0891b2" : "#9ca3af" },
+                    ]}
+                  >
+                    {item.milkActive ? "Milk Active" : "Milk Off"}
+                  </Text>
+                </View>
               </View>
             </>
           )}
 
-          {/* ── Action Row with QR button ── */}
           <View style={c.actionRow}>
             <TouchableOpacity
               style={[c.actionBtn, c.editBtn]}
@@ -1473,7 +1495,6 @@ function CowCard({
               <Text style={[c.actionText, { color: "#2563eb" }]}>Edit</Text>
             </TouchableOpacity>
 
-            {/* QR Button — "Gen QR" first time, "View QR" after */}
             <TouchableOpacity
               style={[c.actionBtn, c.qrBtn]}
               onPress={handleQR}
@@ -1508,7 +1529,6 @@ function CowCard({
         </>
       )}
 
-      {/* QR View Modal — rendered outside expanded block so it always mounts */}
       <QRModal
         visible={qrVisible}
         onClose={() => setQrVisible(false)}
@@ -2165,7 +2185,6 @@ const c = StyleSheet.create({
   },
   editBtn: { backgroundColor: "#eff6ff", borderColor: "#bfdbfe" },
   deleteBtn: { backgroundColor: "#fff1f2", borderColor: "#fecdd3" },
-  // NEW: QR button style — purple tint matching bull colour
   qrBtn: { backgroundColor: "#f5f3ff", borderColor: "#ddd6fe" },
   actionText: { fontSize: 13, fontWeight: "700" },
 });
@@ -2402,7 +2421,6 @@ const m = StyleSheet.create({
   },
 });
 
-// ── QR Modal styles ────────────────────────────────────────────────────────────
 const qr = StyleSheet.create({
   overlay: {
     flex: 1,

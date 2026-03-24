@@ -35,43 +35,55 @@ export default function LoginScreen() {
 
   const [loading, setLoading] = useState(false);
 
-  const { login } = useAuth();
+  // AuthContext must export both login AND workerLogin
+  const { login, workerLogin } = useAuth();
   const router = useRouter();
 
   const handleLogin = async () => {
-    if (loginMethod === 'email') {
-      if (!email || !password) {
-        Alert.alert('Error', 'Please fill in all fields');
-        return;
-      }
-      setLoading(true);
+    // Grab identifier + password based on active tab
+    const identifier =
+      loginMethod === 'email' ? email.trim() : `+91${phone}`;
+    const pwd =
+      loginMethod === 'email' ? password : phonePassword;
+
+    // Basic validation
+    if (loginMethod === 'email' && (!email || !password)) {
+      Alert.alert('Error', 'Please fill in all fields');
+      return;
+    }
+    if (loginMethod === 'phone' && (phone.length !== 10 || !phonePassword)) {
+      Alert.alert('Error', 'Enter a valid 10-digit number and password');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // ── Step 1: Try customer/admin/rider login ──────────────────
       try {
-        await login(email, password);
-        router.replace('/');
-      } catch (error: any) {
-        Alert.alert('Login Failed', error.message || 'Invalid credentials');
-      } finally {
-        setLoading(false);
-      }
-    } else {
-      // Phone login
-      if (!phone || phone.length !== 10) {
-        Alert.alert('Error', 'Enter a valid 10-digit mobile number');
+        await login(identifier, pwd);
+        router.replace('/');   // ← customer home
         return;
+      } catch {
+        // user login failed — silently fall through to worker attempt
       }
-      if (!phonePassword) {
-        Alert.alert('Error', 'Please enter your password');
-        return;
-      } 
-      setLoading(true);
-      try {  
-        await login(`+91${phone}`, phonePassword);
-        router.replace('/');
-      } catch (error: any) {
-        Alert.alert('Login Failed', error.message || 'Invalid credentials');
-      } finally {
-        setLoading(false);
-      }
+
+      // ── Step 2: Fallback — try worker login ─────────────────────
+      // Worker login only accepts email, so use email directly.
+      // If they logged in via phone we still need their email,
+      // so for phone-mode we pass the raw phone as identifier
+      // and let the backend reject with a clear message if it's
+      // not a valid worker email.
+      await workerLogin(identifier, pwd);
+      router.replace('/(worker)' as any);   // ← worker home
+
+    } catch (error: any) {
+      // Both attempts failed
+      Alert.alert(
+        'Login Failed',
+        error.message || 'Invalid credentials. Please check and try again.'
+      );
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -94,11 +106,11 @@ export default function LoginScreen() {
                 resizeMode="contain"
               />
             </View>
-            <Text style={styles.title}>Welcome to Gauhum</Text>
+            <Text style={styles.title}>Welcome to Gausatv</Text>
             <Text style={styles.subtitle}>Sign in to continue</Text>
           </View>
 
-          {/* Toggle Email / Phone */}
+          {/* Toggle Email / Phone — unchanged */}
           <View style={styles.toggleContainer}>
             <TouchableOpacity
               style={[
@@ -112,10 +124,12 @@ export default function LoginScreen() {
                 size={16}
                 color={loginMethod === 'email' ? '#fff' : Colors.textSecondary}
               />
-              <Text style={[
-                styles.toggleText,
-                loginMethod === 'email' && styles.toggleTextActive,
-              ]}>
+              <Text
+                style={[
+                  styles.toggleText,
+                  loginMethod === 'email' && styles.toggleTextActive,
+                ]}
+              >
                 Email
               </Text>
             </TouchableOpacity>
@@ -132,10 +146,12 @@ export default function LoginScreen() {
                 size={16}
                 color={loginMethod === 'phone' ? '#fff' : Colors.textSecondary}
               />
-              <Text style={[
-                styles.toggleText,
-                loginMethod === 'phone' && styles.toggleTextActive,
-              ]}>
+              <Text
+                style={[
+                  styles.toggleText,
+                  loginMethod === 'phone' && styles.toggleTextActive,
+                ]}
+              >
                 Phone
               </Text>
             </TouchableOpacity>
@@ -145,7 +161,7 @@ export default function LoginScreen() {
           <View style={styles.form}>
             <View style={styles.card}>
 
-              {/* ── Email Login ── */}
+              {/* ── Email fields ── */}
               {loginMethod === 'email' && (
                 <>
                   <Input
@@ -191,7 +207,7 @@ export default function LoginScreen() {
                 </>
               )}
 
-              {/* ── Phone Login ── */}
+              {/* ── Phone fields ── */}
               {loginMethod === 'phone' && (
                 <>
                   <Text style={styles.inputLabel}>Mobile Number</Text>
@@ -204,10 +220,9 @@ export default function LoginScreen() {
                       style={styles.phoneInput}
                       placeholder="9999999999"
                       value={phone}
-                      onChangeText={(val) => {
-                        const cleaned = val.replace(/\D/g, '').slice(0, 10);
-                        setPhone(cleaned);
-                      }}
+                      onChangeText={(val) =>
+                        setPhone(val.replace(/\D/g, '').slice(0, 10))
+                      }
                       keyboardType="number-pad"
                       maxLength={10}
                       placeholderTextColor={Colors.textSecondary}
@@ -229,10 +244,16 @@ export default function LoginScreen() {
                     }
                     rightIcon={
                       <TouchableOpacity
-                        onPress={() => setShowPhonePassword(!showPhonePassword)}
+                        onPress={() =>
+                          setShowPhonePassword(!showPhonePassword)
+                        }
                       >
                         <Ionicons
-                          name={showPhonePassword ? 'eye-off-outline' : 'eye-outline'}
+                          name={
+                            showPhonePassword
+                              ? 'eye-off-outline'
+                              : 'eye-outline'
+                          }
                           size={20}
                           color={Colors.textSecondary}
                         />
@@ -259,12 +280,10 @@ export default function LoginScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Demo section */}
           <View style={styles.demoSection}>
-            <Text style={styles.demoTitle}>Gauhum</Text>
-            <Text style={styles.demoText}>A woman powered initiative</Text>
+            <Text style={styles.demoTitle}>Gausatv</Text>
+            <Text style={styles.demoText}>Dairy and cattle management</Text>
           </View>
-
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -272,44 +291,38 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  container:          { flex: 1, backgroundColor: '#F4F6FA' },
-  keyboardView:       { flex: 1 },
-  scrollContent:      { flexGrow: 1, padding: 24 },
+  container:       { flex: 1, backgroundColor: '#F4F6FA' },
+  keyboardView:    { flex: 1 },
+  scrollContent:   { flexGrow: 1, padding: 24 },
 
-  // Header
-  header:             { alignItems: 'center', marginTop: 40, marginBottom: 32 },
-  logoCircle:         {},
-  logoImage:          { width: 96, height: 96, marginBottom: 12 },
-  title:              { fontSize: 28, fontWeight: '700', color: Colors.text, marginBottom: 8 },
-  subtitle:           { fontSize: 16, color: Colors.textSecondary },
+  header:          { alignItems: 'center', marginTop: 40, marginBottom: 32 },
+  logoCircle:      {},
+  logoImage:       { width: 96, height: 96, marginBottom: 12 },
+  title:           { fontSize: 28, fontWeight: '700', color: Colors.text, marginBottom: 8 },
+  subtitle:        { fontSize: 16, color: Colors.textSecondary },
 
-  // Toggle
-  toggleContainer:    { flexDirection: 'row', backgroundColor: '#E5E7EB', borderRadius: 12, padding: 4, marginBottom: 24 },
-  toggleBtn:          { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, borderRadius: 10, gap: 6 },
-  toggleBtnActive:    { backgroundColor: Colors.primary },
-  toggleText:         { fontSize: 14, fontWeight: '600', color: Colors.textSecondary },
-  toggleTextActive:   { color: '#fff' },
+  toggleContainer: { flexDirection: 'row', backgroundColor: '#E5E7EB', borderRadius: 12, padding: 4, marginBottom: 24 },
+  toggleBtn:       { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, borderRadius: 10, gap: 6 },
+  toggleBtnActive: { backgroundColor: Colors.primary },
+  toggleText:      { fontSize: 14, fontWeight: '600', color: Colors.textSecondary },
+  toggleTextActive:{ color: '#fff' },
 
-  // Form
-  form:               { marginBottom: 24 },
-  card:               { backgroundColor: '#FFFFFF', borderRadius: 20, padding: 20, gap: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 8 },
-  button:             { marginTop: 8 },
+  form:            { marginBottom: 24 },
+  card:            { backgroundColor: '#FFFFFF', borderRadius: 20, padding: 20, gap: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 8 },
+  button:          { marginTop: 8 },
 
-  // Phone input
-  inputLabel:         { fontSize: 14, fontWeight: '600', color: Colors.text, marginBottom: 6 },
-  phoneRow:           { flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderColor: '#E5E7EB', borderRadius: 12, backgroundColor: '#fff', overflow: 'hidden', marginBottom: 4 },
-  countryCode:        { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 14, backgroundColor: '#F9FAFB', borderRightWidth: 1, borderRightColor: '#E5E7EB', gap: 6 },
-  countryFlag:        { fontSize: 20 },
-  countryCodeText:    { fontSize: 15, fontWeight: '600', color: Colors.text },
-  phoneInput:         { flex: 1, paddingHorizontal: 14, paddingVertical: 14, fontSize: 16, color: Colors.text },
+  inputLabel:      { fontSize: 14, fontWeight: '600', color: Colors.text, marginBottom: 6 },
+  phoneRow:        { flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderColor: '#E5E7EB', borderRadius: 12, backgroundColor: '#fff', overflow: 'hidden', marginBottom: 4 },
+  countryCode:     { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 14, backgroundColor: '#F9FAFB', borderRightWidth: 1, borderRightColor: '#E5E7EB', gap: 6 },
+  countryFlag:     { fontSize: 20 },
+  countryCodeText: { fontSize: 15, fontWeight: '600', color: Colors.text },
+  phoneInput:      { flex: 1, paddingHorizontal: 14, paddingVertical: 14, fontSize: 16, color: Colors.text },
 
-  // Footer
-  footer:             { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, marginBottom: 24 },
-  footerText:         { fontSize: 14, color: Colors.textSecondary },
-  linkText:           { fontSize: 14, fontWeight: '600', color: Colors.primary },
+  footer:          { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, marginBottom: 24 },
+  footerText:      { fontSize: 14, color: Colors.textSecondary },
+  linkText:        { fontSize: 14, fontWeight: '600', color: Colors.primary },
 
-  // Demo
-  demoSection:        { padding: 16, backgroundColor: Colors.surfaceSecondary, borderRadius: 12 },
-  demoTitle:          { fontSize: 14, fontWeight: '600', color: Colors.text, marginBottom: 8 },
-  demoText:           { fontSize: 12, color: Colors.textSecondary },
+  demoSection:     { padding: 16, backgroundColor: Colors.surfaceSecondary, borderRadius: 12 },
+  demoTitle:       { fontSize: 14, fontWeight: '600', color: Colors.text, marginBottom: 8 },
+  demoText:        { fontSize: 12, color: Colors.textSecondary },
 });

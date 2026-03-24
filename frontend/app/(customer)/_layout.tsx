@@ -3,8 +3,10 @@ import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../src/constants/colors';
 import { Platform, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function CustomerLayout() {
+  const insets = useSafeAreaInsets(); // ← add this
   return (
     <Tabs
       screenOptions={{
@@ -16,8 +18,8 @@ export default function CustomerLayout() {
           borderTopWidth: 1,
           borderTopColor: Colors.border,
           paddingTop: 8,
-          paddingBottom: Platform.OS === 'ios' ? 28 : 12,
-          height: Platform.OS === 'ios' ? 88 : 70,
+          paddingBottom: (Platform.OS === 'ios' ? 28 : 12)+ insets.bottom,
+          height: (Platform.OS === 'ios' ? 88 : 70) + insets.bottom,
         },
         tabBarLabelStyle: {
           fontSize: 11,

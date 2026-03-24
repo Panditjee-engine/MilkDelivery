@@ -1,10 +1,12 @@
-import React from 'react';
-import { Tabs } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../src/constants/colors';
-import { Platform } from 'react-native';
+import React from "react";
+import { Tabs } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import { Colors } from "../../src/constants/colors";
+import { Platform } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function AdminLayout() {
+  const insets = useSafeAreaInsets();
   return (
     <Tabs
       screenOptions={{
@@ -16,19 +18,19 @@ export default function AdminLayout() {
           borderTopWidth: 1,
           borderTopColor: Colors.border,
           paddingTop: 8,
-          paddingBottom: Platform.OS === 'ios' ? 28 : 12,
-          height: Platform.OS === 'ios' ? 88 : 70,
+          paddingBottom: (Platform.OS === "ios" ? 28 : 12) + insets.bottom, // ← updated
+          height: (Platform.OS === "ios" ? 88 : 70) + insets.bottom,
         },
         tabBarLabelStyle: {
           fontSize: 10,
-          fontWeight: '600',
+          fontWeight: "600",
         },
       }}
     >
       <Tabs.Screen
         name="dashboard"
         options={{
-          title: 'Dashboard',
+          title: "Dashboard",
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="grid" size={size} color={color} />
           ),
@@ -38,7 +40,7 @@ export default function AdminLayout() {
       <Tabs.Screen
         name="inventory"
         options={{
-          title: 'Inventory',
+          title: "Inventory",
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="cube" size={size} color={color} />
           ),
@@ -48,7 +50,7 @@ export default function AdminLayout() {
       <Tabs.Screen
         name="orders"
         options={{
-          title: 'Orders',
+          title: "Orders",
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="receipt" size={size} color={color} />
           ),
@@ -59,7 +61,7 @@ export default function AdminLayout() {
       <Tabs.Screen
         name="gausevak"
         options={{
-          title: 'Gausevak',
+          title: "Gausevak",
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="heart" size={size} color={color} />
           ),
@@ -69,7 +71,7 @@ export default function AdminLayout() {
       <Tabs.Screen
         name="wallet"
         options={{
-          title: 'Wallet',
+          title: "Wallet",
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="wallet" size={size} color={color} />
           ),
@@ -79,7 +81,7 @@ export default function AdminLayout() {
       <Tabs.Screen
         name="settings"
         options={{
-          title: 'Settings',
+          title: "Settings",
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="settings" size={size} color={color} />
           ),

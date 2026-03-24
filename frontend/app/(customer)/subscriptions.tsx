@@ -122,79 +122,87 @@ export default function SubscriptionsScreen() {
               <View key={sub.id} style={styles.ticketWrapper}>
                 <View style={styles.perforationTop} />
 
-                <View
-                  style={[styles.ticketCard, isDelivered && { opacity: 0.6 }]}
-                >
-                  <View style={styles.ticketHeader}>
-                    <View>
-                      <Text style={styles.productName}>
-                        {sub.product?.name}
-                      </Text>
-                      <Text style={styles.ticketId}>#{sub.id?.slice(-6)}</Text>
+                {/* ── FIXED: blur is now inside ticketCard so it covers only the card ── */}
+                <View style={styles.ticketCard}>
+                  <View style={[styles.ticketContent, isDelivered && { opacity: 0.45 }]}>
+                    <View style={styles.ticketHeader}>
+                      <View>
+                        <Text style={styles.productName}>
+                          {sub.product?.name}
+                        </Text>
+                        <Text style={styles.ticketId}>#{sub.id?.slice(-6)}</Text>
+                      </View>
+
+                      <Text style={styles.price}>₹{sub.product?.price}</Text>
                     </View>
 
-                    <Text style={styles.price}>₹{sub.product?.price}</Text>
+                    <View style={styles.progressContainer}>
+                      <View style={styles.progressBarBg}>
+                        <View
+                          style={[
+                            styles.progressBarFill,
+                            { width: `${riderProgress * 100}%` },
+                          ]}
+                        />
+                      </View>
+                      <Text style={styles.progressLabel}>{sub.status}</Text>
+                    </View>
+
+                    <View style={styles.detailsRow}>
+                      <View>
+                        <Text style={styles.smallLabel}>Pattern</Text>
+                        <Text style={styles.valueText}>
+                          {getPatternLabel(sub.pattern)}
+                        </Text>
+                      </View>
+
+                      <View>
+                        <Text style={styles.smallLabel}>Qty</Text>
+                        <Text style={styles.valueText}>{sub.quantity}x</Text>
+                      </View>
+
+                      <View>
+                        <Text style={styles.smallLabel}>Unit</Text>
+                        <Text style={styles.valueText}>{sub.product?.unit}</Text>
+                      </View>
+                    </View>
+
+                    {sub.delivery_otp && !isDelivered && (
+                      <View style={styles.otpSection}>
+                        <Text style={styles.smallLabel}>OTP</Text>
+                        <Text style={styles.otpText}>{sub.delivery_otp}</Text>
+                      </View>
+                    )}
+
+                    {!isDelivered && (
+                      <TouchableOpacity
+                        style={styles.cancelBtn}
+                        onPress={() => handleCancel(sub.id)}
+                      >
+                        <Text style={styles.cancelText}>Cancel Subscription</Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
 
-                  <View style={styles.progressContainer}>
-                    <View style={styles.progressBarBg}>
-                      <View
-                        style={[
-                          styles.progressBarFill,
-                          { width: `${riderProgress * 100}%` },
-                        ]}
-                      />
-                    </View>
-                    <Text style={styles.progressLabel}>{sub.status}</Text>
-                  </View>
-
-                  <View style={styles.detailsRow}>
-                    <View>
-                      <Text style={styles.smallLabel}>Pattern</Text>
-                      <Text style={styles.valueText}>
-                        {getPatternLabel(sub.pattern)}
-                      </Text>
-                    </View>
-
-                    <View>
-                      <Text style={styles.smallLabel}>Qty</Text>
-                      <Text style={styles.valueText}>{sub.quantity}x</Text>
-                    </View>
-
-                    <View>
-                      <Text style={styles.smallLabel}>Unit</Text>
-                      <Text style={styles.valueText}>{sub.product?.unit}</Text>
-                    </View>
-                  </View>
-
-                  {sub.delivery_otp && !isDelivered && (
-                    <View style={styles.otpSection}>
-                      <Text style={styles.smallLabel}>OTP</Text>
-                      <Text style={styles.otpText}>{sub.delivery_otp}</Text>
-                    </View>
-                  )}
-
-                  {!isDelivered && (
-                    <TouchableOpacity
-                      style={styles.cancelBtn}
-                      onPress={() => handleCancel(sub.id)}
-                    >
-                      <Text style={styles.cancelText}>Cancel Subscription</Text>
-                    </TouchableOpacity>
-                  )}
-
+                  {/* ── FIXED: blur + stamp live inside the card with absolute fill ── */}
                   {isDelivered && (
-                    <View style={styles.deliveredStamp}>
-                      <Text style={styles.deliveredStampText}>DELIVERED</Text>
-                    </View>
+                    <>
+                      <BlurView
+                        intensity={18}
+                        tint="light"
+                        style={styles.blurOverlay}
+                      />
+                      <View style={styles.deliveredStampWrap}>
+                        <View style={styles.deliveredStamp}>
+                          <Ionicons name="checkmark-circle" size={18} color="#fff" />
+                          <Text style={styles.deliveredStampText}>DELIVERED</Text>
+                        </View>
+                      </View>
+                    </>
                   )}
                 </View>
 
                 <View style={styles.perforationBottom} />
-
-                {isDelivered && (
-                  <BlurView intensity={40} style={styles.blurOverlay} />
-                )}
               </View>
             );
           })
@@ -225,11 +233,18 @@ const styles = StyleSheet.create({
 
   ticketWrapper: { marginBottom: 30, position: "relative" },
 
+  // ── FIXED: card is now `overflow: hidden` + `position: relative`
+  // so absolute children (blur, stamp) are clipped to the card bounds
   ticketCard: {
     backgroundColor: "#fff",
     borderRadius: 20,
-    padding: 18,
     overflow: "hidden",
+    position: "relative",
+  },
+
+  // content sits inside ticketCard, gets opacity when delivered
+  ticketContent: {
+    padding: 18,
   },
 
   ticketHeader: {
@@ -295,21 +310,38 @@ const styles = StyleSheet.create({
 
   cancelText: { color: Colors.error, fontWeight: "600" },
 
-  deliveredStamp: {
-    position: "absolute",
-    top: 30,
-    left: -40,
-    backgroundColor: "#22c55e",
-    paddingVertical: 8,
-    paddingHorizontal: 50,
-    transform: [{ rotate: "-30deg" }],
-  },
-
-  deliveredStampText: { color: "#fff", fontWeight: "700" },
-
+  // ── FIXED: blur fills the entire card absolutely
   blurOverlay: {
     ...StyleSheet.absoluteFillObject,
-    borderRadius: 20,
+  },
+
+  // ── FIXED: stamp is centered over the card
+  deliveredStampWrap: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  deliveredStamp: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#22c55e",
+    paddingVertical: 10,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+
+  deliveredStampText: {
+    color: "#fff",
+    fontWeight: "800",
+    fontSize: 15,
+    letterSpacing: 1,
   },
 
   perforationTop: {

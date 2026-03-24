@@ -7,7 +7,7 @@ import { Colors } from '../src/constants/colors';
 import { api } from '../src/services/api';
 
 export default function Index() {
-  const { user, loading } = useAuth();
+  const { user, isWorker, loading } = useAuth();
   const router = useRouter();
   const [seeding, setSeeding] = useState(false);
 
@@ -28,6 +28,10 @@ export default function Index() {
 
   useEffect(() => {
     if (!loading && !seeding) {
+      if (isWorker) {
+      router.replace('/(worker)' as any);
+      return;
+    }
       if (user) {
         // Redirect based on role
         switch (user.role) {
@@ -47,7 +51,7 @@ export default function Index() {
         router.replace('/(auth)/login');
       }
     }
-  }, [user, loading, seeding]);
+  }, [user, isWorker, loading, seeding]);
 
   if (loading || seeding) {
     return <LoadingScreen message={seeding ? 'Setting up...' : 'Loading...'} />;
