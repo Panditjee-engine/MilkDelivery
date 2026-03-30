@@ -17,6 +17,7 @@ import {
   KeyboardAvoidingView,
   Alert,
 } from "react-native";
+import { Image } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -24,6 +25,22 @@ import { api } from "../../../src/services/api";
 
 type FeedStatus = "fed" | "pending";
 type Shift = "morning" | "evening";
+
+const cowImg = require("../../../assets/images/gir-cow.png");
+const bullImg = require("../../../assets/images/bull-cow.png");
+const calfImg = require("../../../assets/images/calf-cow.png");
+
+const getAnimalImage = (type?: string) => {
+  switch (type?.toLowerCase()) {
+    case "bull":
+      return bullImg;
+    case "calf":
+      return calfImg;
+    case "cow":
+    default:
+      return cowImg;
+  }
+};
 
 const FEED_OPTIONS = [
   { label: "Dry Fodder", icon: "🌾" },
@@ -48,6 +65,7 @@ interface CowFeedRow {
   srNo: string;
   name: string;
   breed: string;
+  type: string;
   morning: FeedStatus;
   evening: FeedStatus;
   morningNote: string;
@@ -83,6 +101,7 @@ function mapToCowRows(cows: any[]): CowFeedRow[] {
     srNo: c.cow_tag || c.cow_id,
     name: c.cow_name || "Unknown",
     breed: c.breed || "",
+    type: c.animal_type || c.type || "cow", 
     morning: c.morning_fed ? "fed" : "pending",
     evening: c.evening_fed ? "fed" : "pending",
     morningNote: c.morning_worker ? `By ${c.morning_worker}` : "—",
@@ -383,28 +402,28 @@ function FeedDetailModal({
               {/* Summary of all feeds */}
               {feedRows.filter((f) => f.feed_type && f.quantity_kg > 0).length >
                 0 && (
-                <View style={md.summaryBox}>
-                  <Text style={md.summaryTitle}>📋 Feed Summary</Text>
-                  {feedRows
-                    .filter((f) => f.feed_type && f.quantity_kg > 0)
-                    .map((f, i) => (
-                      <View key={i} style={md.summaryRow}>
-                        <Text style={md.summaryRowText}>• {f.feed_type}</Text>
-                        <Text style={md.summaryRowQty}>{f.quantity_kg} kg</Text>
-                      </View>
-                    ))}
-                  <View style={[md.summaryRow, md.summaryTotal]}>
-                    <Text style={md.summaryTotalText}>Total</Text>
-                    <Text style={md.summaryTotalQty}>
-                      {feedRows
-                        .filter((f) => f.feed_type && f.quantity_kg > 0)
-                        .reduce((s, f) => s + f.quantity_kg, 0)
-                        .toFixed(1)}{" "}
-                      kg
-                    </Text>
+                  <View style={md.summaryBox}>
+                    <Text style={md.summaryTitle}>📋 Feed Summary</Text>
+                    {feedRows
+                      .filter((f) => f.feed_type && f.quantity_kg > 0)
+                      .map((f, i) => (
+                        <View key={i} style={md.summaryRow}>
+                          <Text style={md.summaryRowText}>• {f.feed_type}</Text>
+                          <Text style={md.summaryRowQty}>{f.quantity_kg} kg</Text>
+                        </View>
+                      ))}
+                    <View style={[md.summaryRow, md.summaryTotal]}>
+                      <Text style={md.summaryTotalText}>Total</Text>
+                      <Text style={md.summaryTotalQty}>
+                        {feedRows
+                          .filter((f) => f.feed_type && f.quantity_kg > 0)
+                          .reduce((s, f) => s + f.quantity_kg, 0)
+                          .toFixed(1)}{" "}
+                        kg
+                      </Text>
+                    </View>
                   </View>
-                </View>
-              )}
+                )}
 
               {/* Save as default toggle */}
               <TouchableOpacity
@@ -612,7 +631,11 @@ function FeedCard({
       {/* Card header */}
       <View style={cs.cardHeader}>
         <View style={cs.cowAvatarWrap}>
-          <Text style={{ fontSize: 22 }}>🐄</Text>
+          <Image
+            source={getAnimalImage(item.type)}
+            style={{ width: 38, height: 38 }}
+            resizeMode="contain"
+          />
         </View>
         <View style={{ flex: 1, marginLeft: 10 }}>
           <Text style={cs.cowName}>{item.name}</Text>
@@ -824,11 +847,11 @@ export default function AdminFeedScreen() {
     setModalVisible(true);
   };
 
- const handleSaveFeed = async (feeds: FeedItem[], saveAsDefault: boolean) => {
-  if (!editingCow) return;
-  const authToken = await AsyncStorage.getItem("access_token");
-  if (!authToken) return;
-  api.setToken(authToken);
+  const handleSaveFeed = async (feeds: FeedItem[], saveAsDefault: boolean) => {
+    if (!editingCow) return;
+    const authToken = await AsyncStorage.getItem("access_token");
+    if (!authToken) return;
+    api.setToken(authToken);
 
     // Call API — see api.ts snippet below
     await api.updateAdminFeedDetails(

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import {
   View,
   Text,
@@ -359,28 +360,65 @@ function CowSelector({
   );
 }
 
+
 function Field({ label, value, onChange, placeholder, icon }: any) {
   const [focused, setFocused] = useState(false);
+  const [showPicker, setShowPicker] = useState(false);
+
+  const isDateField = icon === "calendar-outline";
+
+  const handleDateChange = (event: any, selectedDate?: Date) => {
+    setShowPicker(false);
+    if (selectedDate) {
+      const day = String(selectedDate.getDate()).padStart(2, "0");
+      const month = String(selectedDate.getMonth() + 1).padStart(2, "0");
+      const year = selectedDate.getFullYear();
+      onChange(`${day}/${month}/${year}`);
+    }
+  };
+
   return (
     <View style={f.wrap}>
       <Text style={f.label}>{label}</Text>
-      <View style={[f.row, focused && f.focused]}>
-        <Ionicons
-          name={icon}
-          size={15}
-          color={focused ? "#7c3aed" : "#9ca3af"}
-          style={{ marginRight: 8 }}
+
+      <TouchableOpacity
+        activeOpacity={isDateField ? 0.7 : 1}
+        onPress={() => {
+          if (isDateField) setShowPicker(true);
+        }}
+      >
+        <View style={[f.row, focused && f.focused]}>
+          <Ionicons
+            name={icon}
+            size={15}
+            color={focused ? "#7c3aed" : "#9ca3af"}
+            style={{ marginRight: 8 }}
+            onPress={() => {
+              if (isDateField) setShowPicker(true);
+            }}
+          />
+
+          <TextInput
+            style={f.input}
+            value={value}
+            onChangeText={onChange}
+            placeholder={placeholder ?? label}
+            placeholderTextColor="#d1d5db"
+            editable={!isDateField} // typing disable for date
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+          />
+        </View>
+      </TouchableOpacity>
+
+      {showPicker && (
+        <DateTimePicker
+          value={new Date()}
+          mode="date"
+          display="default"
+          onChange={handleDateChange}
         />
-        <TextInput
-          style={f.input}
-          value={value}
-          onChangeText={onChange}
-          placeholder={placeholder ?? label}
-          placeholderTextColor="#d1d5db"
-          onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
-        />
-      </View>
+      )}
     </View>
   );
 }

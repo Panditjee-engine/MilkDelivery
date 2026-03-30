@@ -4,8 +4,22 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { api } from '../../src/services/api';
-import { Colors } from '../../src/constants/colors';
 import LoadingScreen from '../../src/components/LoadingScreen';
+
+// ── Warm Color Palette ──────────────────────────
+const C = {
+  primary:    '#FF9675', // amber/golden
+  secondary:  '#FF9675', // peach
+  accent:     '#FD9E69', // orange
+  light:      '#FFD999', // soft yellow
+  dark:       '#BB6B3F', // burnt sienna
+  deep:       '#8B6854', // deep brown
+  bg:         '#FFF8EF', // warm off-white
+  card:       '#FFFFFF',
+  text:       '#3D1F0A',
+  textMuted:  '#A07850',
+  textLight:  '#C9A882',
+};
 
 export default function AdminDashboard() {
   const { user } = useAuth();
@@ -52,9 +66,17 @@ export default function AdminDashboard() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={C.primary}
+            colors={[C.primary, C.accent]}
+          />
+        }
         showsVerticalScrollIndicator={false}
       >
+        {/* ── Header ── */}
         <View style={styles.header}>
           <View>
             <Text style={styles.greeting}>Admin Dashboard</Text>
@@ -62,61 +84,63 @@ export default function AdminDashboard() {
             <Text style={styles.date}>{today}</Text>
           </View>
           <View style={styles.adminBadge}>
-            <Ionicons name="shield-checkmark" size={22} color="#fff" />
+            <Ionicons name="shield-checkmark" size={22} color={C.deep} />
           </View>
         </View>
 
+        {/* ── Revenue Card ── */}
         <View style={styles.revenueCard}>
           <View style={styles.revenueLeft}>
             <Text style={styles.revenueLabel}>Today's Revenue</Text>
             <Text style={styles.revenueAmount}>₹{stats?.today_revenue || 0}</Text>
             <View style={styles.revenueBadge}>
-              <Ionicons name="trending-up" size={12} color="#22c55e" />
+              <Ionicons name="trending-up" size={12} color={C.deep} />
               <Text style={styles.revenueBadgeText}>Live</Text>
             </View>
           </View>
           <View style={styles.revenueIcon}>
-            <Ionicons name="cash" size={36} color="rgba(255,255,255,0.3)" />
+            <Ionicons name="cash" size={42} color={C.deep} />
           </View>
         </View>
 
+        {/* ── Stats Grid ── */}
         <View style={styles.statsGrid}>
 
-          <View style={[styles.statCard, { backgroundColor: '#EEF4FF' }]}>
-            <View style={[styles.statIcon, { backgroundColor: '#4F7EFF20' }]}>
-              <Ionicons name="people" size={20} color="#4F7EFF" />
+          <View style={[styles.statCard, { backgroundColor: '#FFF3DC' }]}>
+            <View style={[styles.statIcon, { backgroundColor: C.primary + '30' }]}>
+              <Ionicons name="people" size={20} color={C.dark} />
             </View>
-            <Text style={[styles.statValue, { color: '#4F7EFF' }]}>
+            <Text style={[styles.statValue, { color: C.dark }]}>
               {stats?.total_customers || 0}
             </Text>
             <Text style={styles.statLabel}>Customers</Text>
           </View>
 
-          <View style={[styles.statCard, { backgroundColor: '#FFF4E6' }]}>
-            <View style={[styles.statIcon, { backgroundColor: '#F59E0B20' }]}>
-              <Ionicons name="cube" size={20} color="#f59e0b" />
+          <View style={[styles.statCard, { backgroundColor: '#FFEEDD' }]}>
+            <View style={[styles.statIcon, { backgroundColor: C.accent + '30' }]}>
+              <Ionicons name="cube" size={20} color={C.dark} />
             </View>
-            <Text style={[styles.statValue, { color: '#f59e0b' }]}>
+            <Text style={[styles.statValue, { color: C.dark }]}>
               {products.length}
             </Text>
             <Text style={styles.statLabel}>Products</Text>
           </View>
 
-          <View style={[styles.statCard, { backgroundColor: '#F0F9FF' }]}>
-            <View style={[styles.statIcon, { backgroundColor: '#0EA5E920' }]}>
-              <Ionicons name="receipt" size={20} color="#0ea5e9" />
+          <View style={[styles.statCard, { backgroundColor: '#FFE8D6' }]}>
+            <View style={[styles.statIcon, { backgroundColor: C.secondary + '30' }]}>
+              <Ionicons name="receipt" size={20} color={C.dark} />
             </View>
-            <Text style={[styles.statValue, { color: '#0ea5e9' }]}>
+            <Text style={[styles.statValue, { color: C.dark }]}>
               {stats?.today_orders || 0}
             </Text>
             <Text style={styles.statLabel}>Total Orders</Text>
           </View>
 
-          <View style={[styles.statCard, { backgroundColor: '#F0FDF4' }]}>
-            <View style={[styles.statIcon, { backgroundColor: '#22c55e20' }]}>
-              <Ionicons name="checkmark-circle" size={20} color="#22c55e" />
+          <View style={[styles.statCard, { backgroundColor: '#FFD9B8' }]}>
+            <View style={[styles.statIcon, { backgroundColor: C.dark + '20' }]}>
+              <Ionicons name="checkmark-circle" size={20} color={C.deep} />
             </View>
-            <Text style={[styles.statValue, { color: '#22c55e' }]}>
+            <Text style={[styles.statValue, { color: C.deep }]}>
               {stats?.delivered_today || 0}
             </Text>
             <Text style={styles.statLabel}>Delivered</Text>
@@ -124,10 +148,11 @@ export default function AdminDashboard() {
 
         </View>
 
+        {/* ── Delivery Progress ── */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
-            <View style={[styles.cardIconBox, { backgroundColor: '#EEF4FF' }]}>
-              <Ionicons name="stats-chart" size={16} color="#4F7EFF" />
+            <View style={[styles.cardIconBox, { backgroundColor: '#FFF3DC' }]}>
+              <Ionicons name="stats-chart" size={16} color={C.dark} />
             </View>
             <Text style={styles.cardTitle}>Delivery Progress</Text>
             <View style={styles.ratePill}>
@@ -146,14 +171,14 @@ export default function AdminDashboard() {
             </View>
             <View style={styles.progressDivider} />
             <View style={styles.progressStat}>
-              <Text style={[styles.progressStatVal, { color: '#22c55e' }]}>
+              <Text style={[styles.progressStatVal, { color: C.dark }]}>
                 {stats?.delivered_today || 0}
               </Text>
               <Text style={styles.progressStatLabel}>Delivered</Text>
             </View>
             <View style={styles.progressDivider} />
             <View style={styles.progressStat}>
-              <Text style={[styles.progressStatVal, { color: '#f59e0b' }]}>
+              <Text style={[styles.progressStatVal, { color: C.secondary }]}>
                 {pending}
               </Text>
               <Text style={styles.progressStatLabel}>Pending</Text>
@@ -161,10 +186,11 @@ export default function AdminDashboard() {
           </View>
         </View>
 
+        {/* ── Product Overview ── */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
-            <View style={[styles.cardIconBox, { backgroundColor: '#FFF4E6' }]}>
-              <Ionicons name="cube-outline" size={16} color="#f59e0b" />
+            <View style={[styles.cardIconBox, { backgroundColor: '#FFEEDD' }]}>
+              <Ionicons name="cube-outline" size={16} color={C.dark} />
             </View>
             <Text style={styles.cardTitle}>Product Overview</Text>
           </View>
@@ -174,17 +200,20 @@ export default function AdminDashboard() {
               {products.slice(0, 4).map((p, i) => (
                 <View
                   key={p.id}
-                  style={[styles.productRow, i < Math.min(products.length, 4) - 1 && styles.productRowBorder]}
+                  style={[
+                    styles.productRow,
+                    i < Math.min(products.length, 4) - 1 && styles.productRowBorder,
+                  ]}
                 >
                   <View style={styles.productDot} />
                   <Text style={styles.productName} numberOfLines={1}>{p.name}</Text>
                   <View style={[
                     styles.availPill,
-                    { backgroundColor: p.is_available ? '#F0FDF4' : '#FEF2F2' }
+                    { backgroundColor: p.is_available ? '#FFF3DC' : '#FFE8D6' },
                   ]}>
                     <Text style={[
                       styles.availText,
-                      { color: p.is_available ? '#22c55e' : '#ef4444' }
+                      { color: p.is_available ? C.dark : C.secondary },
                     ]}>
                       {p.is_available ? 'Active' : 'Off'}
                     </Text>
@@ -208,8 +237,9 @@ export default function AdminDashboard() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8F7F4' },
+  container: { flex: 1, backgroundColor: C.bg },
 
+  // Header
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -218,53 +248,55 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 16,
   },
-  greeting: { fontSize: 12, color: '#aaa', fontWeight: '500' },
-  userName: { fontSize: 22, fontWeight: '800', color: '#1A1A1A', letterSpacing: -0.3 },
-  date: { fontSize: 12, color: '#bbb', marginTop: 3 },
+  greeting: { fontSize: 12, color: C.textLight, fontWeight: '500' },
+  userName: { fontSize: 22, fontWeight: '800', color: C.text, letterSpacing: -0.3 },
+  date: { fontSize: 12, color: C.textLight, marginTop: 3 },
   adminBadge: {
     width: 46,
     height: 46,
     borderRadius: 14,
-    backgroundColor: Colors.primary,
+    backgroundColor: C.light,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: Colors.primary,
+    shadowColor: C.primary,
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 4,
   },
 
+  // Revenue Card
   revenueCard: {
     marginHorizontal: 20,
     marginBottom: 16,
-    backgroundColor: Colors.primary,
+    backgroundColor: C.primary,
     borderRadius: 20,
     padding: 22,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    shadowColor: Colors.primary,
-    shadowOpacity: 0.3,
+    shadowColor: C.dark,
+    shadowOpacity: 0.25,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
     elevation: 6,
   },
   revenueLeft: { gap: 4 },
-  revenueLabel: { fontSize: 13, color: 'rgba(255,255,255,0.7)', fontWeight: '500' },
-  revenueAmount: { fontSize: 38, fontWeight: '800', color: '#fff', letterSpacing: -1 },
+  revenueLabel: { fontSize: 13, color: C.deep, fontWeight: '600' },
+  revenueAmount: { fontSize: 38, fontWeight: '800', color: C.text, letterSpacing: -1 },
   revenueBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(34,197,94,0.2)',
+    backgroundColor: C.light,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 20,
     alignSelf: 'flex-start',
   },
-  revenueBadgeText: { fontSize: 11, color: '#22c55e', fontWeight: '700' },
-  revenueIcon: { opacity: 0.6 },
+  revenueBadgeText: { fontSize: 11, color: C.deep, fontWeight: '700' },
+  revenueIcon: { opacity: 0.5 },
 
+  // Stats Grid
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -287,19 +319,20 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   statValue: { fontSize: 28, fontWeight: '800', letterSpacing: -0.5 },
-  statLabel: { fontSize: 12, color: '#888', fontWeight: '600' },
+  statLabel: { fontSize: 12, color: C.textMuted, fontWeight: '600' },
 
+  // Cards
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: C.card,
     borderRadius: 20,
     marginHorizontal: 16,
     marginBottom: 14,
     padding: 18,
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
+    shadowColor: C.dark,
+    shadowOpacity: 0.06,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 2 },
-    elevation: 1,
+    elevation: 2,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -314,25 +347,26 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  cardTitle: { fontSize: 15, fontWeight: '700', color: '#1A1A1A', flex: 1 },
+  cardTitle: { fontSize: 15, fontWeight: '700', color: C.text, flex: 1 },
   ratePill: {
-    backgroundColor: '#EEF4FF',
+    backgroundColor: '#f8c18e',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 20,
   },
-  rateText: { fontSize: 12, fontWeight: '800', color: '#4F7EFF' },
+  rateText: { fontSize: 12, fontWeight: '800', color: C.dark },
 
+  // Progress
   progressBg: {
     height: 8,
-    backgroundColor: '#F0F0F0',
+    backgroundColor: '#FFE8C8',
     borderRadius: 4,
     overflow: 'hidden',
     marginBottom: 16,
   },
   progressFill: {
     height: 8,
-    backgroundColor: '#22c55e',
+    backgroundColor: C.primary,
     borderRadius: 4,
   },
   progressStats: {
@@ -340,31 +374,32 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
   },
   progressStat: { alignItems: 'center', flex: 1 },
-  progressStatVal: { fontSize: 26, fontWeight: '800', color: '#1A1A1A' },
-  progressStatLabel: { fontSize: 11, color: '#aaa', marginTop: 3, fontWeight: '600' },
-  progressDivider: { width: 1, backgroundColor: '#F0F0F0' },
+  progressStatVal: { fontSize: 26, fontWeight: '800', color: C.text },
+  progressStatLabel: { fontSize: 11, color: C.textLight, marginTop: 3, fontWeight: '600' },
+  progressDivider: { width: 1, backgroundColor: '#FFE8C8' },
 
+  // Products
   productRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 11,
     gap: 10,
   },
-  productRowBorder: { borderBottomWidth: 1, borderBottomColor: '#F5F5F5' },
+  productRowBorder: { borderBottomWidth: 1, borderBottomColor: '#FFF3DC' },
   productDot: {
     width: 7,
     height: 7,
     borderRadius: 4,
-    backgroundColor: '#f59e0b',
+    backgroundColor: C.accent,
   },
-  productName: { flex: 1, fontSize: 14, fontWeight: '600', color: '#1A1A1A' },
+  productName: { flex: 1, fontSize: 14, fontWeight: '600', color: C.text },
   availPill: {
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 20,
   },
   availText: { fontSize: 11, fontWeight: '700' },
-  productPrice: { fontSize: 13, fontWeight: '700', color: '#1A1A1A' },
-  moreText: { fontSize: 12, color: '#bbb', textAlign: 'center', marginTop: 10, fontWeight: '500' },
-  emptyText: { fontSize: 13, color: '#ccc', fontStyle: 'italic' },
+  productPrice: { fontSize: 13, fontWeight: '700', color: C.text },
+  moreText: { fontSize: 12, color: C.textLight, textAlign: 'center', marginTop: 10, fontWeight: '500' },
+  emptyText: { fontSize: 13, color: C.textLight, fontStyle: 'italic' },
 });

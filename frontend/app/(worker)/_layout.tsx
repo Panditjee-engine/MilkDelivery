@@ -2,6 +2,7 @@ import { Stack } from "expo-router";
 import { useEffect } from "react";
 import { useRouter } from "expo-router";
 import { useAuth } from "../../src/contexts/AuthContext";
+// LanguageProvider import HATAO
 
 export default function WorkerLayout() {
   const { isWorker, loading } = useAuth();

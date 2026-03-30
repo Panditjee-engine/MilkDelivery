@@ -8,10 +8,25 @@ import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import SwipeToConfirm from "../../src/components/SwipeToConfirm";
 import { api } from "../../src/services/api";
-import { Colors } from "../../src/constants/colors";
 import Button from "../../src/components/Button";
 import LoadingScreen from "../../src/components/LoadingScreen";
 import { useAuth } from "../../src/contexts/AuthContext";
+
+// ── Warm Color Palette ──────────────────────────
+const C = {
+  primary:    '#FF9675', // amber/golden
+  secondary:  '#FF9675', // peach
+  accent:     '#FD9E69', // orange
+  light:      '#FFD999', // soft yellow
+  dark:       '#BB6B3F', // burnt sienna
+  deep:       '#8B6854', // deep brown
+  bg:         '#FFF8EF', // warm off-white
+  card:       '#FFE8D6',
+  text:       '#3D1F0A',
+  textMuted:  '#A07850',
+  textLight:  '#C9A882',
+};
+
 
 type Product = {
   id?: string;
@@ -118,6 +133,7 @@ export default function InventoryScreen() {
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
 
+      {/* ── Header ── */}
       <View style={styles.header}>
         <View>
           <Text style={styles.title}>Inventory</Text>
@@ -125,11 +141,12 @@ export default function InventoryScreen() {
         </View>
         {isAdmin && (
           <TouchableOpacity style={styles.addBtn} onPress={() => setAddModal(true)}>
-            <Ionicons name="add" size={22} color="#fff" />
+            <Ionicons name="add" size={22} color={C.deep} />
           </TouchableOpacity>
         )}
       </View>
 
+      {/* ── Summary Strip ── */}
       <View style={styles.summaryStrip}>
         <View style={styles.summaryItem}>
           <Text style={styles.summaryVal}>{products.length}</Text>
@@ -137,24 +154,32 @@ export default function InventoryScreen() {
         </View>
         <View style={styles.summaryDivider} />
         <View style={styles.summaryItem}>
-          <Text style={[styles.summaryVal, { color: '#22c55e' }]}>{available}</Text>
+          <Text style={[styles.summaryVal, { color: C.dark }]}>{available}</Text>
           <Text style={styles.summaryLabel}>Active</Text>
         </View>
         <View style={styles.summaryDivider} />
         <View style={styles.summaryItem}>
-          <Text style={[styles.summaryVal, { color: '#ef4444' }]}>{products.length - available}</Text>
+          <Text style={[styles.summaryVal, { color: C.secondary }]}>{products.length - available}</Text>
           <Text style={styles.summaryLabel}>Inactive</Text>
         </View>
       </View>
 
+      {/* ── Product List ── */}
       <ScrollView
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={C.primary}
+            colors={[C.primary, C.accent]}
+          />
+        }
         contentContainerStyle={styles.listContent}
       >
         {products.length === 0 ? (
           <View style={styles.emptyState}>
-            <Ionicons name="cube-outline" size={52} color="#ddd" />
+            <Ionicons name="cube-outline" size={52} color={C.light} />
             <Text style={styles.emptyTitle}>No products yet</Text>
             <Text style={styles.emptyDesc}>Tap + to add your first product</Text>
           </View>
@@ -165,7 +190,7 @@ export default function InventoryScreen() {
                 <Image source={{ uri: product.image }} style={styles.productImage} />
               ) : (
                 <View style={styles.imagePlaceholder}>
-                  <Ionicons name="cube-outline" size={22} color="#ccc" />
+                  <Ionicons name="cube-outline" size={22} color={C.light} />
                 </View>
               )}
 
@@ -174,15 +199,15 @@ export default function InventoryScreen() {
                 <Text style={styles.productMeta}>{product.unit} · ₹{product.price}</Text>
                 <View style={[
                   styles.statusPill,
-                  { backgroundColor: product.is_available ? '#F0FDF4' : '#FEF2F2' }
+                  { backgroundColor: product.is_available ? '#FFF3DC' : '#FFE8D6' }
                 ]}>
                   <View style={[
                     styles.statusDot,
-                    { backgroundColor: product.is_available ? '#22c55e' : '#ef4444' }
+                    { backgroundColor: product.is_available ? C.dark : C.secondary }
                   ]} />
                   <Text style={[
                     styles.statusText,
-                    { color: product.is_available ? '#16a34a' : '#dc2626' }
+                    { color: product.is_available ? C.dark : C.secondary }
                   ]}>
                     {product.is_available ? 'Available' : 'Unavailable'}
                   </Text>
@@ -197,20 +222,20 @@ export default function InventoryScreen() {
               {isAdmin && (
                 <View style={styles.actions}>
                   <TouchableOpacity
-                    style={[styles.actionBtn, { backgroundColor: product.is_available ? '#FEF2F2' : '#F0FDF4' }]}
+                    style={[styles.actionBtn, { backgroundColor: product.is_available ? '#FFE8D6' : '#FFF3DC' }]}
                     onPress={() => toggleAvailability(product)}
                   >
                     <Ionicons
                       name={product.is_available ? "eye-off" : "eye"}
                       size={15}
-                      color={product.is_available ? '#ef4444' : '#22c55e'}
+                      color={product.is_available ? C.secondary : C.dark}
                     />
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={[styles.actionBtn, { backgroundColor: '#FEF2F2' }]}
+                    style={[styles.actionBtn, { backgroundColor: '#FFE8D6' }]}
                     onPress={() => deleteProduct(product.id)}
                   >
-                    <Ionicons name="trash-outline" size={15} color="#ef4444" />
+                    <Ionicons name="trash-outline" size={15} color={C.secondary} />
                   </TouchableOpacity>
                 </View>
               )}
@@ -220,6 +245,7 @@ export default function InventoryScreen() {
         <View style={{ height: 20 }} />
       </ScrollView>
 
+      {/* ── Add Product Modal ── */}
       <Modal visible={addModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalSheet}>
@@ -228,7 +254,7 @@ export default function InventoryScreen() {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Add Product</Text>
               <TouchableOpacity style={styles.closeBtn} onPress={resetModal}>
-                <Ionicons name="close" size={16} color="#666" />
+                <Ionicons name="close" size={16} color={C.deep} />
               </TouchableOpacity>
             </View>
 
@@ -239,7 +265,7 @@ export default function InventoryScreen() {
                   <Image source={{ uri: newProduct.image }} style={styles.previewImage} />
                 ) : (
                   <View style={styles.imagePickerEmpty}>
-                    <Ionicons name="camera-outline" size={28} color="#aaa" />
+                    <Ionicons name="camera-outline" size={28} color={C.light} />
                     <Text style={styles.imagePickerText}>Tap to add product image</Text>
                   </View>
                 )}
@@ -249,7 +275,7 @@ export default function InventoryScreen() {
               <TextInput
                 style={styles.input}
                 placeholder="e.g. Full Cream Milk"
-                placeholderTextColor="#ccc"
+                placeholderTextColor={C.textLight}
                 value={newProduct.name}
                 onChangeText={(v) => setNewProduct(p => ({ ...p, name: v }))}
               />
@@ -281,7 +307,7 @@ export default function InventoryScreen() {
                   <TextInput
                     style={styles.input}
                     placeholder="e.g. 500ml"
-                    placeholderTextColor="#ccc"
+                    placeholderTextColor={C.textLight}
                     value={newProduct.unit}
                     onChangeText={(v) => setNewProduct(p => ({ ...p, unit: v }))}
                   />
@@ -292,7 +318,7 @@ export default function InventoryScreen() {
                   <TextInput
                     style={styles.input}
                     placeholder="0.00"
-                    placeholderTextColor="#ccc"
+                    placeholderTextColor={C.textLight}
                     keyboardType="numeric"
                     value={newProduct.price}
                     onChangeText={(v) => setNewProduct(p => ({ ...p, price: v }))}
@@ -304,7 +330,7 @@ export default function InventoryScreen() {
               <TextInput
                 style={styles.input}
                 placeholder="0"
-                placeholderTextColor="#ccc"
+                placeholderTextColor={C.textLight}
                 keyboardType="numeric"
                 value={newProduct.stock}
                 onChangeText={(v) => setNewProduct(p => ({ ...p, stock: v }))}
@@ -336,7 +362,7 @@ export default function InventoryScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8F7F4' },
+  container: { flex: 1, backgroundColor: C.bg },
 
   header: {
     flexDirection: 'row',
@@ -346,16 +372,16 @@ const styles = StyleSheet.create({
     paddingTop: 14,
     paddingBottom: 10,
   },
-  title: { fontSize: 26, fontWeight: '800', color: '#1A1A1A', letterSpacing: -0.5 },
-  subtitle: { fontSize: 13, color: '#aaa', marginTop: 2, fontWeight: '500' },
+  title: { fontSize: 26, fontWeight: '800', color: C.text, letterSpacing: -0.5 },
+  subtitle: { fontSize: 13, color: C.textLight, marginTop: 2, fontWeight: '500' },
   addBtn: {
     width: 44,
     height: 44,
     borderRadius: 14,
-    backgroundColor: Colors.primary,
+    backgroundColor: C.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: Colors.primary,
+    shadowColor: C.dark,
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 4,
@@ -363,32 +389,32 @@ const styles = StyleSheet.create({
 
   summaryStrip: {
     flexDirection: 'row',
-    backgroundColor: '#fff',
+    backgroundColor: C.card,
     marginHorizontal: 20,
     borderRadius: 16,
     paddingVertical: 14,
     marginBottom: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
+    shadowColor: C.dark,
+    shadowOpacity: 0.06,
     shadowRadius: 6,
-    elevation: 1,
+    elevation: 2,
   },
   summaryItem: { flex: 1, alignItems: 'center' },
-  summaryVal: { fontSize: 22, fontWeight: '800', color: '#1A1A1A' },
-  summaryLabel: { fontSize: 11, color: '#aaa', fontWeight: '600', marginTop: 2 },
-  summaryDivider: { width: 1, backgroundColor: '#F0F0F0' },
+  summaryVal: { fontSize: 22, fontWeight: '800', color: C.text },
+  summaryLabel: { fontSize: 11, color: C.textLight, fontWeight: '600', marginTop: 2 },
+  summaryDivider: { width: 1, backgroundColor: '#FFE8C8' },
 
   listContent: { paddingHorizontal: 16 },
   productCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: C.card,
     borderRadius: 16,
     padding: 12,
     marginBottom: 10,
     gap: 12,
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
+    shadowColor: C.dark,
+    shadowOpacity: 0.05,
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
     elevation: 1,
@@ -396,12 +422,12 @@ const styles = StyleSheet.create({
   productImage: { width: 56, height: 56, borderRadius: 12 },
   imagePlaceholder: {
     width: 56, height: 56, borderRadius: 12,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#FFF3DC',
     justifyContent: 'center', alignItems: 'center',
   },
   productInfo: { flex: 1, gap: 3 },
-  productName: { fontSize: 15, fontWeight: '700', color: '#1A1A1A' },
-  productMeta: { fontSize: 12, color: '#aaa', fontWeight: '500' },
+  productName: { fontSize: 15, fontWeight: '700', color: C.text },
+  productMeta: { fontSize: 12, color: C.textMuted, fontWeight: '500' },
   statusPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -417,13 +443,13 @@ const styles = StyleSheet.create({
 
   stockBadge: {
     alignItems: 'center',
-    backgroundColor: '#F8F8F8',
+    backgroundColor: '#FFF3DC',
     borderRadius: 12,
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
-  stockVal: { fontSize: 16, fontWeight: '800', color: '#1A1A1A' },
-  stockLabel: { fontSize: 9, color: '#aaa', fontWeight: '600' },
+  stockVal: { fontSize: 16, fontWeight: '800', color: C.dark },
+  stockLabel: { fontSize: 9, color: C.textMuted, fontWeight: '600' },
 
   actions: { gap: 6 },
   actionBtn: {
@@ -432,30 +458,29 @@ const styles = StyleSheet.create({
   },
 
   emptyState: { alignItems: 'center', paddingTop: 80, gap: 8 },
-  emptyTitle: { fontSize: 16, fontWeight: '700', color: '#ccc' },
-  emptyDesc: { fontSize: 13, color: '#ddd' },
+  emptyTitle: { fontSize: 16, fontWeight: '700', color: C.textLight },
+  emptyDesc: { fontSize: 13, color: C.textLight },
 
-
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(61,31,10,0.4)', justifyContent: 'flex-end' },
   modalSheet: {
-    backgroundColor: '#fff',
+    backgroundColor: C.card,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     padding: 24,
     maxHeight: '92%',
   },
   dragHandle: {
-    width: 40, height: 4, backgroundColor: '#E0E0E0',
+    width: 40, height: 4, backgroundColor: C.light,
     borderRadius: 2, alignSelf: 'center', marginBottom: 20,
   },
   modalHeader: {
     flexDirection: 'row', justifyContent: 'space-between',
     alignItems: 'center', marginBottom: 20,
   },
-  modalTitle: { fontSize: 20, fontWeight: '800', color: '#1A1A1A' },
+  modalTitle: { fontSize: 20, fontWeight: '800', color: C.text },
   closeBtn: {
     width: 32, height: 32, borderRadius: 10,
-    backgroundColor: '#F0F0F0', justifyContent: 'center', alignItems: 'center',
+    backgroundColor: '#FFF3DC', justifyContent: 'center', alignItems: 'center',
   },
 
   imagePicker: {
@@ -463,7 +488,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginBottom: 20,
     borderWidth: 1.5,
-    borderColor: '#F0F0F0',
+    borderColor: C.light,
     borderStyle: 'dashed',
   },
   imagePickerEmpty: {
@@ -471,43 +496,45 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#FAFAFA',
+    backgroundColor: '#FFF8EF',
   },
-  imagePickerText: { fontSize: 13, color: '#aaa', fontWeight: '500' },
+  imagePickerText: { fontSize: 13, color: C.textLight, fontWeight: '500' },
   previewImage: { width: '100%', height: 150 },
 
   fieldLabel: {
-    fontSize: 12, fontWeight: '700', color: '#999',
+    fontSize: 12, fontWeight: '700', color: C.textMuted,
     textTransform: 'uppercase', letterSpacing: 0.6,
     marginBottom: 8, marginTop: 4,
   },
   input: {
-    backgroundColor: '#F8F8F8',
+    backgroundColor: '#FFF8EF',
     padding: 14,
     borderRadius: 12,
     marginBottom: 12,
     fontSize: 15,
-    color: '#1A1A1A',
+    color: C.text,
+    borderWidth: 1,
+    borderColor: '#FFE8C8',
   },
   row: { flexDirection: 'row' },
 
   categoryRow: { marginBottom: 16 },
   catChip: {
     paddingHorizontal: 14, paddingVertical: 8,
-    borderRadius: 20, backgroundColor: '#F5F5F5',
+    borderRadius: 20, backgroundColor: '#FFF3DC',
     marginRight: 8, borderWidth: 1.5, borderColor: 'transparent',
   },
-  catChipActive: { backgroundColor: Colors.primary + '15', borderColor: Colors.primary },
-  catChipText: { fontSize: 13, fontWeight: '600', color: '#888', textTransform: 'capitalize' },
-  catChipTextActive: { color: Colors.primary },
+  catChipActive: { backgroundColor: C.primary + '25', borderColor: C.primary },
+  catChipText: { fontSize: 13, fontWeight: '600', color: C.textMuted, textTransform: 'capitalize' },
+  catChipTextActive: { color: C.dark },
 
   swipeWrapper: { marginBottom: 12, alignItems: 'center' },
   cancelBtn: {
     paddingVertical: 14,
     borderRadius: 12,
-    backgroundColor: '#FEF2F2',
+    backgroundColor: '#FFE8D6',
     alignItems: 'center',
     marginTop: 8,
   },
-  cancelBtnText: { fontSize: 15, fontWeight: '700', color: '#ef4444' },
+  cancelBtnText: { fontSize: 15, fontWeight: '700', color: C.secondary },
 });

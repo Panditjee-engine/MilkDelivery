@@ -29,11 +29,11 @@ interface Order {
 const FILTERS = ["ALL", "PENDING", "DELIVERED"] as const;
 
 const statusConfig: Record<string, { color: string; bg: string; icon: any; label: string }> = {
-  delivered:  { color: "#16a34a", bg: "#F0FDF4", icon: "checkmark-circle", label: "Delivered" },
-  assigned:   { color: "#2563eb", bg: "#EFF6FF", icon: "bicycle",          label: "Assigned"  },
-  unassigned: { color: "#d97706", bg: "#FFFBEB", icon: "time",             label: "Unassigned"},
-  picked_up:  { color: "#7c3aed", bg: "#F5F3FF", icon: "cube",             label: "Picked Up" },
-  out_for_delivery: { color: "#0891b2", bg: "#ECFEFF", icon: "navigate",   label: "On the Way"},
+  delivered:        { color: "#BB6B3F", bg: "#FFF3E8", icon: "checkmark-circle", label: "Delivered"   },
+  assigned:         { color: "#FF9675", bg: "#FFF0EB", icon: "bicycle",          label: "Assigned"    },
+  unassigned:       { color: "#FFBF55", bg: "#FFF8E8", icon: "time",             label: "Unassigned"  },
+  picked_up:        { color: "#8B6854", bg: "#F5EDE8", icon: "cube",             label: "Picked Up"   },
+  out_for_delivery: { color: "#FD9E69", bg: "#FFF3EB", icon: "navigate",         label: "On the Way"  },
 };
 
 export default function AdminOrdersScreen() {
@@ -73,7 +73,7 @@ export default function AdminOrdersScreen() {
         <View style={styles.cardHeader}>
           <View style={styles.orderIdRow}>
             <View style={styles.receiptIcon}>
-              <Ionicons name="receipt-outline" size={14} color={Colors.primary} />
+              <Ionicons name="receipt-outline" size={14} color="#FF9675" />
             </View>
             <Text style={styles.orderId}>#{item.id.slice(-6).toUpperCase()}</Text>
           </View>
@@ -86,7 +86,7 @@ export default function AdminOrdersScreen() {
 
         {(item.delivery_date || item.delivery_slot) && (
           <View style={styles.dateRow}>
-            <Ionicons name="calendar-outline" size={12} color="#aaa" />
+            <Ionicons name="calendar-outline" size={12} color="#8B6854" />
             <Text style={styles.dateText}>
               {item.delivery_date}  {item.delivery_slot && `· ${item.delivery_slot}`}
             </Text>
@@ -101,7 +101,7 @@ export default function AdminOrdersScreen() {
             <Text style={styles.colName}>{item.customer_name ?? "Unknown"}</Text>
             {item.customer_phone && (
               <View style={styles.phoneRow}>
-                <Ionicons name="call-outline" size={11} color="#aaa" />
+                <Ionicons name="call-outline" size={11} color="#8B6854" />
                 <Text style={styles.phoneText}>{item.customer_phone}</Text>
               </View>
             )}
@@ -116,14 +116,14 @@ export default function AdminOrdersScreen() {
                 <Text style={styles.colName}>{item.delivery_partner_name}</Text>
                 {item.delivery_partner_phone && (
                   <View style={styles.phoneRow}>
-                    <Ionicons name="call-outline" size={11} color="#aaa" />
+                    <Ionicons name="call-outline" size={11} color="#8B6854" />
                     <Text style={styles.phoneText}>{item.delivery_partner_phone}</Text>
                   </View>
                 )}
               </>
             ) : (
               <View style={styles.unassignedRow}>
-                <Ionicons name="time-outline" size={13} color="#f59e0b" />
+                <Ionicons name="time-outline" size={13} color="#FFBF55" />
                 <Text style={styles.unassignedText}>Not assigned</Text>
               </View>
             )}
@@ -193,10 +193,10 @@ export default function AdminOrdersScreen() {
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FF9675" />}
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <Ionicons name="receipt-outline" size={48} color="#ddd" />
+            <Ionicons name="receipt-outline" size={48} color="#FFD999" />
             <Text style={styles.emptyTitle}>No orders found</Text>
             <Text style={styles.emptyDesc}>Try changing the filter</Text>
           </View>
@@ -208,7 +208,7 @@ export default function AdminOrdersScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8F7F4' },
+  container: { flex: 1, backgroundColor: '#FFF8F4' },
 
   header: {
     flexDirection: 'row',
@@ -220,12 +220,12 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 26, fontWeight: '800', color: '#1A1A1A', letterSpacing: -0.5 },
   countBadge: {
-    backgroundColor: Colors.primary + '20',
+    backgroundColor: '#FF967520',
     paddingHorizontal: 10,
     paddingVertical: 3,
     borderRadius: 20,
   },
-  countText: { fontSize: 13, fontWeight: '800', color: Colors.primary },
+  countText: { fontSize: 13, fontWeight: '800', color: '#FF9675' },
 
   filterRow: {
     flexDirection: 'row',
@@ -242,11 +242,11 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   filterChipActive: {
-    backgroundColor: Colors.primary + '12',
-    borderColor: Colors.primary,
+    backgroundColor: '#FF967512',
+    borderColor: '#FF9675',
   },
-  filterText: { fontSize: 13, fontWeight: '600', color: '#aaa' },
-  filterTextActive: { color: Colors.primary },
+  filterText: { fontSize: 13, fontWeight: '600', color: '#8B6854' },
+  filterTextActive: { color: '#FF9675' },
 
   list: { paddingHorizontal: 16, paddingBottom: 30 },
 
@@ -255,8 +255,8 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 18,
     marginBottom: 14,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
+    shadowColor: '#BB6B3F',
+    shadowOpacity: 0.07,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 3 },
     elevation: 2,
@@ -271,7 +271,7 @@ const styles = StyleSheet.create({
   orderIdRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   receiptIcon: {
     width: 28, height: 28, borderRadius: 8,
-    backgroundColor: Colors.primary + '15',
+    backgroundColor: '#FF967515',
     justifyContent: 'center', alignItems: 'center',
   },
   orderId: { fontSize: 15, fontWeight: '800', color: '#1A1A1A' },
@@ -286,45 +286,45 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center',
     gap: 5, marginBottom: 4,
   },
-  dateText: { fontSize: 12, color: '#aaa', fontWeight: '500' },
+  dateText: { fontSize: 12, color: '#8B6854', fontWeight: '500' },
 
-  divider: { height: 1, backgroundColor: '#F5F5F5', marginVertical: 14 },
+  divider: { height: 1, backgroundColor: '#FFF0E8', marginVertical: 14 },
 
   twoCol: { flexDirection: 'row' },
   col: { flex: 1 },
-  colDivider: { width: 1, backgroundColor: '#F5F5F5', marginHorizontal: 14 },
+  colDivider: { width: 1, backgroundColor: '#FFF0E8', marginHorizontal: 14 },
   colLabel: {
-    fontSize: 10, fontWeight: '700', color: '#bbb',
+    fontSize: 10, fontWeight: '700', color: '#BB6B3F',
     letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 6,
   },
   colName: { fontSize: 14, fontWeight: '700', color: '#1A1A1A', marginBottom: 4 },
   phoneRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  phoneText: { fontSize: 12, color: '#aaa', fontWeight: '500' },
+  phoneText: { fontSize: 12, color: '#8B6854', fontWeight: '500' },
   unassignedRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
-  unassignedText: { fontSize: 13, color: '#f59e0b', fontWeight: '600' },
+  unassignedText: { fontSize: 13, color: '#FFBF55', fontWeight: '600' },
 
   itemsList: { gap: 6, marginTop: 8 },
   itemRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  itemDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.primary },
+  itemDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#FF9675' },
   itemName: { flex: 1, fontSize: 13, fontWeight: '500', color: '#333' },
-  itemQty: { fontSize: 12, color: '#aaa', fontWeight: '600' },
+  itemQty: { fontSize: 12, color: '#8B6854', fontWeight: '600' },
 
   footer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   otpBox: {
-    backgroundColor: '#FFFBEB',
+    backgroundColor: '#FFF8E8',
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 8,
     alignItems: 'center',
   },
-  otpLabel: { fontSize: 9, color: '#d97706', fontWeight: '700', letterSpacing: 1 },
-  otpValue: { fontSize: 20, fontWeight: '800', color: '#d97706', letterSpacing: 3 },
+  otpLabel: { fontSize: 9, color: '#FFBF55', fontWeight: '700', letterSpacing: 1 },
+  otpValue: { fontSize: 20, fontWeight: '800', color: '#FFBF55', letterSpacing: 3 },
 
   amountBox: { alignItems: 'flex-end' },
-  amountLabel: { fontSize: 10, color: '#aaa', fontWeight: '600' },
+  amountLabel: { fontSize: 10, color: '#8B6854', fontWeight: '600' },
   amountValue: { fontSize: 18, fontWeight: '800', color: '#1A1A1A' },
 
   emptyState: { alignItems: 'center', paddingTop: 80, gap: 8 },
-  emptyTitle: { fontSize: 16, fontWeight: '700', color: '#ccc' },
-  emptyDesc: { fontSize: 13, color: '#ddd' },
+  emptyTitle: { fontSize: 16, fontWeight: '700', color: '#FFD999' },
+  emptyDesc: { fontSize: 13, color: '#FD9E69' },
 });

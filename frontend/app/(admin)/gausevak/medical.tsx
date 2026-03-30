@@ -541,6 +541,218 @@ function StatusToggle({
 }
 
 // ─────────────────────────────────────────────
+// DATE FIELD WITH CALENDAR PICKER
+// ─────────────────────────────────────────────
+
+function DateField({
+  label,
+  value,
+  onChange,
+  color = "#7c3aed",
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  color?: string;
+}) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [customInput, setCustomInput] = useState("");
+  const [customFocused, setCustomFocused] = useState(false);
+
+  // Parse DD/MM/YYYY
+  const parseDate = (s: string): Date | null => {
+    const parts = s.split("/");
+    if (parts.length !== 3) return null;
+    const d = new Date(+parts[2], +parts[1] - 1, +parts[0]);
+    return isNaN(d.getTime()) ? null : d;
+  };
+
+  const formatDate = (d: Date) => {
+    const dd = String(d.getDate()).padStart(2, "0");
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const yyyy = d.getFullYear();
+    return `${dd}/${mm}/${yyyy}`;
+  };
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const [viewYear, setViewYear] = useState(today.getFullYear());
+  const [viewMonth, setViewMonth] = useState(today.getMonth());
+
+  const selectedDate = parseDate(value);
+
+  const openPicker = () => {
+    if (selectedDate) {
+      setViewYear(selectedDate.getFullYear());
+      setViewMonth(selectedDate.getMonth());
+    } else {
+      setViewYear(today.getFullYear());
+      setViewMonth(today.getMonth());
+    }
+    setCustomInput(value);
+    setPickerOpen(true);
+  };
+
+  const prevMonth = () => {
+    if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); }
+    else setViewMonth(m => m - 1);
+  };
+
+  const nextMonth = () => {
+    if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1); }
+    else setViewMonth(m => m + 1);
+  };
+
+  const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  const DAY_NAMES = ["Su","Mo","Tu","We","Th","Fr","Sa"];
+
+  // Build calendar grid
+  const firstDay = new Date(viewYear, viewMonth, 1).getDay();
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+  const cells: (number | null)[] = [];
+  for (let i = 0; i < firstDay; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  const selectDay = (day: number) => {
+    const d = new Date(viewYear, viewMonth, day);
+    onChange(formatDate(d));
+    setPickerOpen(false);
+  };
+
+  const applyCustom = () => {
+    const parts = customInput.split("/");
+    if (parts.length === 3 && parts[2].length === 4) {
+      const d = new Date(+parts[2], +parts[1] - 1, +parts[0]);
+      if (!isNaN(d.getTime())) {
+        onChange(formatDate(d));
+        setPickerOpen(false);
+        return;
+      }
+    }
+    Alert.alert("Invalid Date", "Please enter date in DD/MM/YYYY format");
+  };
+
+  const isSelected = (day: number) => {
+    if (!selectedDate) return false;
+    return selectedDate.getFullYear() === viewYear &&
+      selectedDate.getMonth() === viewMonth &&
+      selectedDate.getDate() === day;
+  };
+
+  const isToday = (day: number) =>
+    today.getFullYear() === viewYear &&
+    today.getMonth() === viewMonth &&
+    today.getDate() === day;
+
+  return (
+    <>
+      <View style={f.wrap}>
+        <Text style={f.label}>{label}</Text>
+        <TouchableOpacity
+          style={[f.row, value ? { borderColor: color, backgroundColor: "#fff" } : {}]}
+          onPress={openPicker}
+          activeOpacity={0.8}
+        >
+          <Ionicons
+            name="calendar-outline"
+            size={14}
+            color={value ? color : "#9ca3af"}
+            style={{ marginRight: 8 }}
+          />
+          <Text style={[f.input, { color: value ? "#0f172a" : "#d1d5db" }]}>
+            {value || "DD/MM/YYYY"}
+          </Text>
+          {value ? (
+            <TouchableOpacity onPress={() => onChange("")} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="close-circle" size={15} color="#9ca3af" />
+            </TouchableOpacity>
+          ) : (
+            <Ionicons name="chevron-down" size={13} color="#9ca3af" />
+          )}
+        </TouchableOpacity>
+      </View>
+
+      <Modal visible={pickerOpen} transparent animationType="fade" onRequestClose={() => setPickerOpen(false)}>
+        <TouchableOpacity style={dp.overlay} activeOpacity={1} onPress={() => setPickerOpen(false)}>
+          <TouchableOpacity activeOpacity={1} style={dp.sheet} onPress={() => {}}>
+            {/* Header */}
+            <View style={dp.header}>
+              <Ionicons name="calendar" size={16} color={color} />
+              <Text style={[dp.headerTitle, { color }]}>{label}</Text>
+              <TouchableOpacity onPress={() => setPickerOpen(false)} style={dp.closeBtn}>
+                <Ionicons name="close" size={16} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Month nav */}
+            <View style={dp.monthNav}>
+              <TouchableOpacity onPress={prevMonth} style={dp.navBtn}>
+                <Ionicons name="chevron-back" size={18} color="#374151" />
+              </TouchableOpacity>
+              <Text style={dp.monthLabel}>{MONTH_NAMES[viewMonth]} {viewYear}</Text>
+              <TouchableOpacity onPress={nextMonth} style={dp.navBtn}>
+                <Ionicons name="chevron-forward" size={18} color="#374151" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Day headers */}
+            <View style={dp.dayHeaderRow}>
+              {DAY_NAMES.map(d => (
+                <Text key={d} style={dp.dayHeader}>{d}</Text>
+              ))}
+            </View>
+
+            {/* Calendar grid */}
+            <View style={dp.grid}>
+              {cells.map((day, i) => {
+                if (!day) return <View key={i} style={dp.cell} />;
+                const sel = isSelected(day);
+                const tod = isToday(day);
+                return (
+                  <TouchableOpacity
+                    key={i}
+                    style={[dp.cell, sel && [dp.cellSelected, { backgroundColor: color }], tod && !sel && dp.cellToday]}
+                    onPress={() => selectDay(day)}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={[dp.cellText, sel && dp.cellTextSelected, tod && !sel && { color, fontWeight: "700" }]}>
+                      {day}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* Custom input */}
+            <View style={dp.customRow}>
+              <Text style={dp.customLabel}>Or type date:</Text>
+              <View style={[dp.customInput, customFocused && { borderColor: color }]}>
+                <TextInput
+                  style={dp.customText}
+                  value={customInput}
+                  onChangeText={setCustomInput}
+                  placeholder="DD/MM/YYYY"
+                  placeholderTextColor="#d1d5db"
+                  keyboardType="numeric"
+                  maxLength={10}
+                  onFocus={() => setCustomFocused(true)}
+                  onBlur={() => setCustomFocused(false)}
+                />
+              </View>
+              <TouchableOpacity style={[dp.applyBtn, { backgroundColor: color }]} onPress={applyCustom}>
+                <Text style={dp.applyText}>Set</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+    </>
+  );
+}
+
+// ─────────────────────────────────────────────
 // FIELD
 // ─────────────────────────────────────────────
 
@@ -853,22 +1065,18 @@ function MedicalFormBody({
 
       <View style={f.twoCol}>
         <View style={{ flex: 1 }}>
-          <Field
+          <DateField
             label="Last Vaccination"
             value={form.lastVaccinationDate}
             onChange={setF("lastVaccinationDate")}
-            placeholder="DD/MM/YYYY"
-            icon="calendar-outline"
             color="#7c3aed"
           />
         </View>
         <View style={{ flex: 1 }}>
-          <Field
+          <DateField
             label="Next Vaccination"
             value={form.nextVaccinationDate}
             onChange={setF("nextVaccinationDate")}
-            placeholder="DD/MM/YYYY"
-            icon="calendar-outline"
             color="#7c3aed"
           />
         </View>
@@ -887,12 +1095,10 @@ function MedicalFormBody({
           />
         </View>
         <View style={{ flex: 1 }}>
-          <Field
+          <DateField
             label="Last Issue Date"
             value={form.lastIssueDate}
             onChange={setF("lastIssueDate")}
-            placeholder="DD/MM/YYYY"
-            icon="calendar-outline"
             color="#ea580c"
           />
         </View>
@@ -909,12 +1115,10 @@ function MedicalFormBody({
           />
         </View>
         <View style={{ flex: 1 }}>
-          <Field
+          <DateField
             label="Issue Date"
             value={form.currentIssueDate}
             onChange={setF("currentIssueDate")}
-            placeholder="DD/MM/YYYY"
-            icon="calendar-outline"
             color="#dc2626"
           />
         </View>
@@ -1728,9 +1932,6 @@ export default function MedicalScreen() {
                   Register a new cow health record
                 </Text>
               </View>
-              <View style={[s.bigBtnArrow, { backgroundColor: "#16a34a" }]}>
-                <Ionicons name="add" size={18} color="#fff" />
-              </View>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => setScreen("list")}
@@ -1746,15 +1947,11 @@ export default function MedicalScreen() {
                   Browse {records.length} medical records
                 </Text>
               </View>
-              <View style={[s.bigBtnArrow, { backgroundColor: "#ea580c" }]}>
-                <Ionicons name="arrow-forward" size={18} color="#fff" />
-              </View>
             </TouchableOpacity>
           </View>
 
           {/* Summary cards */}
-          {records.length > 0 && (
-            <View style={s.summaryRow}>
+          <View style={s.summaryRow}>
               <TouchableOpacity
                 style={[
                   s.summaryCard,
@@ -1808,7 +2005,6 @@ export default function MedicalScreen() {
                 </Text>
               </View>
             </View>
-          )}
 
           {/* ── Calf Vaccine Schedule Section ── */}
           {calfRecords.length > 0 && (
@@ -2752,4 +2948,109 @@ const cs = StyleSheet.create({
     textAlign: "center",
     paddingVertical: 12,
   },
+});
+
+const dp = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "center",
+    paddingHorizontal: 20,
+  },
+  sheet: {
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    padding: 18,
+    shadowColor: "#000",
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 14,
+  },
+  headerTitle: { flex: 1, fontSize: 15, fontWeight: "800", letterSpacing: -0.2 },
+  closeBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#f1f5f9",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  monthNav: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  navBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: "#f8fafc",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  monthLabel: { fontSize: 15, fontWeight: "700", color: "#0f172a" },
+  dayHeaderRow: { flexDirection: "row", marginBottom: 4 },
+  dayHeader: {
+    flex: 1,
+    textAlign: "center",
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#94a3b8",
+    paddingVertical: 4,
+  },
+  grid: { flexDirection: "row", flexWrap: "wrap" },
+  cell: {
+    width: `${100 / 7}%` as any,
+    aspectRatio: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 8,
+  },
+  cellSelected: { borderRadius: 10 },
+  cellToday: {
+    borderWidth: 1.5,
+    borderColor: "#e2e8f0",
+    borderRadius: 10,
+  },
+  cellText: { fontSize: 13, color: "#374151", fontWeight: "500" },
+  cellTextSelected: { color: "#fff", fontWeight: "800" },
+  customRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 14,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#f1f5f9",
+  },
+  customLabel: { fontSize: 12, color: "#94a3b8", fontWeight: "600" },
+  customInput: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f8fafc",
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: "#e2e8f0",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  customText: { flex: 1, fontSize: 13, color: "#0f172a", fontWeight: "600" },
+  applyBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  applyText: { fontSize: 13, fontWeight: "800", color: "#fff" },
 });

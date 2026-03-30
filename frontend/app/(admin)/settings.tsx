@@ -33,7 +33,7 @@ export default function AdminSettingsScreen() {
         <Text style={styles.settingLabel}>{label}</Text>
         <Text style={styles.settingValue}>{value}</Text>
       </View>
-      <Ionicons name="chevron-forward" size={16} color="#ddd" />
+      <Ionicons name="chevron-forward" size={16} color="#FFD999" />
     </TouchableOpacity>
   );
 
@@ -45,6 +45,7 @@ export default function AdminSettingsScreen() {
           <Text style={styles.title}>Settings</Text>
         </View>
 
+        {/* Profile Card */}
         <View style={styles.profileCard}>
           <View style={styles.avatarRing}>
             <View style={styles.avatar}>
@@ -58,11 +59,12 @@ export default function AdminSettingsScreen() {
           </View>
 
           <View style={styles.adminBadge}>
-            <Ionicons name="shield-checkmark" size={11} color={Colors.primary} />
+            <Ionicons name="shield-checkmark" size={11} color="#fff" />
             <Text style={styles.adminBadgeText}>Administrator</Text>
           </View>
         </View>
 
+        {/* System Configuration */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>System Configuration</Text>
@@ -71,30 +73,31 @@ export default function AdminSettingsScreen() {
           <View style={styles.card}>
             <SettingRow
               icon="time-outline"
-              iconBg="#EEF4FF"
-              iconColor="#4F7EFF"
+              iconBg="#FFF8E8"
+              iconColor="#FFBF55"
               label="Order Cut-off Time"
               value="10:00 PM"
             />
             <View style={styles.rowDivider} />
             <SettingRow
               icon="bicycle-outline"
-              iconBg="#F0FDF4"
-              iconColor="#22c55e"
+              iconBg="#FFF3E8"
+              iconColor="#FF9675"
               label="Delivery Window"
               value="5:00 AM – 7:00 AM"
             />
             <View style={styles.rowDivider} />
             <SettingRow
               icon="wallet-outline"
-              iconBg="#FFF4E6"
-              iconColor="#f59e0b"
+              iconBg="#F5EDE8"
+              iconColor="#BB6B3F"
               label="Grace Period"
               value="1 day negative balance"
             />
           </View>
         </View>
 
+        {/* Business Information */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Business Information</Text>
@@ -103,16 +106,16 @@ export default function AdminSettingsScreen() {
           <View style={styles.card}>
             <SettingRow
               icon="storefront-outline"
-              iconBg="#F5F3FF"
-              iconColor="#7c3aed"
+              iconBg="#FFF0E8"
+              iconColor="#FD9E69"
               label="Business Name"
               value="GauSatva"
             />
             <View style={styles.rowDivider} />
             <SettingRow
               icon="call-outline"
-              iconBg="#ECFEFF"
-              iconColor="#0891b2"
+              iconBg="#FFF8E8"
+              iconColor="#8B6854"
               label="Support Contact"
               value="+91 9999999999"
             />
@@ -120,7 +123,7 @@ export default function AdminSettingsScreen() {
         </View>
 
         <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-          <Ionicons name="log-out-outline" size={19} color="#ef4444" />
+          <Ionicons name="log-out-outline" size={19} color="#BB6B3F" />
           <Text style={styles.logoutText}>Logout</Text>
         </TouchableOpacity>
 
@@ -131,7 +134,7 @@ export default function AdminSettingsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8F7F4' },
+  container: { flex: 1, backgroundColor: '#FFF8F4' },
 
   header: {
     paddingHorizontal: 20,
@@ -146,13 +149,13 @@ const styles = StyleSheet.create({
   },
 
   profileCard: {
-    backgroundColor: Colors.primary,
+    backgroundColor: '#FF9675',
     marginHorizontal: 20,
     borderRadius: 22,
     padding: 22,
     marginBottom: 22,
     alignItems: 'center',
-    shadowColor: Colors.primary,
+    shadowColor: '#BB6B3F',
     shadowOpacity: 0.3,
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 6 },
@@ -185,7 +188,7 @@ const styles = StyleSheet.create({
   },
   profileEmail: {
     fontSize: 13,
-    color: 'rgba(255,255,255,0.65)',
+    color: 'rgba(255,255,255,0.7)',
     marginTop: 3,
   },
   adminBadge: {
@@ -211,7 +214,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#bbb',
+    color: '#BB6B3F',
     textTransform: 'uppercase',
     letterSpacing: 0.8,
   },
@@ -221,8 +224,8 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     borderRadius: 18,
     paddingHorizontal: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
+    shadowColor: '#BB6B3F',
+    shadowOpacity: 0.06,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 2 },
     elevation: 1,
@@ -243,8 +246,8 @@ const styles = StyleSheet.create({
   },
   settingInfo: { flex: 1 },
   settingLabel: { fontSize: 14, fontWeight: '600', color: '#1A1A1A' },
-  settingValue: { fontSize: 12, color: '#aaa', marginTop: 2, fontWeight: '500' },
-  rowDivider: { height: 1, backgroundColor: '#F5F5F5', marginLeft: 48 },
+  settingValue: { fontSize: 12, color: '#8B6854', marginTop: 2, fontWeight: '500' },
+  rowDivider: { height: 1, backgroundColor: '#FFF0E8', marginLeft: 48 },
 
   logoutBtn: {
     flexDirection: 'row',
@@ -253,9 +256,9 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     marginTop: 8,
     padding: 16,
-    backgroundColor: '#FEF2F2',
+    backgroundColor: '#F5EDE8',
     borderRadius: 16,
     gap: 8,
   },
-  logoutText: { fontSize: 15, fontWeight: '700', color: '#ef4444' },
+  logoutText: { fontSize: 15, fontWeight: '700', color: '#BB6B3F' },
 });

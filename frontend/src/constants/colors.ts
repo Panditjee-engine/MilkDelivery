@@ -1,37 +1,37 @@
 export const Colors = {
-  primary: '#2563EB',
-  primaryDark: '#1D4ED8',
-  primaryLight: '#60A5FA',
-  secondary: '#10B981',
-  secondaryDark: '#059669',
-  accent: '#F59E0B',
-  
-  background: '#F8FAFC',
+  primary: '#FF9675',
+  primaryDark: '#BB6B3F',
+  primaryLight: '#FFD999',
+  secondary: '#FD9E69',
+  secondaryDark: '#8B6854',
+  accent: '#FFBF55',
+
+  background: '#FFF8F4',
   surface: '#FFFFFF',
-  surfaceSecondary: '#F1F5F9',
-  
-  text: '#1E293B',
-  textSecondary: '#64748B',
-  textLight: '#94A3B8',
+  surfaceSecondary: '#FFF3E8',
+
+  text: '#1A1A1A',
+  textSecondary: '#8B6854',
+  textLight: '#BB6B3F',
   textInverse: '#FFFFFF',
-  
-  border: '#E2E8F0',
-  divider: '#CBD5E1',
-  
-  success: '#10B981',
-  warning: '#F59E0B',
-  error: '#EF4444',
-  info: '#3B82F6',
-  
-  milk: '#FEFCE8',
-  dairy: '#FEF3C7',
-  bakery: '#FED7AA',
-  fruits: '#BBF7D0',
-  vegetables: '#D9F99D',
-  essentials: '#E0E7FF',
-  
-  overlay: 'rgba(0, 0, 0, 0.5)',
-  shadow: 'rgba(0, 0, 0, 0.1)',
+
+  border: '#FFE8D6',
+  divider: '#FFF0E8',
+
+  success: '#FF9675',
+  warning: '#FFBF55',
+  error: '#BB6B3F',
+  info: '#FD9E69',
+
+  milk: '#FFF8F4',
+  dairy: '#FFF3E8',
+  bakery: '#FFE8D6',
+  fruits: '#FFD999',
+  vegetables: '#FFF0E8',
+  essentials: '#F5EDE8',
+
+  overlay: 'rgba(139, 104, 84, 0.5)',
+  shadow: 'rgba(187, 107, 63, 0.1)',
 };
 
 export const CategoryColors: Record<string, string> = {

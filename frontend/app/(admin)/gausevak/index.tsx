@@ -247,10 +247,8 @@ function Header() {
         <View style={styles.headerRow}>
           <View style={styles.logoRing}>
             <Image
-              source={{
-                uri: "https://cdn-icons-png.flaticon.com/512/1998/1998610.png",
-              }}
-              style={styles.logo}
+              source={require("../../../assets/images/Gausevak-logo.png")}
+              style={{ width: 40, height: 40 }}
               resizeMode="contain"
             />
           </View>
@@ -331,7 +329,7 @@ const IS_IOS = Platform.OS === "ios";
 const STATUS_BAR_HEIGHT = IS_IOS ? 0 : (StatusBar.currentHeight ?? 0);
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#F8F7F4" },
+  screen: { flex: 1, backgroundColor: "#FFF8EF" },
   listContent: { paddingHorizontal: 12, paddingTop: 10 },
   headerWrapper: {
     paddingTop: IS_IOS ? 56 : STATUS_BAR_HEIGHT + 16,

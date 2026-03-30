@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import {
   View,
   Text,
@@ -45,7 +46,7 @@ interface Cow {
   created_at: string;
   pregnancyStatus?: PregnancyStatus;
   activeSince?: string;
-  milkActive?: boolean; // ← ADDED
+  milkActive?: boolean;
   // Bull-specific fields
   semenAvailable?: boolean;
   totalDoses?: number;
@@ -70,7 +71,7 @@ interface CowForm {
   isActive: boolean;
   isSold: boolean;
   type: CowType;
-  milkActive: boolean; // ← ADDED
+  milkActive: boolean;
   semenAvailable: boolean;
   totalDoses: string;
   lastUsedDate: string;
@@ -78,6 +79,16 @@ interface CowForm {
   purpose: string;
   damYield: string;
 }
+
+const cowImg = require("../../../assets/images/gir-cow.png");
+const bullImg = require("../../../assets/images/bull-cow.png");
+const calfImg = require("../../../assets/images/calf-cow.png");
+
+const getAnimalImage = (type: string) => {
+  if (type === "bull") return bullImg;
+  if (type === "newborn") return calfImg;
+  return cowImg;
+};
 
 const EMPTY_FORM: CowForm = {
   tag: "",
@@ -92,7 +103,7 @@ const EMPTY_FORM: CowForm = {
   isActive: true,
   isSold: false,
   type: "mature",
-  milkActive: false, // ← ADDED
+  milkActive: false,
   semenAvailable: false,
   totalDoses: "",
   lastUsedDate: "",
@@ -125,6 +136,24 @@ function getTodayStr(): string {
   const dd = String(today.getDate()).padStart(2, "0");
   const mm = String(today.getMonth() + 1).padStart(2, "0");
   const yyyy = today.getFullYear();
+  return `${dd}/${mm}/${yyyy}`;
+}
+
+// ── Helper: DD/MM/YYYY string → Date object ──────────────────────────────────
+function strToDate(str: string): Date {
+  const parts = str.split("/");
+  if (parts.length === 3) {
+    const d = new Date(+parts[2], +parts[1] - 1, +parts[0]);
+    if (!isNaN(d.getTime())) return d;
+  }
+  return new Date();
+}
+
+// ── Helper: Date object → DD/MM/YYYY string ──────────────────────────────────
+function dateToStr(date: Date): string {
+  const dd = String(date.getDate()).padStart(2, "0");
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const yyyy = date.getFullYear();
   return `${dd}/${mm}/${yyyy}`;
 }
 
@@ -211,6 +240,106 @@ function ActiveDaysBadge({
   );
 }
 
+// ── DateField: calendar icon click se picker khulta hai ──────────────────────
+function DateField({
+  label,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+}) {
+  const [focused, setFocused] = useState(false);
+  const [showPicker, setShowPicker] = useState(false);
+
+  const currentDate = value ? strToDate(value) : new Date();
+
+  const handlePickerChange = (_: any, selectedDate?: Date) => {
+    // On Android, picker closes automatically after selection
+    if (Platform.OS === "android") setShowPicker(false);
+    if (selectedDate) {
+      onChange(dateToStr(selectedDate));
+    }
+  };
+
+  return (
+    <View style={f.wrap}>
+      <Text style={f.label}>{label}</Text>
+      <View style={[f.row, focused && f.focused]}>
+        {/* Calendar icon — tap karo to open picker */}
+        <TouchableOpacity onPress={() => setShowPicker(true)}>
+          <Ionicons
+            name="calendar-outline"
+            size={15}
+            color={showPicker || focused ? "#16a34a" : "#9ca3af"}
+            style={{ marginRight: 8 }}
+          />
+        </TouchableOpacity>
+        <TextInput
+          style={f.input}
+          value={value}
+          onChangeText={onChange}
+          placeholder={placeholder ?? "DD/MM/YYYY"}
+          placeholderTextColor="#d1d5db"
+          keyboardType="numeric"
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+        />
+        {/* Optional: small "today" shortcut button */}
+        {value === "" && (
+          <TouchableOpacity
+            onPress={() => onChange(getTodayStr())}
+            style={f.todayBtn}
+          >
+            <Text style={f.todayText}>Today</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* iOS: picker shown inside modal */}
+      {showPicker && Platform.OS === "ios" && (
+        <Modal transparent animationType="slide" visible={showPicker}>
+          <View style={f.pickerOverlay}>
+            <View style={f.pickerCard}>
+              <View style={f.pickerHeader}>
+                <Text style={f.pickerTitle}>{label}</Text>
+                <TouchableOpacity
+                  onPress={() => setShowPicker(false)}
+                  style={f.pickerDoneBtn}
+                >
+                  <Text style={f.pickerDoneText}>Done</Text>
+                </TouchableOpacity>
+              </View>
+              <DateTimePicker
+                value={currentDate}
+                mode="date"
+                display="spinner"
+                onChange={handlePickerChange}
+                maximumDate={new Date()}
+              />
+            </View>
+          </View>
+        </Modal>
+      )}
+
+      {/* Android: native picker */}
+      {showPicker && Platform.OS === "android" && (
+        <DateTimePicker
+          value={currentDate}
+          mode="date"
+          display="default"
+          onChange={handlePickerChange}
+          maximumDate={new Date()}
+        />
+      )}
+    </View>
+  );
+}
+
+// ── Regular Field (non-date) ─────────────────────────────────────────────────
 function Field({
   label,
   value,
@@ -241,6 +370,185 @@ function Field({
           onBlur={() => setFocused(false)}
         />
       </View>
+    </View>
+  );
+}
+
+// ── Breed list ────────────────────────────────────────────────────────────────
+const BREEDS = [
+  { name: "Gir", image: cowImg, origin: "Gujarat" },
+  { name: "Sahiwal", image: cowImg, origin: "Punjab" },
+  { name: "Red Sindhi", image: cowImg, origin: "Sindh" },
+  { name: "Tharparkar", image: cowImg, origin: "Rajasthan" },
+  { name: "Rathi", image: cowImg, origin: "Rajasthan" },
+  { name: "Kankrej", image: cowImg, origin: "Gujarat" },
+  { name: "Badri / Pahadi", image: cowImg, origin: "Uttarakhand" },
+];
+
+// ── BreedSelector: searchable dropdown ───────────────────────────────────────
+function BreedSelector({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const searchRef = useRef<TextInput>(null);
+
+  const filtered = BREEDS.filter((b) =>
+    b.name.toLowerCase().includes(search.toLowerCase()),
+  );
+
+  const select = (name: string) => {
+    onChange(name);
+    setOpen(false);
+    setSearch("");
+  };
+
+  const openDropdown = () => {
+    setOpen(true);
+    setTimeout(() => searchRef.current?.focus(), 150);
+  };
+
+  return (
+    <View style={f.wrap}>
+      <Text style={f.label}>Breed</Text>
+
+      {/* Trigger button */}
+      <TouchableOpacity
+        onPress={openDropdown}
+        style={[f.row, open && f.focused]}
+        activeOpacity={0.8}
+      >
+        <Ionicons
+          name="paw-outline"
+          size={15}
+          color={open ? "#16a34a" : "#9ca3af"}
+          style={{ marginRight: 8 }}
+        />
+        <Text
+          style={[
+            f.input,
+            { paddingVertical: 0 },
+            !value && { color: "#d1d5db" },
+          ]}
+        >
+          {value || "Select or type breed"}
+        </Text>
+        <Ionicons
+          name={open ? "chevron-up" : "chevron-down"}
+          size={14}
+          color="#9ca3af"
+        />
+      </TouchableOpacity>
+
+      {/* Dropdown Modal */}
+      <Modal
+        visible={open}
+        transparent
+        animationType="fade"
+        onRequestClose={() => { setOpen(false); setSearch(""); }}
+      >
+        <TouchableOpacity
+          style={bd.overlay}
+          activeOpacity={1}
+          onPress={() => { setOpen(false); setSearch(""); }}
+        >
+          <TouchableOpacity activeOpacity={1} style={bd.card}>
+            {/* Header */}
+            <View style={bd.header}>
+              <Text style={bd.title}>Select Breed</Text>
+              <TouchableOpacity
+                onPress={() => { setOpen(false); setSearch(""); }}
+                style={bd.closeBtn}
+              >
+                <Ionicons name="close" size={16} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Search box */}
+            <View style={bd.searchRow}>
+              <Ionicons name="search-outline" size={15} color="#9ca3af" />
+              <TextInput
+                ref={searchRef}
+                style={bd.searchInput}
+                value={search}
+                onChangeText={setSearch}
+                placeholder="Search breed..."
+                placeholderTextColor="#d1d5db"
+                returnKeyType="done"
+              />
+              {search.length > 0 && (
+                <TouchableOpacity onPress={() => setSearch("")}>
+                  <Ionicons name="close-circle" size={15} color="#9ca3af" />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Breed list */}
+            <ScrollView
+              style={{ maxHeight: 320 }}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              {filtered.length === 0 ? (
+                // Allow typing a custom breed not in list
+                <TouchableOpacity
+                  style={bd.customRow}
+                  onPress={() => select(search)}
+                >
+                  <Ionicons name="add-circle-outline" size={18} color="#16a34a" />
+                  <View style={{ flex: 1, marginLeft: 10 }}>
+                    <Text style={bd.customLabel}>Add "{search}"</Text>
+                    <Text style={bd.customSub}>Custom breed</Text>
+                  </View>
+                </TouchableOpacity>
+              ) : (
+                filtered.map((b, i) => {
+                  const selected = value === b.name;
+                  return (
+                    <TouchableOpacity
+                      key={b.name}
+                      onPress={() => select(b.name)}
+                      style={[
+                        bd.item,
+                        selected && bd.itemSelected,
+                        i === filtered.length - 1 && { borderBottomWidth: 0 },
+                      ]}
+                      activeOpacity={0.7}
+                    >
+                      <View
+                        style={[
+                          bd.emojiWrap,
+                          selected && { backgroundColor: "#dcfce7", borderColor: "#86efac" },
+                        ]}
+                      >
+                        <Image
+                          source={b.image}
+                          style={{ width: 28, height: 28, resizeMode: "contain" }}
+                        />
+                      </View>
+                      <View style={{ flex: 1, marginLeft: 12 }}>
+                        <Text
+                          style={[bd.breedName, selected && { color: "#16a34a" }]}
+                        >
+                          {b.name}
+                        </Text>
+                        <Text style={bd.origin}>{b.origin}</Text>
+                      </View>
+                      {selected && (
+                        <Ionicons name="checkmark-circle" size={20} color="#16a34a" />
+                      )}
+                    </TouchableOpacity>
+                  );
+                })
+              )}
+            </ScrollView>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -348,13 +656,7 @@ function CowFormFields({
         placeholder={isBull ? "e.g. Sultan" : "e.g. Kamdhenu"}
         icon="text-outline"
       />
-      <Field
-        label="Breed"
-        value={form.breed}
-        onChange={setF("breed")}
-        placeholder="e.g. Gir, Sahiwal"
-        icon="paw-outline"
-      />
+      <BreedSelector value={form.breed} onChange={setF("breed")} />
 
       {isBull ? (
         <>
@@ -398,19 +700,18 @@ function CowFormFields({
             icon="trending-up-outline"
             keyboardType="numeric"
           />
-          <Field
+          {/* ── Date fields with calendar picker ── */}
+          <DateField
             label="Last Used Date"
             value={form.lastUsedDate}
             onChange={setF("lastUsedDate")}
             placeholder="DD/MM/YYYY"
-            icon="calendar-outline"
           />
-          <Field
+          <DateField
             label="Bought Date"
             value={form.boughtDate}
             onChange={setF("boughtDate")}
             placeholder="DD/MM/YYYY"
-            icon="calendar-outline"
           />
           <View style={m.toggleCard}>
             <Toggle
@@ -509,24 +810,22 @@ function CowFormFields({
             placeholder="Large / Medium / Small"
             icon="resize-outline"
           />
+          {/* ── Date field with calendar picker ── */}
           {form.type === "mature" ? (
-            <Field
+            <DateField
               label="Bought Date"
               value={form.boughtDate}
               onChange={setF("boughtDate")}
               placeholder="DD/MM/YYYY"
-              icon="calendar-outline"
             />
           ) : (
-            <Field
+            <DateField
               label="Born Date"
               value={form.bornDate}
               onChange={setF("bornDate")}
               placeholder="DD/MM/YYYY"
-              icon="calendar-outline"
             />
           )}
-          {/* ── TOGGLES — non-bull ── */}
           <View style={m.toggleCard}>
             <Toggle
               label="Active Status"
@@ -541,7 +840,6 @@ function CowFormFields({
               onChange={setF("isSold")}
               color="#dc2626"
             />
-            {/* ← ADDED: Milk Recording toggle, non-bull only */}
             <View style={m.divider} />
             <Toggle
               label="Milk Recording"
@@ -613,7 +911,7 @@ function AddCowModal({
         isActive: form.isActive,
         isSold: form.isSold,
         type: form.type,
-        milkActive: !isBull ? form.milkActive : undefined, // ← ADDED
+        milkActive: !isBull ? form.milkActive : undefined,
         activeSince: form.isActive ? getTodayStr() : undefined,
         ...(isBull && {
           semenAvailable: form.semenAvailable,
@@ -646,7 +944,7 @@ function AddCowModal({
   const TYPE_OPTIONS = [
     {
       key: "mature" as CowType,
-      emoji: "🐄",
+      image: cowImg,
       title: "Mature Cow",
       sub: "Purchased / Adult",
       bg: "#f0fdf4",
@@ -656,7 +954,7 @@ function AddCowModal({
     },
     {
       key: "newborn" as CowType,
-      emoji: "🐮",
+      image: calfImg,
       title: "New Born",
       sub: "Born on farm",
       bg: "#eff6ff",
@@ -703,7 +1001,14 @@ function AddCowModal({
                           { backgroundColor: opt.bg, borderColor: opt.border },
                         ]}
                       >
-                        <Text style={m.typeEmoji}>{opt.emoji}</Text>
+                        <Image
+                          source={opt.image}
+                          style={{
+                            width: 50,
+                            height: 50,
+                            resizeMode: "contain", 
+                          }}
+                        />
                         <Text style={[m.typeTitle, { color: opt.titleColor }]}>
                           {opt.title}
                         </Text>
@@ -730,7 +1035,10 @@ function AddCowModal({
                   style={m.bullCard}
                 >
                   <View style={m.bullInner}>
-                    <Text style={{ fontSize: 28 }}>🐂</Text>
+                    <Image
+                      source={bullImg}
+                      style={{ width: 45, height: 45, resizeMode: "contain" }}
+                    />
                     <View style={{ flex: 1, marginLeft: 14 }}>
                       <Text style={m.bullTitle}>Bull</Text>
                       <Text style={m.bullSub}>
@@ -758,13 +1066,26 @@ function AddCowModal({
                   >
                     <Ionicons name="arrow-back" size={16} color="#6b7280" />
                   </TouchableOpacity>
-                  <Text style={[m.title, { marginLeft: 10, flex: 1 }]}>
-                    {form.type === "mature"
-                      ? "🐄 Mature Cow"
-                      : form.type === "newborn"
-                        ? "🐮 New Born Calf"
-                        : "🐂 Bull"}
-                  </Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", flex: 1, marginLeft: 10 }}>
+                    <Image
+                      source={
+                        form.type === "bull"
+                          ? bullImg
+                          : form.type === "newborn"
+                            ? calfImg
+                            : cowImg
+                      }
+                      style={{ width: 50, height: 50, resizeMode: "contain", marginRight: 6 }}
+                    />
+
+                    <Text style={m.title}>
+                      {form.type === "mature"
+                        ? "Mature Cow"
+                        : form.type === "newborn"
+                          ? "New Born Calf"
+                          : "Bull"}
+                    </Text>
+                  </View>
                   <TouchableOpacity onPress={reset} style={m.closeBtn}>
                     <Ionicons name="close" size={18} color="#6b7280" />
                   </TouchableOpacity>
@@ -854,7 +1175,7 @@ function EditCowModal({
         isActive: cow.isActive,
         isSold: cow.isSold,
         type: cow.type,
-        milkActive: cow.milkActive ?? false, // ← ADDED
+        milkActive: cow.milkActive ?? false,
         semenAvailable: cow.semenAvailable ?? false,
         totalDoses: cow.totalDoses?.toString() ?? "",
         lastUsedDate: cow.lastUsedDate ?? "",
@@ -898,7 +1219,7 @@ function EditCowModal({
         isSold: form.isSold,
         type: form.type,
         activeSince: activeSince ?? undefined,
-        milkActive: !isBull ? form.milkActive : undefined, // ← ADDED
+        milkActive: !isBull ? form.milkActive : undefined,
         ...(isBull && {
           semenAvailable: form.semenAvailable,
           totalDoses: form.totalDoses ? parseInt(form.totalDoses) : undefined,
@@ -1147,9 +1468,14 @@ function CowCard({
               isBull && { backgroundColor: "#f5f3ff", borderColor: "#ddd6fe" },
             ]}
           >
-            <Text style={{ fontSize: 28 }}>
-              {isBull ? "🐂" : item.type === "newborn" ? "🐮" : "🐄"}
-            </Text>
+            <Image
+              source={getAnimalImage(item.type)}
+              style={{
+                width: 40,
+                height: 40,
+                resizeMode: "contain",
+              }}
+            />
           </View>
           <View style={{ flex: 1, marginLeft: 12 }}>
             <View style={c.nameRow}>
@@ -1456,8 +1782,6 @@ function CowCard({
                     </Text>
                   </View>
                 )}
-
-                {/* ← ADDED: Milk Recording pill — non-bull only */}
                 <View
                   style={[
                     c.pill,
@@ -1706,7 +2030,10 @@ export default function CowsScreen() {
               activeOpacity={0.85}
             >
               <View style={[s.bigBtnIcon, { backgroundColor: "#f5f3ff" }]}>
-                <Text style={{ fontSize: 32 }}>🐄</Text>
+                <Image
+                  source={cowImg}
+                  style={{ width: 60, height: 60, resizeMode: "contain" }}
+                />
               </View>
               <Text style={s.bigBtnTitle}>Add Animal</Text>
               <Text style={s.bigBtnSub}>Register cow, calf, or bull</Text>
@@ -1766,20 +2093,35 @@ export default function CowsScreen() {
                 onPress={() => setFilterType(t)}
                 style={[s.filterChip, filterType === t && s.filterChipActive]}
               >
-                <Text
-                  style={[
-                    s.filterChipText,
-                    filterType === t && s.filterChipTextActive,
-                  ]}
-                >
-                  {t === "all"
-                    ? "🐾 All"
-                    : t === "mature"
-                      ? "🐄 Cows"
-                      : t === "newborn"
-                        ? "🐮 Calves"
-                        : "🐂 Bulls"}
-                </Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <Image
+                    source={
+                      t === "all"
+                        ? cowImg
+                        : t === "mature"
+                          ? cowImg
+                          : t === "newborn"
+                            ? calfImg
+                            : bullImg
+                    }
+                    style={{ width: 25, height: 25, resizeMode: "contain" }}
+                  />
+
+                  <Text
+                    style={[
+                      s.filterChipText,
+                      filterType === t && s.filterChipTextActive,
+                    ]}
+                  >
+                    {t === "all"
+                      ? "All"
+                      : t === "mature"
+                        ? "Cows"
+                        : t === "newborn"
+                          ? "Calves"
+                          : "Bulls"}
+                  </Text>
+                </View>
               </TouchableOpacity>
             ))}
           </ScrollView>
@@ -1879,6 +2221,10 @@ export default function CowsScreen() {
     </SafeAreaView>
   );
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Styles
+// ─────────────────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#fff" },
@@ -2278,6 +2624,49 @@ const f = StyleSheet.create({
   },
   motherChipActive: { backgroundColor: "#f0fdf4", borderColor: "#86efac" },
   motherChipText: { fontSize: 12, color: "#6b7280", fontWeight: "600" },
+  // ── DatePicker styles ──
+  todayBtn: {
+    backgroundColor: "#f0fdf4",
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderWidth: 1,
+    borderColor: "#bbf7d0",
+  },
+  todayText: { fontSize: 11, fontWeight: "700", color: "#16a34a" },
+  pickerOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "flex-end",
+  },
+  pickerCard: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingBottom: 32,
+  },
+  pickerHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f3f4f6",
+  },
+  pickerTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#111827",
+  },
+  pickerDoneBtn: {
+    backgroundColor: "#16a34a",
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+  },
+  pickerDoneText: { fontSize: 13, fontWeight: "800", color: "#fff" },
 });
 
 const m = StyleSheet.create({
@@ -2506,5 +2895,125 @@ const qr = StyleSheet.create({
     fontWeight: "700",
     fontSize: 13,
     letterSpacing: 0.2,
+  },
+});
+
+const bd = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 20,
+  },
+  card: {
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    width: "100%",
+    maxWidth: 400,
+    paddingBottom: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f3f4f6",
+  },
+  title: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#111827",
+    letterSpacing: -0.3,
+  },
+  closeBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#f3f4f6",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  searchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginHorizontal: 14,
+    marginVertical: 10,
+    backgroundColor: "#f9fafb",
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: "#e5e7eb",
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    gap: 8,
+  },
+  searchInput: {
+    flex: 1,
+    color: "#111827",
+    fontSize: 14,
+    fontWeight: "500",
+  },
+  item: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f9fafb",
+  },
+  itemSelected: {
+    backgroundColor: "#f0fdf4",
+  },
+  emojiWrap: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: "#f9fafb",
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  breedName: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#111827",
+    letterSpacing: -0.2,
+  },
+  origin: {
+    fontSize: 11,
+    color: "#9ca3af",
+    fontWeight: "500",
+    marginTop: 2,
+  },
+  customRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: "#f0fdf4",
+    margin: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#bbf7d0",
+  },
+  customLabel: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#16a34a",
+  },
+  customSub: {
+    fontSize: 11,
+    color: "#86efac",
+    fontWeight: "500",
+    marginTop: 1,
   },
 });

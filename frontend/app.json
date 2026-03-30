@@ -2,13 +2,16 @@
   "expo": {
     "name": "Gau Satva",
     "slug": "frontend",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "frontend",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Allow $(PRODUCT_NAME) to access your camera"
+      }
     },
     "android": {
       "newArchEnabled": true,
@@ -16,7 +19,10 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#000000"
       },
-      "package": "com.anurags89.frontend"
+      "package": "com.badal_12.frontend",
+      "permissions": [
+        "android.permission.CAMERA"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -45,8 +51,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "cc245ec7-c429-456b-96e9-941112d39825"
+        "projectId": "51584e86-975a-4c13-bb70-11d7590e7834"
       }
-    }
+    },
+    "owner": "badal_12"
   }
 }

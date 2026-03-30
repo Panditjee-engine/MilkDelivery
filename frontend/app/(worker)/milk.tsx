@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback, createContext, useContext } from "react";
+
 import {
   View,
   Text,
@@ -13,77 +13,10 @@ import {
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useAuth } from "../../src/contexts/AuthContext";
+import React, { useState, useRef, useEffect, useCallback } from "react";
+import { useLang } from "../../src/contexts/LanguageContext";
 import { api } from "../../src/services/api";
 
-// ─── Language Context (shared with index.tsx) ─────────────────────────────────
-// If you already have this in a separate file, import useLang from there instead.
-
-type Lang = "en" | "hi";
-
-const translations: Record<string, Record<Lang, string>> = {
-  // Shift labels
-  morningShift:      { en: "Morning Shift",                          hi: "सुबह की पाली" },
-  eveningShift:      { en: "Evening Shift",                          hi: "शाम की पाली" },
-  todayTotal:        { en: "Today Total",                            hi: "आज कुल" },
-
-  // Status strip
-  morning:           { en: "Morning",                                hi: "सुबह" },
-  evening:           { en: "Evening",                                hi: "शाम" },
-
-  // Progress
-  cowsLogged:        { en: "cows logged",                            hi: "गायें दर्ज" },
-
-  // All done banners
-  morningComplete:   { en: "Morning shift complete!",                hi: "सुबह की पाली पूरी हो गई!" },
-  eveningComplete:   { en: "Evening shift complete!",                hi: "शाम की पाली पूरी हो गई!" },
-  morningDoneSub:    { en: "Evening shift opens at 12:00 PM — pull to refresh then.", hi: "दोपहर 12 बजे शाम की पाली शुरू होगी — तब रीफ्रेश करें।" },
-  eveningDoneSub:    { en: "Come back tomorrow morning — pull to refresh then.",      hi: "कल सुबह वापस आएं — तब रीफ्रेश करें।" },
-
-  // Empty state
-  noCowsTitle:       { en: "No cows assigned for milk",             hi: "दूध के लिए कोई गाय नहीं" },
-  noCowsSub:         { en: "Ask your admin to enable Milk Recording on cows", hi: "अपने एडमिन से गायों पर दूध रिकॉर्डिंग चालू करने को कहें" },
-
-  // Loading
-  loadingCows:       { en: "Loading cows...",                        hi: "गायें लोड हो रही हैं..." },
-
-  // Card
-  done:              { en: "Done",                                   hi: "हो गया" },
-  recordedThisShift: { en: "L recorded this shift",                  hi: "L इस पाली में दर्ज" },
-
-  // Save button
-  save:              { en: "Save",                                   hi: "सहेजें" },
-  tapCheck:          { en: "tap ✓",                                  hi: "दबाएं ✓" },
-
-  // Error
-  errorTitle:        { en: "Error",                                  hi: "त्रुटि" },
-  couldNotSave:      { en: "Could not save entry",                   hi: "प्रविष्टि सहेजी नहीं जा सकी" },
-};
-
-interface LangCtx {
-  lang: Lang;
-  toggleLang: () => void;
-  t: (key: string) => string;
-}
-
-// Try to use a shared context if available; fall back to local
-const LanguageContext = createContext<LangCtx>({
-  lang: "en",
-  toggleLang: () => {},
-  t: (k) => translations[k]?.["en"] ?? k,
-});
-
-export function LanguageProvider({ children }: { children: React.ReactNode }) {
-  const [lang, setLang] = useState<Lang>("en");
-  const toggleLang = () => setLang((l) => (l === "en" ? "hi" : "en"));
-  const t = (key: string) => translations[key]?.[lang] ?? key;
-  return (
-    <LanguageContext.Provider value={{ lang, toggleLang, t }}>
-      {children}
-    </LanguageContext.Provider>
-  );
-}
-
-const useLang = () => useContext(LanguageContext);
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -187,7 +120,7 @@ function MilkScreenInner({
   onTotalChange?: (total: number) => void;
 }) {
   const { workerToken } = useAuth();
-  const { lang, toggleLang, t } = useLang();
+  const { t } = useLang();
   const token = workerToken ?? "";
   const shift = getCurrentShift();
   const isMorning = shift === "morning";
@@ -293,7 +226,7 @@ function MilkScreenInner({
   };
 
   const accentColor = isMorning ? "#d97706" : "#4f46e5";
-  const accentBg    = isMorning ? "#fffbeb" : "#eef2ff";
+  const accentBg = isMorning ? "#fffbeb" : "#eef2ff";
   const accentLight = isMorning ? "#fef3c7" : "#e0e7ff";
 
   if (loading) {
@@ -318,10 +251,6 @@ function MilkScreenInner({
         />
       }
     >
-      {/* ── Language toggle ── */}
-      <TouchableOpacity style={s.langBtn} onPress={toggleLang} activeOpacity={0.75}>
-        <Text style={s.langBtnText}>{lang === "en" ? "हि" : "EN"}</Text>
-      </TouchableOpacity>
 
       {/* ── Shift Banner ── */}
       <LinearGradient
@@ -587,18 +516,13 @@ function MilkScreenInner({
 
 // ─── Export wrapped in provider (standalone use) ──────────────────────────────
 // If this screen is always opened from index.tsx which already has LanguageProvider,
-// you can remove the wrapper and just export MilkScreenInner directly.
 
 export default function MilkScreen(props: {
   token?: string;
   cows?: any[];
   onTotalChange?: (total: number) => void;
 }) {
-  return (
-    <LanguageProvider>
-      <MilkScreenInner {...props} />
-    </LanguageProvider>
-  );
+  return <MilkScreenInner {...props} />;
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
@@ -613,25 +537,6 @@ const s = StyleSheet.create({
     gap: 12,
   },
   loadingText: { color: "#6b7280", fontSize: 14 },
-
-  // ── Language toggle ──────────────────────────────────────────────────────
-  langBtn: {
-    alignSelf: "flex-end",
-    marginBottom: 10,
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: "#faf5ff",
-    borderWidth: 1,
-    borderColor: "#e9d5ff",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  langBtnText: {
-    fontSize: 14,
-    fontWeight: "900",
-    color: "#7c3aed",
-  },
 
   shiftBanner: {
     flexDirection: "row",
