@@ -14,6 +14,7 @@ import {
   RefreshControl,
   Modal,
   KeyboardAvoidingView,
+  Image,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -45,6 +46,10 @@ function todayStr() {
   return new Date().toISOString().split("T")[0];
 }
 
+const cowImg = require("../../../assets/images/gir-cow.png");
+const bullImg = require("../../../assets/images/bull-cow.png");
+const calfImg = require("../../../assets/images/calf-cow.png");
+
 const todayLabel = new Date().toLocaleDateString("en-IN", {
   weekday: "long",
   day: "numeric",
@@ -65,8 +70,8 @@ function ShiftCard({
   const isMorning = session === "Morning";
   const isEmpty = liters === 0;
   const color = isEmpty ? "#9ca3af" : isMorning ? "#d97706" : "#6366f1";
-  const bg = isEmpty ? "#f9fafb" : isMorning ? "#fffbeb" : "#eef2ff";
-  const border = isEmpty ? "#e5e7eb" : isMorning ? "#fcd34d" : "#c7d2fe";
+  const bg = isEmpty ? "#f8e9e7d3" : isMorning ? "#fff1eb" : "#eef2ff";
+  const border = isEmpty ? "#ebaaa0e7" : isMorning ? "#fcd34d" : "#c7d2fe";
   const icon = isMorning ? "sunny" : "moon";
 
   return (
@@ -75,23 +80,23 @@ function ShiftCard({
         <View
           style={[
             sh.iconWrap,
-            { backgroundColor: isEmpty ? "#f3f4f6" : color + "20" },
+            { backgroundColor: isEmpty ? "#f8e9e7d3" : color + "20" },
           ]}
         >
           <Ionicons
             name={icon as any}
             size={14}
-            color={isEmpty ? "#d1d5db" : color}
+            color={isEmpty ? "#f89a7d" : color}
           />
         </View>
-        <Text style={[sh.sessionLabel, { color: isEmpty ? "#9ca3af" : color }]}>
+        <Text style={[sh.sessionLabel, { color: isEmpty ? "#ee9b64" : color }]}>
           {session}
         </Text>
       </View>
-      <Text style={[sh.liters, { color: isEmpty ? "#d1d5db" : color }]}>
+      <Text style={[sh.liters, { color: isEmpty ? "#ee9b64" : color }]}>
         {isEmpty ? "0.0" : liters.toFixed(1)}
       </Text>
-      <Text style={[sh.unit, { color: isEmpty ? "#d1d5db" : color + "99" }]}>
+      <Text style={[sh.unit, { color: isEmpty ? "#ee9b64" : color + "99" }]}>
         Litres
       </Text>
       {!isEmpty && worker && (
@@ -111,7 +116,7 @@ function ShiftCard({
 function CapacityBar({ total, capacity }: { total: number; capacity: number }) {
   const pct = capacity > 0 ? Math.min(total / capacity, 1) : 0;
   const barColor = pct >= 1 ? "#16a34a" : pct >= 0.7 ? "#d97706" : "#ef4444";
-  const barBg = pct >= 1 ? "#dcfce7" : pct >= 0.7 ? "#fef3c7" : "#fee2e2";
+  const barBg = pct >= 1 ? "#f8e9e7d3" : pct >= 0.7 ? "#fef3c7" : "#fee2e2";
   const label =
     pct >= 1 ? "At Capacity" : pct >= 0.7 ? "Good Yield" : "Below Target";
 
@@ -201,9 +206,13 @@ function CapacityModal({
           <View style={md.handle} />
           <Text style={md.title}>Set Milking Capacity</Text>
           {cow && (
-            <Text style={md.sub}>
-              🐄 {cow.name} · {cow.srNo}
-            </Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 }}>
+              <Image
+                source={cowImg}
+                style={{ width: 24, height: 24, resizeMode: "contain" }}
+              />
+              <Text style={md.sub}>{cow.name} · {cow.srNo}</Text>
+            </View>
           )}
           <Text style={md.hint}>
             Enter the expected maximum daily milk yield for this cow (in
@@ -283,7 +292,10 @@ function MilkCard({
     <Animated.View style={[s.card, { opacity, transform: [{ translateY }] }]}>
       <View style={s.cardHeader}>
         <View style={s.avatarWrap}>
-          <Text style={{ fontSize: 22 }}>🐄</Text>
+          <Image
+            source={cowImg}
+            style={{ width: 32, height: 32, resizeMode: "contain" }}
+          />
         </View>
         <View style={{ flex: 1, marginLeft: 10 }}>
           <Text style={s.cowName}>{item.name}</Text>
@@ -601,7 +613,7 @@ const ANDROID_STATUS_BAR =
   Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0;
 
 const s = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#f9fafb" },
+  screen: { flex: 1, backgroundColor: "#FFF8F0" },
   loadingWrap: {
     flex: 1,
     alignItems: "center",
@@ -615,9 +627,9 @@ const s = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     paddingTop: Platform.OS === "android" ? ANDROID_STATUS_BAR + 14 : 14,
-    backgroundColor: "#fff",
+    backgroundColor: "#FFF8F0",
     borderBottomWidth: 1,
-    borderBottomColor: "#f3f4f6",
+    borderBottomColor: "#FFF8F0",
   },
   backBtn: {
     width: 36,
@@ -682,7 +694,7 @@ const s = StyleSheet.create({
     backgroundColor: "#fff",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#e5e7eb",
+    borderColor: "#FFD999",
     paddingHorizontal: 12,
     paddingVertical: 10,
     gap: 8,
@@ -700,21 +712,21 @@ const s = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 5,
     borderRadius: 20,
-    backgroundColor: "#fff",
+    backgroundColor: "#FFF8F0",
     borderWidth: 1,
-    borderColor: "#e5e7eb",
+    borderColor: "#FFD999",
   },
   sortChipActive: { backgroundColor: "#111827", borderColor: "#111827" },
   sortChipText: { fontSize: 11, color: "#6b7280", fontWeight: "600" },
   sortChipTextActive: { color: "#fff" },
   listContent: { paddingHorizontal: 14 },
   card: {
-    backgroundColor: "#fff",
+    backgroundColor: "#fcfaf6",
     borderRadius: 18,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: "#f3f4f6",
+    borderColor: "#FFD999",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
@@ -726,11 +738,11 @@ const s = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 12,
-    backgroundColor: "#f9fafb",
+    backgroundColor: "#FFF8F0",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#e5e7eb",
+    borderColor: "#FFD999",
   },
   cowName: {
     fontSize: 15,
@@ -755,10 +767,10 @@ const s = StyleSheet.create({
     gap: 4,
     paddingHorizontal: 8,
     paddingVertical: 4,
-    backgroundColor: "#f9fafb",
+    backgroundColor: "#FFF8F0",
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#e5e7eb",
+    borderColor: "#FFD999",
   },
   capacityBtnText: { fontSize: 10, color: "#6b7280", fontWeight: "600" },
   divider: { height: 1, backgroundColor: "#f3f4f6", marginVertical: 12 },
@@ -860,10 +872,10 @@ const md = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    backgroundColor: "#f9fafb",
+    backgroundColor: "#FFF8F0",
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#e5e7eb",
+    borderColor: "#f5c895",
     paddingHorizontal: 16,
     paddingVertical: 14,
     marginBottom: 20,

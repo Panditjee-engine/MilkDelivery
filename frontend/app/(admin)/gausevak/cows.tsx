@@ -2175,13 +2175,16 @@ export default function CowsScreen() {
               )}
               ListEmptyComponent={
                 <View style={s.empty}>
-                  <Text style={{ fontSize: 48 }}>
-                    {filterType === "bull"
-                      ? "🐂"
-                      : filterType === "newborn"
-                        ? "🐮"
-                        : "🐄"}
-                  </Text>
+                  <Image
+                    source={
+                      filterType === "bull"
+                        ? bullImg
+                        : filterType === "newborn"
+                          ? calfImg
+                          : cowImg
+                    }
+                    style={{ width: 80, height: 80, resizeMode: "contain" }}
+                  />
                   <Text style={s.emptyText}>
                     No{" "}
                     {filterType === "all"

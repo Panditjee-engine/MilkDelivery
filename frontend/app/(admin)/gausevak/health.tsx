@@ -13,6 +13,7 @@ import {
   RefreshControl,
   Alert,
   Platform,
+  Image,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -37,6 +38,10 @@ interface Summary {
   unhealthy: number;
   not_reported: number;
 }
+
+const cowImg = require("../../../assets/images/gir-cow.png");
+const bullImg = require("../../../assets/images/bull-cow.png");
+const calfImg = require("../../../assets/images/calf-cow.png");
 
 const isHealthy = (s: string) => s === "healthy";
 const isUnhealthy = (s: string) => s !== "healthy" && s !== "not_reported";
@@ -461,7 +466,10 @@ export default function CowHealthScreen() {
             )}
             ListEmptyComponent={
               <View style={s.empty}>
-                <Text style={{ fontSize: 44 }}>🐄</Text>
+                <Image
+                  source={cowImg}
+                  style={{ width: 80, height: 80, resizeMode: "contain" }}
+                />
                 <Text style={s.emptyTitle}>No cows found</Text>
                 <Text style={s.emptyText}>
                   {search ? "No results for your search" : "No data for today"}
