@@ -78,10 +78,11 @@ export default function LoginScreen() {
 
     } catch (error: any) {
       // Both attempts failed
-      Alert.alert(
-        'Login Failed',
-        error.message || 'Invalid credentials. Please check and try again.'
-      );
+      const defaultMsg = loginMethod === 'phone'
+        ? 'Invalid phone number or password'
+        : 'Invalid email or password';
+
+      Alert.alert('Login Failed', defaultMsg);
     } finally {
       setLoading(false);
     }
@@ -291,38 +292,38 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  container:       { flex: 1, backgroundColor: '#F4F6FA' },
-  keyboardView:    { flex: 1 },
-  scrollContent:   { flexGrow: 1, padding: 24 },
+  container: { flex: 1, backgroundColor: '#F4F6FA' },
+  keyboardView: { flex: 1 },
+  scrollContent: { flexGrow: 1, padding: 24 },
 
-  header:          { alignItems: 'center', marginTop: 40, marginBottom: 32 },
-  logoCircle:      {},
-  logoImage:       { width: 96, height: 96, marginBottom: 12 },
-  title:           { fontSize: 28, fontWeight: '700', color: Colors.text, marginBottom: 8 },
-  subtitle:        { fontSize: 16, color: Colors.textSecondary },
+  header: { alignItems: 'center', marginTop: 40, marginBottom: 32 },
+  logoCircle: {},
+  logoImage: { width: 150, height: 150, marginBottom: 12 },
+  title: { fontSize: 28, fontWeight: '700', color: Colors.text, marginBottom: 8 },
+  subtitle: { fontSize: 16, color: Colors.textSecondary },
 
   toggleContainer: { flexDirection: 'row', backgroundColor: '#E5E7EB', borderRadius: 12, padding: 4, marginBottom: 24 },
-  toggleBtn:       { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, borderRadius: 10, gap: 6 },
+  toggleBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, borderRadius: 10, gap: 6 },
   toggleBtnActive: { backgroundColor: Colors.primary },
-  toggleText:      { fontSize: 14, fontWeight: '600', color: Colors.textSecondary },
-  toggleTextActive:{ color: '#fff' },
+  toggleText: { fontSize: 14, fontWeight: '600', color: Colors.textSecondary },
+  toggleTextActive: { color: '#fff' },
 
-  form:            { marginBottom: 24 },
-  card:            { backgroundColor: '#FFFFFF', borderRadius: 20, padding: 20, gap: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 8 },
-  button:          { marginTop: 8 },
+  form: { marginBottom: 24 },
+  card: { backgroundColor: '#FFFFFF', borderRadius: 20, padding: 20, gap: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 8 },
+  button: { marginTop: 8 },
 
-  inputLabel:      { fontSize: 14, fontWeight: '600', color: Colors.text, marginBottom: 6 },
-  phoneRow:        { flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderColor: '#E5E7EB', borderRadius: 12, backgroundColor: '#fff', overflow: 'hidden', marginBottom: 4 },
-  countryCode:     { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 14, backgroundColor: '#F9FAFB', borderRightWidth: 1, borderRightColor: '#E5E7EB', gap: 6 },
-  countryFlag:     { fontSize: 20 },
+  inputLabel: { fontSize: 14, fontWeight: '600', color: Colors.text, marginBottom: 6 },
+  phoneRow: { flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderColor: '#E5E7EB', borderRadius: 12, backgroundColor: '#fff', overflow: 'hidden', marginBottom: 4 },
+  countryCode: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 14, backgroundColor: '#F9FAFB', borderRightWidth: 1, borderRightColor: '#E5E7EB', gap: 6 },
+  countryFlag: { fontSize: 20 },
   countryCodeText: { fontSize: 15, fontWeight: '600', color: Colors.text },
-  phoneInput:      { flex: 1, paddingHorizontal: 14, paddingVertical: 14, fontSize: 16, color: Colors.text },
+  phoneInput: { flex: 1, paddingHorizontal: 14, paddingVertical: 14, fontSize: 16, color: Colors.text },
 
-  footer:          { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, marginBottom: 24 },
-  footerText:      { fontSize: 14, color: Colors.textSecondary },
-  linkText:        { fontSize: 14, fontWeight: '600', color: Colors.primary },
+  footer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, marginBottom: 24 },
+  footerText: { fontSize: 14, color: Colors.textSecondary },
+  linkText: { fontSize: 14, fontWeight: '600', color: Colors.primary },
 
-  demoSection:     { padding: 16, backgroundColor: Colors.surfaceSecondary, borderRadius: 12 },
-  demoTitle:       { fontSize: 14, fontWeight: '600', color: Colors.text, marginBottom: 8 },
-  demoText:        { fontSize: 12, color: Colors.textSecondary },
+  demoSection: { padding: 16, backgroundColor: Colors.surfaceSecondary, borderRadius: 12 },
+  demoTitle: { fontSize: 14, fontWeight: '600', color: Colors.text, marginBottom: 8 },
+  demoText: { fontSize: 12, color: Colors.textSecondary },
 });

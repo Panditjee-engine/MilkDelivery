@@ -1,8 +1,8 @@
 export const Colors = {
   primary: '#FF9675',
   primaryDark: '#BB6B3F',
-  primaryLight: '#FFD999',
-  secondary: '#FD9E69',
+  primaryLight: '#8B6854',
+  secondary: '#8B6854',
   secondaryDark: '#8B6854',
   accent: '#FFBF55',
 
@@ -21,12 +21,12 @@ export const Colors = {
   success: '#FF9675',
   warning: '#FFBF55',
   error: '#BB6B3F',
-  info: '#FD9E69',
+  info: '#8B6854',
 
   milk: '#FFF8F4',
   dairy: '#FFF3E8',
   bakery: '#FFE8D6',
-  fruits: '#FFD999',
+  fruits: '#8B6854',
   vegetables: '#FFF0E8',
   essentials: '#F5EDE8',
 

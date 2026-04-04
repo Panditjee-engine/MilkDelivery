@@ -16,8 +16,8 @@ import { useAuth } from "../../src/contexts/AuthContext";
 const C = {
   primary:    '#FF9675', // amber/golden
   secondary:  '#FF9675', // peach
-  accent:     '#FD9E69', // orange
-  light:      '#FFD999', // soft yellow
+  accent:     '#8B6854', // orange
+  light:      '#8B6854', // soft yellow
   dark:       '#BB6B3F', // burnt sienna
   deep:       '#8B6854', // deep brown
   bg:         '#FFF8EF', // warm off-white

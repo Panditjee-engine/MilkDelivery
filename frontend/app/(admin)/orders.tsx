@@ -33,7 +33,7 @@ const statusConfig: Record<string, { color: string; bg: string; icon: any; label
   assigned:         { color: "#FF9675", bg: "#FFF0EB", icon: "bicycle",          label: "Assigned"    },
   unassigned:       { color: "#FFBF55", bg: "#FFF8E8", icon: "time",             label: "Unassigned"  },
   picked_up:        { color: "#8B6854", bg: "#F5EDE8", icon: "cube",             label: "Picked Up"   },
-  out_for_delivery: { color: "#FD9E69", bg: "#FFF3EB", icon: "navigate",         label: "On the Way"  },
+  out_for_delivery: { color: "#8B6854", bg: "#FFF3EB", icon: "navigate",         label: "On the Way"  },
 };
 
 export default function AdminOrdersScreen() {
@@ -196,7 +196,7 @@ export default function AdminOrdersScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FF9675" />}
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <Ionicons name="receipt-outline" size={48} color="#FFD999" />
+            <Ionicons name="receipt-outline" size={48} color="#8B6854" />
             <Text style={styles.emptyTitle}>No orders found</Text>
             <Text style={styles.emptyDesc}>Try changing the filter</Text>
           </View>
@@ -325,6 +325,6 @@ const styles = StyleSheet.create({
   amountValue: { fontSize: 18, fontWeight: '800', color: '#1A1A1A' },
 
   emptyState: { alignItems: 'center', paddingTop: 80, gap: 8 },
-  emptyTitle: { fontSize: 16, fontWeight: '700', color: '#FFD999' },
-  emptyDesc: { fontSize: 13, color: '#FD9E69' },
+  emptyTitle: { fontSize: 16, fontWeight: '700', color: '#8B6854' },
+  emptyDesc: { fontSize: 13, color: '#8B6854' },
 });
