@@ -47,14 +47,12 @@ interface Cow {
   pregnancyStatus?: PregnancyStatus;
   activeSince?: string;
   milkActive?: boolean;
-  // Bull-specific fields
   semenAvailable?: boolean;
   totalDoses?: number;
   lastUsedDate?: string;
   successRate?: number;
   purpose?: string;
   damYield?: number;
-  // QR code field
   qrCode?: string;
 }
 
@@ -112,16 +110,39 @@ const EMPTY_FORM: CowForm = {
   damYield: "",
 };
 
+// Palette:
+// Primary:   #FFBF55 (golden amber)
+// Dark:      #8B6854 (warm brown)
+// Accent:    #BB6B3F (terracotta)
+// Light:     #8B6854 (pale gold)
+// Mid:       #8B6854 (peach orange)
+// Soft:      #FF9675 (salmon)
+
 const STATUS = {
   healthy: {
-    color: "#16a34a",
-    bg: "#f0fdf4",
-    border: "#bbf7d0",
+    color: "#BB6B3F",
+    bg: "#FFF8F0",
+    border: "#8B6854",
     label: "Healthy",
   },
-  sick: { color: "#dc2626", bg: "#fff1f2", border: "#fecdd3", label: "Sick" },
-  sold: { color: "#ea580c", bg: "#fff7ed", border: "#fed7aa", label: "Sold" },
-  bull: { color: "#7c3aed", bg: "#f5f3ff", border: "#ddd6fe", label: "Bull" },
+  sick: {
+    color: "#8B6854",
+    bg: "#F5EFEA",
+    border: "#D4B8A8",
+    label: "Sick",
+  },
+  sold: {
+    color: "#FF9675",
+    bg: "#FFF5F2",
+    border: "#FFD4C4",
+    label: "Sold",
+  },
+  bull: {
+    color: "#FFBF55",
+    bg: "#FFFBF0",
+    border: "#8B6854",
+    label: "Bull",
+  },
 } as const;
 
 function derivedStatus(cow: Cow): keyof typeof STATUS {
@@ -139,7 +160,6 @@ function getTodayStr(): string {
   return `${dd}/${mm}/${yyyy}`;
 }
 
-// ── Helper: DD/MM/YYYY string → Date object ──────────────────────────────────
 function strToDate(str: string): Date {
   const parts = str.split("/");
   if (parts.length === 3) {
@@ -149,7 +169,6 @@ function strToDate(str: string): Date {
   return new Date();
 }
 
-// ── Helper: Date object → DD/MM/YYYY string ──────────────────────────────────
 function dateToStr(date: Date): string {
   const dd = String(date.getDate()).padStart(2, "0");
   const mm = String(date.getMonth() + 1).padStart(2, "0");
@@ -184,28 +203,28 @@ function ActiveDaysBadge({
 
   const color =
     days >= 365
-      ? "#7c3aed"
+      ? "#8B6854"
       : days >= 90
-        ? "#16a34a"
+        ? "#BB6B3F"
         : days >= 30
-          ? "#0891b2"
-          : "#ea580c";
+          ? "#8B6854"
+          : "#FF9675";
   const bg =
     days >= 365
-      ? "#f5f3ff"
+      ? "#F5EFEA"
       : days >= 90
-        ? "#f0fdf4"
+        ? "#FFF8F0"
         : days >= 30
-          ? "#ecfeff"
-          : "#fff7ed";
+          ? "#FFF5EE"
+          : "#FFF5F2";
   const border =
     days >= 365
-      ? "#ddd6fe"
+      ? "#D4B8A8"
       : days >= 90
-        ? "#bbf7d0"
+        ? "#8B6854"
         : days >= 30
-          ? "#a5f3fc"
-          : "#fed7aa";
+          ? "#FFC4A0"
+          : "#FFD4C4";
   const emoji =
     days >= 365 ? "🏆" : days >= 90 ? "⭐" : days >= 30 ? "✅" : "🌱";
   const milestone =
@@ -240,7 +259,6 @@ function ActiveDaysBadge({
   );
 }
 
-// ── DateField: calendar icon click se picker khulta hai ──────────────────────
 function DateField({
   label,
   value,
@@ -258,7 +276,6 @@ function DateField({
   const currentDate = value ? strToDate(value) : new Date();
 
   const handlePickerChange = (_: any, selectedDate?: Date) => {
-    // On Android, picker closes automatically after selection
     if (Platform.OS === "android") setShowPicker(false);
     if (selectedDate) {
       onChange(dateToStr(selectedDate));
@@ -269,12 +286,11 @@ function DateField({
     <View style={f.wrap}>
       <Text style={f.label}>{label}</Text>
       <View style={[f.row, focused && f.focused]}>
-        {/* Calendar icon — tap karo to open picker */}
         <TouchableOpacity onPress={() => setShowPicker(true)}>
           <Ionicons
             name="calendar-outline"
             size={15}
-            color={showPicker || focused ? "#16a34a" : "#9ca3af"}
+            color={showPicker || focused ? "#FFBF55" : "#C4A882"}
             style={{ marginRight: 8 }}
           />
         </TouchableOpacity>
@@ -283,12 +299,11 @@ function DateField({
           value={value}
           onChangeText={onChange}
           placeholder={placeholder ?? "DD/MM/YYYY"}
-          placeholderTextColor="#d1d5db"
+          placeholderTextColor="#D4B8A8"
           keyboardType="numeric"
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
         />
-        {/* Optional: small "today" shortcut button */}
         {value === "" && (
           <TouchableOpacity
             onPress={() => onChange(getTodayStr())}
@@ -299,7 +314,6 @@ function DateField({
         )}
       </View>
 
-      {/* iOS: picker shown inside modal */}
       {showPicker && Platform.OS === "ios" && (
         <Modal transparent animationType="slide" visible={showPicker}>
           <View style={f.pickerOverlay}>
@@ -325,7 +339,6 @@ function DateField({
         </Modal>
       )}
 
-      {/* Android: native picker */}
       {showPicker && Platform.OS === "android" && (
         <DateTimePicker
           value={currentDate}
@@ -339,7 +352,6 @@ function DateField({
   );
 }
 
-// ── Regular Field (non-date) ─────────────────────────────────────────────────
 function Field({
   label,
   value,
@@ -356,7 +368,7 @@ function Field({
         <Ionicons
           name={icon}
           size={15}
-          color={focused ? "#16a34a" : "#9ca3af"}
+          color={focused ? "#FFBF55" : "#C4A882"}
           style={{ marginRight: 8 }}
         />
         <TextInput
@@ -364,7 +376,7 @@ function Field({
           value={value}
           onChangeText={onChange}
           placeholder={placeholder ?? label}
-          placeholderTextColor="#d1d5db"
+          placeholderTextColor="#D4B8A8"
           keyboardType={keyboardType ?? "default"}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
@@ -374,7 +386,6 @@ function Field({
   );
 }
 
-// ── Breed list ────────────────────────────────────────────────────────────────
 const BREEDS = [
   { name: "Gir", image: cowImg, origin: "Gujarat" },
   { name: "Sahiwal", image: cowImg, origin: "Punjab" },
@@ -385,7 +396,6 @@ const BREEDS = [
   { name: "Badri / Pahadi", image: cowImg, origin: "Uttarakhand" },
 ];
 
-// ── BreedSelector: searchable dropdown ───────────────────────────────────────
 function BreedSelector({
   value,
   onChange,
@@ -416,7 +426,6 @@ function BreedSelector({
     <View style={f.wrap}>
       <Text style={f.label}>Breed</Text>
 
-      {/* Trigger button */}
       <TouchableOpacity
         onPress={openDropdown}
         style={[f.row, open && f.focused]}
@@ -425,14 +434,14 @@ function BreedSelector({
         <Ionicons
           name="paw-outline"
           size={15}
-          color={open ? "#16a34a" : "#9ca3af"}
+          color={open ? "#FFBF55" : "#C4A882"}
           style={{ marginRight: 8 }}
         />
         <Text
           style={[
             f.input,
             { paddingVertical: 0 },
-            !value && { color: "#d1d5db" },
+            !value && { color: "#D4B8A8" },
           ]}
         >
           {value || "Select or type breed"}
@@ -440,11 +449,10 @@ function BreedSelector({
         <Ionicons
           name={open ? "chevron-up" : "chevron-down"}
           size={14}
-          color="#9ca3af"
+          color="#C4A882"
         />
       </TouchableOpacity>
 
-      {/* Dropdown Modal */}
       <Modal
         visible={open}
         transparent
@@ -457,49 +465,45 @@ function BreedSelector({
           onPress={() => { setOpen(false); setSearch(""); }}
         >
           <TouchableOpacity activeOpacity={1} style={bd.card}>
-            {/* Header */}
             <View style={bd.header}>
               <Text style={bd.title}>Select Breed</Text>
               <TouchableOpacity
                 onPress={() => { setOpen(false); setSearch(""); }}
                 style={bd.closeBtn}
               >
-                <Ionicons name="close" size={16} color="#6b7280" />
+                <Ionicons name="close" size={16} color="#8B6854" />
               </TouchableOpacity>
             </View>
 
-            {/* Search box */}
             <View style={bd.searchRow}>
-              <Ionicons name="search-outline" size={15} color="#9ca3af" />
+              <Ionicons name="search-outline" size={15} color="#C4A882" />
               <TextInput
                 ref={searchRef}
                 style={bd.searchInput}
                 value={search}
                 onChangeText={setSearch}
                 placeholder="Search breed..."
-                placeholderTextColor="#d1d5db"
+                placeholderTextColor="#D4B8A8"
                 returnKeyType="done"
               />
               {search.length > 0 && (
                 <TouchableOpacity onPress={() => setSearch("")}>
-                  <Ionicons name="close-circle" size={15} color="#9ca3af" />
+                  <Ionicons name="close-circle" size={15} color="#C4A882" />
                 </TouchableOpacity>
               )}
             </View>
 
-            {/* Breed list */}
             <ScrollView
               style={{ maxHeight: 320 }}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
             >
               {filtered.length === 0 ? (
-                // Allow typing a custom breed not in list
                 <TouchableOpacity
                   style={bd.customRow}
                   onPress={() => select(search)}
                 >
-                  <Ionicons name="add-circle-outline" size={18} color="#16a34a" />
+                  <Ionicons name="add-circle-outline" size={18} color="#BB6B3F" />
                   <View style={{ flex: 1, marginLeft: 10 }}>
                     <Text style={bd.customLabel}>Add "{search}"</Text>
                     <Text style={bd.customSub}>Custom breed</Text>
@@ -522,7 +526,7 @@ function BreedSelector({
                       <View
                         style={[
                           bd.emojiWrap,
-                          selected && { backgroundColor: "#dcfce7", borderColor: "#86efac" },
+                          selected && { backgroundColor: "#FFF8F0", borderColor: "#8B6854" },
                         ]}
                       >
                         <Image
@@ -532,14 +536,14 @@ function BreedSelector({
                       </View>
                       <View style={{ flex: 1, marginLeft: 12 }}>
                         <Text
-                          style={[bd.breedName, selected && { color: "#16a34a" }]}
+                          style={[bd.breedName, selected && { color: "#BB6B3F" }]}
                         >
                           {b.name}
                         </Text>
                         <Text style={bd.origin}>{b.origin}</Text>
                       </View>
                       {selected && (
-                        <Ionicons name="checkmark-circle" size={20} color="#16a34a" />
+                        <Ionicons name="checkmark-circle" size={20} color="#BB6B3F" />
                       )}
                     </TouchableOpacity>
                   );
@@ -558,15 +562,15 @@ function Toggle({ label, value, onChange, color }: any) {
     <View style={f.toggleRow}>
       <View>
         <Text style={f.toggleLabel}>{label}</Text>
-        <Text style={[f.toggleSub, { color: value ? color : "#9ca3af" }]}>
+        <Text style={[f.toggleSub, { color: value ? color : "#C4A882" }]}>
           {value ? "Yes" : "No"}
         </Text>
       </View>
       <Switch
         value={value}
         onValueChange={onChange}
-        trackColor={{ false: "#f3f4f6", true: color + "44" }}
-        thumbColor={value ? color : "#d1d5db"}
+        trackColor={{ false: "#F5EDE5", true: color + "44" }}
+        thumbColor={value ? color : "#D4B8A8"}
       />
     </View>
   );
@@ -584,10 +588,10 @@ function PurposeSelector({
       key: "breeding",
       label: "Breeding",
       icon: "heart-outline",
-      color: "#7c3aed",
+      color: "#8B6854",
     },
-    { key: "dairy", label: "Dairy", icon: "water-outline", color: "#0891b2" },
-    { key: "both", label: "Both", icon: "star-outline", color: "#d97706" },
+    { key: "dairy", label: "Dairy", icon: "water-outline", color: "#8B6854" },
+    { key: "both", label: "Both", icon: "star-outline", color: "#FFBF55" },
   ];
   return (
     <View style={f.wrap}>
@@ -600,7 +604,7 @@ function PurposeSelector({
             style={[
               f.purposeChip,
               value === o.key && {
-                backgroundColor: o.color + "15",
+                backgroundColor: o.color + "18",
                 borderColor: o.color,
               },
             ]}
@@ -608,7 +612,7 @@ function PurposeSelector({
             <Ionicons
               name={o.icon as any}
               size={13}
-              color={value === o.key ? o.color : "#9ca3af"}
+              color={value === o.key ? o.color : "#C4A882"}
             />
             <Text
               style={[f.purposeText, value === o.key && { color: o.color }]}
@@ -700,7 +704,6 @@ function CowFormFields({
             icon="trending-up-outline"
             keyboardType="numeric"
           />
-          {/* ── Date fields with calendar picker ── */}
           <DateField
             label="Last Used Date"
             value={form.lastUsedDate}
@@ -718,21 +721,21 @@ function CowFormFields({
               label="Semen Available"
               value={form.semenAvailable}
               onChange={setF("semenAvailable")}
-              color="#7c3aed"
+              color="#FFBF55"
             />
             <View style={m.divider} />
             <Toggle
               label="Active Status"
               value={form.isActive}
               onChange={setF("isActive")}
-              color="#16a34a"
+              color="#BB6B3F"
             />
             <View style={m.divider} />
             <Toggle
               label="Sold Status"
               value={form.isSold}
               onChange={setF("isSold")}
-              color="#dc2626"
+              color="#8B6854"
             />
           </View>
         </>
@@ -753,7 +756,7 @@ function CowFormFields({
                 <Ionicons
                   name="female-outline"
                   size={15}
-                  color="#9ca3af"
+                  color="#C4A882"
                   style={{ marginRight: 8 }}
                 />
                 <TextInput
@@ -761,7 +764,7 @@ function CowFormFields({
                   value={form.mother}
                   onChangeText={setF("mother")}
                   placeholder="Cow name or tag"
-                  placeholderTextColor="#d1d5db"
+                  placeholderTextColor="#D4B8A8"
                 />
               </View>
               {motherOptions.length > 0 && (
@@ -783,7 +786,7 @@ function CowFormFields({
                       <Text
                         style={[
                           f.motherChipText,
-                          form.mother === cow.name && { color: "#16a34a" },
+                          form.mother === cow.name && { color: "#BB6B3F" },
                         ]}
                       >
                         {cow.name}
@@ -810,7 +813,6 @@ function CowFormFields({
             placeholder="Large / Medium / Small"
             icon="resize-outline"
           />
-          {/* ── Date field with calendar picker ── */}
           {form.type === "mature" ? (
             <DateField
               label="Bought Date"
@@ -831,21 +833,21 @@ function CowFormFields({
               label="Active Status"
               value={form.isActive}
               onChange={setF("isActive")}
-              color="#16a34a"
+              color="#BB6B3F"
             />
             <View style={m.divider} />
             <Toggle
               label="Sold Status"
               value={form.isSold}
               onChange={setF("isSold")}
-              color="#dc2626"
+              color="#8B6854"
             />
             <View style={m.divider} />
             <Toggle
               label="Milk Recording"
               value={form.milkActive}
               onChange={setF("milkActive")}
-              color="#0891b2"
+              color="#8B6854"
             />
           </View>
         </>
@@ -947,20 +949,20 @@ function AddCowModal({
       image: cowImg,
       title: "Mature Cow",
       sub: "Purchased / Adult",
-      bg: "#f0fdf4",
-      border: "#86efac",
-      titleColor: "#15803d",
-      pillColor: "#16a34a",
+      bg: "#FFF8F0",
+      border: "#8B6854",
+      titleColor: "#BB6B3F",
+      pillColor: "#BB6B3F",
     },
     {
       key: "newborn" as CowType,
       image: calfImg,
       title: "New Born",
       sub: "Born on farm",
-      bg: "#eff6ff",
-      border: "#93c5fd",
-      titleColor: "#1d4ed8",
-      pillColor: "#2563eb",
+      bg: "#FFF5EE",
+      border: "#FFC4A0",
+      titleColor: "#8B6854",
+      pillColor: "#8B6854",
     },
   ];
 
@@ -984,7 +986,7 @@ function AddCowModal({
                 <View style={m.header}>
                   <Text style={m.title}>Add Animal</Text>
                   <TouchableOpacity onPress={reset} style={m.closeBtn}>
-                    <Ionicons name="close" size={18} color="#6b7280" />
+                    <Ionicons name="close" size={18} color="#8B6854" />
                   </TouchableOpacity>
                 </View>
                 <Text style={m.sub}>Select the type to register</Text>
@@ -1006,7 +1008,7 @@ function AddCowModal({
                           style={{
                             width: 50,
                             height: 50,
-                            resizeMode: "contain", 
+                            resizeMode: "contain",
                           }}
                         />
                         <Text style={[m.typeTitle, { color: opt.titleColor }]}>
@@ -1045,7 +1047,7 @@ function AddCowModal({
                         Register a stud / breeding bull with semen details
                       </Text>
                     </View>
-                    <View style={[m.typePill, { backgroundColor: "#7c3aed" }]}>
+                    <View style={[m.typePill, { backgroundColor: "#8B6854" }]}>
                       <Text style={m.typePillText}>SELECT</Text>
                       <Ionicons name="arrow-forward" size={10} color="#fff" />
                     </View>
@@ -1064,7 +1066,7 @@ function AddCowModal({
                     }}
                     style={m.backBtn}
                   >
-                    <Ionicons name="arrow-back" size={16} color="#6b7280" />
+                    <Ionicons name="arrow-back" size={16} color="#8B6854" />
                   </TouchableOpacity>
                   <View style={{ flexDirection: "row", alignItems: "center", flex: 1, marginLeft: 10 }}>
                     <Image
@@ -1077,7 +1079,6 @@ function AddCowModal({
                       }
                       style={{ width: 50, height: 50, resizeMode: "contain", marginRight: 6 }}
                     />
-
                     <Text style={m.title}>
                       {form.type === "mature"
                         ? "Mature Cow"
@@ -1087,7 +1088,7 @@ function AddCowModal({
                     </Text>
                   </View>
                   <TouchableOpacity onPress={reset} style={m.closeBtn}>
-                    <Ionicons name="close" size={18} color="#6b7280" />
+                    <Ionicons name="close" size={18} color="#8B6854" />
                   </TouchableOpacity>
                 </View>
                 <Text style={m.sub}>Fill in the details below</Text>
@@ -1106,8 +1107,8 @@ function AddCowModal({
                   onPress={submit}
                   style={[
                     m.submitBtn,
-                    form.type === "bull" && { backgroundColor: "#7c3aed" },
-                    form.type === "newborn" && { backgroundColor: "#2563eb" },
+                    form.type === "bull" && { backgroundColor: "#8B6854" },
+                    form.type === "newborn" && { backgroundColor: "#8B6854" },
                     submitting && { opacity: 0.7 },
                   ]}
                   disabled={submitting}
@@ -1268,20 +1269,20 @@ function EditCowModal({
               <View
                 style={[
                   m.editIconWrap,
-                  isBull && { backgroundColor: "#f5f3ff" },
+                  isBull && { backgroundColor: "#FFF8F0" },
                 ]}
               >
                 <Ionicons
                   name="create-outline"
                   size={16}
-                  color={isBull ? "#7c3aed" : "#2563eb"}
+                  color={isBull ? "#FFBF55" : "#BB6B3F"}
                 />
               </View>
               <Text style={[m.title, { marginLeft: 10, flex: 1 }]}>
                 Edit {isBull ? "Bull" : "Cow"}
               </Text>
               <TouchableOpacity onPress={onClose} style={m.closeBtn}>
-                <Ionicons name="close" size={18} color="#6b7280" />
+                <Ionicons name="close" size={18} color="#8B6854" />
               </TouchableOpacity>
             </View>
             <Text style={m.sub}>Update the details below</Text>
@@ -1295,7 +1296,7 @@ function EditCowModal({
               onPress={submit}
               style={[
                 m.submitBtn,
-                isBull ? { backgroundColor: "#7c3aed" } : m.submitBtnBlue,
+                isBull ? { backgroundColor: "#8B6854" } : m.submitBtnTerra,
                 submitting && { opacity: 0.7 },
               ]}
               disabled={submitting}
@@ -1348,7 +1349,7 @@ function QRModal({
               <Text style={qr.tag}>TAG: {cow.tag}</Text>
             </View>
             <TouchableOpacity onPress={onClose} style={qr.closeBtn}>
-              <Ionicons name="close" size={16} color="#6b7280" />
+              <Ionicons name="close" size={16} color="#8B6854" />
             </TouchableOpacity>
           </View>
           <View style={qr.qrWrap}>
@@ -1360,7 +1361,7 @@ function QRModal({
               />
             ) : (
               <View style={qr.qrPlaceholder}>
-                <Ionicons name="qr-code-outline" size={48} color="#d1d5db" />
+                <Ionicons name="qr-code-outline" size={48} color="#D4B8A8" />
               </View>
             )}
           </View>
@@ -1385,7 +1386,7 @@ function DetailItem({
 }) {
   return (
     <View style={c.detailItem}>
-      <Ionicons name={icon as any} size={13} color="#9ca3af" />
+      <Ionicons name={icon as any} size={13} color="#C4A882" />
       <Text style={c.detailLabel}>{label}</Text>
       <Text style={c.detailValue}>{value}</Text>
     </View>
@@ -1465,7 +1466,7 @@ function CowCard({
           <View
             style={[
               c.avatarWrap,
-              isBull && { backgroundColor: "#f5f3ff", borderColor: "#ddd6fe" },
+              isBull && { backgroundColor: "#FFF8F0", borderColor: "#8B6854" },
             ]}
           >
             <Image
@@ -1477,9 +1478,9 @@ function CowCard({
               }}
             />
           </View>
-          <View style={{ flex: 1, marginLeft: 12 }}>
+          <View style={{ flex: 1, marginLeft: 12, minWidth: 0 }}>
             <View style={c.nameRow}>
-              <Text style={c.name}>{item.name}</Text>
+              <Text style={c.name} numberOfLines={1}>{item.name}</Text>
               <View style={c.badgeGroup}>
                 <View
                   style={[
@@ -1496,11 +1497,11 @@ function CowCard({
                   <View
                     style={[
                       c.badge,
-                      { backgroundColor: "#fdf4ff", borderColor: "#e9d5ff" },
+                      { backgroundColor: "#FFF5EE", borderColor: "#FFC4A0" },
                     ]}
                   >
                     <Text style={{ fontSize: 9 }}>🤰</Text>
-                    <Text style={[c.badgeText, { color: "#9333ea" }]}>
+                    <Text style={[c.badgeText, { color: "#BB6B3F" }]}>
                       Pregnant
                     </Text>
                   </View>
@@ -1509,11 +1510,11 @@ function CowCard({
                   <View
                     style={[
                       c.badge,
-                      { backgroundColor: "#f0fdf4", borderColor: "#bbf7d0" },
+                      { backgroundColor: "#FFF8F0", borderColor: "#8B6854" },
                     ]}
                   >
-                    <Ionicons name="flask" size={9} color="#16a34a" />
-                    <Text style={[c.badgeText, { color: "#16a34a" }]}>
+                    <Ionicons name="flask" size={9} color="#FFBF55" />
+                    <Text style={[c.badgeText, { color: "#BB6B3F" }]}>
                       Semen ✓
                     </Text>
                   </View>
@@ -1528,7 +1529,7 @@ function CowCard({
                 flexWrap: "wrap",
               }}
             >
-              <Text style={c.tag}>
+              <Text style={c.tag} numberOfLines={1}>
                 {item.tag} · {item.breed} ·{" "}
                 {isBull
                   ? "Bull"
@@ -1538,7 +1539,7 @@ function CowCard({
               </Text>
               {item.isActive && activeDays !== null && (
                 <View style={c.miniDaysBadge}>
-                  <Ionicons name="time-outline" size={9} color="#16a34a" />
+                  <Ionicons name="time-outline" size={9} color="#BB6B3F" />
                   <Text style={c.miniDaysText}>{activeDays}d active</Text>
                 </View>
               )}
@@ -1547,7 +1548,7 @@ function CowCard({
           <Ionicons
             name={expanded ? "chevron-up" : "chevron-down"}
             size={16}
-            color="#9ca3af"
+            color="#C4A882"
             style={{ marginLeft: 8 }}
           />
         </View>
@@ -1619,21 +1620,21 @@ function CowCard({
                     c.pill,
                     {
                       backgroundColor: item.semenAvailable
-                        ? "#f0fdf4"
-                        : "#f9fafb",
-                      borderColor: item.semenAvailable ? "#86efac" : "#e5e7eb",
+                        ? "#FFF8F0"
+                        : "#F9F6F3",
+                      borderColor: item.semenAvailable ? "#8B6854" : "#E8DDD6",
                     },
                   ]}
                 >
                   <Ionicons
                     name="flask-outline"
                     size={12}
-                    color={item.semenAvailable ? "#16a34a" : "#9ca3af"}
+                    color={item.semenAvailable ? "#FFBF55" : "#C4A882"}
                   />
                   <Text
                     style={[
                       c.pillText,
-                      { color: item.semenAvailable ? "#16a34a" : "#9ca3af" },
+                      { color: item.semenAvailable ? "#BB6B3F" : "#C4A882" },
                     ]}
                   >
                     {item.semenAvailable ? "Semen Available" : "No Semen"}
@@ -1643,20 +1644,20 @@ function CowCard({
                   style={[
                     c.pill,
                     {
-                      backgroundColor: item.isActive ? "#f0fdf4" : "#fff1f2",
-                      borderColor: item.isActive ? "#86efac" : "#fecdd3",
+                      backgroundColor: item.isActive ? "#FFF8F0" : "#F5EFEA",
+                      borderColor: item.isActive ? "#8B6854" : "#D4B8A8",
                     },
                   ]}
                 >
                   <Ionicons
                     name={item.isActive ? "checkmark-circle" : "close-circle"}
                     size={12}
-                    color={item.isActive ? "#16a34a" : "#dc2626"}
+                    color={item.isActive ? "#BB6B3F" : "#8B6854"}
                   />
                   <Text
                     style={[
                       c.pillText,
-                      { color: item.isActive ? "#16a34a" : "#dc2626" },
+                      { color: item.isActive ? "#BB6B3F" : "#8B6854" },
                     ]}
                   >
                     {item.isActive ? "Active" : "Inactive"}
@@ -1701,20 +1702,20 @@ function CowCard({
                   style={[
                     c.pill,
                     {
-                      backgroundColor: item.isActive ? "#f0fdf4" : "#fff1f2",
-                      borderColor: item.isActive ? "#86efac" : "#fecdd3",
+                      backgroundColor: item.isActive ? "#FFF8F0" : "#F5EFEA",
+                      borderColor: item.isActive ? "#8B6854" : "#D4B8A8",
                     },
                   ]}
                 >
                   <Ionicons
                     name={item.isActive ? "checkmark-circle" : "close-circle"}
                     size={12}
-                    color={item.isActive ? "#16a34a" : "#dc2626"}
+                    color={item.isActive ? "#BB6B3F" : "#8B6854"}
                   />
                   <Text
                     style={[
                       c.pillText,
-                      { color: item.isActive ? "#16a34a" : "#dc2626" },
+                      { color: item.isActive ? "#BB6B3F" : "#8B6854" },
                     ]}
                   >
                     {item.isActive ? "Active" : "Inactive"}
@@ -1724,25 +1725,25 @@ function CowCard({
                   <View
                     style={[
                       c.pill,
-                      { backgroundColor: "#fff7ed", borderColor: "#fed7aa" },
+                      { backgroundColor: "#FFF5F2", borderColor: "#FFD4C4" },
                     ]}
                   >
-                    <Ionicons name="pricetag" size={12} color="#ea580c" />
-                    <Text style={[c.pillText, { color: "#ea580c" }]}>Sold</Text>
+                    <Ionicons name="pricetag" size={12} color="#FF9675" />
+                    <Text style={[c.pillText, { color: "#FF9675" }]}>Sold</Text>
                   </View>
                 )}
                 <View
                   style={[
                     c.pill,
-                    { backgroundColor: "#eff6ff", borderColor: "#bfdbfe" },
+                    { backgroundColor: "#FFF5EE", borderColor: "#FFC4A0" },
                   ]}
                 >
                   <Ionicons
                     name={item.type === "newborn" ? "star" : "shield-checkmark"}
                     size={12}
-                    color="#2563eb"
+                    color="#8B6854"
                   />
-                  <Text style={[c.pillText, { color: "#2563eb" }]}>
+                  <Text style={[c.pillText, { color: "#BB6B3F" }]}>
                     {item.type === "newborn" ? "New Born" : "Mature"}
                   </Text>
                 </View>
@@ -1753,12 +1754,12 @@ function CowCard({
                       {
                         backgroundColor:
                           item.pregnancyStatus === "pregnant"
-                            ? "#fdf4ff"
-                            : "#f9fafb",
+                            ? "#FFF5EE"
+                            : "#F9F6F3",
                         borderColor:
                           item.pregnancyStatus === "pregnant"
-                            ? "#e9d5ff"
-                            : "#e5e7eb",
+                            ? "#FFC4A0"
+                            : "#E8DDD6",
                       },
                     ]}
                   >
@@ -1771,8 +1772,8 @@ function CowCard({
                         {
                           color:
                             item.pregnancyStatus === "pregnant"
-                              ? "#9333ea"
-                              : "#9ca3af",
+                              ? "#BB6B3F"
+                              : "#C4A882",
                         },
                       ]}
                     >
@@ -1786,20 +1787,20 @@ function CowCard({
                   style={[
                     c.pill,
                     {
-                      backgroundColor: item.milkActive ? "#ecfeff" : "#f9fafb",
-                      borderColor: item.milkActive ? "#a5f3fc" : "#e5e7eb",
+                      backgroundColor: item.milkActive ? "#FFF5EE" : "#F9F6F3",
+                      borderColor: item.milkActive ? "#FFC4A0" : "#E8DDD6",
                     },
                   ]}
                 >
                   <Ionicons
                     name="water-outline"
                     size={12}
-                    color={item.milkActive ? "#0891b2" : "#9ca3af"}
+                    color={item.milkActive ? "#8B6854" : "#C4A882"}
                   />
                   <Text
                     style={[
                       c.pillText,
-                      { color: item.milkActive ? "#0891b2" : "#9ca3af" },
+                      { color: item.milkActive ? "#BB6B3F" : "#C4A882" },
                     ]}
                   >
                     {item.milkActive ? "Milk Active" : "Milk Off"}
@@ -1815,8 +1816,8 @@ function CowCard({
               onPress={() => onEdit(item)}
               activeOpacity={0.8}
             >
-              <Ionicons name="create-outline" size={15} color="#2563eb" />
-              <Text style={[c.actionText, { color: "#2563eb" }]}>Edit</Text>
+              <Ionicons name="create-outline" size={15} color="#BB6B3F" />
+              <Text style={[c.actionText, { color: "#BB6B3F" }]}>Edit</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -1826,15 +1827,15 @@ function CowCard({
               disabled={qrLoading}
             >
               {qrLoading ? (
-                <ActivityIndicator size="small" color="#7c3aed" />
+                <ActivityIndicator size="small" color="#FFBF55" />
               ) : (
                 <>
                   <Ionicons
                     name={item.qrCode ? "qr-code" : "qr-code-outline"}
                     size={15}
-                    color="#7c3aed"
+                    color="#8B6854"
                   />
-                  <Text style={[c.actionText, { color: "#7c3aed" }]}>
+                  <Text style={[c.actionText, { color: "#8B6854" }]}>
                     {item.qrCode ? "View QR" : "Gen QR"}
                   </Text>
                 </>
@@ -1846,8 +1847,8 @@ function CowCard({
               onPress={() => onDelete(item)}
               activeOpacity={0.8}
             >
-              <Ionicons name="trash-outline" size={15} color="#dc2626" />
-              <Text style={[c.actionText, { color: "#dc2626" }]}>Delete</Text>
+              <Ionicons name="trash-outline" size={15} color="#FF9675" />
+              <Text style={[c.actionText, { color: "#FF9675" }]}>Delete</Text>
             </TouchableOpacity>
           </View>
         </>
@@ -1986,7 +1987,7 @@ export default function CowsScreen() {
           }
           style={s.backBtn}
         >
-          <Ionicons name="arrow-back" size={20} color="#111827" />
+          <Ionicons name="arrow-back" size={20} color="#8B6854" />
         </TouchableOpacity>
         <View style={{ flex: 1, marginLeft: 12 }}>
           <Text style={s.headerTitle}>
@@ -2003,11 +2004,11 @@ export default function CowsScreen() {
 
       <View style={s.statsRow}>
         {[
-          { label: "Total", value: stats.total, color: "#2563eb" },
-          { label: "Active", value: stats.active, color: "#16a34a" },
-          { label: "Bulls", value: stats.bulls, color: "#7c3aed" },
-          { label: "Newborns", value: stats.newborns, color: "#0891b2" },
-          { label: "Sold", value: stats.sold, color: "#ea580c" },
+          { label: "Total", value: stats.total, color: "#8B6854" },
+          { label: "Active", value: stats.active, color: "#BB6B3F" },
+          { label: "Bulls", value: stats.bulls, color: "#FFBF55" },
+          { label: "Newborns", value: stats.newborns, color: "#8B6854" },
+          { label: "Sold", value: stats.sold, color: "#FF9675" },
         ].map((st, i, arr) => (
           <View
             key={i}
@@ -2029,7 +2030,7 @@ export default function CowsScreen() {
               style={s.bigBtn}
               activeOpacity={0.85}
             >
-              <View style={[s.bigBtnIcon, { backgroundColor: "#f5f3ff" }]}>
+              <View style={[s.bigBtnIcon, { backgroundColor: "#FFF8F0" }]}>
                 <Image
                   source={cowImg}
                   style={{ width: 60, height: 60, resizeMode: "contain" }}
@@ -2037,7 +2038,7 @@ export default function CowsScreen() {
               </View>
               <Text style={s.bigBtnTitle}>Add Animal</Text>
               <Text style={s.bigBtnSub}>Register cow, calf, or bull</Text>
-              <View style={[s.bigBtnArrow, { backgroundColor: "#16a34a" }]}>
+              <View style={[s.bigBtnArrow, { backgroundColor: "#BB6B3F" }]}>
                 <Ionicons name="add" size={18} color="#fff" />
               </View>
             </TouchableOpacity>
@@ -2046,14 +2047,14 @@ export default function CowsScreen() {
               style={s.bigBtn}
               activeOpacity={0.85}
             >
-              <View style={[s.bigBtnIcon, { backgroundColor: "#eff6ff" }]}>
+              <View style={[s.bigBtnIcon, { backgroundColor: "#FFF5EE" }]}>
                 <Text style={{ fontSize: 32 }}>📋</Text>
               </View>
               <Text style={s.bigBtnTitle}>See All Animals</Text>
               <Text style={s.bigBtnSub}>
                 View, edit and manage all {cows.length} animals
               </Text>
-              <View style={[s.bigBtnArrow, { backgroundColor: "#2563eb" }]}>
+              <View style={[s.bigBtnArrow, { backgroundColor: "#8B6854" }]}>
                 <Ionicons name="arrow-forward" size={18} color="#fff" />
               </View>
             </TouchableOpacity>
@@ -2062,17 +2063,17 @@ export default function CowsScreen() {
       ) : (
         <View style={{ flex: 1 }}>
           <View style={s.searchWrap}>
-            <Ionicons name="search-outline" size={16} color="#9ca3af" />
+            <Ionicons name="search-outline" size={16} color="#C4A882" />
             <TextInput
               style={s.searchInput}
               placeholder="Search name, tag, breed..."
-              placeholderTextColor="#d1d5db"
+              placeholderTextColor="#D4B8A8"
               value={search}
               onChangeText={setSearch}
             />
             {search.length > 0 && (
               <TouchableOpacity onPress={() => setSearch("")}>
-                <Ionicons name="close-circle" size={16} color="#9ca3af" />
+                <Ionicons name="close-circle" size={16} color="#C4A882" />
               </TouchableOpacity>
             )}
           </View>
@@ -2106,7 +2107,6 @@ export default function CowsScreen() {
                     }
                     style={{ width: 25, height: 25, resizeMode: "contain" }}
                   />
-
                   <Text
                     style={[
                       s.filterChipText,
@@ -2128,7 +2128,7 @@ export default function CowsScreen() {
 
           {loading && cows.length === 0 ? (
             <View style={s.loadingWrap}>
-              <ActivityIndicator size="large" color="#16a34a" />
+              <ActivityIndicator size="large" color="#FFBF55" />
               <Text style={s.loadingText}>Loading animals...</Text>
             </View>
           ) : error ? (
@@ -2157,7 +2157,7 @@ export default function CowsScreen() {
                 <RefreshControl
                   refreshing={refreshing}
                   onRefresh={onRefresh}
-                  tintColor="#16a34a"
+                  tintColor="#FFBF55"
                 />
               }
               renderItem={({ item, index }) => (
@@ -2235,49 +2235,49 @@ const s = StyleSheet.create({
     paddingVertical: 14,
     backgroundColor: "#fff",
     borderBottomWidth: 1,
-    borderBottomColor: "#f3f4f6",
+    borderBottomColor: "#F5EDE5",
   },
   backBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: "#f9fafb",
+    backgroundColor: "#FFF8F0",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#e5e7eb",
+    borderColor: "#f0ba9b",
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#111827",
+    color: "#020201",
     letterSpacing: -0.3,
   },
   headerSub: {
     fontSize: 12,
-    color: "#9ca3af",
+    color: "#fcad80",
     fontWeight: "500",
     marginTop: 1,
   },
   countBadge: {
-    backgroundColor: "#eff6ff",
+    backgroundColor: "#FFF8F0",
     borderRadius: 20,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderWidth: 1,
-    borderColor: "#bfdbfe",
+    borderColor: "#f0ba9b",
   },
-  countText: { fontSize: 12, fontWeight: "700", color: "#2563eb" },
+  countText: { fontSize: 12, fontWeight: "700", color: "#BB6B3F" },
   statsRow: {
     flexDirection: "row",
     backgroundColor: "#fff",
     borderBottomWidth: 1,
-    borderBottomColor: "#f3f4f6",
+    borderBottomColor: "#F5EDE5",
   },
   statItem: { flex: 1, alignItems: "center", paddingVertical: 10 },
-  statBorder: { borderRightWidth: 1, borderRightColor: "#f3f4f6" },
+  statBorder: { borderRightWidth: 1, borderRightColor: "#F5EDE5" },
   statValue: { fontSize: 16, fontWeight: "800", letterSpacing: -0.3 },
-  statLabel: { fontSize: 9, color: "#9ca3af", marginTop: 2, fontWeight: "500" },
+  statLabel: { fontSize: 9, color: "#C4A882", marginTop: 2, fontWeight: "500" },
   homeBody: {
     flex: 1,
     paddingHorizontal: 20,
@@ -2287,14 +2287,14 @@ const s = StyleSheet.create({
   homeHeading: {
     fontSize: 22,
     fontWeight: "800",
-    color: "#111827",
+    color: "#fcad8",
     letterSpacing: -0.4,
     marginBottom: 6,
     textAlign: "center",
   },
   homeSub: {
     fontSize: 14,
-    color: "#9ca3af",
+    color: "#C4A882",
     fontWeight: "500",
     marginBottom: 36,
     textAlign: "center",
@@ -2305,8 +2305,8 @@ const s = StyleSheet.create({
     borderRadius: 20,
     padding: 20,
     borderWidth: 1.5,
-    borderColor: "#f3f4f6",
-    shadowColor: "#000",
+    borderColor: "#F5EDE5",
+    shadowColor: "#fcad80",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
     shadowRadius: 8,
@@ -2323,13 +2323,13 @@ const s = StyleSheet.create({
   bigBtnTitle: {
     fontSize: 17,
     fontWeight: "800",
-    color: "#111827",
+    color: "#fcad80",
     letterSpacing: -0.3,
     marginBottom: 4,
   },
   bigBtnSub: {
     fontSize: 13,
-    color: "#9ca3af",
+    color: "#C4A882",
     fontWeight: "500",
     marginBottom: 16,
   },
@@ -2346,36 +2346,36 @@ const s = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
-    backgroundColor: "#f9fafb",
+    backgroundColor: "#FFF8F0",
     borderWidth: 1,
-    borderColor: "#e5e7eb",
+    borderColor: "#F5EDE5",
   },
-  filterChipActive: { backgroundColor: "#111827", borderColor: "#111827" },
-  filterChipText: { fontSize: 12, color: "#6b7280", fontWeight: "600" },
+  filterChipActive: { backgroundColor: "#8B6854", borderColor: "#8B6854" },
+  filterChipText: { fontSize: 12, color: "#8B6854", fontWeight: "600" },
   filterChipTextActive: { color: "#fff" },
   searchWrap: {
     flexDirection: "row",
     alignItems: "center",
     margin: 16,
     marginBottom: 4,
-    backgroundColor: "#f9fafb",
+    backgroundColor: "#FFF8F0",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#e5e7eb",
+    borderColor: "#fad9b9",
     paddingHorizontal: 12,
     paddingVertical: 10,
     gap: 8,
   },
-  searchInput: { flex: 1, color: "#111827", fontSize: 14 },
+  searchInput: { flex: 1, color: "#8B6854", fontSize: 14 },
   empty: { alignItems: "center", paddingTop: 60, gap: 10 },
-  emptyText: { fontSize: 15, color: "#9ca3af", fontWeight: "600" },
+  emptyText: { fontSize: 15, color: "#C4A882", fontWeight: "600" },
   loadingWrap: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
     gap: 12,
   },
-  loadingText: { fontSize: 14, color: "#9ca3af", fontWeight: "500" },
+  loadingText: { fontSize: 14, color: "#C4A882", fontWeight: "500" },
   errorWrap: {
     flex: 1,
     alignItems: "center",
@@ -2384,7 +2384,7 @@ const s = StyleSheet.create({
   },
   errorText: {
     fontSize: 14,
-    color: "#dc2626",
+    color: "#BB6B3F",
     fontWeight: "500",
     textAlign: "center",
     paddingHorizontal: 32,
@@ -2393,7 +2393,7 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "#16a34a",
+    backgroundColor: "#BB6B3F",
     borderRadius: 10,
     paddingHorizontal: 16,
     paddingVertical: 10,
@@ -2408,56 +2408,60 @@ const c = StyleSheet.create({
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: "#f3f4f6",
-    shadowColor: "#000",
+    borderColor: "#F5EDE5",
+    shadowColor: "#BB6B3F",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 6,
     elevation: 2,
   },
-  bullCard: { borderColor: "#ede9fe", borderWidth: 1.5 },
+  bullCard: { borderColor: "#F5EDE5", borderWidth: 1.5 },
   topRow: { flexDirection: "row", alignItems: "center" },
   avatarWrap: {
     width: 52,
     height: 52,
     borderRadius: 14,
-    backgroundColor: "#f9fafb",
+    backgroundColor: "#FFF8F0",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#e5e7eb",
+    borderColor: "#F5EDE5",
   },
   nameRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     marginBottom: 3,
+    flexWrap: "wrap",
+    gap: 4,
   },
   name: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#111827",
+    color: "#8B6854",
     letterSpacing: -0.2,
+    flexShrink: 1,
   },
   badgeGroup: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
     flexShrink: 1,
+    flexWrap: "wrap",
   },
-  tag: { fontSize: 12, color: "#9ca3af", fontWeight: "500" },
+  tag: { fontSize: 12, color: "#C4A882", fontWeight: "500", flexShrink: 1 },
   miniDaysBadge: {
     flexDirection: "row",
     alignItems: "center",
     gap: 3,
-    backgroundColor: "#f0fdf4",
+    backgroundColor: "#FFF8F0",
     borderRadius: 20,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderWidth: 1,
-    borderColor: "#bbf7d0",
+    borderColor: "#F5EDE5",
   },
-  miniDaysText: { fontSize: 9, fontWeight: "700", color: "#16a34a" },
+  miniDaysText: { fontSize: 9, fontWeight: "700", color: "#BB6B3F" },
   badge: {
     flexDirection: "row",
     alignItems: "center",
@@ -2469,45 +2473,50 @@ const c = StyleSheet.create({
   },
   dot: { width: 6, height: 6, borderRadius: 3 },
   badgeText: { fontSize: 10, fontWeight: "700" },
-  divider: { height: 1, backgroundColor: "#f3f4f6", marginVertical: 12 },
+  divider: { height: 1, backgroundColor: "#F5EDE5", marginVertical: 12 },
   bullStatsRow: {
     flexDirection: "row",
-    backgroundColor: "#f5f3ff",
+    backgroundColor: "#FFF8F0",
     borderRadius: 12,
     paddingVertical: 12,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: "#ede9fe",
+    borderColor: "#F5EDE5",
   },
   bullStat: { flex: 1, alignItems: "center" },
   bullStatVal: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#7c3aed",
+    color: "#BB6B3F",
     letterSpacing: -0.3,
   },
   bullStatLabel: {
     fontSize: 10,
-    color: "#a78bfa",
+    color: "#8B6854",
     fontWeight: "600",
     marginTop: 2,
   },
-  bullStatDivider: { width: 1, backgroundColor: "#ddd6fe" },
+  bullStatDivider: { width: 1, backgroundColor: "#8B6854" },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 },
   detailItem: {
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
-    backgroundColor: "#f9fafb",
+    backgroundColor: "#FFF8F0",
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderWidth: 1,
-    borderColor: "#f3f4f6",
+    borderColor: "#F5EDE5",
   },
-  detailLabel: { fontSize: 11, color: "#9ca3af", fontWeight: "500" },
-  detailValue: { fontSize: 11, color: "#374151", fontWeight: "600" },
-  pillRow: { flexDirection: "row", gap: 8, flexWrap: "wrap", marginBottom: 14 },
+  detailLabel: { fontSize: 11, color: "#C4A882", fontWeight: "500" },
+  detailValue: { fontSize: 11, color: "#5C3D2E", fontWeight: "600" },
+  pillRow: {
+    flexDirection: "row",
+    gap: 8,
+    flexWrap: "wrap",
+    marginBottom: 14,
+  },
   pill: {
     flexDirection: "row",
     alignItems: "center",
@@ -2529,9 +2538,9 @@ const c = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1.5,
   },
-  editBtn: { backgroundColor: "#eff6ff", borderColor: "#bfdbfe" },
-  deleteBtn: { backgroundColor: "#fff1f2", borderColor: "#fecdd3" },
-  qrBtn: { backgroundColor: "#f5f3ff", borderColor: "#ddd6fe" },
+  editBtn: { backgroundColor: "#FFF8F0", borderColor: "#8B6854" },
+  deleteBtn: { backgroundColor: "#FFF5F2", borderColor: "#FFD4C4" },
+  qrBtn: { backgroundColor: "#F5EFEA", borderColor: "#D4B8A8" },
   actionText: { fontSize: 13, fontWeight: "700" },
 });
 
@@ -2570,7 +2579,7 @@ const f = StyleSheet.create({
   wrap: { marginBottom: 14 },
   label: {
     fontSize: 11,
-    color: "#6b7280",
+    color: "#8B6854",
     fontWeight: "700",
     letterSpacing: 0.4,
     marginBottom: 6,
@@ -2579,15 +2588,15 @@ const f = StyleSheet.create({
   row: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#f9fafb",
+    backgroundColor: "#FFF8F0",
     borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: "#e5e7eb",
+    borderColor: "#F5EDE5",
     paddingHorizontal: 12,
     paddingVertical: 11,
   },
-  focused: { borderColor: "#16a34a", backgroundColor: "#fff" },
-  input: { flex: 1, color: "#111827", fontSize: 14, fontWeight: "500" },
+  focused: { borderColor: "#FFBF55", backgroundColor: "#fff" },
+  input: { flex: 1, color: "#8B6854", fontSize: 14, fontWeight: "500" },
   toggleRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -2595,7 +2604,7 @@ const f = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
   },
-  toggleLabel: { fontSize: 14, fontWeight: "700", color: "#111827" },
+  toggleLabel: { fontSize: 14, fontWeight: "700", color: "#8B6854" },
   toggleSub: { fontSize: 11, fontWeight: "500", marginTop: 2 },
   purposeChip: {
     flex: 1,
@@ -2606,10 +2615,10 @@ const f = StyleSheet.create({
     paddingVertical: 9,
     borderRadius: 10,
     borderWidth: 1.5,
-    borderColor: "#e5e7eb",
-    backgroundColor: "#f9fafb",
+    borderColor: "#F5EDE5",
+    backgroundColor: "#FFF8F0",
   },
-  purposeText: { fontSize: 12, fontWeight: "700", color: "#9ca3af" },
+  purposeText: { fontSize: 12, fontWeight: "700", color: "#C4A882" },
   motherChip: {
     flexDirection: "row",
     alignItems: "center",
@@ -2617,23 +2626,22 @@ const f = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
-    backgroundColor: "#f9fafb",
+    backgroundColor: "#FFF8F0",
     borderWidth: 1,
-    borderColor: "#e5e7eb",
+    borderColor: "#F5EDE5",
     marginRight: 6,
   },
-  motherChipActive: { backgroundColor: "#f0fdf4", borderColor: "#86efac" },
-  motherChipText: { fontSize: 12, color: "#6b7280", fontWeight: "600" },
-  // ── DatePicker styles ──
+  motherChipActive: { backgroundColor: "#FFF8F0", borderColor: "#8B6854" },
+  motherChipText: { fontSize: 12, color: "#8B6854", fontWeight: "600" },
   todayBtn: {
-    backgroundColor: "#f0fdf4",
+    backgroundColor: "#FFF8F0",
     borderRadius: 8,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderWidth: 1,
-    borderColor: "#bbf7d0",
+    borderColor: "#8B6854",
   },
-  todayText: { fontSize: 11, fontWeight: "700", color: "#16a34a" },
+  todayText: { fontSize: 11, fontWeight: "700", color: "#BB6B3F" },
   pickerOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.4)",
@@ -2653,15 +2661,15 @@ const f = StyleSheet.create({
     paddingTop: 18,
     paddingBottom: 8,
     borderBottomWidth: 1,
-    borderBottomColor: "#f3f4f6",
+    borderBottomColor: "#F5EDE5",
   },
   pickerTitle: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#111827",
+    color: "#8B6854",
   },
   pickerDoneBtn: {
-    backgroundColor: "#16a34a",
+    backgroundColor: "#FFBF55",
     borderRadius: 10,
     paddingHorizontal: 16,
     paddingVertical: 7,
@@ -2672,7 +2680,7 @@ const f = StyleSheet.create({
 const m = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.4)",
+    backgroundColor: "rgba(61,43,31,0.45)",
     justifyContent: "flex-end",
   },
   sheet: {
@@ -2685,7 +2693,7 @@ const m = StyleSheet.create({
   handle: {
     width: 36,
     height: 4,
-    backgroundColor: "#e5e7eb",
+    backgroundColor: "#F5EDE5",
     borderRadius: 2,
     alignSelf: "center",
     marginBottom: 20,
@@ -2700,15 +2708,15 @@ const m = StyleSheet.create({
     flex: 1,
     fontSize: 18,
     fontWeight: "800",
-    color: "#111827",
+    color: "#8B6854",
     letterSpacing: -0.3,
   },
-  sub: { fontSize: 13, color: "#9ca3af", fontWeight: "500", marginBottom: 20 },
+  sub: { fontSize: 13, color: "#C4A882", fontWeight: "500", marginBottom: 20 },
   closeBtn: {
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: "#f3f4f6",
+    backgroundColor: "#F5EDE5",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -2716,7 +2724,7 @@ const m = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: "#f3f4f6",
+    backgroundColor: "#F5EDE5",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -2724,7 +2732,7 @@ const m = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: "#eff6ff",
+    backgroundColor: "#FFF8F0",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -2737,7 +2745,6 @@ const m = StyleSheet.create({
     minHeight: 160,
     justifyContent: "space-between",
   },
-  typeEmoji: { fontSize: 36, marginBottom: 10 },
   typeTitle: {
     fontSize: 15,
     fontWeight: "800",
@@ -2746,7 +2753,7 @@ const m = StyleSheet.create({
   },
   typeSub: {
     fontSize: 12,
-    color: "#9ca3af",
+    color: "#C4A882",
     fontWeight: "500",
     marginBottom: 14,
   },
@@ -2769,39 +2776,39 @@ const m = StyleSheet.create({
   bullInner: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#f5f3ff",
+    backgroundColor: "#FFF8F0",
     borderRadius: 16,
     padding: 18,
     borderWidth: 1.5,
-    borderColor: "#c4b5fd",
+    borderColor: "#F5EDE5",
   },
   bullTitle: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#7c3aed",
+    color: "#8B6854",
     marginBottom: 3,
   },
-  bullSub: { fontSize: 12, color: "#a78bfa", fontWeight: "500" },
+  bullSub: { fontSize: 12, color: "#C4A882", fontWeight: "500" },
   toggleCard: {
-    backgroundColor: "#f9fafb",
+    backgroundColor: "#FFF8F0",
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#e5e7eb",
+    borderColor: "#F5EDE5",
     overflow: "hidden",
     marginBottom: 4,
   },
-  divider: { height: 1, backgroundColor: "#e5e7eb", marginHorizontal: 16 },
+  divider: { height: 1, backgroundColor: "#F5EDE5", marginHorizontal: 16 },
   submitBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#16a34a",
+    backgroundColor: "#F5EDE5",
     borderRadius: 14,
     paddingVertical: 15,
     gap: 8,
     marginTop: 16,
   },
-  submitBtnBlue: { backgroundColor: "#2563eb" },
+  submitBtnTerra: { backgroundColor: "#BB6B3F" },
   submitText: {
     fontSize: 15,
     fontWeight: "800",
@@ -2813,7 +2820,7 @@ const m = StyleSheet.create({
 const qr = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.55)",
+    backgroundColor: "rgba(61,43,31,0.55)",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -2823,7 +2830,7 @@ const qr = StyleSheet.create({
     padding: 24,
     alignItems: "center",
     width: 300,
-    shadowColor: "#000",
+    shadowColor: "#F5EDE5",
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.18,
     shadowRadius: 24,
@@ -2838,12 +2845,12 @@ const qr = StyleSheet.create({
   name: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#111827",
+    color: "#8B6854",
     letterSpacing: -0.2,
   },
   tag: {
     fontSize: 11,
-    color: "#9ca3af",
+    color: "#C4A882",
     fontWeight: "600",
     marginTop: 1,
   },
@@ -2851,7 +2858,7 @@ const qr = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: "#f3f4f6",
+    backgroundColor: "#F5EDE5",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -2860,11 +2867,11 @@ const qr = StyleSheet.create({
     height: 210,
     borderRadius: 16,
     overflow: "hidden",
-    backgroundColor: "#f9fafb",
+    backgroundColor: "#FFF8F0",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#e5e7eb",
+    borderColor: "#F5EDE5",
   },
   qrImage: {
     width: 210,
@@ -2878,14 +2885,14 @@ const qr = StyleSheet.create({
   },
   hint: {
     fontSize: 11,
-    color: "#9ca3af",
+    color: "#C4A882",
     fontWeight: "500",
     marginTop: 14,
     marginBottom: 4,
   },
   doneBtn: {
     marginTop: 14,
-    backgroundColor: "#111827",
+    backgroundColor: "#8B6854",
     borderRadius: 12,
     paddingHorizontal: 32,
     paddingVertical: 11,
@@ -2901,7 +2908,7 @@ const qr = StyleSheet.create({
 const bd = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.45)",
+    backgroundColor: "rgba(204, 137, 92, 0.45)",
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 20,
@@ -2912,7 +2919,7 @@ const bd = StyleSheet.create({
     width: "100%",
     maxWidth: 400,
     paddingBottom: 12,
-    shadowColor: "#000",
+    shadowColor: "#8B6854",
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.15,
     shadowRadius: 20,
@@ -2926,19 +2933,19 @@ const bd = StyleSheet.create({
     paddingTop: 18,
     paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#f3f4f6",
+    borderBottomColor: "#F5EDE5",
   },
   title: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#111827",
+    color: "#8B6854",
     letterSpacing: -0.3,
   },
   closeBtn: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: "#f3f4f6",
+    backgroundColor: "#F5EDE5",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -2947,17 +2954,17 @@ const bd = StyleSheet.create({
     alignItems: "center",
     marginHorizontal: 14,
     marginVertical: 10,
-    backgroundColor: "#f9fafb",
+    backgroundColor: "#FFF8F0",
     borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: "#e5e7eb",
+    borderColor: "#F5EDE5",
     paddingHorizontal: 12,
     paddingVertical: 9,
     gap: 8,
   },
   searchInput: {
     flex: 1,
-    color: "#111827",
+    color: "#8B6854",
     fontSize: 14,
     fontWeight: "500",
   },
@@ -2967,30 +2974,30 @@ const bd = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#f9fafb",
+    borderBottomColor: "#FFF8F0",
   },
   itemSelected: {
-    backgroundColor: "#f0fdf4",
+    backgroundColor: "#FFF8F0",
   },
   emojiWrap: {
     width: 42,
     height: 42,
     borderRadius: 12,
-    backgroundColor: "#f9fafb",
+    backgroundColor: "#FFF8F0",
     borderWidth: 1,
-    borderColor: "#e5e7eb",
+    borderColor: "#F5EDE5",
     alignItems: "center",
     justifyContent: "center",
   },
   breedName: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#111827",
+    color: "#8B6854",
     letterSpacing: -0.2,
   },
   origin: {
     fontSize: 11,
-    color: "#9ca3af",
+    color: "#C4A882",
     fontWeight: "500",
     marginTop: 2,
   },
@@ -2999,20 +3006,20 @@ const bd = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 16,
     paddingVertical: 14,
-    backgroundColor: "#f0fdf4",
+    backgroundColor: "#FFF8F0",
     margin: 10,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#bbf7d0",
+    borderColor: "#8B6854",
   },
   customLabel: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#16a34a",
+    color: "#BB6B3F",
   },
   customSub: {
     fontSize: 11,
-    color: "#86efac",
+    color: "#8B6854",
     fontWeight: "500",
     marginTop: 1,
   },

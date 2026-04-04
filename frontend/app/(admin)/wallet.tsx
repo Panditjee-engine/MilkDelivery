@@ -85,7 +85,7 @@ export default function AdminWalletScreen() {
           <View style={styles.heroStatsRow}>
             <View style={styles.heroStat}>
               <View style={styles.heroStatIcon}>
-                <Ionicons name="arrow-down" size={12} color="#FFD999" />
+                <Ionicons name="arrow-down" size={12} color="#8B6854" />
               </View>
               <View>
                 <Text style={styles.heroStatLabel}>Total Earned</Text>
@@ -161,7 +161,7 @@ export default function AdminWalletScreen() {
         {filteredTx.length === 0 ? (
           <View style={styles.emptyState}>
             <View style={styles.emptyIcon}>
-              <Ionicons name="receipt-outline" size={32} color="#FD9E69" />
+              <Ionicons name="receipt-outline" size={32} color="#8B6854" />
             </View>
             <Text style={styles.emptyTitle}>No transactions yet</Text>
             <Text style={styles.emptyDesc}>Earnings appear here when orders are delivered</Text>
@@ -314,6 +314,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF3E8',
     justifyContent: 'center', alignItems: 'center', marginBottom: 4,
   },
-  emptyTitle: { fontSize: 16, fontWeight: '700', color: '#FD9E69' },
+  emptyTitle: { fontSize: 16, fontWeight: '700', color: '#8B6854' },
   emptyDesc: { fontSize: 13, color: '#8B6854', textAlign: 'center' },
 });
