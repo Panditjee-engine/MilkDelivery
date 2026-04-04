@@ -924,6 +924,25 @@ async workerLogout() {
   await AsyncStorage.removeItem('worker_token');
   await AsyncStorage.removeItem('worker_data');
 }
+
+  async checkDuplicate(
+    field: "email" | "phone",
+    value: string,
+  ): Promise<boolean> {
+    try {
+      const data = await this.request<{ exists: boolean }>(
+        "/auth/check-duplicate",
+        {
+          method: "POST",
+          body: JSON.stringify({ field, value }),
+        },
+      );
+      return !!data.exists;
+    } catch {
+      // Fail open — don't block the user on a network hiccup.
+      return false;
+    }
+  }
 //------------------------------------------------------------//
 
   logout = async () => {
