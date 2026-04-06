@@ -1107,20 +1107,20 @@ function AddCowModal({
                   onPress={submit}
                   style={[
                     m.submitBtn,
-                    form.type === "bull" && { backgroundColor: "#8B6854" },
-                    form.type === "newborn" && { backgroundColor: "#8B6854" },
+                    form.type === "bull" && { backgroundColor: "#f3dbbc" },
+                    form.type === "newborn" && { backgroundColor: "#f3dbbc"},
                     submitting && { opacity: 0.7 },
                   ]}
                   disabled={submitting}
                 >
                   {submitting ? (
-                    <ActivityIndicator color="#fff" size="small" />
+                    <ActivityIndicator color="#baf1b2" size="small" />
                   ) : (
                     <>
                       <Ionicons
                         name="checkmark-circle-outline"
                         size={18}
-                        color="#fff"
+                        color="#f59696"
                       />
                       <Text style={m.submitText}>
                         {form.type === "bull"
@@ -2805,13 +2805,13 @@ const m = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F5EDE5",
+    backgroundColor: "#f3dbbc",
     borderRadius: 14,
     paddingVertical: 15,
     gap: 8,
     marginTop: 16,
   },
-  submitBtnTerra: { backgroundColor: "#BB6B3F" },
+  submitBtnTerra: { backgroundColor: "#f3dbbc"},
   submitText: {
     fontSize: 15,
     fontWeight: "800",

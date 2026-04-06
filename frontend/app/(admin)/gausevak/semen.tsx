@@ -1058,25 +1058,25 @@ export default function SemenRecordScreen() {
 }
 
 const s = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#f8fafc" },
+  screen: { flex: 1, backgroundColor: "#FFF8F0" },
   header: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 16,
     paddingVertical: 14,
-    backgroundColor: "#fff",
+    backgroundColor: "#FFF8F0",
     borderBottomWidth: 1,
-    borderBottomColor: "#f1f5f9",
+    borderBottomColor: "#f3b17a",
   },
   backBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: "#f8fafc",
+    backgroundColor: "#FFF8F0",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#e2e8f0",
+    borderColor: "#f7cd98",
   },
   headerTitle: {
     fontSize: 18,
@@ -1101,12 +1101,12 @@ const s = StyleSheet.create({
   countText: { fontSize: 12, fontWeight: "700", color: "#0891b2" },
   statsRow: {
     flexDirection: "row",
-    backgroundColor: "#fff",
+    backgroundColor: "#FFF8F0",
     borderBottomWidth: 1,
-    borderBottomColor: "#f1f5f9",
+    borderBottomColor: "#f7cd98",
   },
   statItem: { flex: 1, alignItems: "center", paddingVertical: 11 },
-  statBorder: { borderRightWidth: 1, borderRightColor: "#f1f5f9" },
+  statBorder: { borderRightWidth: 1, borderRightColor: "#f7cd98" },
   statValue: { fontSize: 16, fontWeight: "800", letterSpacing: -0.3 },
   statLabel: {
     fontSize: 9,
@@ -1136,11 +1136,11 @@ const s = StyleSheet.create({
 
   btnGroup: { gap: 12, marginBottom: 24 },
   bigBtn: {
-    backgroundColor: "#fff",
+    backgroundColor: "#fcefec",
     borderRadius: 18,
     padding: 18,
     borderWidth: 1.5,
-    borderColor: "#f1f5f9",
+    borderColor: "#f7cd98",
     flexDirection: "row",
     alignItems: "center",
     gap: 14,
@@ -1493,7 +1493,7 @@ const m = StyleSheet.create({
     justifyContent: "flex-end",
   },
   sheet: {
-    backgroundColor: "#fff",
+    backgroundColor: "#fcede7",
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     padding: 20,
