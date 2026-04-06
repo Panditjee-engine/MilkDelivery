@@ -1115,12 +1115,8 @@ const IS_IOS = Platform.OS === "ios";
 const STATUS_BAR_HEIGHT = IS_IOS ? 0 : (StatusBar.currentHeight ?? 0);
 
 const styles = StyleSheet.create({
-<<<<<<< HEAD
-  screen: { flex: 1, backgroundColor: "#F0F4F8" },
-=======
   screen: { flex: 1, backgroundColor: "#FFF8F0" },
 
->>>>>>> badal
   header: {
     flexDirection: "row",
     alignItems: "center",
