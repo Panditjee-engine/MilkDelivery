@@ -57,14 +57,19 @@ class ApiService {
     return response.json();
   }
 
-  async login(email: string, password: string) {
-    const data = await this.request<any>("/auth/login", {
-      method: "POST",
-      body: JSON.stringify({ email, password }),
-    });
-    this.setToken(data.access_token);
-    return data;
-  }
+ async login(identifier: string, password: string, method: 'email' | 'phone' = 'email') {
+  const body =
+    method === 'phone'
+      ? { phone: identifier, password }
+      : { email: identifier, password };
+
+  const data = await this.request<any>("/auth/login", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  this.setToken(data.access_token);
+  return data;
+}
 
   async register(userData: any) {
     const data = await this.request<any>("/auth/register", {
@@ -943,6 +948,83 @@ async workerLogout() {
       return false;
     }
   }
+
+async forgotPassword(email: string) {
+  return this.request<any>("/auth/forgot-password", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+}
+
+async resetPassword(email: string, reset_code: string, new_password: string) {
+  return this.request<any>("/auth/reset-password", {
+    method: "POST",
+    body: JSON.stringify({ email, reset_code, new_password }),
+  });
+}
+
+async updateWorker(id: string, data: Partial<{ name: string; phone: string; designation: string; farm_name: string; is_active: boolean }>) {
+  return this.request<any>(`/admin/workers/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+// ─────────────────────────────────────────────────────────
+// ADD THESE TO api.ts  (inside the ApiService class)
+// ─────────────────────────────────────────────────────────
+
+// ── Bank Account ─────────────────────────────────────────
+
+async getBankAccount() {
+  return this.request<{
+    accountHolderName: string;
+    accountNumber: string;
+    ifscCode: string;
+    bankName: string;
+    upiId?: string;
+  }>('/wallet/bank-account');
+}
+
+async saveBankAccount(data: {
+  accountHolderName: string;
+  accountNumber: string;
+  ifscCode: string;
+  bankName: string;
+  upiId?: string;
+}) {
+  return this.request<any>('/wallet/bank-account', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+// ── Withdrawal ───────────────────────────────────────────
+
+async requestWithdrawal(amount: number) {
+  return this.request<{
+    message: string;
+    withdrawal_id: string;
+    amount: number;
+    status: string;
+  }>('/wallet/withdraw', {
+    method: 'POST',
+    body: JSON.stringify({ amount }),
+  });
+}
+
+async getWithdrawalHistory() {
+  return this.request<Array<{
+    id: string;
+    amount: number;
+    status: string;  // "pending" | "processing" | "completed" | "rejected"
+    created_at: string;
+    bank_account: {
+      bankName: string;
+      accountNumber: string;
+    };
+  }>>('/wallet/withdrawals');
+}
 //------------------------------------------------------------//
 
   logout = async () => {

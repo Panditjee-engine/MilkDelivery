@@ -34,13 +34,15 @@ function DetailModal({
   visible,
   type,
   products,
-  stats,
+  customers,
+  orders,
   onClose,
 }: {
   visible: boolean;
   type: ModalType;
   products: any[];
-  stats: any;
+  customers: any[];
+  orders: any[];
   onClose: () => void;
 }) {
   const insets = useSafeAreaInsets();
@@ -49,18 +51,17 @@ function DetailModal({
     Exclude<ModalType, null>,
     { title: string; icon: string; color: string; bgColor: string }
   > = {
-    customers: { title: 'All Customers',    icon: 'people',           color: C.dark,   bgColor: '#FFF3DC' },
-    products:  { title: 'All Products',     icon: 'cube',             color: C.dark,   bgColor: '#FFEEDD' },
-    orders:    { title: 'Today\'s Orders',  icon: 'receipt',          color: C.dark,   bgColor: '#FFE8D6' },
-    delivered: { title: 'Delivered Orders', icon: 'checkmark-circle', color: C.deep,   bgColor: '#FFD9B8' },
-    total:     { title: 'All Orders Today', icon: 'list',             color: C.dark,   bgColor: '#FFE8D6' },
+    customers: { title: 'All Customers',    icon: 'people',           color: C.dark,      bgColor: '#FFF3DC' },
+    products:  { title: 'All Products',     icon: 'cube',             color: C.dark,      bgColor: '#FFEEDD' },
+    orders:    { title: "Today's Orders",   icon: 'receipt',          color: C.dark,      bgColor: '#FFE8D6' },
+    delivered: { title: 'Delivered Orders', icon: 'checkmark-circle', color: C.deep,      bgColor: '#FFD9B8' },
+    total:     { title: 'All Orders Today', icon: 'list',             color: C.dark,      bgColor: '#FFE8D6' },
     pending:   { title: 'Pending Orders',   icon: 'time',             color: C.secondary, bgColor: '#FFF0E0' },
   };
 
   if (!type) return null;
   const cfg = config[type];
 
-  // ── Build list data based on type ──────────────
   const renderItem = ({ item, index }: { item: any; index: number }) => {
     if (type === 'products') {
       return (
@@ -68,7 +69,7 @@ function DetailModal({
           <View style={[mStyles.listDot, { backgroundColor: item.is_available ? C.accent : C.textLight }]} />
           <View style={mStyles.listInfo}>
             <Text style={mStyles.listTitle} numberOfLines={1}>{item.name}</Text>
-            <Text style={mStyles.listSub}>₹{item.price}</Text>
+            <Text style={mStyles.listSub}>₹{item.price} · {item.unit}</Text>
           </View>
           <View style={[mStyles.pill, { backgroundColor: item.is_available ? '#FFF3DC' : '#FFE8D6' }]}>
             <Text style={[mStyles.pillText, { color: item.is_available ? C.dark : C.secondary }]}>
@@ -91,6 +92,11 @@ function DetailModal({
             <Text style={mStyles.listTitle} numberOfLines={1}>{item.name || 'Customer'}</Text>
             <Text style={mStyles.listSub}>{item.phone || item.email || '—'}</Text>
           </View>
+          <View style={[mStyles.pill, { backgroundColor: item.is_active ? '#FFF3DC' : '#FFE8D6' }]}>
+            <Text style={[mStyles.pillText, { color: item.is_active ? C.dark : C.secondary }]}>
+              {item.is_active ? 'Active' : 'Off'}
+            </Text>
+          </View>
         </View>
       );
     }
@@ -103,13 +109,13 @@ function DetailModal({
     return (
       <View style={[mStyles.listRow, index % 2 === 0 && mStyles.listRowAlt]}>
         <View style={[mStyles.orderNumBox, { backgroundColor: cfg.bgColor }]}>
-          <Text style={[mStyles.orderNum, { color: cfg.color }]}>#{item.id}</Text>
+          <Text style={[mStyles.orderNum, { color: cfg.color }]}>#{(item.id || '').slice(-4)}</Text>
         </View>
         <View style={mStyles.listInfo}>
           <Text style={mStyles.listTitle} numberOfLines={1}>
             {item.customer_name || item.customer || 'Order'}
           </Text>
-          <Text style={mStyles.listSub}>₹{item.total || item.amount || 0}</Text>
+          <Text style={mStyles.listSub}>₹{item.total_amount || item.total || 0}</Text>
         </View>
         <View style={[mStyles.pill, { backgroundColor: statusColor + '22' }]}>
           <Text style={[mStyles.pillText, { color: statusColor }]}>
@@ -122,11 +128,11 @@ function DetailModal({
 
   // ── Determine list source ──────────────────────
   const getListData = () => {
-    if (type === 'products') return products;
-    if (type === 'customers') return stats?.customers_list || [];
-    if (type === 'delivered') return (stats?.orders_list || []).filter((o: any) => o.status === 'delivered');
-    if (type === 'pending')   return (stats?.orders_list || []).filter((o: any) => o.status !== 'delivered');
-    return stats?.orders_list || [];
+    if (type === 'products')  return products;
+    if (type === 'customers') return customers;
+    if (type === 'delivered') return orders.filter((o: any) => o.status === 'delivered');
+    if (type === 'pending')   return orders.filter((o: any) => o.status !== 'delivered');
+    return orders; // 'orders' | 'total'
   };
 
   const listData = getListData();
@@ -138,15 +144,11 @@ function DetailModal({
       transparent
       onRequestClose={onClose}
     >
-      {/* Backdrop */}
       <Pressable style={mStyles.backdrop} onPress={onClose} />
 
-      {/* Sheet */}
       <View style={[mStyles.sheet, { paddingBottom: insets.bottom + 16 }]}>
-        {/* Drag handle */}
         <View style={mStyles.handle} />
 
-        {/* Modal header */}
         <View style={mStyles.sheetHeader}>
           <View style={[mStyles.sheetIconBox, { backgroundColor: cfg.bgColor }]}>
             <Ionicons name={cfg.icon as any} size={18} color={cfg.color} />
@@ -182,20 +184,26 @@ function DetailModal({
 // ── Main Dashboard ───────────────────────────────
 export default function AdminDashboard() {
   const { user } = useAuth();
-  const [loading, setLoading]     = useState(true);
+  const [loading, setLoading]       = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [stats, setStats]         = useState<any>(null);
-  const [products, setProducts]   = useState<any[]>([]);
-  const [modalType, setModalType] = useState<ModalType>(null);
+  const [stats, setStats]           = useState<any>(null);
+  const [products, setProducts]     = useState<any[]>([]);
+  const [customers, setCustomers]   = useState<any[]>([]);   // ← NEW
+  const [orders, setOrders]         = useState<any[]>([]);   // ← NEW
+  const [modalType, setModalType]   = useState<ModalType>(null);
 
   const fetchData = async () => {
     try {
-      const [dashboardData, productsData] = await Promise.all([
+      const [dashboardData, productsData, usersData, ordersData] = await Promise.all([
         api.getAdminDashboard(),
         api.getProducts(),
+        api.getAllUsers('customer'),          // ← fetch customers list
+        api.getAllOrders(),                 // ← fetch today's orders list
       ]);
       setStats(dashboardData);
       setProducts(productsData);
+      setCustomers(usersData);
+      setOrders(ordersData);
     } catch (error) {
       console.error('Error fetching dashboard:', error);
     } finally {
@@ -267,7 +275,6 @@ export default function AdminDashboard() {
         {/* ── Stats Grid ── */}
         <View style={styles.statsGrid}>
 
-          {/* Customers */}
           <TouchableOpacity
             style={[styles.statCard, { backgroundColor: '#FFF3DC' }]}
             onPress={() => setModalType('customers')}
@@ -277,7 +284,7 @@ export default function AdminDashboard() {
               <Ionicons name="people" size={20} color={C.dark} />
             </View>
             <Text style={[styles.statValue, { color: C.dark }]}>
-              {stats?.total_customers || 0}
+              {customers.length || stats?.total_customers || 0}
             </Text>
             <Text style={styles.statLabel}>Customers</Text>
             <View style={styles.tapHint}>
@@ -285,7 +292,6 @@ export default function AdminDashboard() {
             </View>
           </TouchableOpacity>
 
-          {/* Products */}
           <TouchableOpacity
             style={[styles.statCard, { backgroundColor: '#FFEEDD' }]}
             onPress={() => setModalType('products')}
@@ -303,7 +309,6 @@ export default function AdminDashboard() {
             </View>
           </TouchableOpacity>
 
-          {/* Total Orders */}
           <TouchableOpacity
             style={[styles.statCard, { backgroundColor: '#FFE8D6' }]}
             onPress={() => setModalType('orders')}
@@ -321,7 +326,6 @@ export default function AdminDashboard() {
             </View>
           </TouchableOpacity>
 
-          {/* Delivered */}
           <TouchableOpacity
             style={[styles.statCard, { backgroundColor: '#FFD9B8' }]}
             onPress={() => setModalType('delivered')}
@@ -358,8 +362,6 @@ export default function AdminDashboard() {
           </View>
 
           <View style={styles.progressStats}>
-
-            {/* Total — clickable */}
             <TouchableOpacity
               style={styles.progressStat}
               onPress={() => setModalType('total')}
@@ -372,7 +374,6 @@ export default function AdminDashboard() {
 
             <View style={styles.progressDivider} />
 
-            {/* Delivered — clickable */}
             <TouchableOpacity
               style={styles.progressStat}
               onPress={() => setModalType('delivered')}
@@ -387,7 +388,6 @@ export default function AdminDashboard() {
 
             <View style={styles.progressDivider} />
 
-            {/* Pending — clickable */}
             <TouchableOpacity
               style={styles.progressStat}
               onPress={() => setModalType('pending')}
@@ -399,7 +399,6 @@ export default function AdminDashboard() {
               <Text style={styles.progressStatLabel}>Pending</Text>
               <Ionicons name="chevron-down" size={10} color={C.textLight} style={{ marginTop: 2 }} />
             </TouchableOpacity>
-
           </View>
         </View>
 
@@ -411,10 +410,7 @@ export default function AdminDashboard() {
             </View>
             <Text style={styles.cardTitle}>Product Overview</Text>
             {products.length > 0 && (
-              <TouchableOpacity
-                onPress={() => setModalType('products')}
-                hitSlop={10}
-              >
+              <TouchableOpacity onPress={() => setModalType('products')} hitSlop={10}>
                 <Ionicons name="arrow-forward-circle-outline" size={22} color={C.accent} />
               </TouchableOpacity>
             )}
@@ -447,7 +443,6 @@ export default function AdminDashboard() {
                 </View>
               ))}
 
-              {/* +X more — now clickable */}
               {products.length > 4 && (
                 <TouchableOpacity
                   onPress={() => setModalType('products')}
@@ -472,7 +467,8 @@ export default function AdminDashboard() {
         visible={modalType !== null}
         type={modalType}
         products={products}
-        stats={stats}
+        customers={customers}
+        orders={orders}
         onClose={() => setModalType(null)}
       />
     </SafeAreaView>
@@ -552,14 +548,8 @@ const mStyles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 6,
   },
-  listRowAlt: {
-    backgroundColor: '#FFF8EF',
-  },
-  listDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
+  listRowAlt: { backgroundColor: '#FFF8EF' },
+  listDot: { width: 8, height: 8, borderRadius: 4 },
   avatarCircle: {
     width: 34,
     height: 34,
@@ -568,52 +558,16 @@ const mStyles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  avatarText: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: C.dark,
-  },
-  orderNumBox: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  orderNum: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  listInfo: {
-    flex: 1,
-  },
-  listTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: C.text,
-  },
-  listSub: {
-    fontSize: 12,
-    color: C.textLight,
-    marginTop: 2,
-  },
-  pill: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 20,
-  },
-  pillText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  emptyBox: {
-    alignItems: 'center',
-    paddingVertical: 40,
-    gap: 10,
-  },
-  emptyTxt: {
-    fontSize: 14,
-    color: C.textLight,
-    fontStyle: 'italic',
-  },
+  avatarText: { fontSize: 14, fontWeight: '800', color: C.dark },
+  orderNumBox: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  orderNum: { fontSize: 12, fontWeight: '700' },
+  listInfo: { flex: 1 },
+  listTitle: { fontSize: 14, fontWeight: '700', color: C.text },
+  listSub: { fontSize: 12, color: C.textLight, marginTop: 2 },
+  pill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 },
+  pillText: { fontSize: 11, fontWeight: '700' },
+  emptyBox: { alignItems: 'center', paddingVertical: 40, gap: 10 },
+  emptyTxt: { fontSize: 14, color: C.textLight, fontStyle: 'italic' },
 });
 
 // ── Dashboard Styles ─────────────────────────────
@@ -621,7 +575,6 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
   scrollContent: { paddingBottom: 8 },
 
-  // Header
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -640,7 +593,6 @@ const styles = StyleSheet.create({
     shadowColor: C.primary, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4,
   },
 
-  // Revenue Card
   revenueCard: {
     marginHorizontal: 20, marginBottom: 16,
     backgroundColor: C.primary, borderRadius: 20, padding: 22,
@@ -659,50 +611,35 @@ const styles = StyleSheet.create({
   revenueBadgeText: { fontSize: 11, color: C.deep, fontWeight: '700' },
   revenueIcon: { opacity: 0.5 },
 
-  // Stats Grid
   statsGrid: {
     flexDirection: 'row', flexWrap: 'wrap',
     paddingHorizontal: 16, gap: 10, marginBottom: 16,
   },
-  statCard: {
-    width: '47.5%', borderRadius: 16, padding: 16, gap: 6,
-    position: 'relative',
-  },
+  statCard: { width: '47.5%', borderRadius: 16, padding: 16, gap: 6, position: 'relative' },
   statIcon: {
     width: 36, height: 36, borderRadius: 10,
     justifyContent: 'center', alignItems: 'center', marginBottom: 4,
   },
   statValue: { fontSize: 28, fontWeight: '800', letterSpacing: -0.5 },
   statLabel: { fontSize: 12, color: C.textMuted, fontWeight: '600' },
-  tapHint: {
-    position: 'absolute', bottom: 10, right: 10,
-  },
+  tapHint: { position: 'absolute', bottom: 10, right: 10 },
 
-  // Cards
   card: {
     backgroundColor: C.card, borderRadius: 20,
     marginHorizontal: 16, marginBottom: 14, padding: 18,
     shadowColor: C.dark, shadowOpacity: 0.06, shadowRadius: 8,
     shadowOffset: { width: 0, height: 2 }, elevation: 2,
   },
-  cardHeader: {
-    flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16,
-  },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16 },
   cardIconBox: {
     width: 32, height: 32, borderRadius: 10,
     justifyContent: 'center', alignItems: 'center',
   },
   cardTitle: { fontSize: 15, fontWeight: '700', color: C.text, flex: 1 },
-  ratePill: {
-    backgroundColor: '#f8c18e', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20,
-  },
+  ratePill: { backgroundColor: '#f8c18e', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
   rateText: { fontSize: 12, fontWeight: '800', color: C.dark },
 
-  // Progress
-  progressBg: {
-    height: 8, backgroundColor: '#FFE8C8', borderRadius: 4,
-    overflow: 'hidden', marginBottom: 16,
-  },
+  progressBg: { height: 8, backgroundColor: '#FFE8C8', borderRadius: 4, overflow: 'hidden', marginBottom: 16 },
   progressFill: { height: 8, backgroundColor: C.primary, borderRadius: 4 },
   progressStats: { flexDirection: 'row', justifyContent: 'space-around' },
   progressStat: { alignItems: 'center', flex: 1, paddingVertical: 4 },
@@ -710,10 +647,7 @@ const styles = StyleSheet.create({
   progressStatLabel: { fontSize: 11, color: C.textLight, marginTop: 3, fontWeight: '600' },
   progressDivider: { width: 1, backgroundColor: '#FFE8C8' },
 
-  // Products
-  productRow: {
-    flexDirection: 'row', alignItems: 'center', paddingVertical: 11, gap: 10,
-  },
+  productRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 11, gap: 10 },
   productRowBorder: { borderBottomWidth: 1, borderBottomColor: '#FFF3DC' },
   productDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: C.accent },
   productName: { flex: 1, fontSize: 14, fontWeight: '600', color: C.text },
@@ -721,7 +655,6 @@ const styles = StyleSheet.create({
   availText: { fontSize: 11, fontWeight: '700' },
   productPrice: { fontSize: 13, fontWeight: '700', color: C.text },
 
-  // More button
   moreBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     marginTop: 10, gap: 4,
