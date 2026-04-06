@@ -2170,9 +2170,9 @@ const vp = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 10,
-    backgroundColor: "#f8fafc",
+    backgroundColor: "#FFF8F0",
     borderWidth: 1.5,
-    borderColor: "#e2e8f0",
+    borderColor: "#f1bb9c",
   },
   chipLabel: { fontSize: 13, fontWeight: "800", color: "#374151" },
   descHint: {
@@ -2197,13 +2197,13 @@ const vp = StyleSheet.create({
 });
 
 const s = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#f8fafc" },
+  screen: { flex: 1, backgroundColor: "#FFF8F0" },
   header: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 16,
     paddingVertical: 14,
-    backgroundColor: "#fff",
+    backgroundColor: "#FFF8F0",
     borderBottomWidth: 1,
     borderBottomColor: "#f1f5f9",
   },
@@ -2211,11 +2211,11 @@ const s = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: "#f8fafc",
+    backgroundColor: "#FFF8F0",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#e2e8f0",
+    borderColor: "#9cc1f1",
   },
   headerTitle: {
     fontSize: 18,
@@ -2230,12 +2230,12 @@ const s = StyleSheet.create({
     marginTop: 1,
   },
   countBadge: {
-    backgroundColor: "#f0fdf4",
+    backgroundColor: "#FFF8F0",
     borderRadius: 20,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderWidth: 1,
-    borderColor: "#bbf7d0",
+    borderColor: "#bbd0f7",
   },
   countText: { fontSize: 12, fontWeight: "700", color: "#16a34a" },
   statsRow: {
@@ -2274,11 +2274,11 @@ const s = StyleSheet.create({
   },
   btnGroup: { gap: 12, marginBottom: 20 },
   bigBtn: {
-    backgroundColor: "#fff",
+    backgroundColor: "#fdf6e5",
     borderRadius: 18,
     padding: 16,
     borderWidth: 1.5,
-    borderColor: "#f1f5f9",
+    borderColor: "#ecd657",
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
@@ -2712,7 +2712,7 @@ const m = StyleSheet.create({
     justifyContent: "flex-end",
   },
   sheet: {
-    backgroundColor: "#fff",
+    backgroundColor: "#FFF8F0",
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     padding: 20,

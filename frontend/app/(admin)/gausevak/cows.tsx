@@ -1070,17 +1070,21 @@ function AddCowModal({
                   onPress={submit}
                   style={[
                     m.submitBtn,
-                    form.type === "bull" && { backgroundColor: "#8B6854" },
-                    form.type === "newborn" && { backgroundColor: "#8B6854" },
+                    form.type === "bull" && { backgroundColor: "#f3dbbc" },
+                    form.type === "newborn" && { backgroundColor: "#f3dbbc"},
                     submitting && { opacity: 0.7 },
                   ]}
                   disabled={submitting}
                 >
                   {submitting ? (
-                    <ActivityIndicator color="#fff" size="small" />
+                    <ActivityIndicator color="#baf1b2" size="small" />
                   ) : (
                     <>
-                      <Ionicons name="checkmark-circle-outline" size={18} color="#fff" />
+                      <Ionicons
+                        name="checkmark-circle-outline"
+                        size={18}
+                        color="#f59696"
+                      />
                       <Text style={m.submitText}>
                         {form.type === "bull"
                           ? "Register Bull"
@@ -1777,53 +1781,81 @@ export default function CowsScreen() {
 }
           </ScrollView >
 
-  { loading && cows.length === 0 ? (
-  <View style={s.loadingWrap}>
-    <ActivityIndicator size="large" color="#FFBF55" />
-    <Text style={s.loadingText}>Loading animals...</Text>
-  </View>
-) : error ? (
-  <View style={s.errorWrap}>
-    <Text style={{ fontSize: 40 }}>⚠️</Text>
-    <Text style={s.errorText}>{error}</Text>
-    <TouchableOpacity onPress={() => fetchCows(search || undefined)} style={s.retryBtn}>
-      <Ionicons name="refresh" size={14} color="#fff" />
-      <Text style={s.retryText}>Retry</Text>
-    </TouchableOpacity>
-  </View>
-) : (
-  <FlatList
-    data={filteredCows}
-    keyExtractor={(item) => item.id}
-    contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 100 }}
-    showsVerticalScrollIndicator={false}
-    refreshControl={
-      <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#16a34a" />
-    }
-    renderItem={({ item, index }) => (
-      <CowCard
-        item={item}
-        index={index}
-        onEdit={(cow) => setEditCow(cow)}
-        onDelete={handleDelete}
-        onUpdate={(updated) =>
-          setCows((prev) => prev.map((c) => (c.id === updated.id ? updated : c)))
-        }
-      />
-    )}
-    ListEmptyComponent={
-      <View style={s.empty}>
-        <Text style={{ fontSize: 48 }}>
-          {filterType === "bull" ? "🐂" : filterType === "newborn" ? "🐮" : "🐄"}
-        </Text>
-        <Text style={s.emptyText}>
-          No {filterType === "all" ? "animals" : filterType === "bull" ? "bulls" : filterType === "newborn" ? "calves" : "cows"} found
-        </Text>
-      </View>
-    }
-  />
-)}
-        </View >
+          {loading && cows.length === 0 ? (
+            <View style={s.loadingWrap}>
+              <ActivityIndicator size="large" color="#FFBF55" />
+              <Text style={s.loadingText}>Loading animals...</Text>
+            </View>
+          ) : error ? (
+            <View style={s.errorWrap}>
+              <Text style={{ fontSize: 40 }}>⚠️</Text>
+              <Text style={s.errorText}>{error}</Text>
+              <TouchableOpacity
+                onPress={() => fetchCows(search || undefined)}
+                style={s.retryBtn}
+              >
+                <Ionicons name="refresh" size={14} color="#fff" />
+                <Text style={s.retryText}>Retry</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <FlatList
+              data={filteredCows}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={{
+                paddingHorizontal: 16,
+                paddingTop: 8,
+                paddingBottom: 100,
+              }}
+              showsVerticalScrollIndicator={false}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={onRefresh}
+                  tintColor="#FFBF55"
+                />
+              }
+              renderItem={({ item, index }) => (
+                <CowCard
+                  item={item}
+                  index={index}
+                  onEdit={(cow) => setEditCow(cow)}
+                  onDelete={handleDelete}
+                  onUpdate={(updated) =>
+                    setCows((prev) =>
+                      prev.map((c) => (c.id === updated.id ? updated : c)),
+                    )
+                  }
+                />
+              )}
+              ListEmptyComponent={
+                <View style={s.empty}>
+                  <Image
+                    source={
+                      filterType === "bull"
+                        ? bullImg
+                        : filterType === "newborn"
+                          ? calfImg
+                          : cowImg
+                    }
+                    style={{ width: 80, height: 80, resizeMode: "contain" }}
+                  />
+                  <Text style={s.emptyText}>
+                    No{" "}
+                    {filterType === "all"
+                      ? "animals"
+                      : filterType === "bull"
+                        ? "bulls"
+                        : filterType === "newborn"
+                          ? "calves"
+                          : "cows"}{" "}
+                    found
+                  </Text>
+                </View>
+              }
+            />
+          )}
+        </View>
       )}
 
       <AddCowModal
@@ -2371,15 +2403,19 @@ const m = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F5EDE5",
+    backgroundColor: "#f3dbbc",
     borderRadius: 14,
     paddingVertical: 15,
     gap: 8,
     marginTop: 16,
   },
-  submitBtnTerra: { backgroundColor: "#C4A882" },
-  submitBtnBlue: { backgroundColor: "#2563eb" },
-  submitText: { fontSize: 15, fontWeight: "800", color: "#fff", letterSpacing: -0.2 },
+  submitBtnTerra: { backgroundColor: "#f3dbbc"},
+  submitText: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#fff",
+    letterSpacing: -0.2,
+  },
 });
 
 const qr = StyleSheet.create({

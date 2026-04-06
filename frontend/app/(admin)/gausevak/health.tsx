@@ -13,6 +13,7 @@ import {
   RefreshControl,
   Alert,
   Platform,
+  Image,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -23,6 +24,7 @@ interface CowRow {
   cow_name: string;
   cow_tag: string;
   breed: string;
+  type: string;
   status: string;
   worker_name: string | null;
   reported: boolean;
@@ -37,6 +39,10 @@ interface Summary {
   unhealthy: number;
   not_reported: number;
 }
+
+const cowImg = require("../../../assets/images/gir-cow.png");
+const bullImg = require("../../../assets/images/bull-cow.png");
+const calfImg = require("../../../assets/images/calf-cow.png");
 
 const isHealthy = (s: string) => s === "healthy";
 const isUnhealthy = (s: string) => s !== "healthy" && s !== "not_reported";
@@ -68,12 +74,20 @@ function statusCfg(s: string) {
   };
 }
 
+function getCowImage(type: string) {
+  if (type === "bull") return bullImg;
+  if (type === "newborn") return calfImg;
+  return cowImg;
+}
+
 function mapRow(r: any): CowRow {
+  console.log("TYPE:", r.type, "NAME:", r.cow_name);
   return {
     cow_id: r.cow_id ?? "",
     cow_name: r.cow_name ?? "",
     cow_tag: r.cow_tag ?? "",
     breed: r.breed ?? "",
+    type: r.type ?? "mature",
     status: r.status ?? "not_reported",
     worker_name: r.worker_name ?? null,
     reported: r.reported ?? false,
@@ -82,6 +96,7 @@ function mapRow(r: any): CowRow {
     markedHealthy: false,
   };
 }
+
 
 function CowCard({
   item,
@@ -135,9 +150,10 @@ function CowCard({
             unhealthy && { backgroundColor: "#fef2f2", borderColor: "#fca5a5" },
           ]}
         >
-          <Text style={{ fontSize: 20 }}>
-            {healthy ? "🐄" : isNotReported(item.status) ? "❓" : "🤒"}
-          </Text>
+          <Image
+            source={getCowImage(item.type)}
+            style={{ width: 26, height: 26, resizeMode: "contain" }}
+          />
         </View>
 
         <View style={{ flex: 1, marginLeft: 10 }}>
@@ -239,11 +255,25 @@ export default function CowHealthScreen() {
 
   const fetchAll = useCallback(async () => {
     try {
-      const res = await api.getAdminHealthLogs(TODAY);
+      const [res, cowsList] = await Promise.all([
+        api.getAdminHealthLogs(TODAY),
+        api.getCows(),
+      ]);
+
+      // update by Badal on 28-06-2024: creating a map of cow_id to type for quick lookup while mapping rows
+      const typeMap: Record<string, string> = {};
+      cowsList.forEach((c: any) => {
+        typeMap[c.id] = c.type ?? "mature";
+      });
+
       setSummary(
         res.summary ?? { total: 0, healthy: 0, unhealthy: 0, not_reported: 0 },
       );
-      setRows(Array.isArray(res.cows) ? res.cows.map(mapRow) : []);
+      setRows(
+        Array.isArray(res.cows)
+          ? res.cows.map((r: any) => mapRow({ ...r, type: typeMap[r.cow_id] ?? "mature" }))
+          : []
+      );
     } catch (e: any) {
       console.log("admin health fetch error:", e.message);
       Alert.alert("Error", e.message || "Failed to load");
@@ -461,7 +491,10 @@ export default function CowHealthScreen() {
             )}
             ListEmptyComponent={
               <View style={s.empty}>
-                <Text style={{ fontSize: 44 }}>🐄</Text>
+                <Image
+                  source={cowImg}
+                  style={{ width: 80, height: 80, resizeMode: "contain" }}
+                />
                 <Text style={s.emptyTitle}>No cows found</Text>
                 <Text style={s.emptyText}>
                   {search ? "No results for your search" : "No data for today"}
@@ -478,16 +511,16 @@ export default function CowHealthScreen() {
 const ANDROID_STATUS_BAR = Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0;
 
 const s = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#f9fafb" },
+  screen: { flex: 1, backgroundColor: "#FFF8F0" },
   header: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 16,
     paddingVertical: 14,
     paddingTop: Platform.OS === "android" ? ANDROID_STATUS_BAR + 14 : 14,
-    backgroundColor: "#fff",
+    backgroundColor: "#FFF8F0",
     borderBottomWidth: 1,
-    borderBottomColor: "#f3f4f6",
+    borderBottomColor: "#e6a681",
   },
   backBtn: {
     width: 36,
@@ -497,7 +530,7 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#e5e7eb",
+    borderColor: "#e6a681",
   },
   headerTitle: {
     fontSize: 18,
@@ -525,7 +558,7 @@ const s = StyleSheet.create({
     flexDirection: "row",
     backgroundColor: "#fff",
     borderBottomWidth: 1,
-    borderBottomColor: "#f3f4f6",
+    borderBottomColor: "#e6a681",
   },
   statItem: { flex: 1, alignItems: "center", paddingVertical: 9 },
   statBorder: { borderRightWidth: 1, borderRightColor: "#f3f4f6" },
@@ -582,12 +615,12 @@ const s = StyleSheet.create({
 
 const cc = StyleSheet.create({
   card: {
-    backgroundColor: "#fff",
+    backgroundColor: "#fdfafa",
     borderRadius: 14,
     padding: 12,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: "#f3f4f6",
+    borderColor: "#ffc9b8",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.03,
