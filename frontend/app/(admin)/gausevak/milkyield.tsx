@@ -417,25 +417,12 @@ export default function MilkYieldScreen() {
   >("name");
   const [modalCow, setModalCow] = useState<MilkRow | null>(null);
 
-  const fetchAll = useCallback(async () => {
-  try {
-    const [data, cowsList] = await Promise.all([
-      api.getMilkDashboard(todayStr()),
-      api.getCows(),
-    ]);
-
-    // Sirf mature cow ke ids
-    const matureCowIds = new Set(
-      cowsList
-        .filter((c: any) => c.type === "mature")
-        .map((c: any) => c.id)
-    );
-
-    setSummary(data.summary);
-    setMilkRows(
-      data.cows
-        .filter((c: any) => matureCowIds.has(c.cow_id)) // ← bull & calf filter out
-        .map((c: any) => ({
+   const fetchAll = useCallback(async () => {
+    try {
+      const data = await api.getMilkDashboard(todayStr());
+      setSummary(data.summary);
+      setMilkRows(
+        data.cows.map((c: any) => ({
           id: c.cow_id,
           srNo: c.cow_tag || c.cow_id,
           name: c.cow_name || "Unknown",
@@ -446,14 +433,14 @@ export default function MilkYieldScreen() {
           dailyCapacity: c.daily_capacity_liters ?? 0,
           peak: c.peak ?? null,
         })),
-    );
-  } catch (e) {
-    console.log("milk fetch error:", e);
-  } finally {
-    setLoading(false);
-    setRefreshing(false);
-  }
-}, []);
+      );
+    } catch (e) {
+      console.log("milk fetch error:", e);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
 
   useEffect(() => {
     fetchAll();
