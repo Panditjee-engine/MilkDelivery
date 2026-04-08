@@ -10,6 +10,7 @@ import {
   UIManager,
   Platform,
 } from "react-native";
+import { useIsFocused } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../../src/services/api";
@@ -84,6 +85,7 @@ export default function AdminOrdersScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<"ALL" | "PENDING" | "DELIVERED">("ALL");
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const isFocused = useIsFocused();
 
   const fetchOrders = async () => {
     try {
@@ -103,9 +105,16 @@ export default function AdminOrdersScreen() {
     }
   };
 
-  useEffect(() => {
+useEffect(() => {
+  if (!isFocused) return;
+
+  fetchOrders();
+  const interval = setInterval(() => {
     fetchOrders();
-  }, [filter]);
+  }, 2000);
+
+  return () => clearInterval(interval);
+}, [filter, isFocused]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);

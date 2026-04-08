@@ -26,7 +26,7 @@ import { api } from "../../src/services/api";
 type LoginMethod = "email" | "phone";
 type ToastType = "error" | "success" | "warn";
 
-// ── Toast ──────────────────────────────────────────────────────────────────────
+// ── Toast 
 function Toast({
   message,
   type,
@@ -125,7 +125,7 @@ const ts = StyleSheet.create({
   },
 });
 
-// ── Wrong Password Modal ───────────────────────────────────────────────────────
+// ── Wrong Password Modal 
 function WrongPasswordModal({
   visible,
   email,
@@ -348,7 +348,7 @@ const wm = StyleSheet.create({
   dismissText: { fontSize: 14, color: "#9ca3af", fontWeight: "600" },
 });
 
-// ── Forgot Password Modal ──────────────────────────────────────────────────────
+// ── Forgot Password Modal 
 type ForgotStep = "email" | "code" | "newPassword" | "done";
 
 function ForgotPasswordModal({
@@ -370,7 +370,7 @@ function ForgotPasswordModal({
   const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [verificationCode, setVerificationCode] = useState(""); // FIX: replaces devCode
+  const [verificationCode, setVerificationCode] = useState("");
 
   const scaleAnim = useRef(new Animated.Value(0.88)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
@@ -427,7 +427,6 @@ function ForgotPasswordModal({
     setLoading(true);
     try {
       const res = await api.forgotPassword(fpEmail.trim().toLowerCase());
-      // FIX: store as verificationCode to display to user
       if (res.dev_code) setVerificationCode(res.dev_code);
       animateStep();
       setStep("code");
@@ -567,7 +566,6 @@ function ForgotPasswordModal({
           >
             <Text style={fm.subtitle}>{stepConfig.subtitle}</Text>
 
-            {/* ── Step: Email ── */}
             {step === "email" && (
               <>
                 <View style={fm.inputWrap}>
@@ -605,10 +603,8 @@ function ForgotPasswordModal({
               </>
             )}
 
-            {/* ── Step: Code ── */}
             {step === "code" && (
               <>
-                {/* FIX: Show verification code in a clean display box instead of dev pill */}
                 {!!verificationCode && (
                   <View style={fm.codeDisplay}>
                     <View style={fm.codeDisplayHeader}>
@@ -658,7 +654,6 @@ function ForgotPasswordModal({
               </>
             )}
 
-            {/* ── Step: New Password ── */}
             {step === "newPassword" && (
               <>
                 <View style={fm.inputWrap}>
@@ -731,7 +726,6 @@ function ForgotPasswordModal({
               </>
             )}
 
-            {/* ── Step: Done ── */}
             {step === "done" && (
               <TouchableOpacity
                 style={[fm.btn, { backgroundColor: Colors.primary }]}
@@ -840,7 +834,6 @@ const fm = StyleSheet.create({
   btnText: { fontSize: 15, fontWeight: "800", color: "#fff" },
   resend: { alignSelf: "center", marginTop: 14 },
   resendText: { fontSize: 13, color: Colors.primary, fontWeight: "600" },
-  // FIX: New verification code display styles (replaces devPill)
   codeDisplay: {
     width: "100%",
     backgroundColor: "#f5f3ff",
@@ -872,16 +865,12 @@ const fm = StyleSheet.create({
     letterSpacing: 8,
     marginBottom: 4,
   },
-  codeDisplayHint: {
-    fontSize: 11,
-    color: "#9ca3af",
-    fontWeight: "500",
-  },
+  codeDisplayHint: { fontSize: 11, color: "#9ca3af", fontWeight: "500" },
   cancel: { marginTop: 18 },
   cancelText: { fontSize: 14, color: "#9ca3af", fontWeight: "600" },
 });
 
-// ── Main Login Screen ──────────────────────────────────────────────────────────
+// ── Main Login Screen 
 export default function LoginScreen() {
   const [loginMethod, setLoginMethod] = useState<LoginMethod>("email");
   const [email, setEmail] = useState("");
@@ -908,9 +897,23 @@ export default function LoginScreen() {
   const { login, workerLogin } = useAuth();
   const router = useRouter();
 
+  // ── Helper: detect wrong-password errors 
+  const isWrongPassword = (err: any): boolean => {
+    const msg = (err?.message || "").toLowerCase();
+    return (
+      msg.includes("invalid") ||
+      msg.includes("password") ||
+      msg.includes("incorrect") ||
+      msg.includes("unauthorized") ||
+      msg.includes("401")
+    );
+  };
+
+  // ── FIXED handleLogin 
   const handleLogin = async () => {
     const pwd = loginMethod === "email" ? password : phonePassword;
 
+    // Validation
     if (loginMethod === "email") {
       if (!email.trim()) {
         showToast("Please enter your email address", "error");
@@ -937,52 +940,47 @@ export default function LoginScreen() {
     }
 
     setLoading(true);
+
+    let userLoginError: any = null;
+    let workerLoginError: any = null;
+
     try {
+      // ── Step 1: Try USER login 
       try {
-        if (loginMethod === "email") {
-          await login(email.trim(), pwd);
-        } else {
-          await login(`+91${phone}`, pwd);
-        }
+        const identifier =
+          loginMethod === "email" ? email.trim() : `+91${phone}`;
+        await login(identifier, pwd);
         showToast("Welcome back! ", "success");
         setTimeout(() => router.replace("/"), 800);
-        return;
+        return; 
       } catch (err: any) {
-        const errMsg = (err?.message || "").toLowerCase();
-        if (
-          errMsg.includes("invalid") ||
-          errMsg.includes("password") ||
-          errMsg.includes("incorrect") ||
-          errMsg.includes("unauthorized")
-        ) {
-          if (loginMethod === "email") {
-            setPrefillEmail(email.trim());
-            setWrongPasswordModal(true);
-            return;
-          }
-        }
+        userLoginError = err; 
       }
 
+      // ── Step 2: Try WORKER login (email only) 
       if (loginMethod === "email") {
         try {
           await workerLogin(email.trim(), pwd);
-          showToast("Welcome, worker! 🐄", "success");
+          showToast("Welcome, worker ", "success");
           setTimeout(() => router.replace("/(worker)" as any), 800);
-          return;
-        } catch (workerErr: any) {
-          const workerMsg = (workerErr?.message || "").toLowerCase();
-          if (
-            workerMsg.includes("invalid") ||
-            workerMsg.includes("password") ||
-            workerMsg.includes("incorrect")
-          ) {
-            setPrefillEmail(email.trim());
-            setWrongPasswordModal(true);
-            return;
-          }
+          return; // success — exit
+        } catch (err: any) {
+          workerLoginError = err; // store error, do NOT return
         }
       }
 
+      // ── Step 3: Both failed — decide what to show ──────────────────────
+      // Show wrong-password modal if either attempt got a credentials error
+      if (
+        loginMethod === "email" &&
+        (isWrongPassword(userLoginError) || isWrongPassword(workerLoginError))
+      ) {
+        setPrefillEmail(email.trim());
+        setWrongPasswordModal(true);
+        return;
+      }
+
+      // For phone or any other error — generic toast
       showToast(
         loginMethod === "phone"
           ? "Invalid phone number or password"
@@ -990,12 +988,7 @@ export default function LoginScreen() {
         "error",
       );
     } catch {
-      showToast(
-        loginMethod === "phone"
-          ? "Invalid phone number or password"
-          : "Invalid email or password",
-        "error",
-      );
+      showToast("Something went wrong. Please try again.", "error");
     } finally {
       setLoading(false);
     }
@@ -1007,16 +1000,12 @@ export default function LoginScreen() {
   };
 
   return (
-    // FIX: edges prop controls safe area insets; "top" excluded so StatusBar area uses white bg
     <SafeAreaView style={styles.container} edges={["bottom", "left", "right"]}>
-      {/* FIX: White status bar that doesn't blend into the grey screen */}
       <StatusBar
         barStyle="dark-content"
         backgroundColor="#FFFFFF"
         translucent={false}
       />
-
-      {/* FIX: White bar that sits behind the status bar on Android */}
       <View style={styles.statusBarPatch} />
 
       <Toast
@@ -1167,12 +1156,11 @@ export default function LoginScreen() {
                   <Text style={styles.inputLabel}>Mobile Number</Text>
                   <View style={styles.phoneRow}>
                     <View style={styles.countryCode}>
-                      <Text style={styles.countryFlag}>🇮🇳</Text>
                       <Text style={styles.countryCodeText}>+91</Text>
                     </View>
                     <TextInput
                       style={styles.phoneInput}
-                      placeholder="9999999999"
+                      placeholder="mobile number"
                       value={phone}
                       onChangeText={(val) =>
                         setPhone(val.replace(/\D/g, "").slice(0, 10))
@@ -1228,7 +1216,6 @@ export default function LoginScreen() {
                   setForgotPasswordModal(true);
                 }}
               >
-                <Ionicons name="key-outline" size={14} color={Colors.primary} />
                 <Text style={styles.forgotLinkText}>Forgot password?</Text>
               </TouchableOpacity>
             </View>
@@ -1254,7 +1241,6 @@ export default function LoginScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F4F6FA" },
-  // FIX: White patch behind the status bar so it doesn't grey-blend
   statusBarPatch: {
     backgroundColor: "#FFFFFF",
     height: Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0,

@@ -12,7 +12,7 @@ import Button from "../../src/components/Button";
 import LoadingScreen from "../../src/components/LoadingScreen";
 import { useAuth } from "../../src/contexts/AuthContext";
 
-// ── Warm Color Palette ──────────────────────────
+// ── Warm Color Palette 
 const C = {
   primary:    '#FF9675',
   secondary:  '#FF9675',
@@ -27,7 +27,7 @@ const C = {
   textLight:  '#C9A882',
 };
 
-// ── Custom Alert ────────────────────────────────
+// ── Custom Alert
 type AlertButton = {
   text: string;
   style?: 'default' | 'cancel' | 'destructive';
@@ -99,7 +99,7 @@ function CustomAlert({ config, onDismiss }: { config: AlertConfig; onDismiss: ()
   );
 }
 
-// ── Alert hook ──────────────────────────────────
+// ── Alert hook 
 function useCustomAlert() {
   const [alertConfig, setAlertConfig] = useState<AlertConfig>({
     visible: false, title: '', buttons: [],
@@ -119,7 +119,7 @@ function useCustomAlert() {
   return { alertConfig, showAlert, dismissAlert };
 }
 
-// ── Types ───────────────────────────────────────
+// ── Types 
 type Product = {
   id?: string;
   name: string;
@@ -471,7 +471,7 @@ export default function InventoryScreen() {
   );
 }
 
-// ── Alert Styles ────────────────────────────────
+// ── Alert Styles 
 const alertStyles = StyleSheet.create({
   overlay: {
     flex: 1,
@@ -550,7 +550,7 @@ const alertStyles = StyleSheet.create({
   },
 });
 
-// ── Screen Styles ───────────────────────────────
+// ── Screen Styles 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
 

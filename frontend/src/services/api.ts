@@ -1025,6 +1025,19 @@ async getWithdrawalHistory() {
     };
   }>>('/wallet/withdrawals');
 }
+
+async createOrder(data: {
+  product_id: string;
+  quantity: number;
+  pattern: string;
+  custom_days: number[] | null;
+  delivery_date: string;
+}) {
+  return this.request<any>("/orders", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
 //------------------------------------------------------------//
 
   logout = async () => {
