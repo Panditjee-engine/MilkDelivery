@@ -14,6 +14,7 @@ import {
   UIManager,
   Easing,
 } from "react-native";
+import { useIsFocused } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../../src/services/api";
@@ -1203,6 +1204,7 @@ export default function SubscriptionsScreen() {
   const [confirmVisible, setConfirmVisible] = useState(false);
   const [successVisible, setSuccessVisible] = useState(false);
   const [pendingSubId, setPendingSubId] = useState<string | null>(null);
+  const isFocused = useIsFocused();
 
   const scrollRef = useRef<ScrollView>(null);
 
@@ -1210,21 +1212,34 @@ export default function SubscriptionsScreen() {
   const headerAnim = useRef(new Animated.Value(-24)).current;
   const headerOpacity = useRef(new Animated.Value(0)).current;
 
-  useEffect(() => {
-    Animated.parallel([
-      Animated.spring(headerAnim, {
-        toValue: 0,
-        useNativeDriver: true,
-        damping: 14,
-        stiffness: 160,
-      }),
-      Animated.timing(headerOpacity, {
-        toValue: 1,
-        duration: 350,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, []);
+// Animation — runs once on mount (keep as-is)
+useEffect(() => {
+  Animated.parallel([
+    Animated.spring(headerAnim, {
+      toValue: 0,
+      useNativeDriver: true,
+      damping: 14,
+      stiffness: 160,
+    }),
+    Animated.timing(headerOpacity, {
+      toValue: 1,
+      duration: 350,
+      useNativeDriver: true,
+    }),
+  ]).start();
+}, []);
+
+// Auto-refresh — separate effect
+useEffect(() => {
+  if (!isFocused) return;
+
+  fetchData();
+  const interval = setInterval(() => {
+    fetchData();
+  }, 2000);
+
+  return () => clearInterval(interval);
+}, [isFocused]);
 
   const fetchData = async () => {
     try {

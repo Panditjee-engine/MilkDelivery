@@ -1,4 +1,3 @@
-
 import {
   View,
   Text,
@@ -6,9 +5,10 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
-  Alert,
   TextInput,
   RefreshControl,
+  Modal,
+  Animated,
 } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -16,7 +16,6 @@ import { useAuth } from "../../src/contexts/AuthContext";
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useLang } from "../../src/contexts/LanguageContext";
 import { api } from "../../src/services/api";
-
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -58,6 +57,168 @@ interface MilkEntry {
   date: string;
   worker_name: string;
 }
+
+// ─── Modern Alert ─────────────────────────────────────────────────────────────
+
+interface AlertConfig {
+  visible: boolean;
+  title: string;
+  message: string;
+  icon?: string;
+  iconColor?: string;
+  iconBg?: string;
+}
+
+function ModernAlert({
+  config,
+  onClose,
+}: {
+  config: AlertConfig;
+  onClose: () => void;
+}) {
+  const scaleAnim = useRef(new Animated.Value(0.85)).current;
+  const opacityAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (config.visible) {
+      scaleAnim.setValue(0.85);
+      opacityAnim.setValue(0);
+      Animated.parallel([
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          useNativeDriver: true,
+          damping: 15,
+          stiffness: 200,
+        }),
+        Animated.timing(opacityAnim, {
+          toValue: 1,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [config.visible]);
+
+  if (!config.visible) return null;
+
+  return (
+    <Modal visible={config.visible} transparent animationType="none">
+      <View style={al.overlay}>
+        <Animated.View
+          style={[
+            al.card,
+            { opacity: opacityAnim, transform: [{ scale: scaleAnim }] },
+          ]}
+        >
+          {/* Icon */}
+          <View
+            style={[
+              al.iconWrap,
+              { backgroundColor: config.iconBg ?? "#fee2e2" },
+            ]}
+          >
+            <Ionicons
+              name={(config.icon ?? "alert-circle-outline") as any}
+              size={28}
+              color={config.iconColor ?? "#ef4444"}
+            />
+          </View>
+
+          <Text style={al.title}>{config.title}</Text>
+          <Text style={al.message}>{config.message}</Text>
+
+          <TouchableOpacity
+            style={al.btn}
+            onPress={onClose}
+            activeOpacity={0.85}
+          >
+            <Text style={al.btnText}>OK, Got it</Text>
+          </TouchableOpacity>
+        </Animated.View>
+      </View>
+    </Modal>
+  );
+}
+
+function useModernAlert() {
+  const [config, setConfig] = useState<AlertConfig>({
+    visible: false,
+    title: "",
+    message: "",
+  });
+
+  const show = (
+    title: string,
+    message: string,
+    icon?: string,
+    iconColor?: string,
+    iconBg?: string,
+  ) => setConfig({ visible: true, title, message, icon, iconColor, iconBg });
+
+  const hide = () => setConfig((p) => ({ ...p, visible: false }));
+
+  return { config, show, hide };
+}
+
+const al = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 32,
+  },
+  card: {
+    backgroundColor: "#fff",
+    borderRadius: 24,
+    paddingHorizontal: 24,
+    paddingTop: 28,
+    paddingBottom: 22,
+    width: "100%",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 16,
+  },
+  iconWrap: {
+    width: 62,
+    height: 62,
+    borderRadius: 20,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#111827",
+    textAlign: "center",
+    marginBottom: 8,
+    letterSpacing: -0.3,
+  },
+  message: {
+    fontSize: 13,
+    color: "#6b7280",
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: 22,
+    fontWeight: "500",
+  },
+  btn: {
+    width: "100%",
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: "#111827",
+    alignItems: "center",
+  },
+  btnText: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#fff",
+  },
+});
 
 // ─── Qty Input ────────────────────────────────────────────────────────────────
 
@@ -132,8 +293,17 @@ function MilkScreenInner({
   const [refreshing, setRefreshing] = useState(false);
 
   const [cowData, setCowData] = useState<
-    Record<string, { qty: number; saving: boolean; saved: boolean; savedShift?: string }>
+    Record<
+      string,
+      { qty: number; saving: boolean; saved: boolean; savedShift?: string }
+    >
   >({});
+
+  const {
+    config: alertConfig,
+    show: showAlert,
+    hide: hideAlert,
+  } = useModernAlert();
 
   const get = (id: string) =>
     cowData[id] ?? { qty: 0, saving: false, saved: false };
@@ -215,8 +385,15 @@ function MilkScreenInner({
       setTodayEntries((prev) => [...prev, entry]);
       patch(cow.id, { saved: true, qty: 0, saving: false, savedShift: shift });
     } catch (err: any) {
-      Alert.alert(t("errorTitle"), err?.message ?? t("couldNotSave"));
       patch(cow.id, { saving: false });
+      showAlert(
+        "Could Not Save",
+        err?.message ??
+          "Something went wrong while saving the milk entry. Please try again.",
+        "water-outline",
+        "#ef4444",
+        "#fee2e2",
+      );
     }
   };
 
@@ -239,283 +416,313 @@ function MilkScreenInner({
   }
 
   return (
-    <ScrollView
-      style={s.container}
-      contentContainerStyle={s.content}
-      showsVerticalScrollIndicator={false}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          tintColor="#16a34a"
-        />
-      }
-    >
+    <>
+      <ModernAlert config={alertConfig} onClose={hideAlert} />
 
-      {/* ── Shift Banner ── */}
-      <LinearGradient
-        colors={isMorning ? ["#fffbeb", "#fef3c7"] : ["#eef2ff", "#e0e7ff"]}
-        style={[
-          s.shiftBanner,
-          { borderColor: isMorning ? "#f59e0b40" : "#6366f140" },
-        ]}
+      <ScrollView
+        style={s.container}
+        contentContainerStyle={s.content}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#16a34a"
+          />
+        }
       >
-        <View style={s.shiftLeft}>
-          <View style={[s.shiftIconBox, { backgroundColor: accentLight }]}>
-            <Ionicons
-              name={isMorning ? "sunny" : "moon"}
-              size={22}
-              color={accentColor}
-            />
-          </View>
-          <View>
-            <Text style={[s.shiftTitle, { color: accentColor }]}>
-              {isMorning ? t("morningShift") : t("eveningShift")}
-            </Text>
-            <Text style={s.shiftDate}>{todayStr()}</Text>
-          </View>
-        </View>
-        <View style={s.shiftRight}>
-          <Text style={[s.totalNum, { color: accentColor }]}>
-            {totalMilk.toFixed(1)}
-            <Text style={s.totalUnit}> L</Text>
-          </Text>
-          <Text style={s.totalLbl}>{t("todayTotal")}</Text>
-        </View>
-      </LinearGradient>
-
-      {/* ── Shift Status Strip ── */}
-      {shiftStatus && (
-        <View style={s.statusStrip}>
-          {/* Morning chip */}
-          <View
-            style={[
-              s.statusChip,
-              {
-                backgroundColor: shiftStatus.morning_done ? "#f0fdf4" : "#f9fafb",
-                borderColor: shiftStatus.morning_done ? "#16a34a40" : "#e5e7eb",
-              },
-            ]}
-          >
-            <Ionicons
-              name={shiftStatus.morning_done ? "checkmark-circle" : "ellipse-outline"}
-              size={14}
-              color={shiftStatus.morning_done ? "#16a34a" : "#9ca3af"}
-            />
-            <Text
-              style={[
-                s.statusText,
-                { color: shiftStatus.morning_done ? "#16a34a" : "#9ca3af" },
-              ]}
-            >
-              {t("morning")}{" "}
-              {shiftStatus.morning_done ? `✓ ${shiftStatus.morning_count}` : "—"}
-            </Text>
-          </View>
-
-          {/* Evening chip */}
-          <View
-            style={[
-              s.statusChip,
-              {
-                backgroundColor: shiftStatus.evening_done ? "#eef2ff" : "#f9fafb",
-                borderColor: shiftStatus.evening_done ? "#6366f140" : "#e5e7eb",
-              },
-            ]}
-          >
-            <Ionicons
-              name={shiftStatus.evening_done ? "checkmark-circle" : "ellipse-outline"}
-              size={14}
-              color={shiftStatus.evening_done ? "#6366f1" : "#9ca3af"}
-            />
-            <Text
-              style={[
-                s.statusText,
-                { color: shiftStatus.evening_done ? "#6366f1" : "#9ca3af" },
-              ]}
-            >
-              {t("evening")}{" "}
-              {shiftStatus.evening_done ? `✓ ${shiftStatus.evening_count}` : "—"}
-            </Text>
-          </View>
-        </View>
-      )}
-
-      {/* ── Progress Bar ── */}
-      <View style={s.progressRow}>
-        <Text style={s.progressTxt}>
-          {doneCount}/{cows.length} {t("cowsLogged")}
-        </Text>
-        <Text style={s.progressPct}>
-          {cows.length > 0 ? Math.round((doneCount / cows.length) * 100) : 0}%
-        </Text>
-      </View>
-      <View style={s.progressBg}>
-        <View
+        {/* ── Shift Banner ── */}
+        <LinearGradient
+          colors={isMorning ? ["#fffbeb", "#fef3c7"] : ["#eef2ff", "#e0e7ff"]}
           style={[
-            s.progressFill,
-            {
-              width: `${cows.length > 0 ? (doneCount / cows.length) * 100 : 0}%` as any,
-              backgroundColor: accentColor,
-            },
-          ]}
-        />
-      </View>
-
-      {/* ── All Done Banner ── */}
-      {doneCount === cows.length && cows.length > 0 && (
-        <View
-          style={[
-            s.allDoneBanner,
-            { backgroundColor: accentBg, borderColor: accentColor + "40" },
+            s.shiftBanner,
+            { borderColor: isMorning ? "#f59e0b40" : "#6366f140" },
           ]}
         >
-          <Text style={s.allDoneEmoji}>{isMorning ? "☀️" : "🌙"}</Text>
-          <View style={{ flex: 1 }}>
-            <Text style={[s.allDoneTitle, { color: accentColor }]}>
-              {isMorning ? t("morningComplete") : t("eveningComplete")}
-            </Text>
-            <Text style={s.allDoneSub}>
-              {isMorning ? t("morningDoneSub") : t("eveningDoneSub")}
-            </Text>
+          <View style={s.shiftLeft}>
+            <View style={[s.shiftIconBox, { backgroundColor: accentLight }]}>
+              <Ionicons
+                name={isMorning ? "sunny" : "moon"}
+                size={22}
+                color={accentColor}
+              />
+            </View>
+            <View>
+              <Text style={[s.shiftTitle, { color: accentColor }]}>
+                {isMorning ? t("morningShift") : t("eveningShift")}
+              </Text>
+              <Text style={s.shiftDate}>{todayStr()}</Text>
+            </View>
           </View>
-        </View>
-      )}
+          <View style={s.shiftRight}>
+            <Text style={[s.totalNum, { color: accentColor }]}>
+              {totalMilk.toFixed(1)}
+              <Text style={s.totalUnit}> L</Text>
+            </Text>
+            <Text style={s.totalLbl}>{t("todayTotal")}</Text>
+          </View>
+        </LinearGradient>
 
-      {/* ── Empty State ── */}
-      {cows.length === 0 && !loading && (
-        <View style={s.emptyWrap}>
-          <MaterialCommunityIcons name="cow-off" size={48} color="#d1d5db" />
-          <Text style={s.emptyTitle}>{t("noCowsTitle")}</Text>
-          <Text style={s.emptySub}>{t("noCowsSub")}</Text>
-        </View>
-      )}
-
-      {/* ── Cow Cards ── */}
-      {cows.map((cow) => {
-        const d = get(cow.id);
-
-        return (
-          <View
-            key={cow.id}
-            style={[
-              s.card,
-              d.saved && { borderColor: "#16a34a40", backgroundColor: "#f0fdf4" },
-            ]}
-          >
-            <View style={s.cardTop}>
-              <View
+        {/* ── Shift Status Strip ── */}
+        {shiftStatus && (
+          <View style={s.statusStrip}>
+            <View
+              style={[
+                s.statusChip,
+                {
+                  backgroundColor: shiftStatus.morning_done
+                    ? "#f0fdf4"
+                    : "#f9fafb",
+                  borderColor: shiftStatus.morning_done
+                    ? "#16a34a40"
+                    : "#e5e7eb",
+                },
+              ]}
+            >
+              <Ionicons
+                name={
+                  shiftStatus.morning_done
+                    ? "checkmark-circle"
+                    : "ellipse-outline"
+                }
+                size={14}
+                color={shiftStatus.morning_done ? "#16a34a" : "#9ca3af"}
+              />
+              <Text
                 style={[
-                  s.cowAvatar,
-                  { backgroundColor: d.saved ? "#dcfce7" : "#f3f4f6" },
+                  s.statusText,
+                  { color: shiftStatus.morning_done ? "#16a34a" : "#9ca3af" },
                 ]}
               >
-                <MaterialCommunityIcons
-                  name="cow"
-                  size={22}
-                  color={d.saved ? "#16a34a" : "#6b7280"}
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={s.cowName}>{cow.name}</Text>
-                <Text style={s.cowTag}>
-                  #{cow.tag}
-                  {cow.breed ? ` · ${cow.breed}` : ""}
-                </Text>
+                {t("morning")}{" "}
+                {shiftStatus.morning_done
+                  ? `✓ ${shiftStatus.morning_count}`
+                  : "—"}
+              </Text>
+            </View>
+
+            <View
+              style={[
+                s.statusChip,
+                {
+                  backgroundColor: shiftStatus.evening_done
+                    ? "#eef2ff"
+                    : "#f9fafb",
+                  borderColor: shiftStatus.evening_done
+                    ? "#6366f140"
+                    : "#e5e7eb",
+                },
+              ]}
+            >
+              <Ionicons
+                name={
+                  shiftStatus.evening_done
+                    ? "checkmark-circle"
+                    : "ellipse-outline"
+                }
+                size={14}
+                color={shiftStatus.evening_done ? "#6366f1" : "#9ca3af"}
+              />
+              <Text
+                style={[
+                  s.statusText,
+                  { color: shiftStatus.evening_done ? "#6366f1" : "#9ca3af" },
+                ]}
+              >
+                {t("evening")}{" "}
+                {shiftStatus.evening_done
+                  ? `✓ ${shiftStatus.evening_count}`
+                  : "—"}
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* ── Progress Bar ── */}
+        <View style={s.progressRow}>
+          <Text style={s.progressTxt}>
+            {doneCount}/{cows.length} {t("cowsLogged")}
+          </Text>
+          <Text style={s.progressPct}>
+            {cows.length > 0 ? Math.round((doneCount / cows.length) * 100) : 0}%
+          </Text>
+        </View>
+        <View style={s.progressBg}>
+          <View
+            style={[
+              s.progressFill,
+              {
+                width:
+                  `${cows.length > 0 ? (doneCount / cows.length) * 100 : 0}%` as any,
+                backgroundColor: accentColor,
+              },
+            ]}
+          />
+        </View>
+
+        {/* ── All Done Banner ── */}
+        {doneCount === cows.length && cows.length > 0 && (
+          <View
+            style={[
+              s.allDoneBanner,
+              { backgroundColor: accentBg, borderColor: accentColor + "40" },
+            ]}
+          >
+            <Text style={s.allDoneEmoji}>{isMorning ? "☀️" : "🌙"}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={[s.allDoneTitle, { color: accentColor }]}>
+                {isMorning ? t("morningComplete") : t("eveningComplete")}
+              </Text>
+              <Text style={s.allDoneSub}>
+                {isMorning ? t("morningDoneSub") : t("eveningDoneSub")}
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* ── Empty State ── */}
+        {cows.length === 0 && !loading && (
+          <View style={s.emptyWrap}>
+            <MaterialCommunityIcons name="cow-off" size={48} color="#d1d5db" />
+            <Text style={s.emptyTitle}>{t("noCowsTitle")}</Text>
+            <Text style={s.emptySub}>{t("noCowsSub")}</Text>
+          </View>
+        )}
+
+        {/* ── Cow Cards ── */}
+        {cows.map((cow) => {
+          const d = get(cow.id);
+
+          return (
+            <View
+              key={cow.id}
+              style={[
+                s.card,
+                d.saved && {
+                  borderColor: "#16a34a40",
+                  backgroundColor: "#f0fdf4",
+                },
+              ]}
+            >
+              <View style={s.cardTop}>
+                <View
+                  style={[
+                    s.cowAvatar,
+                    { backgroundColor: d.saved ? "#dcfce7" : "#f3f4f6" },
+                  ]}
+                >
+                  <MaterialCommunityIcons
+                    name="cow"
+                    size={22}
+                    color={d.saved ? "#16a34a" : "#6b7280"}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.cowName}>{cow.name}</Text>
+                  <Text style={s.cowTag}>
+                    #{cow.tag}
+                    {cow.breed ? ` · ${cow.breed}` : ""}
+                  </Text>
+                </View>
+
+                {d.saved && (
+                  <View style={s.savedBadge}>
+                    <Ionicons
+                      name="checkmark-circle"
+                      size={16}
+                      color="#16a34a"
+                    />
+                    <Text style={s.savedBadgeText}>{t("done")}</Text>
+                  </View>
+                )}
               </View>
 
-              {d.saved && (
-                <View style={s.savedBadge}>
-                  <Ionicons name="checkmark-circle" size={16} color="#16a34a" />
-                  <Text style={s.savedBadgeText}>{t("done")}</Text>
+              {/* Saved quantity row */}
+              {d.saved &&
+                (() => {
+                  const entry = todayEntries.find(
+                    (e) => e.cow_id === cow.id && e.shift === shift,
+                  );
+                  return entry ? (
+                    <View style={s.savedRow}>
+                      <Ionicons name="water" size={13} color="#16a34a" />
+                      <Text style={s.savedQtyText}>
+                        {entry.quantity.toFixed(1)} {t("recordedThisShift")}
+                      </Text>
+                    </View>
+                  ) : null;
+                })()}
+
+              {/* Input controls */}
+              {!d.saved && (
+                <View style={s.controls}>
+                  <TouchableOpacity
+                    style={s.stepBtn}
+                    onPress={() =>
+                      patch(cow.id, {
+                        qty: Math.max(0, Math.round((d.qty - 0.5) * 10) / 10),
+                      })
+                    }
+                    disabled={d.saving}
+                  >
+                    <Ionicons name="remove" size={20} color="#374151" />
+                  </TouchableOpacity>
+
+                  <QtyInput
+                    qty={d.qty}
+                    disabled={d.saving}
+                    onChange={(v) => patch(cow.id, { qty: v })}
+                  />
+
+                  <TouchableOpacity
+                    style={s.stepBtn}
+                    onPress={() =>
+                      patch(cow.id, {
+                        qty: Math.round((d.qty + 0.5) * 10) / 10,
+                      })
+                    }
+                    disabled={d.saving}
+                  >
+                    <Ionicons name="add" size={20} color="#374151" />
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      s.saveBtn,
+                      {
+                        backgroundColor: d.qty > 0 ? accentColor : "#f3f4f6",
+                        borderColor: d.qty > 0 ? accentColor : "#e5e7eb",
+                      },
+                    ]}
+                    onPress={() => handleSave(cow)}
+                    disabled={d.saving || d.qty === 0}
+                  >
+                    {d.saving ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <Text
+                        style={[
+                          s.saveBtnText,
+                          { color: d.qty > 0 ? "#fff" : "#9ca3af" },
+                        ]}
+                      >
+                        {t("save")}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
                 </View>
               )}
             </View>
+          );
+        })}
 
-            {/* Saved quantity row */}
-            {d.saved &&
-              (() => {
-                const entry = todayEntries.find(
-                  (e) => e.cow_id === cow.id && e.shift === shift,
-                );
-                return entry ? (
-                  <View style={s.savedRow}>
-                    <Ionicons name="water" size={13} color="#16a34a" />
-                    <Text style={s.savedQtyText}>
-                      {entry.quantity.toFixed(1)} {t("recordedThisShift")}
-                    </Text>
-                  </View>
-                ) : null;
-              })()}
-
-            {/* Input controls */}
-            {!d.saved && (
-              <View style={s.controls}>
-                <TouchableOpacity
-                  style={s.stepBtn}
-                  onPress={() =>
-                    patch(cow.id, {
-                      qty: Math.max(0, Math.round((d.qty - 0.5) * 10) / 10),
-                    })
-                  }
-                  disabled={d.saving}
-                >
-                  <Ionicons name="remove" size={20} color="#374151" />
-                </TouchableOpacity>
-
-                <QtyInput
-                  qty={d.qty}
-                  disabled={d.saving}
-                  onChange={(v) => patch(cow.id, { qty: v })}
-                />
-
-                <TouchableOpacity
-                  style={s.stepBtn}
-                  onPress={() =>
-                    patch(cow.id, { qty: Math.round((d.qty + 0.5) * 10) / 10 })
-                  }
-                  disabled={d.saving}
-                >
-                  <Ionicons name="add" size={20} color="#374151" />
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[
-                    s.saveBtn,
-                    {
-                      backgroundColor: d.qty > 0 ? accentColor : "#f3f4f6",
-                      borderColor: d.qty > 0 ? accentColor : "#e5e7eb",
-                    },
-                  ]}
-                  onPress={() => handleSave(cow)}
-                  disabled={d.saving || d.qty === 0}
-                >
-                  {d.saving ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    <Text
-                      style={[
-                        s.saveBtnText,
-                        { color: d.qty > 0 ? "#fff" : "#9ca3af" },
-                      ]}
-                    >
-                      {t("save")}
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-        );
-      })}
-
-      <View style={{ height: 40 }} />
-    </ScrollView>
+        <View style={{ height: 40 }} />
+      </ScrollView>
+    </>
   );
 }
 
-// ─── Export wrapped in provider (standalone use) ──────────────────────────────
-// If this screen is always opened from index.tsx which already has LanguageProvider,
+// ─── Export ───────────────────────────────────────────────────────────────────
 
 export default function MilkScreen(props: {
   token?: string;

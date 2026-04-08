@@ -30,6 +30,9 @@ interface MilkRow {
   eveningWorker: string | null;
   dailyCapacity: number;
   peak: { date: string; total: number } | null;
+  // ✅ FIX 1 & 2: track type and milkActive so we can filter them out
+  cowType: string;
+  milkActive: boolean;
 }
 
 interface Summary {
@@ -171,7 +174,6 @@ function CapacityModal({
     currentCapacity > 0 ? currentCapacity.toString() : "",
   );
 
-  // Sync input when modal opens with current capacity
   useEffect(() => {
     setVal(currentCapacity > 0 ? currentCapacity.toString() : "");
   }, [currentCapacity, visible]);
@@ -236,7 +238,7 @@ function CapacityModal({
   );
 }
 
-// ─── MilkCard ─────────────────────────────────────────────────────────────────
+// ─── MilkCard — collapsible ───────────────────────────────────────────────────
 function MilkCard({
   item,
   index,
@@ -248,18 +250,20 @@ function MilkCard({
 }) {
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(16)).current;
+  // ✅ NEW: collapsed by default, tap to expand for full details
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     Animated.parallel([
       Animated.timing(opacity, {
         toValue: 1,
         duration: 300,
-        delay: index * 60,
+        delay: index * 50,
         useNativeDriver: true,
       }),
       Animated.spring(translateY, {
         toValue: 0,
-        delay: index * 60,
+        delay: index * 50,
         tension: 70,
         friction: 12,
         useNativeDriver: true,
@@ -270,8 +274,6 @@ function MilkCard({
   const total = item.morningLiters + item.eveningLiters;
   const isHighYield = total >= 15;
   const isNil = total === 0;
-
-  // Read directly from item — updated optimistically on save
   const capacity = item.dailyCapacity ?? 0;
   const peak = item.peak ?? null;
 
@@ -281,63 +283,117 @@ function MilkCard({
 
   return (
     <Animated.View style={[s.card, { opacity, transform: [{ translateY }] }]}>
-      <View style={s.cardHeader}>
+      {/* ── Collapsed row — always visible ── */}
+      <TouchableOpacity
+        onPress={() => setExpanded((e) => !e)}
+        activeOpacity={0.8}
+        style={s.cardHeader}
+      >
         <View style={s.avatarWrap}>
           <Text style={{ fontSize: 22 }}>🐄</Text>
         </View>
+
+        {/* Name + Sr */}
         <View style={{ flex: 1, marginLeft: 10 }}>
-          <Text style={s.cowName}>{item.name}</Text>
+          <Text style={s.cowName} numberOfLines={1}>
+            {item.name}
+          </Text>
           <Text style={s.cowSr}>{item.srNo}</Text>
         </View>
-        <View style={{ alignItems: "flex-end", gap: 6 }}>
+
+        {/* Shift mini pills */}
+        <View style={s.miniShifts}>
           <View
             style={[
-              s.totalBadge,
-              { backgroundColor: totalBg, borderColor: totalBorder },
+              s.miniPill,
+              { backgroundColor: "#fffbeb", borderColor: "#fcd34d" },
             ]}
           >
-            <Ionicons name="water" size={12} color={totalColor} />
-            <Text style={[s.totalText, { color: totalColor }]}>
-              {total.toFixed(1)} L
-            </Text>
-            <Text style={[s.totalSub, { color: totalColor + "88" }]}>
-              Today
+            <Ionicons name="sunny" size={10} color="#d97706" />
+            <Text style={[s.miniPillText, { color: "#d97706" }]}>
+              {item.morningLiters.toFixed(1)}L
             </Text>
           </View>
+          <View
+            style={[
+              s.miniPill,
+              { backgroundColor: "#eef2ff", borderColor: "#c7d2fe" },
+            ]}
+          >
+            <Ionicons name="moon" size={10} color="#6366f1" />
+            <Text style={[s.miniPillText, { color: "#6366f1" }]}>
+              {item.eveningLiters.toFixed(1)}L
+            </Text>
+          </View>
+        </View>
 
-          {/* Capacity button — shows current value or "Set cap" */}
+        {/* Total badge */}
+        <View
+          style={[
+            s.totalBadge,
+            {
+              backgroundColor: totalBg,
+              borderColor: totalBorder,
+              marginLeft: 8,
+            },
+          ]}
+        >
+          <Ionicons name="water" size={12} color={totalColor} />
+          <Text style={[s.totalText, { color: totalColor }]}>
+            {total.toFixed(1)} L
+          </Text>
+        </View>
+
+        {/* Expand chevron */}
+        <Ionicons
+          name={expanded ? "chevron-up" : "chevron-down"}
+          size={16}
+          color="#9ca3af"
+          style={{ marginLeft: 6 }}
+        />
+      </TouchableOpacity>
+
+      {/* ── Expanded details ── */}
+      {expanded && (
+        <>
+          <View style={s.divider} />
+
+          {/* Capacity button */}
           <TouchableOpacity
             style={s.capacityBtn}
             onPress={() => onSetCapacity(item)}
           >
             <Ionicons name="settings-outline" size={11} color="#6b7280" />
             <Text style={s.capacityBtnText}>
-              {capacity > 0 ? `${capacity.toFixed(0)}L cap` : "Set cap"}
+              {capacity > 0
+                ? `${capacity.toFixed(0)}L daily cap`
+                : "Set daily capacity"}
             </Text>
           </TouchableOpacity>
-        </View>
-      </View>
 
-      {/* Capacity progress bar — only shown when capacity is set */}
-      {capacity > 0 && <CapacityBar total={total} capacity={capacity} />}
+          {/* Capacity progress bar */}
+          {capacity > 0 && <CapacityBar total={total} capacity={capacity} />}
 
-      {/* Peak badge — only shown when history exists */}
-      {peak && <PeakBadge peak={peak} />}
+          {/* Peak badge */}
+          {peak && <PeakBadge peak={peak} />}
 
-      <View style={s.divider} />
+          <View style={s.divider} />
 
-      <View style={s.shiftsRow}>
-        <ShiftCard
-          session="Morning"
-          liters={item.morningLiters}
-          worker={item.morningWorker}
-        />
-        <ShiftCard
-          session="Evening"
-          liters={item.eveningLiters}
-          worker={item.eveningWorker}
-        />
-      </View>
+          {/* Shift cards */}
+          <View style={s.shiftsRow}>
+            <ShiftCard
+              session="Morning"
+              liters={item.morningLiters}
+              worker={item.morningWorker}
+            />
+            <ShiftCard
+              session="Evening"
+              liters={item.eveningLiters}
+              worker={item.eveningWorker}
+            />
+          </View>
+        </>
+      )}
     </Animated.View>
   );
 }
@@ -348,28 +404,28 @@ function SummaryBar({ summary }: { summary: Summary }) {
     <View style={s.summaryBar}>
       {[
         {
-          label: "Morning Total",
+          label: "Morning",
           value: `${summary.total_morning.toFixed(1)} L`,
           color: "#d97706",
           bg: "#fffbeb",
           icon: "sunny",
         },
         {
-          label: "Evening Total",
+          label: "Evening",
           value: `${summary.total_evening.toFixed(1)} L`,
           color: "#6366f1",
           bg: "#eef2ff",
           icon: "moon",
         },
         {
-          label: "Grand Total",
+          label: "Total",
           value: `${summary.grand_total.toFixed(1)} L`,
           color: "#16a34a",
           bg: "#f0fdf4",
           icon: "water",
         },
         {
-          label: "Active Cows",
+          label: "Active",
           value: `${summary.active_cows}`,
           color: "#2563eb",
           bg: "#eff6ff",
@@ -382,6 +438,45 @@ function SummaryBar({ summary }: { summary: Summary }) {
           <Text style={s.summaryLabel}>{st.label}</Text>
         </View>
       ))}
+    </View>
+  );
+}
+
+// ─── Auto-refresh indicator ───────────────────────────────────────────────────
+function AutoRefreshDot({ active }: { active: boolean }) {
+  const pulse = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (!active) return;
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, {
+          toValue: 0.4,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulse, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    anim.start();
+    return () => anim.stop();
+  }, [active]);
+
+  return (
+    <View style={ar.wrap}>
+      <Animated.View
+        style={[
+          ar.dot,
+          { opacity: pulse, backgroundColor: active ? "#16a34a" : "#d1d5db" },
+        ]}
+      />
+      <Text style={[ar.label, { color: active ? "#16a34a" : "#9ca3af" }]}>
+        {active ? "Live" : "Paused"}
+      </Text>
     </View>
   );
 }
@@ -402,15 +497,29 @@ export default function MilkYieldScreen() {
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<
     "name" | "total" | "morning" | "evening"
-  >("name");
+  >("total");
   const [modalCow, setModalCow] = useState<MilkRow | null>(null);
 
-  const fetchAll = useCallback(async () => {
+  // ✅ NEW: auto-refresh every 2 seconds
+  const autoRefreshRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [autoRefreshActive, setAutoRefreshActive] = useState(true);
+  const isMountedRef = useRef(true);
+
+  const fetchAll = useCallback(async (silent = false) => {
+    if (!isMountedRef.current) return;
     try {
+      if (!silent) setLoading(true);
       const data = await api.getMilkDashboard(todayStr());
+      if (!isMountedRef.current) return;
+
+      // ✅ FIX 1 & 2: filter out bulls AND milk-inactive cows
+      const filtered = data.cows.filter(
+        (c: any) => c.cow_type !== "bull" && c.milk_active !== false,
+      );
+
       setSummary(data.summary);
       setMilkRows(
-        data.cows.map((c: any) => ({
+        filtered.map((c: any) => ({
           id: c.cow_id,
           srNo: c.cow_tag || c.cow_id,
           name: c.cow_name || "Unknown",
@@ -420,48 +529,67 @@ export default function MilkYieldScreen() {
           eveningWorker: c.evening_worker ?? null,
           dailyCapacity: c.daily_capacity_liters ?? 0,
           peak: c.peak ?? null,
+          cowType: c.cow_type ?? "mature",
+          milkActive: c.milk_active ?? true,
         })),
       );
     } catch (e) {
-      console.log("milk fetch error:", e);
+      // silent fail on background refresh
+      if (!silent) console.log("milk fetch error:", e);
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (!silent && isMountedRef.current) setLoading(false);
     }
   }, []);
 
+  // Initial load
   useEffect(() => {
-    fetchAll();
+    fetchAll(false);
+  }, []);
+
+  // ✅ Auto-refresh every 2 seconds
+  useEffect(() => {
+    isMountedRef.current = true;
+
+    if (autoRefreshActive) {
+      autoRefreshRef.current = setInterval(() => {
+        fetchAll(true); // silent = true so no loading spinner flicker
+      }, 2000);
+    }
+
+    return () => {
+      if (autoRefreshRef.current) clearInterval(autoRefreshRef.current);
+    };
+  }, [autoRefreshActive, fetchAll]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+      if (autoRefreshRef.current) clearInterval(autoRefreshRef.current);
+    };
   }, []);
 
   const onRefresh = () => {
     setRefreshing(true);
-    fetchAll();
+    fetchAll(false).finally(() => setRefreshing(false));
   };
 
   const handleSetCapacity = (cow: MilkRow) => setModalCow(cow);
 
   const handleSaveCapacity = async (val: number) => {
     if (!modalCow) return;
-
-    // Snapshot for rollback
     const snapshot = milkRows;
 
-    // 1️⃣ Optimistic update — card shows new capacity instantly
     setMilkRows((prev) =>
       prev.map((row) =>
         row.id === modalCow.id ? { ...row, dailyCapacity: val } : row,
       ),
     );
-
-    // 2️⃣ Close modal right away — feels instant
     setModalCow(null);
 
     try {
-      // 3️⃣ Persist to backend in background
       await api.setCowCapacity(modalCow.id, val);
     } catch (e) {
-      // 4️⃣ Revert if API fails
       console.log("capacity save error:", e);
       setMilkRows(snapshot);
     }
@@ -485,7 +613,6 @@ export default function MilkYieldScreen() {
       return a.name.localeCompare(b.name);
     });
 
-  // Always read current capacity from live state so modal pre-fills correctly
   const modalCurrentCapacity = modalCow
     ? (milkRows.find((r) => r.id === modalCow.id)?.dailyCapacity ?? 0)
     : 0;
@@ -503,7 +630,17 @@ export default function MilkYieldScreen() {
           <Text style={s.headerTitle}>Milk Yield</Text>
           <Text style={s.headerSub}>{todayLabel}</Text>
         </View>
-        <TouchableOpacity style={s.refreshBtn} onPress={onRefresh}>
+        {/* ✅ Auto-refresh toggle */}
+        <TouchableOpacity
+          onPress={() => setAutoRefreshActive((a) => !a)}
+          style={s.refreshBtn}
+        >
+          <AutoRefreshDot active={autoRefreshActive} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[s.refreshBtn, { marginLeft: 8 }]}
+          onPress={onRefresh}
+        >
           <Ionicons name="refresh-outline" size={18} color="#6b7280" />
         </TouchableOpacity>
       </View>
@@ -522,7 +659,7 @@ export default function MilkYieldScreen() {
             <Ionicons name="search-outline" size={15} color="#9ca3af" />
             <TextInput
               style={s.searchInput}
-              placeholder="Search cow name or Sr. No..."
+              placeholder="Search cow name or tag..."
               placeholderTextColor="#d1d5db"
               value={search}
               onChangeText={setSearch}
@@ -534,7 +671,7 @@ export default function MilkYieldScreen() {
             )}
           </View>
 
-          {/* Sort */}
+          {/* Sort + count */}
           <View style={s.sortRow}>
             <Text style={s.sortLabel}>Sort:</Text>
             {(["name", "total", "morning", "evening"] as const).map((opt) => (
@@ -553,7 +690,13 @@ export default function MilkYieldScreen() {
                 </Text>
               </TouchableOpacity>
             ))}
+            <Text style={s.cowCount}>{filtered.length} cows</Text>
           </View>
+
+          {/* ✅ Hint: tap to expand */}
+          {filtered.length > 0 && (
+            <Text style={s.expandHint}>Tap a card to see full details</Text>
+          )}
 
           <FlatList
             data={filtered}
@@ -577,7 +720,11 @@ export default function MilkYieldScreen() {
             ListEmptyComponent={
               <View style={s.empty}>
                 <Text style={{ fontSize: 40 }}>🥛</Text>
-                <Text style={s.emptyText}>No records found</Text>
+                <Text style={s.emptyText}>
+                  {milkRows.length === 0
+                    ? "No milk-active cows found.\nEnable milk recording in cattle settings."
+                    : "No records match your search."}
+                </Text>
               </View>
             }
             ListFooterComponent={<View style={{ height: 100 }} />}
@@ -642,8 +789,8 @@ const s = StyleSheet.create({
     marginTop: 1,
   },
   refreshBtn: {
-    width: 36,
     height: 36,
+    paddingHorizontal: 10,
     borderRadius: 18,
     backgroundColor: "#f9fafb",
     alignItems: "center",
@@ -693,7 +840,7 @@ const s = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 14,
     gap: 8,
-    marginBottom: 12,
+    marginBottom: 6,
   },
   sortLabel: { fontSize: 12, color: "#9ca3af", fontWeight: "600" },
   sortChip: {
@@ -707,12 +854,27 @@ const s = StyleSheet.create({
   sortChipActive: { backgroundColor: "#111827", borderColor: "#111827" },
   sortChipText: { fontSize: 11, color: "#6b7280", fontWeight: "600" },
   sortChipTextActive: { color: "#fff" },
-  listContent: { paddingHorizontal: 14 },
+  cowCount: {
+    marginLeft: "auto",
+    fontSize: 11,
+    color: "#9ca3af",
+    fontWeight: "600",
+  },
+  expandHint: {
+    fontSize: 11,
+    color: "#9ca3af",
+    fontWeight: "500",
+    textAlign: "center",
+    marginBottom: 8,
+  },
+  listContent: { paddingHorizontal: 14, paddingTop: 4 },
+
+  // ── Card ──
   card: {
     backgroundColor: "#fff",
-    borderRadius: 18,
-    padding: 16,
-    marginBottom: 12,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 10,
     borderWidth: 1,
     borderColor: "#f3f4f6",
     shadowColor: "#000",
@@ -723,8 +885,8 @@ const s = StyleSheet.create({
   },
   cardHeader: { flexDirection: "row", alignItems: "center" },
   avatarWrap: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 40,
     borderRadius: 12,
     backgroundColor: "#f9fafb",
     alignItems: "center",
@@ -733,38 +895,68 @@ const s = StyleSheet.create({
     borderColor: "#e5e7eb",
   },
   cowName: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "700",
     color: "#111827",
     letterSpacing: -0.2,
   },
-  cowSr: { fontSize: 12, color: "#9ca3af", fontWeight: "500", marginTop: 1 },
+  cowSr: { fontSize: 11, color: "#9ca3af", fontWeight: "500", marginTop: 1 },
+
+  // ── Mini shift pills (collapsed view) ──
+  miniShifts: { flexDirection: "row", gap: 4, marginLeft: 4 },
+  miniPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  miniPillText: { fontSize: 11, fontWeight: "700" },
+
+  // ── Total badge ──
   totalBadge: {
     alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
     borderWidth: 1,
     gap: 2,
   },
-  totalText: { fontSize: 14, fontWeight: "800", letterSpacing: -0.3 },
-  totalSub: { fontSize: 9, fontWeight: "600" },
+  totalText: { fontSize: 13, fontWeight: "800", letterSpacing: -0.3 },
+
+  // ── Capacity button ──
   capacityBtn: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     backgroundColor: "#f9fafb",
     borderRadius: 8,
     borderWidth: 1,
     borderColor: "#e5e7eb",
+    alignSelf: "flex-start",
+    marginBottom: 10,
   },
-  capacityBtnText: { fontSize: 10, color: "#6b7280", fontWeight: "600" },
+  capacityBtnText: { fontSize: 11, color: "#6b7280", fontWeight: "600" },
+
   divider: { height: 1, backgroundColor: "#f3f4f6", marginVertical: 12 },
   shiftsRow: { flexDirection: "row", gap: 10 },
-  empty: { alignItems: "center", paddingTop: 60, gap: 10 },
-  emptyText: { fontSize: 15, color: "#9ca3af", fontWeight: "600" },
+  empty: {
+    alignItems: "center",
+    paddingTop: 60,
+    gap: 10,
+    paddingHorizontal: 32,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: "#9ca3af",
+    fontWeight: "500",
+    textAlign: "center",
+    lineHeight: 20,
+  },
 });
 
 const sh = StyleSheet.create({
@@ -801,7 +993,7 @@ const sh = StyleSheet.create({
 });
 
 const cap = StyleSheet.create({
-  wrap: { marginTop: 12, marginBottom: 4 },
+  wrap: { marginTop: 0, marginBottom: 4 },
   labelRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -892,4 +1084,10 @@ const md = StyleSheet.create({
     gap: 6,
   },
   saveText: { fontSize: 14, fontWeight: "700", color: "#fff" },
+});
+
+const ar = StyleSheet.create({
+  wrap: { flexDirection: "row", alignItems: "center", gap: 4 },
+  dot: { width: 8, height: 8, borderRadius: 4 },
+  label: { fontSize: 10, fontWeight: "700" },
 });

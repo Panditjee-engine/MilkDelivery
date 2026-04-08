@@ -17,9 +17,9 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { LinearGradient } from "expo-linear-gradient";
-import { api } from "../../src/services/api"; // adjust path to match your project
+import { api } from "../../src/services/api"; 
 
-// ── Brand Colors ──────────────────────────────────────────────────
+// ── Brand Colors 
 const C = {
   primary: "#FF5200",
   accent: "#FC8019",
@@ -42,7 +42,7 @@ type Step = "phone" | "details";
 type ToastType = "error" | "success" | "warn";
 type Status = "idle" | "checking" | "ok" | "error";
 
-// ── Validation helpers ────────────────────────────────────────────
+// ── Validation helpers 
 
 /** Indian mobile: 10 digits, starts 6-9, not all same digit */
 function validateIndianMobile(num: string): { ok: boolean; reason?: string } {
@@ -63,7 +63,7 @@ function validateEmail(val: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val.trim());
 }
 
-// ── Toast ─────────────────────────────────────────────────────────
+// ── Toast 
 function Toast({
   message,
   type,
@@ -157,7 +157,7 @@ const ts = StyleSheet.create({
   },
 });
 
-// ── Inline field error ────────────────────────────────────────────
+// ── Inline field error 
 function FieldError({ msg }: { msg?: string }) {
   if (!msg) return null;
   return (
@@ -181,7 +181,7 @@ function FieldError({ msg }: { msg?: string }) {
   );
 }
 
-// ── Floating label input ──────────────────────────────────────────
+// ── Floating label input 
 interface FIProps {
   label: string;
   value: string;
@@ -318,7 +318,7 @@ const fi = StyleSheet.create({
   input: { flex: 1, fontSize: 15, color: C.text, height: 26, padding: 0 },
 });
 
-// ── Roles ─────────────────────────────────────────────────────────
+// ── Roles 
 const ROLES = [
   {
     value: "customer" as Role,
@@ -340,7 +340,6 @@ const ROLES = [
   },
 ];
 
-// ════════════════════════════════════════════════════════════════
 export default function RegisterScreen() {
   const [step, setStep] = useState<Step>("phone");
 
@@ -382,7 +381,7 @@ export default function RegisterScreen() {
   const { register } = useAuth();
   const router = useRouter();
 
-  // ── Phone change: validate + debounced duplicate check ───────────
+  // ── Phone change: validate + debounced duplicate check 
   const handlePhoneChange = (val: string) => {
     const cleaned = val.replace(/\D/g, "").slice(0, 10);
     setPhone(cleaned);
@@ -443,7 +442,7 @@ export default function RegisterScreen() {
     }, 700);
   };
 
-  // ── Step animation ────────────────────────────────────────────────
+  // ── Step animation 
   const slideAnim = useRef(new Animated.Value(0)).current;
   const goToDetails = () => {
     Animated.timing(slideAnim, {
@@ -478,7 +477,7 @@ export default function RegisterScreen() {
     });
   };
 
-  // ── Step 1 submit ─────────────────────────────────────────────────
+  // ── Step 1 submit 
   const handleNext = async () => {
     const { ok, reason } = validateIndianMobile(phone);
     if (!ok) {
@@ -512,7 +511,7 @@ export default function RegisterScreen() {
     goToDetails();
   };
 
-  // ── Step 2 submit ─────────────────────────────────────────────────
+  // ── Step 2 submit 
   const handleRegister = async () => {
     let hasErr = false;
 
@@ -613,7 +612,7 @@ export default function RegisterScreen() {
     if (nameErr && v.trim()) setNameErr("");
   };
 
-  // ── Render ────────────────────────────────────────────────────────
+  // ── Render 
   return (
     <SafeAreaView style={s.container}>
       <Toast
@@ -703,7 +702,6 @@ export default function RegisterScreen() {
                 >
                   <View style={s.phoneRow}>
                     <View style={s.countryChip}>
-                      <Text style={{ fontSize: 22 }}>🇮🇳</Text>
                       <Text style={s.countryCode}>+91</Text>
                       <Ionicons
                         name="chevron-down"
@@ -713,7 +711,7 @@ export default function RegisterScreen() {
                     </View>
                     <TextInput
                       style={s.phoneInput}
-                      placeholder="98765 43210"
+                      placeholder="mobile number"
                       placeholderTextColor={C.textLight}
                       value={phone}
                       onChangeText={handlePhoneChange}
@@ -767,7 +765,7 @@ export default function RegisterScreen() {
                         color={C.success}
                       />
                       <Text style={[s.phoneBannerText, { color: C.success }]}>
-                        Number is available ✓
+                        Number is available 
                       </Text>
                     </View>
                   ) : phone.length > 0 && phone.length < 10 ? (
@@ -851,7 +849,7 @@ export default function RegisterScreen() {
                         <Text style={s.roleDesc}>{r.desc}</Text>
                         {active && (
                           <View style={s.roleCheck}>
-                            <Ionicons name="checkmark" size={10} color="#fff" />
+                            <Ionicons name="checkmark" size={10} color="#fff" /> 
                           </View>
                         )}
                       </TouchableOpacity>
@@ -864,7 +862,6 @@ export default function RegisterScreen() {
                     label="Full Name"
                     value={name}
                     onChangeText={handleNameChange}
-                    leftEmoji="👤"
                     error={nameErr}
                   />
 
@@ -874,7 +871,6 @@ export default function RegisterScreen() {
                     onChangeText={handleEmailChange}
                     keyboardType="email-address"
                     autoCapitalize="none"
-                    leftEmoji="✉️"
                     error={emailErr}
                     status={emailSt}
                   />
@@ -900,7 +896,7 @@ export default function RegisterScreen() {
                           fontWeight: "600",
                         }}
                       >
-                        Email available ✓
+                        Email available 
                       </Text>
                     </View>
                   )}
@@ -910,7 +906,6 @@ export default function RegisterScreen() {
                     value={password}
                     onChangeText={handlePasswordChange}
                     secureTextEntry={!showPass}
-                    leftEmoji="🔒"
                     error={passErr}
                     rightIcon={
                       <TouchableOpacity onPress={() => setShowPass(!showPass)}>
@@ -968,7 +963,6 @@ export default function RegisterScreen() {
                     value={confirmPassword}
                     onChangeText={handleConfirmChange}
                     secureTextEntry={!showPass}
-                    leftEmoji="🔒"
                     error={confErr}
                     status={
                       confirmPassword &&

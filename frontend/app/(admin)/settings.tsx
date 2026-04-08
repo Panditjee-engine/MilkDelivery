@@ -17,7 +17,7 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../src/contexts/AuthContext";
 
-// ── Palette ──────────────────────────────────────────────
+// ── Palette 
 const C = {
   bg: "#FFF8F4",
   card: "#fff",
@@ -33,7 +33,7 @@ const C = {
   border: "#FFF0E8",
 };
 
-// ── Types ────────────────────────────────────────────────
+// ── Types 
 type ModalType =
   | "cutoff"
   | "delivery"
@@ -69,7 +69,7 @@ const GRACE_OPTIONS = [
 const HOURS_12 = ["5", "6", "7", "8", "9", "10", "11", "12"];
 const MINUTES = ["00", "15", "30", "45"];
 
-// ── Custom Alert ─────────────────────────────────────────
+// ── Custom Alert 
 type AlertBtn = {
   text: string;
   style?: "default" | "cancel" | "destructive";
@@ -182,7 +182,7 @@ function useAlert() {
   return { cfg, show, dismiss };
 }
 
-// ── Picker Chip Row ──────────────────────────────────────
+// ── Picker Chip Row 
 function PickerRow({
   label,
   options,
@@ -214,7 +214,7 @@ function PickerRow({
   );
 }
 
-// ── Modal Shell ──────────────────────────────────────────
+// ── Modal Shell 
 function SettingModal({
   visible,
   title,
@@ -276,7 +276,7 @@ function SettingModal({
   );
 }
 
-// ── Setting Row ──────────────────────────────────────────
+// ── Setting Row 
 function SettingRow({
   icon,
   iconBg,
@@ -315,7 +315,7 @@ function SettingRow({
   );
 }
 
-// ── Main Screen ──────────────────────────────────────────
+// ── Main Screen
 export default function AdminSettingsScreen() {
   const { user, logout } = useAuth();
   const router = useRouter();
@@ -860,7 +860,7 @@ export default function AdminSettingsScreen() {
   );
 }
 
-// ── Alert Styles ─────────────────────────────────────────
+// ── Alert Styles 
 const aS = StyleSheet.create({
   overlay: {
     flex: 1,
@@ -917,7 +917,7 @@ const aS = StyleSheet.create({
   btnTxtDest: { color: "#3D1F0A" },
 });
 
-// ── Modal Styles ─────────────────────────────────────────
+// ── Modal Styles 
 const mS = StyleSheet.create({
   overlay: {
     flex: 1,
@@ -1040,7 +1040,7 @@ const mS = StyleSheet.create({
   pwHintTxt: { fontSize: 12, color: "#A07850", fontWeight: "500" },
 });
 
-// ── Screen Styles ────────────────────────────────────────
+// ── Screen Styles 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#FFF8F4" },
   header: { paddingHorizontal: 20, paddingTop: 14, paddingBottom: 8 },

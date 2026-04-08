@@ -17,6 +17,7 @@ import {
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../../../src/services/api";
+import { useIsFocused } from "@react-navigation/native";
 
 interface CowRow {
   cow_id: string;
@@ -222,6 +223,7 @@ const fmtDate = (iso: string) =>
 
 export default function CowHealthScreen() {
   const router = useRouter();
+  const isFocused = useIsFocused();
 
   const [rows, setRows] = useState<CowRow[]>([]);
   const [summary, setSummary] = useState<Summary>({
@@ -253,10 +255,16 @@ export default function CowHealthScreen() {
     }
   }, []);
 
-  useEffect(() => {
-    setLoading(true);
+useEffect(() => {
+  if (!isFocused) return;
+
+  fetchAll();
+  const interval = setInterval(() => {
     fetchAll();
-  }, []);
+  }, 2000);
+
+  return () => clearInterval(interval);
+}, [isFocused]);
 
   const onRefresh = () => {
     setRefreshing(true);

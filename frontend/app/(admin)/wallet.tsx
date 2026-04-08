@@ -16,7 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { api } from "../../src/services/api";
 import LoadingScreen from "../../src/components/LoadingScreen";
 
-// ── Palette ─────────────────────────────────────
+// ── Palette 
 const C = {
   bg: "#FFF8F4",
   card: "#fff",
@@ -33,7 +33,7 @@ const C = {
   textSub: "#8B6854",
 };
 
-// ── Custom Alert ─────────────────────────────────
+// ── Custom Alert 
 type AlertBtn = {
   text: string;
   style?: "default" | "cancel" | "destructive";
@@ -147,7 +147,7 @@ function useAlert() {
   return { cfg, show, dismiss };
 }
 
-// ── Bank Account Modal ───────────────────────────
+// ── Bank Account Modal 
 type BankAccount = {
   accountHolderName: string;
   accountNumber: string;
@@ -320,7 +320,7 @@ function BankModal({
   );
 }
 
-// ── Withdraw Modal ───────────────────────────────
+// ── Withdraw Modal 
 function WithdrawModal({
   visible,
   balance,
@@ -463,12 +463,13 @@ function WithdrawModal({
   );
 }
 
-// ── Main Screen ──────────────────────────────────
+// ── Main Screen 
 export default function AdminWalletScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [balance, setBalance] = useState(0);
   const [transactions, setTransactions] = useState<any[]>([]);
+  const [withdrawals, setWithdrawals] = useState<any[]>([]);
   const [filter, setFilter] = useState<"ALL" | "credit" | "debit">("ALL");
   const [bankAccount, setBankAccount] = useState<BankAccount | null>(null);
   const [showBank, setShowBank] = useState(false);
@@ -478,13 +479,15 @@ export default function AdminWalletScreen() {
 
   const fetchData = async () => {
     try {
-      const [walletData, txData, bankData] = await Promise.all([
+      const [walletData, txData, bankData, withdrawalData] = await Promise.all([
         api.getWallet(),
         api.getWalletTransactions(),
         api.getBankAccount().catch(() => null),
+        api.getWithdrawalHistory().catch(() => []),
       ]);
       setBalance(walletData.balance ?? 0);
       setTransactions(txData ?? []);
+      setWithdrawals(withdrawalData ?? []);
       if (bankData) setBankAccount(bankData);
     } catch (e) {
       console.error("Error fetching wallet:", e);
@@ -497,6 +500,7 @@ export default function AdminWalletScreen() {
   useEffect(() => {
     fetchData();
   }, []);
+
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     fetchData();
@@ -509,6 +513,41 @@ export default function AdminWalletScreen() {
       hour: "2-digit",
       minute: "2-digit",
     });
+
+  const statusMeta = (status: string) => {
+    switch (status?.toLowerCase()) {
+      case "pending":
+        return {
+          label: "Pending",
+          color: C.amber,
+          bg: C.warn,
+          icon: "time-outline",
+        };
+      case "completed":
+      case "approved":
+        return {
+          label: "Completed",
+          color: "#22A06B",
+          bg: "#E6F9F1",
+          icon: "checkmark-circle-outline",
+        };
+      case "failed":
+      case "rejected":
+        return {
+          label: "Failed",
+          color: C.primary,
+          bg: C.peach,
+          icon: "close-circle-outline",
+        };
+      default:
+        return {
+          label: status ?? "Unknown",
+          color: C.accent,
+          bg: C.deepPeach,
+          icon: "help-circle-outline",
+        };
+    }
+  };
 
   const handleSaveBank = async (data: BankAccount) => {
     try {
@@ -592,6 +631,17 @@ export default function AdminWalletScreen() {
     filter === "ALL"
       ? transactions
       : transactions.filter((t) => t.type === filter);
+
+  // Withdrawal summary counts
+  const pendingCount = withdrawals.filter(
+    (w) => w.status?.toLowerCase() === "pending",
+  ).length;
+  const completedCount = withdrawals.filter((w) =>
+    ["completed", "approved"].includes(w.status?.toLowerCase()),
+  ).length;
+  const totalWithdrawn = withdrawals
+    .filter((w) => ["completed", "approved"].includes(w.status?.toLowerCase()))
+    .reduce((s, w) => s + w.amount, 0);
 
   return (
     <SafeAreaView style={s.container} edges={["top"]}>
@@ -764,6 +814,115 @@ export default function AdminWalletScreen() {
           ))}
         </View>
 
+        {/* ── Withdrawal Requests Section ── */}
+        {withdrawals.length > 0 && (
+          <View style={s.withdrawSection}>
+            {/* Section header */}
+            <View style={s.withdrawSectionHdr}>
+              <View>
+                <Text style={s.txTitle}>Withdrawal Requests</Text>
+                <Text style={s.txSub}>{withdrawals.length} requests</Text>
+              </View>
+              {/* Summary pills */}
+              <View style={s.withdrawPills}>
+                {pendingCount > 0 && (
+                  <View style={[s.withdrawPill, { backgroundColor: C.warn }]}>
+                    <Ionicons name="time-outline" size={10} color={C.amber} />
+                    <Text style={[s.withdrawPillTxt, { color: C.amber }]}>
+                      {pendingCount} Pending
+                    </Text>
+                  </View>
+                )}
+                {completedCount > 0 && (
+                  <View style={[s.withdrawPill, { backgroundColor: "#E6F9F1" }]}>
+                    <Ionicons
+                      name="checkmark-circle-outline"
+                      size={10}
+                      color="#22A06B"
+                    />
+                    <Text style={[s.withdrawPillTxt, { color: "#22A06B" }]}>
+                      {completedCount} Done
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </View>
+
+            {/* Total withdrawn strip */}
+            {totalWithdrawn > 0 && (
+              <View style={s.withdrawStrip}>
+                <Ionicons name="trending-up-outline" size={14} color={C.dark} />
+                <Text style={s.withdrawStripTxt}>
+                  Total Withdrawn:{" "}
+                  <Text style={{ fontWeight: "800", color: C.dark }}>
+                    ₹{totalWithdrawn.toFixed(0)}
+                  </Text>
+                </Text>
+              </View>
+            )}
+
+            {/* Withdrawal cards */}
+            {[...withdrawals].reverse().map((w, i) => {
+              const meta = statusMeta(w.status);
+              return (
+                <View key={w.id ?? i} style={s.withdrawCard}>
+                  {/* Status color strip on left */}
+                  <View
+                    style={[s.withdrawStripe, { backgroundColor: meta.color }]}
+                  />
+
+                  {/* Icon */}
+                  <View
+                    style={[s.withdrawIcon, { backgroundColor: meta.bg }]}
+                  >
+                    <Ionicons
+                      name={meta.icon as any}
+                      size={18}
+                      color={meta.color}
+                    />
+                  </View>
+
+                  {/* Info */}
+                  <View style={s.withdrawInfo}>
+                    <Text style={s.withdrawTitle}>Withdrawal Request</Text>
+                    <Text style={s.withdrawDate}>{formatDate(w.created_at)}</Text>
+                    {(w.bank_name || w.account_last4) && (
+                      <Text style={s.withdrawBank}>
+                        {w.bank_name ?? ""}
+                        {w.account_last4 ? `  ••••${w.account_last4}` : ""}
+                      </Text>
+                    )}
+                    {w.remarks ? (
+                      <Text style={s.withdrawRemarks} numberOfLines={1}>
+                        {w.remarks}
+                      </Text>
+                    ) : null}
+                  </View>
+
+                  {/* Amount + Badge */}
+                  <View style={s.withdrawRight}>
+                    <Text style={[s.withdrawAmt, { color: meta.color }]}>
+                      -₹{w.amount}
+                    </Text>
+                    <View
+                      style={[s.statusBadge, { backgroundColor: meta.bg }]}
+                    >
+                      <Ionicons
+                        name={meta.icon as any}
+                        size={9}
+                        color={meta.color}
+                      />
+                      <Text style={[s.statusBadgeTxt, { color: meta.color }]}>
+                        {meta.label}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        )}
+
         {/* ── Transactions ── */}
         <View style={s.txHeader}>
           <View>
@@ -851,7 +1010,7 @@ export default function AdminWalletScreen() {
   );
 }
 
-// ── Alert Styles ─────────────────────────────────
+// ── Alert Styles 
 const aS = StyleSheet.create({
   overlay: {
     flex: 1,
@@ -908,7 +1067,7 @@ const aS = StyleSheet.create({
   btnTxtDest: { color: "#3D1F0A" },
 });
 
-// ── Bank Modal Styles ────────────────────────────
+// ── Bank Modal Styles 
 const bS = StyleSheet.create({
   overlay: {
     flex: 1,
@@ -985,7 +1144,7 @@ const bS = StyleSheet.create({
   cancelTxt: { fontSize: 15, fontWeight: "700", color: "#BB6B3F" },
 });
 
-// ── Withdraw Modal Styles ────────────────────────
+// ── Withdraw Modal Styles 
 const wS = StyleSheet.create({
   overlay: {
     flex: 1,
@@ -1094,7 +1253,7 @@ const wS = StyleSheet.create({
   cancelTxt: { fontSize: 15, fontWeight: "700", color: "#BB6B3F" },
 });
 
-// ── Screen Styles ────────────────────────────────
+// ── Screen Styles 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
   header: { paddingHorizontal: 20, paddingTop: 14, paddingBottom: 8 },
@@ -1252,6 +1411,97 @@ const s = StyleSheet.create({
     fontWeight: "600",
     textAlign: "center",
   },
+
+  // ── Withdrawal Section ──
+  withdrawSection: {
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+  withdrawSectionHdr: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-end",
+    marginBottom: 10,
+  },
+  withdrawPills: {
+    flexDirection: "row",
+    gap: 6,
+  },
+  withdrawPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 20,
+  },
+  withdrawPillTxt: { fontSize: 10, fontWeight: "700" },
+  withdrawStrip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: C.deepPeach,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 10,
+  },
+  withdrawStripTxt: { fontSize: 12, color: C.muted, fontWeight: "500" },
+  withdrawCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: C.card,
+    borderRadius: 16,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: "#FFE8C8",
+    overflow: "hidden",
+    shadowColor: C.dark,
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
+  },
+  withdrawStripe: {
+    width: 4,
+    alignSelf: "stretch",
+  },
+  withdrawIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: "center",
+    alignItems: "center",
+    marginLeft: 12,
+    marginRight: 10,
+    marginVertical: 14,
+  },
+  withdrawInfo: { flex: 1, paddingVertical: 14 },
+  withdrawTitle: { fontSize: 13, fontWeight: "700", color: C.text },
+  withdrawDate: { fontSize: 11, color: C.accent, marginTop: 2 },
+  withdrawBank: { fontSize: 11, color: C.muted, marginTop: 1, fontWeight: "500" },
+  withdrawRemarks: {
+    fontSize: 10,
+    color: C.light,
+    marginTop: 2,
+    fontStyle: "italic",
+  },
+  withdrawRight: {
+    alignItems: "flex-end",
+    paddingRight: 14,
+    paddingVertical: 14,
+    gap: 6,
+  },
+  withdrawAmt: { fontSize: 15, fontWeight: "800" },
+  statusBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    borderRadius: 20,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  statusBadgeTxt: { fontSize: 10, fontWeight: "700" },
 
   txHeader: {
     paddingHorizontal: 20,
