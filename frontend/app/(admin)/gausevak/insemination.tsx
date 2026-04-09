@@ -14,11 +14,11 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Switch,
-  SafeAreaView,
   ActivityIndicator,
   RefreshControl,
   Alert,
 } from "react-native";
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../../../src/services/api";
@@ -1120,6 +1120,7 @@ function InseminationCard({
 }
 
 export default function InseminationScreen() {
+    const insets = useSafeAreaInsets();
   const router = useRouter();
   const [records, setRecords] = useState<InseminationRecord[]>([]);
   const [screen, setScreen] = useState<"home" | "list">("home");
@@ -1194,15 +1195,13 @@ export default function InseminationScreen() {
     Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0;
 
   return (
-    <SafeAreaView style={s.screen}>
+   <View style={[s.screen, { paddingTop: insets.top }]}>
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
 
       <View
         style={[
           s.header,
           {
-            paddingTop:
-              Platform.OS === "android" ? ANDROID_STATUS_BAR + 14 : 14,
           },
         ]}
       >
@@ -1375,7 +1374,7 @@ export default function InseminationScreen() {
           )
         }
       />
-    </SafeAreaView>
+    </View>
   );
 }
 

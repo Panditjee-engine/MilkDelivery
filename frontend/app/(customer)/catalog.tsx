@@ -10,7 +10,6 @@ import {
   Modal,
   Animated,
   Vibration,
-  Dimensions,
   Image,
 } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
@@ -23,6 +22,7 @@ import LoadingScreen from "../../src/components/LoadingScreen";
 
 const CARD_WIDTH = 130;
 
+// All patterns — daily/alternate/custom = subscription, buy_once = one-time order
 const patterns = [
   {
     value: "daily",
@@ -30,38 +30,42 @@ const patterns = [
     description: "Subscription",
     icon: "sunny-outline",
     isSubscription: true,
+    hint: "Delivered every day",
   },
   {
     value: "alternate",
     label: "Alternate",
-    description: "Order",
+    description: "Subscription",
     icon: "repeat-outline",
-    isSubscription: false,
+    isSubscription: true,
+    hint: "Every other day",
   },
   {
     value: "custom",
-    label: "Custom",
-    description: "Order",
+    label: "Custom Days",
+    description: "Subscription",
     icon: "calendar-outline",
-    isSubscription: false,
+    isSubscription: true,
+    hint: "Pick your days",
   },
   {
     value: "buy_once",
     label: "Buy Once",
-    description: "Order",
+    description: "One-time",
     icon: "bag-check-outline",
     isSubscription: false,
+    hint: "Single delivery",
   },
 ];
 
 const weekDays = [
-  { value: 0, label: "M" },
-  { value: 1, label: "T" },
-  { value: 2, label: "W" },
-  { value: 3, label: "T" },
-  { value: 4, label: "F" },
-  { value: 5, label: "S" },
-  { value: 6, label: "S" },
+  { value: 0, label: "Mon" },
+  { value: 1, label: "Tue" },
+  { value: 2, label: "Wed" },
+  { value: 3, label: "Thu" },
+  { value: 4, label: "Fri" },
+  { value: 5, label: "Sat" },
+  { value: 6, label: "Sun" },
 ];
 
 const CATEGORY_THEMES: Record<
@@ -84,8 +88,8 @@ function getCategoryTheme(category: string) {
 function formatUnit(unit: string): string {
   if (!unit) return "";
   const lower = unit.toLowerCase().trim();
-  const match = lower.match(/^(\d+\.?\d*)\s*(l|litre|litres|liter|liters)$/);
-  if (match) return `${match[1]}L`;
+  const lMatch = lower.match(/^(\d+\.?\d*)\s*(l|litre|litres|liter|liters)$/);
+  if (lMatch) return `${lMatch[1]}L`;
   const mlMatch = lower.match(/^(\d+\.?\d*)\s*ml$/);
   if (mlMatch) return `${mlMatch[1]}ml`;
   const kgMatch = lower.match(/^(\d+\.?\d*)\s*kg$/);
@@ -95,15 +99,15 @@ function formatUnit(unit: string): string {
   return unit.charAt(0).toUpperCase() + unit.slice(1);
 }
 
-// ─── Success Modal ─────────────────────────────────────────────────────────────
+// ─── Success Modal 
 function SuccessModal({
   visible,
-  isSubscription,
+  pattern,
   productName,
   onClose,
 }: {
   visible: boolean;
-  isSubscription: boolean;
+  pattern: string;
   productName: string;
   onClose: () => void;
 }) {
@@ -113,6 +117,15 @@ function SuccessModal({
   const slideAnim = useRef(new Animated.Value(18)).current;
   const ringAnim = useRef(new Animated.Value(0.6)).current;
   const ringOpacity = useRef(new Animated.Value(0)).current;
+
+  const isSubscription = pattern !== "buy_once";
+
+  const subtitleMap: Record<string, string> = {
+    daily: `${productName} will be delivered every day starting tomorrow.`,
+    alternate: `${productName} will be delivered every alternate day starting tomorrow.`,
+    custom: `${productName} will be delivered on your selected days.`,
+    buy_once: `Your one-time order for ${productName} has been placed successfully.`,
+  };
 
   useEffect(() => {
     if (visible) {
@@ -178,6 +191,14 @@ function SuccessModal({
   const bgLight = isSubscription ? "#f0fdf4" : Colors.primary + "12";
   const border = isSubscription ? "#bbf7d0" : Colors.primary + "33";
 
+  const tagLabel =
+    {
+      daily: "Recurring daily delivery",
+      alternate: "Every other day delivery",
+      custom: "Custom days delivery",
+      buy_once: "One-time delivery",
+    }[pattern] ?? "Delivery scheduled";
+
   return (
     <Modal visible={visible} transparent animationType="fade">
       <View style={ms.overlay}>
@@ -212,14 +233,12 @@ function SuccessModal({
               />
             </Animated.View>
           </View>
+
           <Text style={ms.title}>
             {isSubscription ? "Subscription Created!" : "Order Placed!"}
           </Text>
-          <Text style={ms.subtitle}>
-            {isSubscription
-              ? `${productName} will be delivered every day starting tomorrow.`
-              : `Your order for ${productName} has been placed successfully.`}
-          </Text>
+          <Text style={ms.subtitle}>{subtitleMap[pattern]}</Text>
+
           <Animated.View
             style={[
               ms.tagRow,
@@ -237,13 +256,10 @@ function SuccessModal({
                 size={12}
                 color={color}
               />
-              <Text style={[ms.tagText, { color }]}>
-                {isSubscription
-                  ? "Recurring daily delivery"
-                  : "One-time delivery"}
-              </Text>
+              <Text style={[ms.tagText, { color }]}>{tagLabel}</Text>
             </View>
           </Animated.View>
+
           <TouchableOpacity
             style={[ms.btn, { backgroundColor: color, shadowColor: color }]}
             onPress={onClose}
@@ -257,7 +273,7 @@ function SuccessModal({
   );
 }
 
-// ─── Custom Days Error Modal ───────────────────────────────────────────────────
+// ─── Info Modal (no days selected) ────────────────────────────────────────────
 function InfoModal({
   visible,
   onClose,
@@ -321,6 +337,89 @@ function InfoModal({
             activeOpacity={0.85}
           >
             <Text style={ms.btnText}>Got it</Text>
+          </TouchableOpacity>
+        </Animated.View>
+      </View>
+    </Modal>
+  );
+}
+
+// ─── Wallet Error Modal ────────────────────────────────────────────────────────
+function WalletErrorModal({
+  visible,
+  walletBalance,
+  orderTotal,
+  onClose,
+}: {
+  visible: boolean;
+  walletBalance: number;
+  orderTotal: number;
+  onClose: () => void;
+}) {
+  const scaleAnim = useRef(new Animated.Value(0.85)).current;
+  const opacityAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (visible) {
+      scaleAnim.setValue(0.85);
+      opacityAnim.setValue(0);
+      Animated.parallel([
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          useNativeDriver: true,
+          damping: 14,
+          stiffness: 200,
+        }),
+        Animated.timing(opacityAnim, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start();
+      Vibration.vibrate([0, 50, 30, 60]);
+    }
+  }, [visible]);
+
+  return (
+    <Modal visible={visible} transparent animationType="fade">
+      <View style={ms.overlay}>
+        <Animated.View
+          style={[
+            ms.card,
+            { opacity: opacityAnim, transform: [{ scale: scaleAnim }] },
+          ]}
+        >
+          <View style={ms.iconWrap}>
+            <View
+              style={[
+                ms.iconCircle,
+                { backgroundColor: "#fff7ed", borderColor: "#fed7aa" },
+              ]}
+            >
+              <Ionicons name="wallet-outline" size={28} color="#f97316" />
+            </View>
+          </View>
+          <Text style={ms.title}>Insufficient Balance</Text>
+          <Text style={ms.subtitle}>
+            Your wallet balance{" "}
+            <Text style={{ fontWeight: "800", color: "#f97316" }}>
+              ₹{walletBalance.toFixed(2)}
+            </Text>{" "}
+            is less than the order total{" "}
+            <Text style={{ fontWeight: "800", color: "#1A1A1A" }}>
+              ₹{orderTotal.toFixed(2)}
+            </Text>
+            .{"\n"}Please recharge your wallet to continue.
+          </Text>
+          <TouchableOpacity
+            style={[
+              ms.btn,
+              { backgroundColor: "#f97316", shadowColor: "#f97316" },
+            ]}
+            onPress={onClose}
+            activeOpacity={0.85}
+          >
+            <Text style={ms.btnText}>OK, Got it</Text>
           </TouchableOpacity>
         </Animated.View>
       </View>
@@ -405,7 +504,7 @@ const ms = StyleSheet.create({
   btnText: { fontSize: 16, fontWeight: "800", color: "#fff" },
 });
 
-// ─── Product Card ─────────────────────────────────────────────────────────────
+// ─── Product Card ──────────────────────────────────────────────────────────────
 function ModernProductCard({
   product,
   onPress,
@@ -460,7 +559,7 @@ function ModernProductCard({
   );
 }
 
-// ─── Category Section ─────────────────────────────────────────────────────────
+// ─── Category Section ──────────────────────────────────────────────────────────
 function CategorySection({
   value,
   label,
@@ -511,33 +610,7 @@ function CategorySection({
   );
 }
 
-// ─── Pattern pill badge ────────────────────────────────────────────────────────
-function PatternBadge({ isSubscription }: { isSubscription: boolean }) {
-  return (
-    <View
-      style={[
-        styles.patternBadge,
-        { backgroundColor: isSubscription ? "#f0fdf4" : Colors.primary + "12" },
-      ]}
-    >
-      <Ionicons
-        name={isSubscription ? "repeat-outline" : "flash-outline"}
-        size={10}
-        color={isSubscription ? "#22c55e" : Colors.primary}
-      />
-      <Text
-        style={[
-          styles.patternBadgeText,
-          { color: isSubscription ? "#22c55e" : Colors.primary },
-        ]}
-      >
-        {isSubscription ? "Subscription" : "Order"}
-      </Text>
-    </View>
-  );
-}
-
-// ─── Main Screen ──────────────────────────────────────────────────────────────
+// ─── Main Screen ───────────────────────────────────────────────────────────────
 export default function CatalogScreen() {
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
@@ -545,16 +618,18 @@ export default function CatalogScreen() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [quantity, setQuantity] = useState(1);
   const [pattern, setPattern] = useState("daily");
   const [customDays, setCustomDays] = useState<number[]>([]);
   const [submitting, setSubmitting] = useState(false);
+
   const [successVisible, setSuccessVisible] = useState(false);
   const [infoVisible, setInfoVisible] = useState(false);
   const [walletErrorVisible, setWalletErrorVisible] = useState(false);
-  const [lastIsSubscription, setLastIsSubscription] = useState(false);
+  const [lastPattern, setLastPattern] = useState("daily");
   const [walletBalance, setWalletBalance] = useState(0);
 
   const isFocused = useIsFocused();
@@ -584,12 +659,10 @@ export default function CatalogScreen() {
 
   useEffect(() => {
     if (!isFocused) return;
-
     fetchData();
     const interval = setInterval(() => {
       if (!modalVisible) fetchData();
     }, 2000);
-
     return () => clearInterval(interval);
   }, [isFocused, fetchData, modalVisible]);
 
@@ -617,9 +690,7 @@ export default function CatalogScreen() {
     );
   };
 
-  const isCurrentPatternSubscription = pattern === "daily";
-
-  // Order total based on selected product and quantity
+  const isCurrentPatternSubscription = pattern !== "buy_once";
   const orderTotal = (selectedProduct?.price ?? 0) * quantity;
 
   const handleSubmit = async () => {
@@ -627,50 +698,40 @@ export default function CatalogScreen() {
       setInfoVisible(true);
       return;
     }
-
-    // ── Wallet balance check ──────────────────────────────
     if (walletBalance < orderTotal) {
       setWalletErrorVisible(true);
       return;
     }
-    // ─────────────────────────────────────────────────────
 
     setSubmitting(true);
     try {
+      // Start tomorrow
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
       const startDate = tomorrow.toISOString().split("T")[0];
 
-      if (isCurrentPatternSubscription) {
-        await api.createSubscription({
-          product_id: selectedProduct.id,
-          quantity,
-          pattern,
-          custom_days: null,
-          start_date: startDate,
-          end_date: null,
-        });
-      } else {
-        await api.createOrder({
-          product_id: selectedProduct.id,
-          quantity,
-          pattern,
-          custom_days: pattern === "custom" ? customDays : null,
-          delivery_date: startDate,
-        });
-      }
+      // ALL patterns go to subscriptions endpoint
+      // Backend handles: daily/alternate/custom = recurring, buy_once = single order
+      await api.createSubscription({
+        product_id: selectedProduct.id,
+        quantity,
+        pattern,
+        custom_days: pattern === "custom" ? customDays : null,
+        start_date: startDate,
+        end_date: pattern === "buy_once" ? startDate : null,
+        amount: orderTotal,
+      });
 
-      setLastIsSubscription(isCurrentPatternSubscription);
+      setLastPattern(pattern);
       setModalVisible(false);
       setSuccessVisible(true);
 
-      // Silently refresh wallet balance after order
       api
         .getWallet()
         .then((w) => setWalletBalance(w.balance ?? 0))
         .catch(() => {});
     } catch (e: any) {
-      // Could show an error modal here
+      console.error("Order error:", e);
     } finally {
       setSubmitting(false);
     }
@@ -700,6 +761,7 @@ export default function CatalogScreen() {
 
   const modalTheme = getCategoryTheme(selectedProduct?.category);
   const shopName = getAdminName(selectedProduct?.admin_id);
+  const selectedPatternObj = patterns.find((p) => p.value === pattern);
 
   const ListHeader = (
     <>
@@ -709,7 +771,6 @@ export default function CatalogScreen() {
           <Text style={styles.pageSubtitle}>
             {products.length} products available
           </Text>
-          {/* Wallet balance pill in header */}
           <View style={styles.walletPill}>
             <Ionicons name="wallet-outline" size={11} color={Colors.primary} />
             <Text style={styles.walletPillText}>
@@ -789,7 +850,7 @@ export default function CatalogScreen() {
         )}
       />
 
-      {/* ── Subscribe / Order Modal ── */}
+      {/* ── Order / Subscribe Modal ── */}
       <Modal visible={modalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalSheet}>
@@ -841,7 +902,7 @@ export default function CatalogScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Wallet balance strip inside modal */}
+            {/* Wallet balance strip */}
             <View style={styles.walletStrip}>
               <View style={styles.walletStripLeft}>
                 <Ionicons
@@ -904,7 +965,7 @@ export default function CatalogScreen() {
                 </TouchableOpacity>
               </View>
 
-              {/* Order total row */}
+              {/* Order total */}
               <View style={styles.orderTotalRow}>
                 <Text style={styles.orderTotalLabel}>Order Total</Text>
                 <Text
@@ -920,7 +981,7 @@ export default function CatalogScreen() {
                 </Text>
               </View>
 
-              {/* Pattern */}
+              {/* Delivery Pattern */}
               <Text style={styles.sectionLabel}>Delivery Pattern</Text>
               <View style={styles.patternGrid}>
                 {patterns.map((p) => {
@@ -982,12 +1043,22 @@ export default function CatalogScreen() {
                       >
                         {p.label}
                       </Text>
+                      <Text
+                        style={[
+                          styles.patternHint,
+                          {
+                            color: isActive ? "rgba(255,255,255,0.8)" : "#aaa",
+                          },
+                        ]}
+                      >
+                        {p.hint}
+                      </Text>
                     </TouchableOpacity>
                   );
                 })}
               </View>
 
-              {/* Live badge showing what will be created */}
+              {/* Live type banner */}
               <View
                 style={[
                   styles.submitTypeBanner,
@@ -1023,23 +1094,24 @@ export default function CatalogScreen() {
                   ]}
                 >
                   {isCurrentPatternSubscription
-                    ? "This will create a daily subscription"
-                    : "This will place a one-time order"}
+                    ? `This creates a ${selectedPatternObj?.label.toLowerCase()} subscription — auto-delivered to riders`
+                    : "This places a one-time order — shows to rider once"}
                 </Text>
               </View>
 
-              {/* Custom days */}
+              {/* Custom days picker */}
               {pattern === "custom" && (
                 <>
-                  <Text style={styles.sectionLabel}>Select Days</Text>
+                  <Text style={styles.sectionLabel}>Select Delivery Days</Text>
                   <View style={styles.daysRow}>
                     {weekDays.map((day) => (
                       <TouchableOpacity
                         key={day.value}
                         style={[
-                          styles.dayCircle,
+                          styles.dayPill,
                           customDays.includes(day.value) && {
                             backgroundColor: modalTheme.accent,
+                            borderColor: modalTheme.accent,
                           },
                         ]}
                         onPress={() => toggleCustomDay(day.value)}
@@ -1056,6 +1128,12 @@ export default function CatalogScreen() {
                       </TouchableOpacity>
                     ))}
                   </View>
+                  {customDays.length > 0 && (
+                    <Text style={styles.selectedDaysHint}>
+                      Delivering on {customDays.length} day
+                      {customDays.length > 1 ? "s" : ""} per week
+                    </Text>
+                  )}
                 </>
               )}
 
@@ -1064,11 +1142,11 @@ export default function CatalogScreen() {
                 title={
                   submitting
                     ? isCurrentPatternSubscription
-                      ? "Subscribing..."
+                      ? "Creating Subscription..."
                       : "Placing Order..."
                     : isCurrentPatternSubscription
-                      ? "Subscribe Now"
-                      : "Place Order"
+                      ? `Subscribe — ${selectedPatternObj?.label}`
+                      : "Place One-time Order"
                 }
                 onPress={handleSubmit}
                 loading={submitting}
@@ -1079,56 +1157,20 @@ export default function CatalogScreen() {
         </View>
       </Modal>
 
-      {/* ── Success Modal ── */}
+      {/* Modals */}
       <SuccessModal
         visible={successVisible}
-        isSubscription={lastIsSubscription}
+        pattern={lastPattern}
         productName={selectedProduct?.name || ""}
         onClose={() => setSuccessVisible(false)}
       />
-
-      {/* ── Info Modal (custom days error) ── */}
       <InfoModal visible={infoVisible} onClose={() => setInfoVisible(false)} />
-
-      {/* ── Insufficient Wallet Modal ── */}
-      <Modal visible={walletErrorVisible} transparent animationType="fade">
-        <View style={ms.overlay}>
-          <View style={ms.card}>
-            <View style={ms.iconWrap}>
-              <View
-                style={[
-                  ms.iconCircle,
-                  { backgroundColor: "#fff7ed", borderColor: "#fed7aa" },
-                ]}
-              >
-                <Ionicons name="wallet-outline" size={28} color="#f97316" />
-              </View>
-            </View>
-            <Text style={ms.title}>Insufficient Balance</Text>
-            <Text style={ms.subtitle}>
-              Your wallet balance{" "}
-              <Text style={{ fontWeight: "800", color: "#f97316" }}>
-                ₹{walletBalance.toFixed(2)}
-              </Text>{" "}
-              is less than the order total{" "}
-              <Text style={{ fontWeight: "800", color: "#1A1A1A" }}>
-                ₹{orderTotal.toFixed(2)}
-              </Text>
-              .{"\n"}Please recharge your wallet to continue.
-            </Text>
-            <TouchableOpacity
-              style={[
-                ms.btn,
-                { backgroundColor: "#f97316", shadowColor: "#f97316" },
-              ]}
-              onPress={() => setWalletErrorVisible(false)}
-              activeOpacity={0.85}
-            >
-              <Text style={ms.btnText}>OK, Got it</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+      <WalletErrorModal
+        visible={walletErrorVisible}
+        walletBalance={walletBalance}
+        orderTotal={orderTotal}
+        onClose={() => setWalletErrorVisible(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -1257,7 +1299,6 @@ const styles = StyleSheet.create({
   },
   emptyText: { fontSize: 14, color: "#bbb", fontWeight: "500" },
 
-  // ── Modal ──
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.45)",
@@ -1321,7 +1362,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
-  // ── Wallet strip inside modal ──
   walletStrip: {
     flexDirection: "row",
     alignItems: "center",
@@ -1344,7 +1384,6 @@ const styles = StyleSheet.create({
   },
   insufficientBadgeText: { fontSize: 10, fontWeight: "700", color: "#f97316" },
 
-  // ── Order total row ──
   orderTotalRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -1368,6 +1407,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     marginTop: 2,
   },
+
   quantityRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -1399,7 +1439,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#F8F8F8",
     borderWidth: 1.5,
     borderColor: "transparent",
-    gap: 6,
+    gap: 4,
   },
   patternCardTop: {
     flexDirection: "row",
@@ -1413,6 +1453,7 @@ const styles = StyleSheet.create({
   },
   patternTypeBadgeText: { fontSize: 9, fontWeight: "800", letterSpacing: 0.3 },
   patternLabel: { fontSize: 13, fontWeight: "700", color: "#1A1A1A" },
+  patternHint: { fontSize: 10, color: "#aaa", fontWeight: "500" },
 
   submitTypeBanner: {
     flexDirection: "row",
@@ -1426,29 +1467,21 @@ const styles = StyleSheet.create({
   },
   submitTypeBannerText: { fontSize: 12, fontWeight: "700", flex: 1 },
 
-  daysRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 20,
-  },
-  dayCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+  daysRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 8 },
+  dayPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
     backgroundColor: "#F5F5F5",
-    justifyContent: "center",
-    alignItems: "center",
+    borderWidth: 1.5,
+    borderColor: "#E5E5E5",
   },
   dayLabel: { fontSize: 11, fontWeight: "700", color: "#999" },
   dayLabelActive: { color: "#fff" },
-
-  patternBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 8,
+  selectedDaysHint: {
+    fontSize: 11,
+    color: "#888",
+    marginBottom: 16,
+    fontWeight: "500",
   },
-  patternBadgeText: { fontSize: 9, fontWeight: "800" },
 });

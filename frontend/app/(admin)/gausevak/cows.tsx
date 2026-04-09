@@ -19,6 +19,7 @@ import {
   Alert,
   Image,
 } from "react-native";
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../../../src/services/api";
@@ -1568,6 +1569,7 @@ function CowCard({
 }
 
 export default function CowsScreen() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const [cows, setCows] = useState<Cow[]>([]);
   const [screen, setScreen] = useState<Screen>("home");
@@ -1672,7 +1674,7 @@ export default function CowsScreen() {
   // paddingTop on the screen handles the status bar on Android
   // On iOS the notch/status bar is handled natively by the OS
   return (
-    <View style={s.screen}>
+    <View style={[s.screen, { paddingTop: insets.top }]}>
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
 
       <View style={s.header}>
@@ -1877,17 +1879,13 @@ export default function CowsScreen() {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Styles
-// ─────────────────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
-  // ✅ KEY FIX: paddingTop pushes everything below the status bar on Android
-  // On iOS, the OS handles this automatically so we use 0
+
   screen: {
     flex: 1,
     backgroundColor: "#fff",
-    paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0,
   },
   header: {
     flexDirection: "row",

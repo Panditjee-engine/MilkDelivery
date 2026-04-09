@@ -8,13 +8,13 @@ import {
   TextInput,
   Animated,
   StatusBar,
-  SafeAreaView,
   ActivityIndicator,
   RefreshControl,
   Alert,
   Platform,
   Image,
 } from "react-native";
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../../../src/services/api";
@@ -240,6 +240,7 @@ const fmtDate = (iso: string) =>
 export default function CowHealthScreen() {
   const router = useRouter();
   const isFocused = useIsFocused();
+    const insets = useSafeAreaInsets();
 
   const [rows, setRows] = useState<CowRow[]>([]);
   const [summary, setSummary] = useState<Summary>({
@@ -372,7 +373,7 @@ useEffect(() => {
   ];
 
   return (
-    <SafeAreaView style={s.screen}>
+     <View style={[s.screen, { paddingTop: insets.top }]}>
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
 
       <View style={s.header}>
@@ -512,11 +513,9 @@ useEffect(() => {
           />
         </>
       )}
-    </SafeAreaView>
+    </View>
   );
 }
-
-const ANDROID_STATUS_BAR = Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0;
 
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#FFF8F0" },
@@ -525,8 +524,8 @@ const s = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 16,
     paddingVertical: 14,
-    paddingTop: Platform.OS === "android" ? ANDROID_STATUS_BAR + 14 : 14,
-    backgroundColor: "#FFF8F0",
+    paddingTop: 14,
+    backgroundColor: "#fff",
     borderBottomWidth: 1,
     borderBottomColor: "#e6a681",
   },

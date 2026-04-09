@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -17,7 +17,7 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../src/contexts/AuthContext";
 
-// ── Palette 
+// ── Palette
 const C = {
   bg: "#FFF8F4",
   card: "#fff",
@@ -33,7 +33,7 @@ const C = {
   border: "#FFF0E8",
 };
 
-// ── Types 
+// ── Types
 type ModalType =
   | "cutoff"
   | "delivery"
@@ -43,6 +43,9 @@ type ModalType =
   | "profile"
   | "password"
   | null;
+
+// OTP step: 'input' → 'verify' → 'change'
+type OtpStep = "input" | "verify" | "change";
 
 interface Settings {
   cutoffHour: string;
@@ -69,7 +72,7 @@ const GRACE_OPTIONS = [
 const HOURS_12 = ["5", "6", "7", "8", "9", "10", "11", "12"];
 const MINUTES = ["00", "15", "30", "45"];
 
-// ── Custom Alert 
+// ── Custom Alert
 type AlertBtn = {
   text: string;
   style?: "default" | "cancel" | "destructive";
@@ -83,6 +86,8 @@ type AlertCfg = {
   title: string;
   message?: string;
   buttons: AlertBtn[];
+  // OTP display
+  otpCode?: string;
 };
 
 function CustomAlert({
@@ -116,6 +121,18 @@ function CustomAlert({
           </View>
           <Text style={aS.title}>{cfg.title}</Text>
           {cfg.message ? <Text style={aS.msg}>{cfg.message}</Text> : null}
+
+          {/* OTP Code Display */}
+          {cfg.otpCode ? (
+            <View style={aS.otpBox}>
+              {cfg.otpCode.split("").map((digit, i) => (
+                <View key={i} style={aS.otpDigitBox}>
+                  <Text style={aS.otpDigit}>{digit}</Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
+
           <View
             style={[
               aS.btnRow,
@@ -168,6 +185,7 @@ function useAlert() {
     icon?: string,
     iconBg?: string,
     iconColor?: string,
+    otpCode?: string,
   ) =>
     setCfg({
       visible: true,
@@ -177,12 +195,13 @@ function useAlert() {
       icon,
       iconBg,
       iconColor,
+      otpCode,
     });
   const dismiss = () => setCfg((p) => ({ ...p, visible: false }));
   return { cfg, show, dismiss };
 }
 
-// ── Picker Chip Row 
+// ── Picker Chip Row
 function PickerRow({
   label,
   options,
@@ -214,7 +233,7 @@ function PickerRow({
   );
 }
 
-// ── Modal Shell 
+// ── Modal Shell
 function SettingModal({
   visible,
   title,
@@ -259,14 +278,6 @@ function SettingModal({
             </View>
             <ScrollView showsVerticalScrollIndicator={false} style={mS.body}>
               {children}
-              <TouchableOpacity
-                style={mS.saveBtn}
-                onPress={onSave}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="checkmark-circle" size={18} color="#fff" />
-                <Text style={mS.saveTxt}>Save Changes</Text>
-              </TouchableOpacity>
               <View style={{ height: 24 }} />
             </ScrollView>
           </Pressable>
@@ -276,7 +287,7 @@ function SettingModal({
   );
 }
 
-// ── Setting Row 
+// ── Setting Row
 function SettingRow({
   icon,
   iconBg,
@@ -315,6 +326,56 @@ function SettingRow({
   );
 }
 
+// ── OTP Input: 6 individual boxes
+function OtpInput({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const inputs = useRef<(TextInput | null)[]>([]);
+
+  const handleChange = (text: string, index: number) => {
+    const cleaned = text.replace(/[^0-9]/g, "").slice(-1);
+    const arr = value.padEnd(6, " ").split("");
+    arr[index] = cleaned || " ";
+    const next = arr.join("").trimEnd();
+    onChange(next);
+    if (cleaned && index < 5) {
+      inputs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleKeyPress = (e: any, index: number) => {
+    if (e.nativeEvent.key === "Backspace" && !value[index] && index > 0) {
+      inputs.current[index - 1]?.focus();
+    }
+  };
+
+  return (
+    <View style={mS.otpRow}>
+      {[0, 1, 2, 3, 4, 5].map((i) => (
+        <TextInput
+          key={i}
+          ref={(ref) => { inputs.current[i] = ref; }}
+          style={[
+            mS.otpBox,
+            value[i] && value[i] !== " " ? mS.otpBoxFilled : null,
+          ]}
+          value={value[i] && value[i] !== " " ? value[i] : ""}
+          onChangeText={(t) => handleChange(t, i)}
+          onKeyPress={(e) => handleKeyPress(e, i)}
+          keyboardType="number-pad"
+          maxLength={1}
+          textAlign="center"
+          selectTextOnFocus
+        />
+      ))}
+    </View>
+  );
+}
+
 // ── Main Screen
 export default function AdminSettingsScreen() {
   const { user, logout } = useAuth();
@@ -344,23 +405,28 @@ export default function AdminSettingsScreen() {
     email: user?.email ?? "",
     phone: user?.phone ?? "",
   });
-  // Password change state
-  const [pwDraft, setPwDraft] = useState({
-    current: "",
-    newPw: "",
-    confirm: "",
-  });
-  const [showPw, setShowPw] = useState({
-    current: false,
-    newPw: false,
-    confirm: false,
-  });
+
+  // ── Password / OTP state
+  const [otpStep, setOtpStep] = useState<OtpStep>("input");
+  const [otpContact, setOtpContact] = useState(""); // email or phone
+  const [generatedOtp, setGeneratedOtp] = useState(""); // simulated OTP
+  const [enteredOtp, setEnteredOtp] = useState(""); // user typed OTP
+  const [otpResendTimer, setOtpResendTimer] = useState(0);
+  const [pwDraft, setPwDraft] = useState({ newPw: "", confirm: "" });
+  const [showPw, setShowPw] = useState({ newPw: false, confirm: false });
 
   useEffect(() => {
     AsyncStorage.getItem("APP_SETTINGS").then((data) => {
       if (data) setSettings(JSON.parse(data));
     });
   }, []);
+
+  // Resend countdown
+  useEffect(() => {
+    if (otpResendTimer <= 0) return;
+    const t = setTimeout(() => setOtpResendTimer((p) => p - 1), 1000);
+    return () => clearTimeout(t);
+  }, [otpResendTimer]);
 
   const openModal = (type: ModalType) => {
     setDraft({ ...settings });
@@ -370,8 +436,14 @@ export default function AdminSettingsScreen() {
         email: user?.email ?? "",
         phone: (user as any)?.phone ?? "",
       });
-    if (type === "password")
-      setPwDraft({ current: "", newPw: "", confirm: "" });
+    if (type === "password") {
+      setOtpStep("input");
+      setOtpContact("");
+      setGeneratedOtp("");
+      setEnteredOtp("");
+      setPwDraft({ newPw: "", confirm: "" });
+      setShowPw({ newPw: false, confirm: false });
+    }
     setActiveModal(type);
   };
   const closeModal = () => setActiveModal(null);
@@ -414,11 +486,111 @@ export default function AdminSettingsScreen() {
     );
   };
 
-  const savePassword = () => {
-    if (!pwDraft.current || !pwDraft.newPw || !pwDraft.confirm) {
+  // ── OTP: Step 1 — Request OTP
+  const handleRequestOtp = () => {
+    const trimmed = otpContact.trim();
+    if (!trimmed) {
+      showAlert(
+        "Required",
+        "Please enter your email address or phone number.",
+        undefined,
+        "alert-circle-outline",
+        C.deepPeach,
+        C.amber,
+      );
+      return;
+    }
+    // Basic validation
+    const isEmail = /\S+@\S+\.\S+/.test(trimmed);
+    const isPhone = /^[+]?[\d\s\-()]{7,15}$/.test(trimmed);
+    if (!isEmail && !isPhone) {
+      showAlert(
+        "Invalid Input",
+        "Enter a valid email address or phone number.",
+        undefined,
+        "alert-circle-outline",
+        C.deepPeach,
+        C.amber,
+      );
+      return;
+    }
+
+    // Generate a 6-digit OTP (simulated — replace with real API call)
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    setGeneratedOtp(otp);
+    setOtpStep("verify");
+    setOtpResendTimer(30);
+
+    // TODO: call api.sendOtp(trimmed) — the otp below is for demo only
+    showAlert(
+      "OTP Sent",
+      `Your one-time password has been sent to ${trimmed}`,
+      [
+        {
+          text: "Got it",
+          onPress: () => {},
+        },
+      ],
+      "mail-outline",
+      C.deepPeach,
+      C.dark,
+      otp, // display OTP in alert (remove in production)
+    );
+  };
+
+  // ── OTP: Step 2 — Verify OTP
+  const handleVerifyOtp = () => {
+    if (enteredOtp.length < 6) {
+      showAlert(
+        "Incomplete OTP",
+        "Please enter all 6 digits of the OTP.",
+        undefined,
+        "alert-circle-outline",
+        C.deepPeach,
+        C.amber,
+      );
+      return;
+    }
+    if (enteredOtp !== generatedOtp) {
+      showAlert(
+        "Invalid OTP",
+        "The OTP you entered is incorrect. Please try again.",
+        undefined,
+        "close-circle-outline",
+        "#FFE8D6",
+        "#E53935",
+      );
+      setEnteredOtp("");
+      return;
+    }
+    setOtpStep("change");
+  };
+
+  // ── OTP: Resend OTP
+  const handleResendOtp = () => {
+    if (otpResendTimer > 0) return;
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    setGeneratedOtp(otp);
+    setEnteredOtp("");
+    setOtpResendTimer(30);
+    // TODO: call api.sendOtp(otpContact)
+    showAlert(
+      "OTP Resent",
+      `A new OTP has been sent to ${otpContact}`,
+      undefined,
+      "refresh-circle-outline",
+      C.deepPeach,
+      C.dark,
+      otp,
+    );
+  };
+
+  // ── OTP: Step 3 — Save new password
+  const handleSavePassword = () => {
+    if (!pwDraft.newPw || !pwDraft.confirm) {
       showAlert(
         "Fill All Fields",
-        "Please fill in all password fields.",
+        "Please fill in both password fields.",
         undefined,
         "lock-closed-outline",
         C.deepPeach,
@@ -440,7 +612,7 @@ export default function AdminSettingsScreen() {
     if (pwDraft.newPw !== pwDraft.confirm) {
       showAlert(
         "Mismatch",
-        "New password and confirm password do not match.",
+        "Passwords do not match.",
         undefined,
         "alert-circle-outline",
         C.deepPeach,
@@ -448,7 +620,7 @@ export default function AdminSettingsScreen() {
       );
       return;
     }
-    // TODO: call api.changePassword(pwDraft.current, pwDraft.newPw)
+    // TODO: call api.changePassword(pwDraft.newPw)
     setActiveModal(null);
     showAlert(
       "Password Changed",
@@ -485,6 +657,14 @@ export default function AdminSettingsScreen() {
   const cutoffDisplay = `${settings.cutoffHour}:${settings.cutoffMin} ${settings.cutoffAmPm}`;
   const deliveryDisplay = `${settings.deliveryStartHour}:${settings.deliveryStartMin} ${settings.deliveryStartAmPm} – ${settings.deliveryEndHour}:${settings.deliveryEndMin} ${settings.deliveryEndAmPm}`;
   const graceDisplay = settings.gracePeriod;
+
+  // ── Password modal step labels
+  const pwStepTitle =
+    otpStep === "input"
+      ? "Verify Identity"
+      : otpStep === "verify"
+        ? "Enter OTP"
+        : "Set New Password";
 
   return (
     <SafeAreaView style={s.container} edges={["top"]}>
@@ -637,6 +817,14 @@ export default function AdminSettingsScreen() {
             setDraft((d) => ({ ...d, cutoffAmPm: v as "AM" | "PM" }))
           }
         />
+        <TouchableOpacity
+          style={mS.saveBtn}
+          onPress={saveSettings}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="checkmark-circle" size={18} color="#fff" />
+          <Text style={mS.saveTxt}>Save Changes</Text>
+        </TouchableOpacity>
       </SettingModal>
 
       {/* ── Modal: Delivery Window ── */}
@@ -690,6 +878,14 @@ export default function AdminSettingsScreen() {
             setDraft((d) => ({ ...d, deliveryEndAmPm: v as "AM" | "PM" }))
           }
         />
+        <TouchableOpacity
+          style={mS.saveBtn}
+          onPress={saveSettings}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="checkmark-circle" size={18} color="#fff" />
+          <Text style={mS.saveTxt}>Save Changes</Text>
+        </TouchableOpacity>
       </SettingModal>
 
       {/* ── Modal: Grace Period ── */}
@@ -719,6 +915,14 @@ export default function AdminSettingsScreen() {
             </TouchableOpacity>
           ))}
         </View>
+        <TouchableOpacity
+          style={mS.saveBtn}
+          onPress={saveSettings}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="checkmark-circle" size={18} color="#fff" />
+          <Text style={mS.saveTxt}>Save Changes</Text>
+        </TouchableOpacity>
       </SettingModal>
 
       {/* ── Modal: Business Name ── */}
@@ -738,6 +942,14 @@ export default function AdminSettingsScreen() {
           placeholderTextColor={C.light}
           autoFocus
         />
+        <TouchableOpacity
+          style={mS.saveBtn}
+          onPress={saveSettings}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="checkmark-circle" size={18} color="#fff" />
+          <Text style={mS.saveTxt}>Save Changes</Text>
+        </TouchableOpacity>
       </SettingModal>
 
       {/* ── Modal: Support Contact ── */}
@@ -758,6 +970,14 @@ export default function AdminSettingsScreen() {
           keyboardType="phone-pad"
           autoFocus
         />
+        <TouchableOpacity
+          style={mS.saveBtn}
+          onPress={saveSettings}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="checkmark-circle" size={18} color="#fff" />
+          <Text style={mS.saveTxt}>Save Changes</Text>
+        </TouchableOpacity>
       </SettingModal>
 
       {/* ── Modal: Edit Profile ── */}
@@ -803,64 +1023,242 @@ export default function AdminSettingsScreen() {
             />
           </View>
         ))}
+        <TouchableOpacity
+          style={mS.saveBtn}
+          onPress={saveProfile}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="checkmark-circle" size={18} color="#fff" />
+          <Text style={mS.saveTxt}>Save Changes</Text>
+        </TouchableOpacity>
       </SettingModal>
 
-      {/* ── Modal: Change Password ── */}
+      {/* ── Modal: Change Password (OTP Flow) ── */}
       <SettingModal
         visible={activeModal === "password"}
-        title="Change Password"
+        title={pwStepTitle}
         icon="lock-closed-outline"
         onClose={closeModal}
-        onSave={savePassword}
+        onSave={() => {}} // save handled per-step
       >
-        {(
-          [
-            { label: "Current Password", key: "current" },
-            { label: "New Password", key: "newPw" },
-            { label: "Confirm New Password", key: "confirm" },
-          ] as const
-        ).map((f) => (
-          <View key={f.key}>
-            <Text style={mS.fieldLabel}>{f.label}</Text>
-            <View style={mS.pwRow}>
-              <TextInput
-                style={[mS.input, { flex: 1, marginBottom: 0 }]}
-                value={pwDraft[f.key]}
-                onChangeText={(v) => setPwDraft((p) => ({ ...p, [f.key]: v }))}
-                placeholder="••••••••"
-                placeholderTextColor={C.light}
-                secureTextEntry={!showPw[f.key]}
-              />
-              <TouchableOpacity
-                style={mS.eyeBtn}
-                onPress={() => setShowPw((p) => ({ ...p, [f.key]: !p[f.key] }))}
+        {/* Step indicator */}
+        <View style={mS.stepRow}>
+          {(["input", "verify", "change"] as OtpStep[]).map((step, i) => (
+            <React.Fragment key={step}>
+              <View
+                style={[
+                  mS.stepDot,
+                  otpStep === step && mS.stepDotActive,
+                  (otpStep === "verify" && i === 0) ||
+                  (otpStep === "change" && i <= 1)
+                    ? mS.stepDotDone
+                    : null,
+                ]}
               >
-                <Ionicons
-                  name={showPw[f.key] ? "eye-off-outline" : "eye-outline"}
-                  size={18}
-                  color={C.accent}
+                {(otpStep === "verify" && i === 0) ||
+                (otpStep === "change" && i <= 1) ? (
+                  <Ionicons name="checkmark" size={10} color="#fff" />
+                ) : (
+                  <Text style={mS.stepDotTxt}>{i + 1}</Text>
+                )}
+              </View>
+              {i < 2 && (
+                <View
+                  style={[
+                    mS.stepLine,
+                    (otpStep === "verify" && i === 0) ||
+                    (otpStep === "change" && i <= 1)
+                      ? mS.stepLineDone
+                      : null,
+                  ]}
                 />
+              )}
+            </React.Fragment>
+          ))}
+        </View>
+
+        {/* ── Step 1: Enter email / phone ── */}
+        {otpStep === "input" && (
+          <View>
+            <View style={mS.stepInfo}>
+              <Ionicons
+                name="shield-outline"
+                size={32}
+                color={C.primary}
+                style={{ marginBottom: 10 }}
+              />
+              <Text style={mS.stepInfoTitle}>Verify your identity</Text>
+              <Text style={mS.stepInfoDesc}>
+                Enter your registered email address or phone number to receive a
+                one-time password.
+              </Text>
+            </View>
+            <Text style={mS.fieldLabel}>Email / Phone Number</Text>
+            <TextInput
+              style={mS.input}
+              value={otpContact}
+              onChangeText={setOtpContact}
+              placeholder="email@example.com or +91 XXXXXXXXXX"
+              placeholderTextColor={C.light}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoFocus
+            />
+            <TouchableOpacity
+              style={mS.saveBtn}
+              onPress={handleRequestOtp}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="send-outline" size={17} color="#fff" />
+              <Text style={mS.saveTxt}>Send OTP</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* ── Step 2: Enter OTP ── */}
+        {otpStep === "verify" && (
+          <View>
+            <View style={mS.stepInfo}>
+              <Ionicons
+                name="keypad-outline"
+                size={32}
+                color={C.primary}
+                style={{ marginBottom: 10 }}
+              />
+              <Text style={mS.stepInfoTitle}>Enter OTP</Text>
+              <Text style={mS.stepInfoDesc}>
+                We sent a 6-digit code to{" "}
+                <Text style={{ color: C.dark, fontWeight: "700" }}>
+                  {otpContact}
+                </Text>
+                . It expires in 10 minutes.
+              </Text>
+            </View>
+
+            <Text style={mS.fieldLabel}>One-Time Password</Text>
+            <OtpInput value={enteredOtp} onChange={setEnteredOtp} />
+
+            {/* Resend row */}
+            <View style={mS.resendRow}>
+              <Text style={mS.resendLabel}>Didn't receive it?</Text>
+              <TouchableOpacity
+                onPress={handleResendOtp}
+                disabled={otpResendTimer > 0}
+              >
+                <Text
+                  style={[
+                    mS.resendBtn,
+                    otpResendTimer > 0 && mS.resendBtnDisabled,
+                  ]}
+                >
+                  {otpResendTimer > 0
+                    ? `Resend in ${otpResendTimer}s`
+                    : "Resend OTP"}
+                </Text>
               </TouchableOpacity>
             </View>
-            <View style={{ height: 12 }} />
+
+            <TouchableOpacity
+              style={mS.saveBtn}
+              onPress={handleVerifyOtp}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="checkmark-circle" size={18} color="#fff" />
+              <Text style={mS.saveTxt}>Verify OTP</Text>
+            </TouchableOpacity>
+
+            {/* Back */}
+            <TouchableOpacity
+              style={mS.backBtn}
+              onPress={() => setOtpStep("input")}
+            >
+              <Ionicons name="arrow-back-outline" size={14} color={C.muted} />
+              <Text style={mS.backTxt}>Change email / phone</Text>
+            </TouchableOpacity>
           </View>
-        ))}
-        <View style={mS.pwHint}>
-          <Ionicons
-            name="information-circle-outline"
-            size={14}
-            color={C.muted}
-          />
-          <Text style={mS.pwHintTxt}>
-            Password must be at least 6 characters
-          </Text>
-        </View>
+        )}
+
+        {/* ── Step 3: Set new password ── */}
+        {otpStep === "change" && (
+          <View>
+            <View style={mS.stepInfo}>
+              <Ionicons
+                name="lock-open-outline"
+                size={32}
+                color={C.primary}
+                style={{ marginBottom: 10 }}
+              />
+              <Text style={mS.stepInfoTitle}>Set new password</Text>
+              <Text style={mS.stepInfoDesc}>
+                Identity verified. Enter your new password below.
+              </Text>
+            </View>
+
+            {(
+              [
+                { label: "New Password", key: "newPw" },
+                { label: "Confirm New Password", key: "confirm" },
+              ] as const
+            ).map((f) => (
+              <View key={f.key}>
+                <Text style={mS.fieldLabel}>{f.label}</Text>
+                <View style={mS.pwRow}>
+                  <TextInput
+                    style={[mS.input, { flex: 1, marginBottom: 0 }]}
+                    value={pwDraft[f.key]}
+                    onChangeText={(v) =>
+                      setPwDraft((p) => ({ ...p, [f.key]: v }))
+                    }
+                    placeholder="••••••••"
+                    placeholderTextColor={C.light}
+                    secureTextEntry={!showPw[f.key]}
+                  />
+                  <TouchableOpacity
+                    style={mS.eyeBtn}
+                    onPress={() =>
+                      setShowPw((p) => ({ ...p, [f.key]: !p[f.key] }))
+                    }
+                  >
+                    <Ionicons
+                      name={
+                        showPw[f.key] ? "eye-off-outline" : "eye-outline"
+                      }
+                      size={18}
+                      color={C.accent}
+                    />
+                  </TouchableOpacity>
+                </View>
+                <View style={{ height: 12 }} />
+              </View>
+            ))}
+
+            <View style={mS.pwHint}>
+              <Ionicons
+                name="information-circle-outline"
+                size={14}
+                color={C.muted}
+              />
+              <Text style={mS.pwHintTxt}>
+                Password must be at least 6 characters
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={mS.saveBtn}
+              onPress={handleSavePassword}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="shield-checkmark" size={18} color="#fff" />
+              <Text style={mS.saveTxt}>Update Password</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </SettingModal>
     </SafeAreaView>
   );
 }
 
-// ── Alert Styles 
+// ── Alert Styles
 const aS = StyleSheet.create({
   overlay: {
     flex: 1,
@@ -899,8 +1297,31 @@ const aS = StyleSheet.create({
     color: "#A07850",
     textAlign: "center",
     lineHeight: 20,
-    marginBottom: 22,
+    marginBottom: 16,
     fontWeight: "500",
+  },
+  // OTP display in alert
+  otpBox: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 20,
+    marginTop: 4,
+  },
+  otpDigitBox: {
+    width: 38,
+    height: 46,
+    borderRadius: 10,
+    backgroundColor: "#FFE8D6",
+    borderWidth: 1.5,
+    borderColor: "#FFBF55",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  otpDigit: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#BB6B3F",
+    letterSpacing: 1,
   },
   btnRow: { flexDirection: "row", gap: 10, width: "100%", marginTop: 4 },
   btn: {
@@ -917,7 +1338,7 @@ const aS = StyleSheet.create({
   btnTxtDest: { color: "#3D1F0A" },
 });
 
-// ── Modal Styles 
+// ── Modal Styles
 const mS = StyleSheet.create({
   overlay: {
     flex: 1,
@@ -1038,9 +1459,118 @@ const mS = StyleSheet.create({
     marginBottom: 8,
   },
   pwHintTxt: { fontSize: 12, color: "#A07850", fontWeight: "500" },
+
+  // Step indicator
+  stepRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 24,
+  },
+  stepDot: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#FFE8D6",
+    borderWidth: 1.5,
+    borderColor: "#FFD4B0",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  stepDotActive: {
+    backgroundColor: "#FF9675",
+    borderColor: "#FF9675",
+  },
+  stepDotDone: {
+    backgroundColor: "#BB6B3F",
+    borderColor: "#BB6B3F",
+  },
+  stepDotTxt: { fontSize: 12, fontWeight: "800", color: "#BB6B3F" },
+  stepLine: {
+    flex: 1,
+    height: 2,
+    backgroundColor: "#FFE8D6",
+    marginHorizontal: 4,
+    maxWidth: 40,
+  },
+  stepLineDone: { backgroundColor: "#BB6B3F" },
+
+  // Step info box
+  stepInfo: {
+    alignItems: "center",
+    backgroundColor: "#FFF0E4",
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 20,
+  },
+  stepInfoTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#3D1F0A",
+    marginBottom: 6,
+  },
+  stepInfoDesc: {
+    fontSize: 13,
+    color: "#A07850",
+    textAlign: "center",
+    lineHeight: 19,
+    fontWeight: "500",
+  },
+
+  // OTP input boxes
+  otpRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 8,
+    marginBottom: 16,
+  },
+  otpBox: {
+    flex: 1,
+    height: 54,
+    borderRadius: 14,
+    backgroundColor: "#fff",
+    borderWidth: 1.5,
+    borderColor: "#FFE8C8",
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#3D1F0A",
+    textAlign: "center",
+  },
+  otpBoxFilled: {
+    borderColor: "#FF9675",
+    backgroundColor: "#FFF8EF",
+  },
+
+  // Resend
+  resendRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    marginBottom: 16,
+  },
+  resendLabel: { fontSize: 13, color: "#A07850" },
+  resendBtn: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#BB6B3F",
+    textDecorationLine: "underline",
+  },
+  resendBtnDisabled: { color: "#C9A882", textDecorationLine: "none" },
+
+  // Back button
+  backBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    marginTop: 14,
+    paddingVertical: 8,
+  },
+  backTxt: { fontSize: 13, color: "#A07850", fontWeight: "600" },
 });
 
-// ── Screen Styles 
+// ── Screen Styles
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#FFF8F4" },
   header: { paddingHorizontal: 20, paddingTop: 14, paddingBottom: 8 },
