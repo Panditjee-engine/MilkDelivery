@@ -9,17 +9,17 @@ import {
   FlatList,
   TextInput,
   Animated,
-  SafeAreaView,
   ActivityIndicator,
   RefreshControl,
   Modal,
   KeyboardAvoidingView,
 } from "react-native";
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../../../src/services/api";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Types
 interface MilkRow {
   id: string;
   srNo: string;
@@ -204,7 +204,7 @@ function CapacityModal({
           <Text style={md.title}>Set Milking Capacity</Text>
           {cow && (
             <Text style={md.sub}>
-              🐄 {cow.name} · {cow.srNo}
+               {cow.name} · {cow.srNo}
             </Text>
           )}
           <Text style={md.hint}>
@@ -492,6 +492,7 @@ export default function MilkYieldScreen() {
     active_cows: 0,
     total_cows: 0,
   });
+  const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
@@ -618,7 +619,7 @@ export default function MilkYieldScreen() {
     : 0;
 
   return (
-    <SafeAreaView style={s.screen}>
+    <View style={[s.screen, { paddingTop: insets.top }]}>
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
 
       {/* Header */}
@@ -739,13 +740,11 @@ export default function MilkYieldScreen() {
         onSave={handleSaveCapacity}
         onClose={() => setModalCow(null)}
       />
-    </SafeAreaView>
+      </View>
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
-const ANDROID_STATUS_BAR =
-  Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0;
+// ─── Styles 
 
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#f9fafb" },
@@ -761,7 +760,7 @@ const s = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 16,
     paddingVertical: 14,
-    paddingTop: Platform.OS === "android" ? ANDROID_STATUS_BAR + 14 : 14,
+    paddingTop: 14,
     backgroundColor: "#fff",
     borderBottomWidth: 1,
     borderBottomColor: "#f3f4f6",

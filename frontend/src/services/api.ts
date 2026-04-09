@@ -47,12 +47,17 @@ class ApiService {
       headers,
     });
 
-    if (!response.ok) {
-      const error = await response
-        .json()
-        .catch(() => ({ detail: "Request failed" }));
-      throw new Error(error.detail || "Request failed");
-    }
+if (!response.ok) {
+  const error = await response
+    .json()
+    .catch(() => ({ detail: "Request failed" }));
+
+  console.log("❌ FULL ERROR:", error);
+  console.log("❌ DETAIL:", error.detail);
+  console.log("❌ STRING:", JSON.stringify(error));
+
+  throw new Error(JSON.stringify(error.detail));
+}
 
     return response.json();
   }
@@ -123,12 +128,20 @@ class ApiService {
     return this.request<any[]>("/subscriptions");
   }
 
-  async createSubscription(data: any) {
-    return this.request<any>("/subscriptions", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
-  }
+async createSubscription(data: {
+  product_id: string;
+  quantity: number;
+  pattern: string;
+  custom_days: number[] | null;
+  start_date: string;
+  end_date?: string | null;
+  amount: number;
+}) {
+  return this.request<any>("/subscriptions", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
 
   async updateSubscription(id: string, data: any) {
     return this.request<any>(`/subscriptions/${id}`, {
@@ -914,8 +927,12 @@ async workerLogin(identifier: string, password: string) {
   const response = await fetch(`${API_BASE}/api/worker/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: identifier, password }),
+    body: JSON.stringify({ 
+      email: identifier,  // backend reads this field for both email and phone
+      password 
+    }),
   });
+  
   const data = await response.json();
   if (!response.ok) throw new Error(data.detail || 'Worker login failed');
 
@@ -949,17 +966,22 @@ async workerLogout() {
     }
   }
 
-async forgotPassword(email: string) {
+async forgotPassword(identifier: string) {
+  // identifier is already formatted: email as-is, phone as +91XXXXXXXXXX
   return this.request<any>("/auth/forgot-password", {
     method: "POST",
-    body: JSON.stringify({ email }),
+    body: JSON.stringify({ email: identifier }), // backend field is still "email"
   });
 }
 
-async resetPassword(email: string, reset_code: string, new_password: string) {
+async resetPassword(identifier: string, reset_code: string, new_password: string) {
   return this.request<any>("/auth/reset-password", {
     method: "POST",
-    body: JSON.stringify({ email, reset_code, new_password }),
+    body: JSON.stringify({ 
+      email: identifier,  // backend field is still "email"
+      reset_code, 
+      new_password 
+    }),
   });
 }
 

@@ -12,11 +12,11 @@ import {
   Modal,
   ScrollView,
   KeyboardAvoidingView,
-  SafeAreaView,
   ActivityIndicator,
   RefreshControl,
   Alert,
 } from "react-native";
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../../../src/services/api";
@@ -340,7 +340,7 @@ function SemenFormModal({
                   onChange={setF("totalDoses")}
                   color="#7c3aed"
                   icon="flask-outline"
-                  emoji="💉"
+                  emoji=""
                 />
                 <Counter
                   label="Damaged"
@@ -348,7 +348,7 @@ function SemenFormModal({
                   onChange={setF("damaged")}
                   color="#dc2626"
                   icon="close-circle-outline"
-                  emoji="❌"
+                  emoji=""
                 />
               </View>
 
@@ -364,7 +364,7 @@ function SemenFormModal({
                   onChange={setF("femalCalves")}
                   color="#e11d48"
                   icon="female-outline"
-                  emoji="🐮"
+                  emoji=""
                 />
                 <Counter
                   label="Male Calves"
@@ -372,7 +372,7 @@ function SemenFormModal({
                   onChange={setF("maleCalves")}
                   color="#2563eb"
                   icon="male-outline"
-                  emoji="🐂"
+                  emoji=""
                 />
               </View>
 
@@ -388,7 +388,7 @@ function SemenFormModal({
                   onChange={setF("conceptionCount")}
                   color="#d97706"
                   icon="checkmark-circle-outline"
-                  emoji="✅"
+                  emoji=""
                 />
                 <View style={m.ratePreview}>
                   <Text style={m.rateLabel}>Conception Rate</Text>
@@ -507,7 +507,7 @@ function SemenCard({
         {/* Top row */}
         <View style={c.topRow}>
           <View style={c.bullAvatar}>
-            <Text style={{ fontSize: 26 }}>🐂</Text>
+            <Text style={{ fontSize: 26 }}></Text>
           </View>
           <View style={{ flex: 1, marginLeft: 12 }}>
             <View
@@ -537,25 +537,25 @@ function SemenCard({
 
         <View style={c.statsStrip}>
           <View style={c.stripItem}>
-            <Text style={c.stripEmoji}>🐮</Text>
+            <Text style={c.stripEmoji}></Text>
             <Text style={c.stripCount}>{item.femalCalves}</Text>
             <Text style={c.stripLabel}>Female</Text>
           </View>
           <View style={c.stripDivider} />
           <View style={c.stripItem}>
-            <Text style={c.stripEmoji}>🐂</Text>
+            <Text style={c.stripEmoji}></Text>
             <Text style={c.stripCount}>{item.maleCalves}</Text>
             <Text style={c.stripLabel}>Male</Text>
           </View>
           <View style={c.stripDivider} />
           <View style={c.stripItem}>
-            <Text style={c.stripEmoji}>💉</Text>
+            <Text style={c.stripEmoji}></Text>
             <Text style={c.stripCount}>{item.totalDoses}</Text>
             <Text style={c.stripLabel}>Doses</Text>
           </View>
           <View style={c.stripDivider} />
           <View style={c.stripItem}>
-            <Text style={c.stripEmoji}>❌</Text>
+            <Text style={c.stripEmoji}></Text>
             <Text
               style={[
                 c.stripCount,
@@ -568,7 +568,7 @@ function SemenCard({
           </View>
           <View style={c.stripDivider} />
           <View style={c.stripItem}>
-            <Text style={c.stripEmoji}>✅</Text>
+            <Text style={c.stripEmoji}></Text>
             <Text style={[c.stripCount, { color: "#d97706" }]}>
               {item.conceptionCount}
             </Text>
@@ -587,7 +587,7 @@ function SemenCard({
                 { borderColor: "#fecdd3", backgroundColor: "#fff1f2" },
               ]}
             >
-              <Text style={c.detailEmoji}>🐮</Text>
+              <Text style={c.detailEmoji}></Text>
               <Text style={[c.detailCount, { color: "#e11d48" }]}>
                 {item.femalCalves}
               </Text>
@@ -602,7 +602,7 @@ function SemenCard({
                 { borderColor: "#bfdbfe", backgroundColor: "#eff6ff" },
               ]}
             >
-              <Text style={c.detailEmoji}>🐂</Text>
+              <Text style={c.detailEmoji}></Text>
               <Text style={[c.detailCount, { color: "#2563eb" }]}>
                 {item.maleCalves}
               </Text>
@@ -617,7 +617,7 @@ function SemenCard({
                 { borderColor: "#bbf7d0", backgroundColor: "#f0fdf4" },
               ]}
             >
-              <Text style={c.detailEmoji}>🐄</Text>
+              <Text style={c.detailEmoji}></Text>
               <Text style={[c.detailCount, { color: "#16a34a" }]}>
                 {totalCalves}
               </Text>
@@ -632,7 +632,7 @@ function SemenCard({
                 { borderColor: "#e9d5ff", backgroundColor: "#faf5ff" },
               ]}
             >
-              <Text style={c.detailEmoji}>💉</Text>
+              
               <Text style={[c.detailCount, { color: "#7c3aed" }]}>
                 {item.totalDoses}
               </Text>
@@ -647,7 +647,7 @@ function SemenCard({
                 { borderColor: "#fecdd3", backgroundColor: "#fff1f2" },
               ]}
             >
-              <Text style={c.detailEmoji}>❌</Text>
+              <Text style={c.detailEmoji}></Text>
               <Text style={[c.detailCount, { color: "#dc2626" }]}>
                 {item.damaged}
               </Text>
@@ -660,7 +660,7 @@ function SemenCard({
                 { borderColor: rColor + "40", backgroundColor: rColor + "10" },
               ]}
             >
-              <Text style={c.detailEmoji}>📊</Text>
+              <Text style={c.detailEmoji}></Text>
               <Text style={[c.detailCount, { color: rColor }]}>{rate}</Text>
               <Text style={[c.detailLabel, { color: rColor }]}>
                 Conception %
@@ -725,6 +725,7 @@ function SemenCard({
 }
 
 export default function SemenRecordScreen() {
+    const insets = useSafeAreaInsets();
   const router = useRouter();
   const [records, setRecords] = useState<SemenRecord[]>([]);
   const [screen, setScreen] = useState<"home" | "list">("home");
@@ -804,15 +805,13 @@ export default function SemenRecordScreen() {
       : "—";
 
   return (
-    <SafeAreaView style={s.screen}>
+     <View style={[s.screen, { paddingTop: insets.top }]}>
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
 
       <View
         style={[
           s.header,
           {
-            paddingTop:
-              Platform.OS === "ios" ? 0 : (StatusBar.currentHeight ?? 0),
           },
         ]}
       >
@@ -838,8 +837,8 @@ export default function SemenRecordScreen() {
       <View style={s.statsRow}>
         {[
           { label: "Bulls", value: records.length, color: "#0891b2" },
-          { label: "Female 🐮", value: totalFemalCalves, color: "#e11d48" },
-          { label: "Male 🐂", value: totalMaleCalves, color: "#2563eb" },
+          { label: "Female ", value: totalFemalCalves, color: "#e11d48" },
+          { label: "Male ", value: totalMaleCalves, color: "#2563eb" },
           {
             label: "Rate",
             value: overallRate,
@@ -862,7 +861,6 @@ export default function SemenRecordScreen() {
       {screen === "home" ? (
         <View style={s.homeBody}>
           <View style={s.heroWrap}>
-            <Text style={s.heroEmoji}>🐂</Text>
             <Text style={s.homeHeading}>Semen Records</Text>
             <Text style={s.homeSub}>
               Track bull performance, calves & conception rates
@@ -876,7 +874,7 @@ export default function SemenRecordScreen() {
               activeOpacity={0.85}
             >
               <View style={[s.bigBtnIcon, { backgroundColor: "#ecfeff" }]}>
-                <Text style={{ fontSize: 30 }}>➕</Text>
+                <Ionicons name="add-circle" size={18} color="#0891b2" />  
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={s.bigBtnTitle}>Add Semen Record</Text>
@@ -895,7 +893,7 @@ export default function SemenRecordScreen() {
               activeOpacity={0.85}
             >
               <View style={[s.bigBtnIcon, { backgroundColor: "#eff6ff" }]}>
-                <Text style={{ fontSize: 30 }}>📋</Text>
+                <Ionicons name="list" size={18} color="#2563eb" />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={s.bigBtnTitle}>View All Records</Text>
@@ -917,7 +915,7 @@ export default function SemenRecordScreen() {
                   { backgroundColor: "#fff1f2", borderColor: "#fecdd3" },
                 ]}
               >
-                <Text style={s.summaryEmoji}>🐮</Text>
+                <Text style={s.summaryEmoji}></Text>
                 <Text style={[s.summaryCount, { color: "#e11d48" }]}>
                   {totalFemalCalves}
                 </Text>
@@ -931,7 +929,7 @@ export default function SemenRecordScreen() {
                   { backgroundColor: "#eff6ff", borderColor: "#bfdbfe" },
                 ]}
               >
-                <Text style={s.summaryEmoji}>🐂</Text>
+                <Text style={s.summaryEmoji}></Text>
                 <Text style={[s.summaryCount, { color: "#2563eb" }]}>
                   {totalMaleCalves}
                 </Text>
@@ -945,7 +943,7 @@ export default function SemenRecordScreen() {
                   { backgroundColor: "#fffbeb", borderColor: "#fcd34d" },
                 ]}
               >
-                <Text style={s.summaryEmoji}>📊</Text>
+                <Text style={s.summaryEmoji}></Text>
                 <Text style={[s.summaryCount, { color: "#d97706" }]}>
                   {overallRate}
                 </Text>
@@ -981,7 +979,7 @@ export default function SemenRecordScreen() {
             </View>
           ) : error ? (
             <View style={s.errorWrap}>
-              <Text style={{ fontSize: 36 }}>⚠️</Text>
+              <Text style={{ fontSize: 36 }}></Text>
               <Text style={s.errorText}>{error}</Text>
               <TouchableOpacity
                 onPress={() => fetchRecords()}
@@ -1018,7 +1016,7 @@ export default function SemenRecordScreen() {
               )}
               ListEmptyComponent={
                 <View style={s.empty}>
-                  <Text style={{ fontSize: 44 }}>🐂</Text>
+                  <Text style={{ fontSize: 44 }}></Text>
                   <Text style={s.emptyText}>No records found</Text>
                   <TouchableOpacity onPress={openAdd} style={s.emptyAddBtn}>
                     <Ionicons name="add" size={14} color="#fff" />
@@ -1053,7 +1051,7 @@ export default function SemenRecordScreen() {
           }
         }}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 

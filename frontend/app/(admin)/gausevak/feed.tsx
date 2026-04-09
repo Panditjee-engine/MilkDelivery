@@ -9,7 +9,6 @@ import {
   FlatList,
   TextInput,
   Animated,
-  SafeAreaView,
   ActivityIndicator,
   RefreshControl,
   Modal,
@@ -17,6 +16,7 @@ import {
   KeyboardAvoidingView,
   Alert,
 } from "react-native";
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -135,7 +135,7 @@ const STATUS_CFG: Record<
   },
 };
 
-// ─── Auto-refresh dot ─────────────────────────────────────────────────────────
+// ─── Auto-refresh dot 
 function AutoRefreshDot({ active }: { active: boolean }) {
   const pulse = useRef(new Animated.Value(1)).current;
 
@@ -174,7 +174,7 @@ function AutoRefreshDot({ active }: { active: boolean }) {
   );
 }
 
-// ─── FeedDetailModal ──────────────────────────────────────────────────────────
+// ─── FeedDetailModal 
 function FeedDetailModal({
   visible,
   cow,
@@ -270,7 +270,7 @@ function FeedDetailModal({
                 <Text style={md.title}>Feed Details</Text>
                 <Text style={md.sub}>
                   {cow.name} ·{" "}
-                  {shift === "morning" ? "☀️ Morning" : "🌙 Evening"}
+                  {shift === "morning" ? " Morning" : " Evening"}
                 </Text>
               </View>
               <TouchableOpacity style={md.closeBtn} onPress={onClose}>
@@ -503,7 +503,7 @@ function FeedDetailModal({
   );
 }
 
-// ─── FeedBadge ────────────────────────────────────────────────────────────────
+// ─── FeedBadge 
 function FeedBadge({
   status,
   note,
@@ -594,7 +594,7 @@ function FeedBadge({
   );
 }
 
-// ─── FeedCard — collapsed by default, tap to expand ──────────────────────────
+// ─── FeedCard — collapsed by default, tap to expand 
 function FeedCard({
   item,
   index,
@@ -770,7 +770,7 @@ function FeedCard({
   );
 }
 
-// ─── SummaryStrip ─────────────────────────────────────────────────────────────
+// ─── SummaryStrip 
 function SummaryStrip({
   summary,
   activeShift,
@@ -829,7 +829,7 @@ function SummaryStrip({
   );
 }
 
-// ─── ShiftToggle ──────────────────────────────────────────────────────────────
+// ─── ShiftToggle 
 function ShiftToggle({
   active,
   onChange,
@@ -869,8 +869,9 @@ function ShiftToggle({
   );
 }
 
-// ─── Main Screen ──────────────────────────────────────────────────────────────
+// ─── Main Screen 
 export default function AdminFeedScreen() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const today = new Date().toLocaleDateString("en-IN", {
     weekday: "long",
@@ -1046,7 +1047,7 @@ export default function AdminFeedScreen() {
   });
 
   return (
-    <SafeAreaView style={sc.screen}>
+     <View style={[sc.screen, { paddingTop: insets.top }]}>
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
 
       {/* Header */}
@@ -1054,8 +1055,6 @@ export default function AdminFeedScreen() {
         style={[
           sc.header,
           {
-            paddingTop:
-              Platform.OS === "ios" ? 0 : (StatusBar.currentHeight ?? 0),
           },
         ]}
       >
@@ -1155,7 +1154,7 @@ export default function AdminFeedScreen() {
             )}
             ListEmptyComponent={
               <View style={sc.empty}>
-                <Text style={{ fontSize: 40 }}>🌾</Text>
+                <Text style={{ fontSize: 40 }}></Text>
                 <Text style={sc.emptyText}>No records found</Text>
               </View>
             }
@@ -1176,11 +1175,11 @@ export default function AdminFeedScreen() {
         onClose={() => setModalVisible(false)}
         onSave={handleSaveFeed}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
+// ─── Styles 
 
 const ar = StyleSheet.create({
   wrap: { flexDirection: "row", alignItems: "center", gap: 4 },
