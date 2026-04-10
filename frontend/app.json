@@ -5,12 +5,14 @@
     "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "frontend",
+    "scheme": "gausatv",
     "userInterfaceStyle": "automatic",
     "ios": {
+      "bundleIdentifier": "com.cowsatva.gausatv",
       "supportsTablet": true,
       "infoPlist": {
-        "NSCameraUsageDescription": "Allow $(PRODUCT_NAME) to access your camera"
+        "NSCameraUsageDescription": "Allow $(PRODUCT_NAME) to access your camera",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -19,7 +21,7 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#000000"
       },
-      "package": "com.badal_12.frontend",
+      "package": "com.cowsatva.gausatv",
       "permissions": [
         "android.permission.CAMERA"
       ]

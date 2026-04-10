@@ -22,6 +22,18 @@ import Button from '../../src/components/Button';
 
 type LoginMethod = 'email' | 'phone';
 
+function IndiaFlagIcon() {
+  return (
+    <View style={styles.countryFlag} accessible={false}>
+      <View style={[styles.flagStripe, styles.flagSaffron]} />
+      <View style={[styles.flagStripe, styles.flagWhite]}>
+        <View style={styles.flagChakra} />
+      </View>
+      <View style={[styles.flagStripe, styles.flagGreen]} />
+    </View>
+  );
+}
+
 export default function LoginScreen() {
   const [loginMethod, setLoginMethod] = useState<LoginMethod>('email');
 
@@ -213,7 +225,7 @@ export default function LoginScreen() {
                   <Text style={styles.inputLabel}>Mobile Number</Text>
                   <View style={styles.phoneRow}>
                     <View style={styles.countryCode}>
-                      <Text style={styles.countryFlag}>🇮🇳</Text>
+                      <IndiaFlagIcon />
                       <Text style={styles.countryCodeText}>+91</Text>
                     </View>
                     <TextInput
@@ -314,7 +326,12 @@ const styles = StyleSheet.create({
   inputLabel:      { fontSize: 14, fontWeight: '600', color: Colors.text, marginBottom: 6 },
   phoneRow:        { flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderColor: '#E5E7EB', borderRadius: 12, backgroundColor: '#fff', overflow: 'hidden', marginBottom: 4 },
   countryCode:     { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 14, backgroundColor: '#F9FAFB', borderRightWidth: 1, borderRightColor: '#E5E7EB', gap: 6 },
-  countryFlag:     { fontSize: 20 },
+  countryFlag:     { width: 22, height: 15, borderRadius: 3, overflow: 'hidden', borderWidth: 0.5, borderColor: '#D1D5DB' },
+  flagStripe:      { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  flagSaffron:     { backgroundColor: '#FF9933' },
+  flagWhite:       { backgroundColor: '#FFFFFF' },
+  flagGreen:       { backgroundColor: '#138808' },
+  flagChakra:      { width: 4, height: 4, borderRadius: 999, backgroundColor: '#1A4BA0' },
   countryCodeText: { fontSize: 15, fontWeight: '600', color: Colors.text },
   phoneInput:      { flex: 1, paddingHorizontal: 14, paddingVertical: 14, fontSize: 16, color: Colors.text },
 
