@@ -47,24 +47,34 @@ class ApiService {
       headers,
     });
 
-    if (!response.ok) {
-      const error = await response
-        .json()
-        .catch(() => ({ detail: "Request failed" }));
-      throw new Error(error.detail || "Request failed");
-    }
+if (!response.ok) {
+  const error = await response
+    .json()
+    .catch(() => ({ detail: "Request failed" }));
+
+  console.log("❌ FULL ERROR:", error);
+  console.log("❌ DETAIL:", error.detail);
+  console.log("❌ STRING:", JSON.stringify(error));
+
+  throw new Error(JSON.stringify(error.detail));
+}
 
     return response.json();
   }
 
-  async login(email: string, password: string) {
-    const data = await this.request<any>("/auth/login", {
-      method: "POST",
-      body: JSON.stringify({ email, password }),
-    });
-    this.setToken(data.access_token);
-    return data;
-  }
+ async login(identifier: string, password: string, method: 'email' | 'phone' = 'email') {
+  const body =
+    method === 'phone'
+      ? { phone: identifier, password }
+      : { email: identifier, password };
+
+  const data = await this.request<any>("/auth/login", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  this.setToken(data.access_token);
+  return data;
+}
 
   async register(userData: any) {
     const data = await this.request<any>("/auth/register", {
@@ -118,12 +128,20 @@ class ApiService {
     return this.request<any[]>("/subscriptions");
   }
 
-  async createSubscription(data: any) {
-    return this.request<any>("/subscriptions", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
-  }
+async createSubscription(data: {
+  product_id: string;
+  quantity: number;
+  pattern: string;
+  custom_days: number[] | null;
+  start_date: string;
+  end_date?: string | null;
+  amount: number;
+}) {
+  return this.request<any>("/subscriptions", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
 
   async updateSubscription(id: string, data: any) {
     return this.request<any>(`/subscriptions/${id}`, {
@@ -909,8 +927,12 @@ async workerLogin(identifier: string, password: string) {
   const response = await fetch(`${API_BASE}/api/worker/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: identifier, password }),
+    body: JSON.stringify({ 
+      email: identifier,  // backend reads this field for both email and phone
+      password 
+    }),
   });
+  
   const data = await response.json();
   if (!response.ok) throw new Error(data.detail || 'Worker login failed');
 
@@ -923,6 +945,120 @@ async workerLogin(identifier: string, password: string) {
 async workerLogout() {
   await AsyncStorage.removeItem('worker_token');
   await AsyncStorage.removeItem('worker_data');
+}
+
+  async checkDuplicate(
+    field: "email" | "phone",
+    value: string,
+  ): Promise<boolean> {
+    try {
+      const data = await this.request<{ exists: boolean }>(
+        "/auth/check-duplicate",
+        {
+          method: "POST",
+          body: JSON.stringify({ field, value }),
+        },
+      );
+      return !!data.exists;
+    } catch {
+      // Fail open — don't block the user on a network hiccup.
+      return false;
+    }
+  }
+
+async forgotPassword(identifier: string) {
+  // identifier is already formatted: email as-is, phone as +91XXXXXXXXXX
+  return this.request<any>("/auth/forgot-password", {
+    method: "POST",
+    body: JSON.stringify({ email: identifier }), // backend field is still "email"
+  });
+}
+
+async resetPassword(identifier: string, reset_code: string, new_password: string) {
+  return this.request<any>("/auth/reset-password", {
+    method: "POST",
+    body: JSON.stringify({ 
+      email: identifier,  // backend field is still "email"
+      reset_code, 
+      new_password 
+    }),
+  });
+}
+
+async updateWorker(id: string, data: Partial<{ name: string; phone: string; designation: string; farm_name: string; is_active: boolean }>) {
+  return this.request<any>(`/admin/workers/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+// ─────────────────────────────────────────────────────────
+// ADD THESE TO api.ts  (inside the ApiService class)
+// ─────────────────────────────────────────────────────────
+
+// ── Bank Account ─────────────────────────────────────────
+
+async getBankAccount() {
+  return this.request<{
+    accountHolderName: string;
+    accountNumber: string;
+    ifscCode: string;
+    bankName: string;
+    upiId?: string;
+  }>('/wallet/bank-account');
+}
+
+async saveBankAccount(data: {
+  accountHolderName: string;
+  accountNumber: string;
+  ifscCode: string;
+  bankName: string;
+  upiId?: string;
+}) {
+  return this.request<any>('/wallet/bank-account', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+// ── Withdrawal ───────────────────────────────────────────
+
+async requestWithdrawal(amount: number) {
+  return this.request<{
+    message: string;
+    withdrawal_id: string;
+    amount: number;
+    status: string;
+  }>('/wallet/withdraw', {
+    method: 'POST',
+    body: JSON.stringify({ amount }),
+  });
+}
+
+async getWithdrawalHistory() {
+  return this.request<Array<{
+    id: string;
+    amount: number;
+    status: string;  // "pending" | "processing" | "completed" | "rejected"
+    created_at: string;
+    bank_account: {
+      bankName: string;
+      accountNumber: string;
+    };
+  }>>('/wallet/withdrawals');
+}
+
+async createOrder(data: {
+  product_id: string;
+  quantity: number;
+  pattern: string;
+  custom_days: number[] | null;
+  delivery_date: string;
+}) {
+  return this.request<any>("/orders", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
 }
 //------------------------------------------------------------//
 

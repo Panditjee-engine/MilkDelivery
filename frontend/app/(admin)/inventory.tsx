@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   View, Text, StyleSheet, ScrollView, RefreshControl,
-  TouchableOpacity, TextInput, Alert, Modal, Image,
+  TouchableOpacity, TextInput, Modal, Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -12,22 +12,114 @@ import Button from "../../src/components/Button";
 import LoadingScreen from "../../src/components/LoadingScreen";
 import { useAuth } from "../../src/contexts/AuthContext";
 
-// ── Warm Color Palette ──────────────────────────
+// ── Warm Color Palette 
 const C = {
-  primary:    '#FF9675', // amber/golden
-  secondary:  '#FF9675', // peach
-  accent:     '#FD9E69', // orange
-  light:      '#FFD999', // soft yellow
-  dark:       '#BB6B3F', // burnt sienna
-  deep:       '#8B6854', // deep brown
-  bg:         '#FFF8EF', // warm off-white
+  primary:    '#FF9675',
+  secondary:  '#FF9675',
+  accent:     '#8B6854',
+  light:      '#8B6854',
+  dark:       '#BB6B3F',
+  deep:       '#8B6854',
+  bg:         '#FFF8EF',
   card:       '#FFE8D6',
   text:       '#3D1F0A',
   textMuted:  '#A07850',
   textLight:  '#C9A882',
 };
 
+// ── Custom Alert
+type AlertButton = {
+  text: string;
+  style?: 'default' | 'cancel' | 'destructive';
+  onPress?: () => void;
+};
 
+type AlertConfig = {
+  visible: boolean;
+  title: string;
+  message?: string;
+  buttons: AlertButton[];
+};
+
+function CustomAlert({ config, onDismiss }: { config: AlertConfig; onDismiss: () => void }) {
+  if (!config.visible) return null;
+  return (
+    <Modal transparent animationType="fade" visible={config.visible} onRequestClose={onDismiss}>
+      <View style={alertStyles.overlay}>
+        <View style={alertStyles.box}>
+          {/* Icon */}
+          <View style={alertStyles.iconWrap}>
+            <Ionicons
+              name={
+                config.buttons.some(b => b.style === 'destructive')
+                  ? 'warning-outline'
+                  : 'information-circle-outline'
+              }
+              size={28}
+              color={config.buttons.some(b => b.style === 'destructive') ? C.secondary : C.dark}
+            />
+          </View>
+
+          <Text style={alertStyles.title}>{config.title}</Text>
+          {config.message ? <Text style={alertStyles.message}>{config.message}</Text> : null}
+
+          <View style={alertStyles.btnRow}>
+            {config.buttons.map((btn, idx) => {
+              const isDestructive = btn.style === 'destructive';
+              const isCancel = btn.style === 'cancel';
+              return (
+                <TouchableOpacity
+                  key={idx}
+                  style={[
+                    alertStyles.btn,
+                    isDestructive && alertStyles.btnDestructive,
+                    isCancel && alertStyles.btnCancel,
+                    config.buttons.length === 1 && { flex: 1 },
+                  ]}
+                  onPress={() => {
+                    onDismiss();
+                    btn.onPress?.();
+                  }}
+                  activeOpacity={0.75}
+                >
+                  <Text style={[
+                    alertStyles.btnText,
+                    isDestructive && alertStyles.btnTextDestructive,
+                    isCancel && alertStyles.btnTextCancel,
+                  ]}>
+                    {btn.text}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+// ── Alert hook 
+function useCustomAlert() {
+  const [alertConfig, setAlertConfig] = useState<AlertConfig>({
+    visible: false, title: '', buttons: [],
+  });
+
+  const showAlert = (title: string, message?: string, buttons?: AlertButton[]) => {
+    setAlertConfig({
+      visible: true,
+      title,
+      message,
+      buttons: buttons ?? [{ text: 'OK', style: 'default' }],
+    });
+  };
+
+  const dismissAlert = () => setAlertConfig(prev => ({ ...prev, visible: false }));
+
+  return { alertConfig, showAlert, dismissAlert };
+}
+
+// ── Types 
 type Product = {
   id?: string;
   name: string;
@@ -44,6 +136,7 @@ const CATEGORIES = ["milk", "dairy", "bakery", "fruits", "vegetables", "essentia
 export default function InventoryScreen() {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
+  const { alertConfig, showAlert, dismissAlert } = useCustomAlert();
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -69,7 +162,10 @@ export default function InventoryScreen() {
 
   const pickImageFromGallery = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) { Alert.alert("Permission required", "Gallery access is needed"); return; }
+    if (!permission.granted) {
+      showAlert("Permission Required", "Gallery access is needed to pick a product image.");
+      return;
+    }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       quality: 0.6, base64: true,
@@ -103,22 +199,34 @@ export default function InventoryScreen() {
       setAddModal(false);
       setNewProduct({ name: "", category: "", unit: "", price: "", stock: "", image: "" });
       fetchData();
-    } catch (e: any) { Alert.alert("Error", e.message); }
+    } catch (e: any) {
+      showAlert("Something went wrong", e.message);
+    }
   };
 
   const toggleAvailability = async (product: Product) => {
     try {
       await api.updateProduct(product.id!, { is_available: !product.is_available });
       fetchData();
-    } catch (e: any) { Alert.alert("Error", e.message); }
+    } catch (e: any) {
+      showAlert("Update Failed", e.message);
+    }
   };
 
   const deleteProduct = (id?: string) => {
     if (!id) return;
-    Alert.alert("Delete Product", "Are you sure you want to delete this product?", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Delete", style: "destructive", onPress: async () => { await api.deleteProduct(id); fetchData(); } }
-    ]);
+    showAlert(
+      "Delete Product",
+      "Are you sure you want to delete this product? This action cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => { await api.deleteProduct(id); fetchData(); },
+        },
+      ]
+    );
   };
 
   const resetModal = () => {
@@ -132,6 +240,8 @@ export default function InventoryScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
+
+      <CustomAlert config={alertConfig} onDismiss={dismissAlert} />
 
       {/* ── Header ── */}
       <View style={styles.header}>
@@ -361,6 +471,86 @@ export default function InventoryScreen() {
   );
 }
 
+// ── Alert Styles 
+const alertStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(61,31,10,0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  box: {
+    width: '100%',
+    backgroundColor: '#FFF8EF',
+    borderRadius: 24,
+    paddingTop: 28,
+    paddingBottom: 20,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    shadowColor: '#3D1F0A',
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    elevation: 10,
+  },
+  iconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: '#FFE8D6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  title: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#3D1F0A',
+    textAlign: 'center',
+    marginBottom: 6,
+    letterSpacing: -0.3,
+  },
+  message: {
+    fontSize: 14,
+    color: '#A07850',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 22,
+    fontWeight: '500',
+  },
+  btnRow: {
+    flexDirection: 'row',
+    gap: 10,
+    width: '100%',
+    marginTop: 4,
+  },
+  btn: {
+    flex: 1,
+    paddingVertical: 13,
+    borderRadius: 14,
+    backgroundColor: '#FFE8D6',
+    alignItems: 'center',
+  },
+  btnCancel: {
+    backgroundColor: '#FFF3DC',
+  },
+  btnDestructive: {
+    backgroundColor: '#FF9675',
+  },
+  btnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#BB6B3F',
+  },
+  btnTextCancel: {
+    color: '#A07850',
+  },
+  btnTextDestructive: {
+    color: '#3D1F0A',
+  },
+});
+
+// ── Screen Styles 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
 

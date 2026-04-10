@@ -12,18 +12,16 @@ import {
   Modal,
   ScrollView,
   KeyboardAvoidingView,
-  SafeAreaView,
   ActivityIndicator,
   RefreshControl,
   Alert,
 } from "react-native";
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../../../src/services/api";
 
-// ─────────────────────────────────────────────
 // INTERFACES
-// ─────────────────────────────────────────────
 
 interface MedicalRecord {
   id: string;
@@ -73,9 +71,7 @@ interface MedicalForm {
   notes: string;
 }
 
-// ─────────────────────────────────────────────
 // CONSTANTS
-// ─────────────────────────────────────────────
 
 const EMPTY_FORM: MedicalForm = {
   cowSrNo: "",
@@ -117,9 +113,7 @@ const CALF_VACCINE_SCHEDULE = [
   { label: "6 Months", days: 180 },
 ];
 
-// ─────────────────────────────────────────────
 // HELPERS
-// ─────────────────────────────────────────────
 
 function getCalfVaccineDates(bornDate: string) {
   const parts = bornDate.split("/");
@@ -139,9 +133,7 @@ function getCalfVaccineDates(bornDate: string) {
   });
 }
 
-// ─────────────────────────────────────────────
 // VACCINE NAME PICKER
-// ─────────────────────────────────────────────
 
 function VaccinePicker({
   value,
@@ -217,9 +209,7 @@ function VaccinePicker({
   );
 }
 
-// ─────────────────────────────────────────────
 // COW SELECTOR
-// ─────────────────────────────────────────────
 
 function CowSelector({
   value,
@@ -435,7 +425,7 @@ function CowSelector({
                     >
                       <View style={cs.cowIcon}>
                         <Text style={{ fontSize: 20 }}>
-                          {item.type === "newborn" ? "🐮" : "🐄"}
+                          {item.type === "newborn" ? "" : ""}
                         </Text>
                       </View>
                       <View style={{ flex: 1 }}>
@@ -481,7 +471,6 @@ function CowSelector({
                   }
                   ListEmptyComponent={
                     <View style={cs.emptyBox}>
-                      <Text style={{ fontSize: 32 }}>🐄</Text>
                       <Text style={cs.emptyText}>No cows found</Text>
                     </View>
                   }
@@ -495,9 +484,7 @@ function CowSelector({
   );
 }
 
-// ─────────────────────────────────────────────
 // STATUS TOGGLE
-// ─────────────────────────────────────────────
 
 function StatusToggle({
   value,
@@ -540,9 +527,7 @@ function StatusToggle({
   );
 }
 
-// ─────────────────────────────────────────────
 // DATE FIELD WITH CALENDAR PICKER
-// ─────────────────────────────────────────────
 
 function DateField({
   label,
@@ -752,9 +737,7 @@ function DateField({
   );
 }
 
-// ─────────────────────────────────────────────
 // FIELD
-// ─────────────────────────────────────────────
 
 function Field({
   label,
@@ -806,9 +789,7 @@ function Sec({
   );
 }
 
-// ─────────────────────────────────────────────
 // CALF VACCINE CARD (Home screen)
-// ─────────────────────────────────────────────
 
 function CalfVaccineCard({ record }: { record: MedicalRecord }) {
   const [expanded, setExpanded] = useState(false);
@@ -871,7 +852,7 @@ function CalfVaccineCard({ record }: { record: MedicalRecord }) {
       {expanded && (
         <View style={cv.scheduleWrap}>
           <View style={cv.divider} />
-          <Text style={cv.scheduleTitle}>💉 Vaccination Schedule</Text>
+          <Text style={cv.scheduleTitle}> Vaccination Schedule</Text>
           {vaccineDates.map((v, i) => {
             const parts = v.date.split("/");
             const vDate = new Date(+parts[2], +parts[1] - 1, +parts[0]);
@@ -970,9 +951,7 @@ function CalfVaccineCard({ record }: { record: MedicalRecord }) {
   );
 }
 
-// ─────────────────────────────────────────────
 // MEDICAL FORM BODY
-// ─────────────────────────────────────────────
 
 function MedicalFormBody({
   form,
@@ -1209,9 +1188,7 @@ function MedicalFormBody({
   );
 }
 
-// ─────────────────────────────────────────────
 // MEDICAL FORM MODAL
-// ─────────────────────────────────────────────
 
 function MedicalFormModal({
   visible,
@@ -1393,9 +1370,7 @@ function MedicalFormModal({
   );
 }
 
-// ─────────────────────────────────────────────
 // DETAIL ROW
-// ─────────────────────────────────────────────
 
 function DRow({
   icon,
@@ -1422,9 +1397,7 @@ function DRow({
   );
 }
 
-// ─────────────────────────────────────────────
 // MEDICAL CARD
-// ─────────────────────────────────────────────
 
 function MedicalCard({
   item,
@@ -1649,7 +1622,7 @@ function MedicalCard({
         {expanded && (
           <>
             <View style={c.divider} />
-            <Text style={c.secLabel}>💉 Vaccination</Text>
+            <Text style={c.secLabel}>Vaccination</Text>
             <DRow
               icon="shield-checkmark-outline"
               label="Vaccine"
@@ -1668,7 +1641,7 @@ function MedicalCard({
               value={item.nextVaccinationDate}
               color="#16a34a"
             />
-            <Text style={c.secLabel}>🩹 Health Issues</Text>
+            <Text style={c.secLabel}> Health Issues</Text>
             <DRow
               icon="bandage-outline"
               label="Last Issue"
@@ -1743,11 +1716,10 @@ function MedicalCard({
   );
 }
 
-// ─────────────────────────────────────────────
 // MAIN SCREEN
-// ─────────────────────────────────────────────
 
 export default function MedicalScreen() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const [records, setRecords] = useState<MedicalRecord[]>([]);
   const [screen, setScreen] = useState<"home" | "list">("home");
@@ -1846,7 +1818,7 @@ export default function MedicalScreen() {
   );
 
   return (
-    <SafeAreaView style={s.screen}>
+     <View style={[s.screen, { paddingTop: insets.top }]}>
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
 
       {/* ── Header ── */}
@@ -1854,8 +1826,7 @@ export default function MedicalScreen() {
         style={[
           s.header,
           {
-            paddingTop:
-              Platform.OS === "android" ? ANDROID_STATUS_BAR + 14 : 14,
+           
           },
         ]}
       >
@@ -1909,7 +1880,6 @@ export default function MedicalScreen() {
         >
           {/* Hero */}
           <View style={s.heroWrap}>
-            <Text style={s.heroEmoji}>🏥</Text>
             <Text style={s.homeHeading}>Medical Records</Text>
             <Text style={s.homeSub}>
               Track health, vaccination & treatment for each cow
@@ -1923,9 +1893,6 @@ export default function MedicalScreen() {
               style={s.bigBtn}
               activeOpacity={0.85}
             >
-              <View style={[s.bigBtnIcon, { backgroundColor: "#f0fdf4" }]}>
-                <Text style={{ fontSize: 28 }}>➕</Text>
-              </View>
               <View style={{ flex: 1 }}>
                 <Text style={s.bigBtnTitle}>Add Medical Record</Text>
                 <Text style={s.bigBtnSub}>
@@ -1938,9 +1905,6 @@ export default function MedicalScreen() {
               style={s.bigBtn}
               activeOpacity={0.85}
             >
-              <View style={[s.bigBtnIcon, { backgroundColor: "#fff7ed" }]}>
-                <Text style={{ fontSize: 28 }}>📋</Text>
-              </View>
               <View style={{ flex: 1 }}>
                 <Text style={s.bigBtnTitle}>View All Records</Text>
                 <Text style={s.bigBtnSub}>
@@ -1963,7 +1927,7 @@ export default function MedicalScreen() {
                 }}
                 activeOpacity={0.8}
               >
-                <Text style={s.summaryEmoji}>✅</Text>
+                <Text style={s.summaryEmoji}></Text>
                 <Text style={[s.summaryCount, { color: "#16a34a" }]}>
                   {healthy}
                 </Text>
@@ -1982,7 +1946,7 @@ export default function MedicalScreen() {
                 }}
                 activeOpacity={0.8}
               >
-                <Text style={s.summaryEmoji}>⚠️</Text>
+                <Text style={s.summaryEmoji}></Text>
                 <Text style={[s.summaryCount, { color: "#dc2626" }]}>
                   {unhealthy}
                 </Text>
@@ -1996,7 +1960,7 @@ export default function MedicalScreen() {
                   { backgroundColor: "#faf5ff", borderColor: "#e9d5ff" },
                 ]}
               >
-                <Text style={s.summaryEmoji}>💉</Text>
+                <Text style={s.summaryEmoji}></Text>
                 <Text style={[s.summaryCount, { color: "#7c3aed" }]}>
                   {records.filter((r) => !!r.nextVaccinationDate).length}
                 </Text>
@@ -2014,7 +1978,7 @@ export default function MedicalScreen() {
                 <View
                   style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
                 >
-                  <Text style={{ fontSize: 18 }}>🐮</Text>
+                  <Text style={{ fontSize: 18 }}></Text>
                   <Text style={s.calfSectionTitle}>Calf Vaccine Schedule</Text>
                 </View>
                 <View style={s.calfCountBadge}>
@@ -2066,8 +2030,8 @@ export default function MedicalScreen() {
                   {fil === "all"
                     ? "All"
                     : fil === "healthy"
-                      ? "✅ Healthy"
-                      : "⚠️ Unhealthy"}
+                      ? " Healthy"
+                      : " Unhealthy"}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -2152,14 +2116,11 @@ export default function MedicalScreen() {
           }
         }}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
-// ─────────────────────────────────────────────
 // STYLES
-// ─────────────────────────────────────────────
-
 const vp = StyleSheet.create({
   wrap: { marginBottom: 12 },
   chipRow: { flexDirection: "row", gap: 8, marginBottom: 8 },
@@ -2170,9 +2131,9 @@ const vp = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 10,
-    backgroundColor: "#f8fafc",
+    backgroundColor: "#FFF8F0",
     borderWidth: 1.5,
-    borderColor: "#e2e8f0",
+    borderColor: "#f1bb9c",
   },
   chipLabel: { fontSize: 13, fontWeight: "800", color: "#374151" },
   descHint: {
@@ -2197,13 +2158,13 @@ const vp = StyleSheet.create({
 });
 
 const s = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#f8fafc" },
+  screen: { flex: 1, backgroundColor: "#FFF8F0" },
   header: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 16,
     paddingVertical: 14,
-    backgroundColor: "#fff",
+    backgroundColor: "#FFF8F0",
     borderBottomWidth: 1,
     borderBottomColor: "#f1f5f9",
   },
@@ -2211,11 +2172,11 @@ const s = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: "#f8fafc",
+    backgroundColor: "#FFF8F0",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#e2e8f0",
+    borderColor: "#9cc1f1",
   },
   headerTitle: {
     fontSize: 18,
@@ -2230,12 +2191,12 @@ const s = StyleSheet.create({
     marginTop: 1,
   },
   countBadge: {
-    backgroundColor: "#f0fdf4",
+    backgroundColor: "#FFF8F0",
     borderRadius: 20,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderWidth: 1,
-    borderColor: "#bbf7d0",
+    borderColor: "#bbd0f7",
   },
   countText: { fontSize: 12, fontWeight: "700", color: "#16a34a" },
   statsRow: {
@@ -2274,11 +2235,11 @@ const s = StyleSheet.create({
   },
   btnGroup: { gap: 12, marginBottom: 20 },
   bigBtn: {
-    backgroundColor: "#fff",
+    backgroundColor: "#fdf6e5",
     borderRadius: 18,
     padding: 16,
     borderWidth: 1.5,
-    borderColor: "#f1f5f9",
+    borderColor: "#ecd657",
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
@@ -2712,7 +2673,7 @@ const m = StyleSheet.create({
     justifyContent: "flex-end",
   },
   sheet: {
-    backgroundColor: "#fff",
+    backgroundColor: "#FFF8F0",
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     padding: 20,

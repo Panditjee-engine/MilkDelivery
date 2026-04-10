@@ -93,6 +93,115 @@ const MENU = [
   },
 ];
 
+interface WeatherData {
+  temp: number;
+  humidity: number;
+  windSpeed: number;
+  condition: string;
+}
+
+// ── Weather hook: fetches from wttr.in, retries once ──────────────────────
+function useWeather(): WeatherData | null {
+  const [weather, setWeather] = useState<WeatherData | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const tryFetch = async (attempt: number) => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      try {
+        // wttr.in plain-text format: no API key, very fast
+        // %t = temp, %h = humidity, %w = wind, %C = condition
+        const url = "https://wttr.in/Ghaziabad?format=%t|%h|%w|%C";
+        const res = await fetch(url, {
+          signal: controller.signal,
+          headers: { "User-Agent": "GausevakApp/1.0" },
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const text = (await res.text()).trim();
+        const parts = text.split("|");
+        if (parts.length < 4) throw new Error("Bad format: " + text);
+
+        const temp = parseInt(parts[0].replace(/[^\d-]/g, ""), 10);
+        const humidity = parseInt(parts[1].replace(/\D/g, ""), 10);
+        const windSpeed = parseInt(parts[2].replace(/\D/g, ""), 10);
+        const condition = parts[3].trim();
+
+        if (!cancelled && !isNaN(temp)) {
+          setWeather({ temp, humidity, windSpeed, condition });
+        }
+      } catch (err: any) {
+        console.warn(`Weather attempt ${attempt}:`, err?.message ?? err);
+        if (attempt === 1 && !cancelled) {
+          setTimeout(() => tryFetch(2), 4000);
+        }
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    };
+
+    tryFetch(1);
+    return () => { cancelled = true; };
+  }, []);
+
+  return weather;
+}
+
+// ── Inline weather row inside the header (no card wrapper) ─────────────────
+function InlineWeather({ weather }: { weather: WeatherData | null }) {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (weather) {
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [weather]);
+
+  if (!weather) {
+    // Show a subtle skeleton while loading — no text, just a faint pulse
+    return (
+      <View style={inlineStyles.skeletonRow}>
+        <View style={inlineStyles.skeletonChip} />
+        <View style={[inlineStyles.skeletonChip, { width: 44 }]} />
+        <View style={[inlineStyles.skeletonChip, { width: 52 }]} />
+      </View>
+    );
+  }
+
+  return (
+    <Animated.View style={[inlineStyles.row, { opacity: fadeAnim }]}>
+      {/* Condition */}
+      <Ionicons name="partly-sunny-outline" size={12} color="#f4a261" />
+      <Text style={inlineStyles.conditionText} numberOfLines={1}>
+        {weather.condition}
+      </Text>
+
+      <View style={inlineStyles.sep} />
+
+      {/* Temp */}
+      <Ionicons name="thermometer-outline" size={12} color="#f4a261" />
+      <Text style={inlineStyles.value}>{weather.temp}°C</Text>
+
+      <View style={inlineStyles.sep} />
+
+      {/* Humidity */}
+      <Ionicons name="water-outline" size={12} color="#56b4d3" />
+      <Text style={inlineStyles.value}>{weather.humidity}%</Text>
+
+      <View style={inlineStyles.sep} />
+
+      {/* Wind */}
+      <Ionicons name="flag-outline" size={12} color="#74c69d" />
+      <Text style={inlineStyles.value}>{weather.windSpeed} km/h</Text>
+    </Animated.View>
+  );
+}
+
 function MenuCard({ item, index }: { item: (typeof MENU)[0]; index: number }) {
   const router = useRouter();
   const scale = useRef(new Animated.Value(1)).current;
@@ -193,6 +302,7 @@ interface CowStats {
 
 function Header() {
   const router = useRouter();
+  const weather = useWeather();
   const [stats, setStats] = useState<CowStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [showScanner, setShowScanner] = useState(false);
@@ -221,7 +331,6 @@ function Header() {
     { label: "Inactive", value: stats?.inactive ?? "-" },
   ];
 
-  // ── When scan succeeds: close modal → navigate to result page ──
   const handleScanned = (data: string) => {
     setShowScanner(false);
     router.push({
@@ -240,10 +349,14 @@ function Header() {
         style={styles.headerCard}
       >
         <View style={styles.headerGlow} />
+
+        {/* ── Top badge ─────────────────────────────────────────────── */}
         <View style={styles.badge}>
           <View style={styles.badgeDot} />
           <Text style={styles.badgeText}>LIVESTOCK MANAGEMENT</Text>
         </View>
+
+        {/* ── Logo row with weather inline below title ───────────────── */}
         <View style={styles.headerRow}>
           <View style={styles.logoRing}>
             <Image
@@ -252,10 +365,15 @@ function Header() {
               resizeMode="contain"
             />
           </View>
+
+          {/* Title + weather directly below it, no card */}
           <View style={{ flex: 1 }}>
             <Text style={styles.heading}>Gausevak</Text>
             <Text style={styles.subheading}>Cattle care</Text>
+            {/* Inline weather sits right under the subtitle */}
+            <InlineWeather weather={weather} />
           </View>
+
           <View style={{ flexDirection: "row", gap: 8 }}>
             <TouchableOpacity
               style={styles.notifBtn}
@@ -274,6 +392,7 @@ function Header() {
           </View>
         </View>
 
+        {/* ── Cow stats ─────────────────────────────────────────────── */}
         <View style={styles.statsRow}>
           {loading ? (
             <View style={styles.loadingContainer}>
@@ -328,6 +447,47 @@ export default function GausevakScreen() {
 const IS_IOS = Platform.OS === "ios";
 const STATUS_BAR_HEIGHT = IS_IOS ? 0 : (StatusBar.currentHeight ?? 0);
 
+// ── Inline weather styles (no card/box) ───────────────────────────────────
+const inlineStyles = StyleSheet.create({
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 6,
+    flexWrap: "wrap",
+  },
+  conditionText: {
+    color: "#a8c8e8",
+    fontSize: 10,
+    fontWeight: "500",
+    maxWidth: 90,
+  },
+  value: {
+    color: "#c8dff0",
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  sep: {
+    width: 1,
+    height: 10,
+    backgroundColor: "#2a4a6b",
+    marginHorizontal: 2,
+  },
+  skeletonRow: {
+    flexDirection: "row",
+    gap: 6,
+    marginTop: 6,
+  },
+  skeletonChip: {
+    height: 10,
+    width: 36,
+    borderRadius: 5,
+    backgroundColor: "#1e3a5f",
+    opacity: 0.5,
+  },
+});
+
+// ── Main styles ────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#FFF8EF" },
   listContent: { paddingHorizontal: 12, paddingTop: 10 },
@@ -348,6 +508,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.45,
     shadowRadius: 24,
     elevation: 14,
+    gap: 10,
   },
   headerGlow: {
     position: "absolute",
@@ -367,7 +528,6 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     paddingHorizontal: 12,
     paddingVertical: 5,
-    marginBottom: 16,
     gap: 6,
     borderWidth: 1,
     borderColor: "#1e3a5f",
@@ -386,9 +546,8 @@ const styles = StyleSheet.create({
   },
   headerRow: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: 14,
-    marginBottom: 18,
   },
   logoRing: {
     width: 52,
@@ -400,7 +559,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  logo: { width: 32, height: 32 },
   heading: {
     fontSize: 24,
     fontWeight: "800",

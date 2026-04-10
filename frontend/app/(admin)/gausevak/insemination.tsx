@@ -14,11 +14,11 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Switch,
-  SafeAreaView,
   ActivityIndicator,
   RefreshControl,
   Alert,
 } from "react-native";
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../../../src/services/api";
@@ -1120,6 +1120,7 @@ function InseminationCard({
 }
 
 export default function InseminationScreen() {
+    const insets = useSafeAreaInsets();
   const router = useRouter();
   const [records, setRecords] = useState<InseminationRecord[]>([]);
   const [screen, setScreen] = useState<"home" | "list">("home");
@@ -1194,15 +1195,13 @@ export default function InseminationScreen() {
     Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0;
 
   return (
-    <SafeAreaView style={s.screen}>
+   <View style={[s.screen, { paddingTop: insets.top }]}>
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
 
       <View
         style={[
           s.header,
           {
-            paddingTop:
-              Platform.OS === "android" ? ANDROID_STATUS_BAR + 14 : 14,
           },
         ]}
       >
@@ -1375,30 +1374,30 @@ export default function InseminationScreen() {
           )
         }
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
 const s = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#f9fafb" },
+  screen: { flex: 1, backgroundColor: "#FFF8F0" },
   header: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 16,
     paddingVertical: 14,
-    backgroundColor: "#fff",
+    backgroundColor: "#FFF8F0",
     borderBottomWidth: 1,
-    borderBottomColor: "#f3f4f6",
+    borderBottomColor: "#fdc5bb",
   },
   backBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: "#f9fafb",
+    backgroundColor: "#FFF8F0",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#e5e7eb",
+    borderColor: "#fdc5bb",
   },
   headerTitle: {
     fontSize: 18,
@@ -1414,12 +1413,12 @@ const s = StyleSheet.create({
   },
   statsRow: {
     flexDirection: "row",
-    backgroundColor: "#fff",
+    backgroundColor: "#ffe5dd",
     borderBottomWidth: 1,
-    borderBottomColor: "#f3f4f6",
+    borderBottomColor: "#fdc5bb",
   },
   statItem: { flex: 1, alignItems: "center", paddingVertical: 12 },
-  statBorder: { borderRightWidth: 1, borderRightColor: "#f3f4f6" },
+  statBorder: { borderRightWidth: 1, borderRightColor: "#fdc5bb" },
   statValue: { fontSize: 18, fontWeight: "800", letterSpacing: -0.3 },
   statLabel: {
     fontSize: 10,
@@ -1450,12 +1449,12 @@ const s = StyleSheet.create({
   },
   btnGroup: { width: "100%", gap: 14 },
   bigBtn: {
-    backgroundColor: "#fff",
+    backgroundColor: "#fcf0ee",
     borderRadius: 20,
     padding: 20,
     borderWidth: 1.5,
-    borderColor: "#f3f4f6",
-    shadowColor: "#000",
+    borderColor: "#fdc5bb",
+    shadowColor: "#e6914c",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
     shadowRadius: 8,
@@ -1495,10 +1494,10 @@ const s = StyleSheet.create({
     alignItems: "center",
     margin: 14,
     marginBottom: 10,
-    backgroundColor: "#fff",
+    backgroundColor: "#faf3ef",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#e5e7eb",
+    borderColor: "#f5c99f",
     paddingHorizontal: 12,
     paddingVertical: 10,
     gap: 8,
@@ -1556,12 +1555,12 @@ const s = StyleSheet.create({
 
 const c = StyleSheet.create({
   card: {
-    backgroundColor: "#fff",
+    backgroundColor: "#f8d0be",
     borderRadius: 16,
     padding: 14,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: "#f3f4f6",
+    borderColor: "#fdc5bb",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
@@ -1764,7 +1763,7 @@ const m = StyleSheet.create({
     justifyContent: "flex-end",
   },
   sheet: {
-    backgroundColor: "#fff",
+    backgroundColor: "#f8efeb",
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     padding: 20,
