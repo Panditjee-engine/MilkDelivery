@@ -25,26 +25,9 @@ import { api } from "../../src/services/api";
 
 type ToastType = "error" | "success" | "warn";
 
-<<<<<<< HEAD
-function IndiaFlagIcon() {
-  return (
-    <View style={styles.countryFlag} accessible={false}>
-      <View style={[styles.flagStripe, styles.flagSaffron]} />
-      <View style={[styles.flagStripe, styles.flagWhite]}>
-        <View style={styles.flagChakra} />
-      </View>
-      <View style={[styles.flagStripe, styles.flagGreen]} />
-    </View>
-  );
-}
-
-export default function LoginScreen() {
-  const [loginMethod, setLoginMethod] = useState<LoginMethod>('email');
-=======
 function looksLikePhone(value: string): boolean {
   return /^\d/.test(value.trim());
 }
->>>>>>> main
 
 function isValidIndianPhone(value: string): boolean {
   const digits = value.replace(/\D/g, "");
@@ -1355,62 +1338,11 @@ export default function LoginScreen() {
                     size={20}
                     color={Colors.textSecondary}
                   />
-<<<<<<< HEAD
-                  <Input
-                    label="Password"
-                    placeholder="Enter your password"
-                    value={password}
-                    onChangeText={setPassword}
-                    secureTextEntry={!showPassword}
-                    leftIcon={
-                      <Ionicons
-                        name="lock-closed-outline"
-                        size={20}
-                        color={Colors.textSecondary}
-                      />
-                    }
-                    rightIcon={
-                      <TouchableOpacity
-                        onPress={() => setShowPassword(!showPassword)}
-                      >
-                        <Ionicons
-                          name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                          size={20}
-                          color={Colors.textSecondary}
-                        />
-                      </TouchableOpacity>
-                    }
-                  />
-                </>
-              )}
-
-              {/* ── Phone fields ── */}
-              {loginMethod === 'phone' && (
-                <>
-                  <Text style={styles.inputLabel}>Mobile Number</Text>
-                  <View style={styles.phoneRow}>
-                    <View style={styles.countryCode}>
-                      <IndiaFlagIcon />
-                      <Text style={styles.countryCodeText}>+91</Text>
-                    </View>
-                    <TextInput
-                      style={styles.phoneInput}
-                      placeholder="9999999999"
-                      value={phone}
-                      onChangeText={(val) =>
-                        setPhone(val.replace(/\D/g, '').slice(0, 10))
-                      }
-                      keyboardType="number-pad"
-                      maxLength={10}
-                      placeholderTextColor={Colors.textSecondary}
-                    />
-=======
                 </View>
                 {isPhoneInput && (
                   <View style={styles.phonePrefixInline}>
                     <Text style={styles.phonePrefixInlineText}>+91</Text>
                     <View style={styles.phonePrefixDivider} />
->>>>>>> main
                   </View>
                 )}
                 <TextInput
@@ -1512,47 +1444,6 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-<<<<<<< HEAD
-  container:       { flex: 1, backgroundColor: '#F4F6FA' },
-  keyboardView:    { flex: 1 },
-  scrollContent:   { flexGrow: 1, padding: 24 },
-
-  header:          { alignItems: 'center', marginTop: 40, marginBottom: 32 },
-  logoCircle:      {},
-  logoImage:       { width: 96, height: 96, marginBottom: 12 },
-  title:           { fontSize: 28, fontWeight: '700', color: Colors.text, marginBottom: 8 },
-  subtitle:        { fontSize: 16, color: Colors.textSecondary },
-
-  toggleContainer: { flexDirection: 'row', backgroundColor: '#E5E7EB', borderRadius: 12, padding: 4, marginBottom: 24 },
-  toggleBtn:       { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, borderRadius: 10, gap: 6 },
-  toggleBtnActive: { backgroundColor: Colors.primary },
-  toggleText:      { fontSize: 14, fontWeight: '600', color: Colors.textSecondary },
-  toggleTextActive:{ color: '#fff' },
-
-  form:            { marginBottom: 24 },
-  card:            { backgroundColor: '#FFFFFF', borderRadius: 20, padding: 20, gap: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 8 },
-  button:          { marginTop: 8 },
-
-  inputLabel:      { fontSize: 14, fontWeight: '600', color: Colors.text, marginBottom: 6 },
-  phoneRow:        { flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderColor: '#E5E7EB', borderRadius: 12, backgroundColor: '#fff', overflow: 'hidden', marginBottom: 4 },
-  countryCode:     { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 14, backgroundColor: '#F9FAFB', borderRightWidth: 1, borderRightColor: '#E5E7EB', gap: 6 },
-  countryFlag:     { width: 22, height: 15, borderRadius: 3, overflow: 'hidden', borderWidth: 0.5, borderColor: '#D1D5DB' },
-  flagStripe:      { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  flagSaffron:     { backgroundColor: '#FF9933' },
-  flagWhite:       { backgroundColor: '#FFFFFF' },
-  flagGreen:       { backgroundColor: '#138808' },
-  flagChakra:      { width: 4, height: 4, borderRadius: 999, backgroundColor: '#1A4BA0' },
-  countryCodeText: { fontSize: 15, fontWeight: '600', color: Colors.text },
-  phoneInput:      { flex: 1, paddingHorizontal: 14, paddingVertical: 14, fontSize: 16, color: Colors.text },
-
-  footer:          { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, marginBottom: 24 },
-  footerText:      { fontSize: 14, color: Colors.textSecondary },
-  linkText:        { fontSize: 14, fontWeight: '600', color: Colors.primary },
-
-  demoSection:     { padding: 16, backgroundColor: Colors.surfaceSecondary, borderRadius: 12 },
-  demoTitle:       { fontSize: 14, fontWeight: '600', color: Colors.text, marginBottom: 8 },
-  demoText:        { fontSize: 12, color: Colors.textSecondary },
-=======
   container: { flex: 1, backgroundColor: "#F4F6FA" },
   statusBarPatch: {
     backgroundColor: "#FFFFFF",
@@ -1656,5 +1547,4 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   demoText: { fontSize: 12, color: Colors.textSecondary },
->>>>>>> main
 });

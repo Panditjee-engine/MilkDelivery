@@ -1,33 +1,16 @@
-import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, Image, Text } from 'react-native';
+import React, { useEffect } from 'react';
+import { View, StyleSheet, Text } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../src/contexts/AuthContext';
 import LoadingScreen from '../src/components/LoadingScreen';
 import { Colors } from '../src/constants/colors';
-import { api } from '../src/services/api';
 
 export default function Index() {
   const { user, isWorker, loading } = useAuth();
   const router = useRouter();
-  const [seeding, setSeeding] = useState(false);
 
   useEffect(() => {
-    const initApp = async () => {
-      // Seed initial data
-      try {
-        setSeeding(true);
-         await api.seedData();
-      } catch (error) {
-        console.log('Seed skipped or failed:', error);
-      } finally {
-        setSeeding(false);
-      }
-    };
-    initApp();
-  }, []);
-
-  useEffect(() => {
-    if (!loading && !seeding) {
+    if (!loading) {
       if (isWorker) {
       router.replace('/(worker)' as any);
       return;
@@ -51,10 +34,10 @@ export default function Index() {
         router.replace('/(auth)/login');
       }
     }
-  }, [user, isWorker, loading, seeding]);
+  }, [user, isWorker, loading]);
 
-  if (loading || seeding) {
-    return <LoadingScreen message={seeding ? 'Setting up...' : 'Loading...'} />;
+  if (loading) {
+    return <LoadingScreen message="Loading..." />;
   }
 
   return (
