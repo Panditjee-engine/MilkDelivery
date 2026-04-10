@@ -770,7 +770,10 @@ function CowFormFields({
                         form.mother === cow.name && f.motherChipActive,
                       ]}
                     >
-                      <Text style={{ fontSize: 12 }}>🐄</Text>
+                      <Image
+                        source={cowImg}
+                        style={{ width: 16, height: 16, resizeMode: "contain" }}
+                      />
                       <Text
                         style={[
                           f.motherChipText,
@@ -1072,7 +1075,7 @@ function AddCowModal({
                   style={[
                     m.submitBtn,
                     form.type === "bull" && { backgroundColor: "#f3dbbc" },
-                    form.type === "newborn" && { backgroundColor: "#f3dbbc"},
+                    form.type === "newborn" && { backgroundColor: "#f3dbbc" },
                     submitting && { opacity: 0.7 },
                   ]}
                   disabled={submitting}
@@ -1225,41 +1228,41 @@ function EditCowModal({
             <View style={m.handle} />
             <View style={m.header}>
               <View style={[m.editIconWrap, isBull && { backgroundColor: "#f5f3ff" }]}>
-      <Ionicons
-        name="create-outline"
-        size={16}
-        color={isBull ? "#FFBF55" : "#BB6B3F"}
-      />
-    </View>
-    <Text style={[m.title, { marginLeft: 10, flex: 1 }]}>
-      Edit {isBull ? "Bull" : "Cow"}
-    </Text>
-    <TouchableOpacity onPress={onClose} style={m.closeBtn}>
-      <Ionicons name="close" size={18} color="#8B6854" />
-    </TouchableOpacity>
-  </View>
-    <Text style={m.sub}>Update the details below</Text>
-    <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
-      <CowFormFields form={form} setF={setF} showTagField cows={cows} />
-    </ScrollView>
-    <TouchableOpacity
-      onPress={submit}
-      style={[
-        m.submitBtn,
-        isBull ? { backgroundColor: "#8B6854" } : m.submitBtnTerra,
-        submitting && { opacity: 0.7 },
-      ]}
-      disabled={submitting}
-    >
-      {submitting ? (
-        <ActivityIndicator color="#fff" size="small" />
-      ) : (
-        <>
-          <Ionicons name="save-outline" size={18} color="#fff" />
-          <Text style={m.submitText}>Save Changes</Text>
-        </>
-      )}
-    </TouchableOpacity>
+                <Ionicons
+                  name="create-outline"
+                  size={16}
+                  color={isBull ? "#FFBF55" : "#BB6B3F"}
+                />
+              </View>
+              <Text style={[m.title, { marginLeft: 10, flex: 1 }]}>
+                Edit {isBull ? "Bull" : "Cow"}
+              </Text>
+              <TouchableOpacity onPress={onClose} style={m.closeBtn}>
+                <Ionicons name="close" size={18} color="#8B6854" />
+              </TouchableOpacity>
+            </View>
+            <Text style={m.sub}>Update the details below</Text>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
+              <CowFormFields form={form} setF={setF} showTagField cows={cows} />
+            </ScrollView>
+            <TouchableOpacity
+              onPress={submit}
+              style={[
+                m.submitBtn,
+                isBull ? { backgroundColor: "#8B6854" } : m.submitBtnTerra,
+                submitting && { opacity: 0.7 },
+              ]}
+              disabled={submitting}
+            >
+              {submitting ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <>
+                  <Ionicons name="save-outline" size={18} color="#fff" />
+                  <Text style={m.submitText}>Save Changes</Text>
+                </>
+              )}
+            </TouchableOpacity>
           </View >
         </KeyboardAvoidingView >
       </View >
@@ -1287,9 +1290,10 @@ function QRModal({
       <TouchableOpacity style={qr.overlay} activeOpacity={1} onPress={onClose}>
         <TouchableOpacity activeOpacity={1} style={qr.card}>
           <View style={qr.header}>
-            <Text style={{ fontSize: 22 }}>
-              {cow.type === "bull" ? "🐂" : cow.type === "newborn" ? "🐮" : "🐄"}
-            </Text>
+            <Image
+              source={getAnimalImage(cow.type)}
+              style={{ width: 44, height: 44, resizeMode: "contain" }}
+            />
             <View style={{ flex: 1, marginLeft: 10 }}>
               <Text style={qr.name}>{cow.name}</Text>
               <Text style={qr.tag}>TAG: {cow.tag}</Text>
@@ -1390,87 +1394,87 @@ function CowCard({
     >
       <TouchableOpacity onPress={() => setExpanded((e) => !e)} activeOpacity={0.8}>
         <View style={c.topRow}>
-  <View style={[c.avatarWrap, isBull && { backgroundColor: "#f5f3ff", borderColor: "#ddd6fe" }]}>
-    <Image source={getAnimalImage(item.type)} style={{ width: 40, height: 40, resizeMode: "contain" }} />
-    </View>
-    <View style={{ flex: 1, marginLeft: 12, minWidth: 0 }}>
-      <View style={c.nameRow}>
-        <Text style={c.name} numberOfLines={1}>{item.name}</Text>
-        <View style={c.badgeGroup}>
-          <View style={[c.badge, { backgroundColor: st.bg, borderColor: st.border }]}>
-            <View style={[c.dot, { backgroundColor: st.color }]} />
-            <Text style={[c.badgeText, { color: st.color }]}>{st.label}</Text>
+          <View style={[c.avatarWrap, isBull && { backgroundColor: "#f5f3ff", borderColor: "#ddd6fe" }]}>
+            <Image source={getAnimalImage(item.type)} style={{ width: 40, height: 40, resizeMode: "contain" }} />
           </View>
-          {item.pregnancyStatus === "pregnant" && (
-            <View style={[c.badge, { backgroundColor: "#fdf4ff", borderColor: "#e9d5ff" }]}>
-              <Text style={{ fontSize: 9 }}>🤰</Text>
-              <Text style={[c.badgeText, { color: "#9333ea" }]}>Pregnant</Text>
-            </View>
-          )}
-          {isBull && item.semenAvailable && (
-            <View style={[c.badge, { backgroundColor: "#f0fdf4", borderColor: "#bbf7d0" }]}>
-              <Ionicons name="flask" size={9} color="#16a34a" />
-              <Text style={[c.badgeText, { color: "#16a34a" }]}>Semen ✓</Text>
+          <View style={{ flex: 1, marginLeft: 12, minWidth: 0 }}>
+            <View style={c.nameRow}>
+              <Text style={c.name} numberOfLines={1}>{item.name}</Text>
+              <View style={c.badgeGroup}>
+                <View style={[c.badge, { backgroundColor: st.bg, borderColor: st.border }]}>
+                  <View style={[c.dot, { backgroundColor: st.color }]} />
+                  <Text style={[c.badgeText, { color: st.color }]}>{st.label}</Text>
                 </View>
-              )}
-            </View>
+                {item.pregnancyStatus === "pregnant" && (
+                  <View style={[c.badge, { backgroundColor: "#fdf4ff", borderColor: "#e9d5ff" }]}>
+                    <Text style={{ fontSize: 9 }}>🤰</Text>
+                    <Text style={[c.badgeText, { color: "#9333ea" }]}>Pregnant</Text>
+                  </View>
+                )}
+                {isBull && item.semenAvailable && (
+                  <View style={[c.badge, { backgroundColor: "#f0fdf4", borderColor: "#bbf7d0" }]}>
+                    <Ionicons name="flask" size={9} color="#16a34a" />
+                    <Text style={[c.badgeText, { color: "#16a34a" }]}>Semen ✓</Text>
+                  </View>
+                )}
+              </View>
             </View>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
               <Text style={c.tag}>
-          {item.tag} · {item.breed} ·{" "}
-          {isBull ? "Bull" : item.type === "newborn" ? "Newborn" : "Adult"}
-        </Text>
-        {item.isActive && activeDays !== null && (
-          <View style={c.miniDaysBadge}>
-            <Ionicons name="time-outline" size={9} color="#BB6B3F" />
-            <Text style={c.miniDaysText}>{activeDays}d active</Text>
+                {item.tag} · {item.breed} ·{" "}
+                {isBull ? "Bull" : item.type === "newborn" ? "Newborn" : "Adult"}
+              </Text>
+              {item.isActive && activeDays !== null && (
+                <View style={c.miniDaysBadge}>
+                  <Ionicons name="time-outline" size={9} color="#BB6B3F" />
+                  <Text style={c.miniDaysText}>{activeDays}d active</Text>
+                </View>
+              )}
+            </View>
           </View>
-        )}
-      </View>
-  </View>
-    <Ionicons
-      name={expanded ? "chevron-up" : "chevron-down"}
-      size={16}
-      color="#C4A882"
-      style={{ marginLeft: 8 }}
-    />
+          <Ionicons
+            name={expanded ? "chevron-up" : "chevron-down"}
+            size={16}
+            color="#C4A882"
+            style={{ marginLeft: 8 }}
+          />
         </View >
       </TouchableOpacity >
 
-    { expanded && (
-      <>
-        <View style={c.divider} />
-        <ActiveDaysBadge activeSince={item.activeSince} isActive={item.isActive} />
-        {isBull ? (
-          <>
-            <View style={c.bullStatsRow}>
-              <View style={c.bullStat}>
-                <Text style={c.bullStatVal}>{item.totalDoses ?? "—"}</Text>
-                <Text style={c.bullStatLabel}>Doses</Text>
+      {expanded && (
+        <>
+          <View style={c.divider} />
+          <ActiveDaysBadge activeSince={item.activeSince} isActive={item.isActive} />
+          {isBull ? (
+            <>
+              <View style={c.bullStatsRow}>
+                <View style={c.bullStat}>
+                  <Text style={c.bullStatVal}>{item.totalDoses ?? "—"}</Text>
+                  <Text style={c.bullStatLabel}>Doses</Text>
+                </View>
+                <View style={c.bullStatDivider} />
+                <View style={c.bullStat}>
+                  <Text style={c.bullStatVal}>
+                    {item.successRate != null ? `${item.successRate}%` : "—"}
+                  </Text>
+                  <Text style={c.bullStatLabel}>Success Rate</Text>
+                </View>
+                <View style={c.bullStatDivider} />
+                <View style={c.bullStat}>
+                  <Text style={c.bullStatVal}>{item.purpose ?? "—"}</Text>
+                  <Text style={c.bullStatLabel}>Purpose</Text>
+                </View>
               </View>
-              <View style={c.bullStatDivider} />
-              <View style={c.bullStat}>
-                <Text style={c.bullStatVal}>
-                  {item.successRate != null ? `${item.successRate}%` : "—"}
-                </Text>
-                <Text style={c.bullStatLabel}>Success Rate</Text>
+              <View style={c.grid}>
+                <DetailItem icon="scale-outline" label="Weight" value={item.weight || "—"} />
+                <DetailItem icon="resize-outline" label="Size" value={item.size || "—"} />
+                <DetailItem icon="calendar-outline" label="Bought" value={item.boughtDate || "—"} />
+                <DetailItem icon="time-outline" label="Last Used" value={item.lastUsedDate || "—"} />
+                {item.damYield != null && (
+                  <DetailItem icon="water-outline" label="Dam Yield" value={`${item.damYield} L/day`} />
+                )}
               </View>
-              <View style={c.bullStatDivider} />
-              <View style={c.bullStat}>
-                <Text style={c.bullStatVal}>{item.purpose ?? "—"}</Text>
-                <Text style={c.bullStatLabel}>Purpose</Text>
-              </View>
-            </View>
-            <View style={c.grid}>
-              <DetailItem icon="scale-outline" label="Weight" value={item.weight || "—"} />
-              <DetailItem icon="resize-outline" label="Size" value={item.size || "—"} />
-              <DetailItem icon="calendar-outline" label="Bought" value={item.boughtDate || "—"} />
-              <DetailItem icon="time-outline" label="Last Used" value={item.lastUsedDate || "—"} />
-              {item.damYield != null && (
-                <DetailItem icon="water-outline" label="Dam Yield" value={`${item.damYield} L/day`} />
-              )}
-            </View>
-            <View style={c.pillRow}>
+              <View style={c.pillRow}>
                 <View style={[c.pill, { backgroundColor: item.semenAvailable ? "#f0fdf4" : "#f9fafb", borderColor: item.semenAvailable ? "#86efac" : "#e5e7eb" }]}>
                   <Ionicons name="flask-outline" size={12} color={item.semenAvailable ? "#16a34a" : "#9ca3af"} />
                   <Text style={[c.pillText, { color: item.semenAvailable ? "#16a34a" : "#9ca3af" }]}>
@@ -1480,90 +1484,90 @@ function CowCard({
                 <View style={[c.pill, { backgroundColor: item.isActive ? "#f0fdf4" : "#fff1f2", borderColor: item.isActive ? "#86efac" : "#fecdd3" }]}>
                   <Ionicons name={item.isActive ? "checkmark-circle" : "close-circle"} size={12} color={item.isActive ? "#16a34a" : "#dc2626"} />
                   <Text style={[c.pillText, { color: item.isActive ? "#16a34a" : "#dc2626" }]}>
-            {item.isActive ? "Active" : "Inactive"}
-          </Text>
-        </View>
-    </View>
+                    {item.isActive ? "Active" : "Inactive"}
+                  </Text>
+                </View>
+              </View>
             </>
           ) : (
-    <>
-      <View style={c.grid}>
-        <DetailItem icon="scale-outline" label="Weight" value={item.weight || "—"} />
-        <DetailItem icon="male-outline" label="Father" value={item.father || "—"} />
-        {item.type === "newborn" && (
-          <DetailItem icon="female-outline" label="Mother" value={(item as any).mother || "—"} />
-        )}
-        <DetailItem icon="resize-outline" label="Size" value={item.size || "—"} />
-        <DetailItem
-          icon="calendar-outline"
-          label={item.type === "newborn" ? "Born" : "Bought"}
-          value={item.bornDate || item.boughtDate || "—"}
-        />
-      </View>
-      <View style={c.pillRow}>
-  <View style={[c.pill, { backgroundColor: item.isActive ? "#f0fdf4" : "#fff1f2", borderColor: item.isActive ? "#86efac" : "#fecdd3" }]}>
-    <Ionicons name={item.isActive ? "checkmark-circle" : "close-circle"} size={12} color={item.isActive ? "#16a34a" : "#dc2626"} />
-    <Text style={[c.pillText, { color: item.isActive ? "#16a34a" : "#dc2626" }]}>
-          {item.isActive ? "Active" : "Inactive"}
-        </Text>
-      </View>
-      {item.isSold && (
-        <View style={[c.pill, { backgroundColor: "#fff7ed", borderColor: "#fed7aa" }]}>
-          <Ionicons name="pricetag" size={12} color="#ea580c" />
-          <Text style={[c.pillText, { color: "#ea580c" }]}>Sold</Text>
-        </View>
-      )}
-      <View style={[c.pill, { backgroundColor: "#eff6ff", borderColor: "#bfdbfe" }]}>
-        <Ionicons name={item.type === "newborn" ? "star" : "shield-checkmark"} size={12} color="#2563eb" />
-        <Text style={[c.pillText, { color: "#2563eb" }]}>
-              {item.type === "newborn" ? "New Born" : "Mature"}
-            </Text>
-          </View>
-          {item.pregnancyStatus !== "unknown" && (
-            <View style={[c.pill, { backgroundColor: item.pregnancyStatus === "pregnant" ? "#fdf4ff" : "#f9fafb", borderColor: item.pregnancyStatus === "pregnant" ? "#e9d5ff" : "#e5e7eb" }]}>
-              <Text style={{ fontSize: 11 }}>
-                {item.pregnancyStatus === "pregnant" ? "🤰" : ""}
-              </Text>
-              <Text style={[c.pillText, { color: item.pregnancyStatus === "pregnant" ? "#9333ea" : "#9ca3af" }]}>
-                {item.pregnancyStatus === "pregnant" ? "Pregnant" : "Not Pregnant"}
-              </Text>
-            </View>
-          )}
-          <View style={[c.pill, { backgroundColor: item.milkActive ? "#ecfeff" : "#f9fafb", borderColor: item.milkActive ? "#a5f3fc" : "#e5e7eb" }]}>
-            <Ionicons name="water-outline" size={12} color={item.milkActive ? "#0891b2" : "#9ca3af"} />
-            <Text style={[c.pillText, { color: item.milkActive ? "#0891b2" : "#9ca3af" }]}>
-                  {item.milkActive ? "Milk Active" : "Milk Off"}
-                </Text>
+            <>
+              <View style={c.grid}>
+                <DetailItem icon="scale-outline" label="Weight" value={item.weight || "—"} />
+                <DetailItem icon="male-outline" label="Father" value={item.father || "—"} />
+                {item.type === "newborn" && (
+                  <DetailItem icon="female-outline" label="Mother" value={(item as any).mother || "—"} />
+                )}
+                <DetailItem icon="resize-outline" label="Size" value={item.size || "—"} />
+                <DetailItem
+                  icon="calendar-outline"
+                  label={item.type === "newborn" ? "Born" : "Bought"}
+                  value={item.bornDate || item.boughtDate || "—"}
+                />
               </View>
-          </View>
-        </>
+              <View style={c.pillRow}>
+                <View style={[c.pill, { backgroundColor: item.isActive ? "#f0fdf4" : "#fff1f2", borderColor: item.isActive ? "#86efac" : "#fecdd3" }]}>
+                  <Ionicons name={item.isActive ? "checkmark-circle" : "close-circle"} size={12} color={item.isActive ? "#16a34a" : "#dc2626"} />
+                  <Text style={[c.pillText, { color: item.isActive ? "#16a34a" : "#dc2626" }]}>
+                    {item.isActive ? "Active" : "Inactive"}
+                  </Text>
+                </View>
+                {item.isSold && (
+                  <View style={[c.pill, { backgroundColor: "#fff7ed", borderColor: "#fed7aa" }]}>
+                    <Ionicons name="pricetag" size={12} color="#ea580c" />
+                    <Text style={[c.pillText, { color: "#ea580c" }]}>Sold</Text>
+                  </View>
+                )}
+                <View style={[c.pill, { backgroundColor: "#eff6ff", borderColor: "#bfdbfe" }]}>
+                  <Ionicons name={item.type === "newborn" ? "star" : "shield-checkmark"} size={12} color="#2563eb" />
+                  <Text style={[c.pillText, { color: "#2563eb" }]}>
+                    {item.type === "newborn" ? "New Born" : "Mature"}
+                  </Text>
+                </View>
+                {item.pregnancyStatus !== "unknown" && (
+                  <View style={[c.pill, { backgroundColor: item.pregnancyStatus === "pregnant" ? "#fdf4ff" : "#f9fafb", borderColor: item.pregnancyStatus === "pregnant" ? "#e9d5ff" : "#e5e7eb" }]}>
+                    <Text style={{ fontSize: 11 }}>
+                      {item.pregnancyStatus === "pregnant" ? "🤰" : ""}
+                    </Text>
+                    <Text style={[c.pillText, { color: item.pregnancyStatus === "pregnant" ? "#9333ea" : "#9ca3af" }]}>
+                      {item.pregnancyStatus === "pregnant" ? "Pregnant" : "Not Pregnant"}
+                    </Text>
+                  </View>
+                )}
+                <View style={[c.pill, { backgroundColor: item.milkActive ? "#ecfeff" : "#f9fafb", borderColor: item.milkActive ? "#a5f3fc" : "#e5e7eb" }]}>
+                  <Ionicons name="water-outline" size={12} color={item.milkActive ? "#0891b2" : "#9ca3af"} />
+                  <Text style={[c.pillText, { color: item.milkActive ? "#0891b2" : "#9ca3af" }]}>
+                    {item.milkActive ? "Milk Active" : "Milk Off"}
+                  </Text>
+                </View>
+              </View>
+            </>
           )}
-        <View style={c.actionRow}>
-  <TouchableOpacity style={[c.actionBtn, c.editBtn]} onPress={() => onEdit(item)} activeOpacity={0.8}>
-    <Ionicons name="create-outline" size={15} color="#2563eb" />
-    <Text style={[c.actionText, { color: "#2563eb" }]}>Edit</Text>
-    </TouchableOpacity>
-    <TouchableOpacity style={[c.actionBtn, c.qrBtn]} onPress={handleQR} activeOpacity={0.8} disabled={qrLoading}>
-      {qrLoading ? (
-        <ActivityIndicator size="small" color="#FFBF55" />
-      ) : (
-        <>
+          <View style={c.actionRow}>
+            <TouchableOpacity style={[c.actionBtn, c.editBtn]} onPress={() => onEdit(item)} activeOpacity={0.8}>
+              <Ionicons name="create-outline" size={15} color="#2563eb" />
+              <Text style={[c.actionText, { color: "#2563eb" }]}>Edit</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[c.actionBtn, c.qrBtn]} onPress={handleQR} activeOpacity={0.8} disabled={qrLoading}>
+              {qrLoading ? (
+                <ActivityIndicator size="small" color="#FFBF55" />
+              ) : (
+                <>
                   <Ionicons name={item.qrCode ? "qr-code" : "qr-code-outline"} size={15} color="#7c3aed" />
                   <Text style={[c.actionText, { color: "#7c3aed" }]}>
-        {item.qrCode ? "View QR" : "Gen QR"}
-      </Text>
-    </>
+                    {item.qrCode ? "View QR" : "Gen QR"}
+                  </Text>
+                </>
               )
-}
+              }
             </TouchableOpacity >
-  <TouchableOpacity style={[c.actionBtn, c.deleteBtn]} onPress={() => onDelete(item)} activeOpacity={0.8}>
-    <Ionicons name="trash-outline" size={15} color="#dc2626" />
-    <Text style={[c.actionText, { color: "#dc2626" }]}>Delete</Text>
-    </TouchableOpacity>
-  </View>
+            <TouchableOpacity style={[c.actionBtn, c.deleteBtn]} onPress={() => onDelete(item)} activeOpacity={0.8}>
+              <Ionicons name="trash-outline" size={15} color="#dc2626" />
+              <Text style={[c.actionText, { color: "#dc2626" }]}>Delete</Text>
+            </TouchableOpacity>
+          </View>
         </>
       )}
-<QRModal visible={qrVisible} onClose={() => setQrVisible(false)} cow={item} />
+      <QRModal visible={qrVisible} onClose={() => setQrVisible(false)} cow={item} />
     </Animated.View >
   );
 }
@@ -1717,70 +1721,70 @@ export default function CowsScreen() {
           <Text style={s.homeHeading}>What would you like to do?</Text>
           <Text style={s.homeSub}>Manage your cattle records easily</Text>
           <View style={s.btnGroup}>
-  <TouchableOpacity onPress={() => setAddVisible(true)} style={s.bigBtn} activeOpacity={0.85}>
-    <View style={[s.bigBtnIcon, { backgroundColor: "#f5f3ff" }]}>
-      <Image source={cowImg} style={{ width: 60, height: 60, resizeMode: "contain" }} />
+            <TouchableOpacity onPress={() => setAddVisible(true)} style={s.bigBtn} activeOpacity={0.85}>
+              <View style={[s.bigBtnIcon, { backgroundColor: "#f5f3ff" }]}>
+                <Image source={cowImg} style={{ width: 60, height: 60, resizeMode: "contain" }} />
+              </View>
+              <Text style={s.bigBtnTitle}>Add Animal</Text>
+              <Text style={s.bigBtnSub}>Register cow, calf, or bull</Text>
+              <View style={[s.bigBtnArrow, { backgroundColor: "#BB6B3F" }]}>
+                <Ionicons name="add" size={18} color="#fff" />
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setScreen("list")} style={s.bigBtn} activeOpacity={0.85}>
+              <View style={[s.bigBtnIcon, { backgroundColor: "#eff6ff" }]}>
+                <Text style={{ fontSize: 32 }}>📋</Text>
+              </View>
+              <Text style={s.bigBtnTitle}>See All Animals</Text>
+              <Text style={s.bigBtnSub}>View, edit and manage all {cows.length} animals</Text>
+              <View style={[s.bigBtnArrow, { backgroundColor: "#2563eb" }]}>
+                <Ionicons name="arrow-forward" size={18} color="#fff" />
+              </View>
+            </TouchableOpacity>
+          </View>
         </View>
-        <Text style={s.bigBtnTitle}>Add Animal</Text>
-        <Text style={s.bigBtnSub}>Register cow, calf, or bull</Text>
-        <View style={[s.bigBtnArrow, { backgroundColor: "#BB6B3F" }]}>
-          <Ionicons name="add" size={18} color="#fff" />
-        </View>
-      </TouchableOpacity>
-  <TouchableOpacity onPress={() => setScreen("list")} style={s.bigBtn} activeOpacity={0.85}>
-    <View style={[s.bigBtnIcon, { backgroundColor: "#eff6ff" }]}>
-      <Text style={{ fontSize: 32 }}>📋</Text>
-    </View>
-    <Text style={s.bigBtnTitle}>See All Animals</Text>
-    <Text style={s.bigBtnSub}>View, edit and manage all {cows.length} animals</Text>
-    <View style={[s.bigBtnArrow, { backgroundColor: "#2563eb" }]}>
-          <Ionicons name="arrow-forward" size={18} color="#fff" />
-        </View>
-      </TouchableOpacity>
-    </View>
-  </View>
       ) : (
-    <View style={{ flex: 1 }}>
-      <View style={s.searchWrap}>
-        <Ionicons name="search-outline" size={16} color="#C4A882" />
-        <TextInput
-          style={s.searchInput}
-          placeholder="Search name, tag, breed..."
-          placeholderTextColor="#D4B8A8"
-          value={search}
-          onChangeText={setSearch}
-        />
-        {search.length > 0 && (
-          <TouchableOpacity onPress={() => setSearch("")}>
-            <Ionicons name="close-circle" size={16} color="#C4A882" />
-          </TouchableOpacity>
-        )}
-      </View>
+        <View style={{ flex: 1 }}>
+          <View style={s.searchWrap}>
+            <Ionicons name="search-outline" size={16} color="#C4A882" />
+            <TextInput
+              style={s.searchInput}
+              placeholder="Search name, tag, breed..."
+              placeholderTextColor="#D4B8A8"
+              value={search}
+              onChangeText={setSearch}
+            />
+            {search.length > 0 && (
+              <TouchableOpacity onPress={() => setSearch("")}>
+                <Ionicons name="close-circle" size={16} color="#C4A882" />
+              </TouchableOpacity>
+            )}
+          </View>
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={s.filterRow}
-        contentContainerStyle={{ paddingHorizontal: 16, gap: 8, paddingBottom: 4 }}
-      >
-        {(["all", "mature", "newborn", "bull"] as const).map((t) => (
-          <TouchableOpacity
-            key={t}
-            onPress={() => setFilterType(t)}
-            style={[s.filterChip, filterType === t && s.filterChipActive]}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={s.filterRow}
+            contentContainerStyle={{ paddingHorizontal: 16, gap: 8, paddingBottom: 4 }}
           >
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-              <Image
-                source={t === "bull" ? bullImg : t === "newborn" ? calfImg : cowImg}
-                style={{ width: 25, height: 25, resizeMode: "contain" }}
-              />
-  <Text style={[s.filterChipText, filterType === t && s.filterChipTextActive]}>
-    {t === "all" ? "All" : t === "mature" ? "Cows" : t === "newborn" ? "Calves" : "Bulls"}
-    </Text>
-  </View>
+            {(["all", "mature", "newborn", "bull"] as const).map((t) => (
+              <TouchableOpacity
+                key={t}
+                onPress={() => setFilterType(t)}
+                style={[s.filterChip, filterType === t && s.filterChipActive]}
+              >
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <Image
+                    source={t === "bull" ? bullImg : t === "newborn" ? calfImg : cowImg}
+                    style={{ width: 25, height: 25, resizeMode: "contain" }}
+                  />
+                  <Text style={[s.filterChipText, filterType === t && s.filterChipTextActive]}>
+                    {t === "all" ? "All" : t === "mature" ? "Cows" : t === "newborn" ? "Calves" : "Bulls"}
+                  </Text>
+                </View>
               </TouchableOpacity >
             ))
-}
+            }
           </ScrollView >
 
           {loading && cows.length === 0 ? (
@@ -2407,7 +2411,7 @@ const m = StyleSheet.create({
     gap: 8,
     marginTop: 16,
   },
-  submitBtnTerra: { backgroundColor: "#f3dbbc"},
+  submitBtnTerra: { backgroundColor: "#f3dbbc" },
   submitText: {
     fontSize: 15,
     fontWeight: "800",

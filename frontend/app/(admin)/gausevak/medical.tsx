@@ -15,6 +15,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   Alert,
+  Image
 } from "react-native";
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from "expo-router";
@@ -29,6 +30,7 @@ interface MedicalRecord {
   cowSrNo: string;
   cowName?: string;
   cowAge?: string;
+  cowType?: string;
   currentStatus: "healthy" | "unhealthy";
   lastVaccinationDate?: string;
   nextVaccinationDate?: string;
@@ -72,6 +74,10 @@ interface MedicalForm {
 }
 
 // CONSTANTS
+
+const cowImg = require("../../../assets/images/gir-cow.png");
+const bullImg = require("../../../assets/images/bull-cow.png");
+const calfImg = require("../../../assets/images/calf-cow.png");
 
 const EMPTY_FORM: MedicalForm = {
   cowSrNo: "",
@@ -347,7 +353,7 @@ function CowSelector({
             <TouchableOpacity
               activeOpacity={1}
               style={cs.sheet}
-              onPress={() => {}}
+              onPress={() => { }}
             >
               <View style={cs.sheetHeader}>
                 <Text style={cs.sheetTitle}>Select Cow</Text>
@@ -589,8 +595,8 @@ function DateField({
     else setViewMonth(m => m + 1);
   };
 
-  const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-  const DAY_NAMES = ["Su","Mo","Tu","We","Th","Fr","Sa"];
+  const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  const DAY_NAMES = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 
   // Build calendar grid
   const firstDay = new Date(viewYear, viewMonth, 1).getDay();
@@ -661,7 +667,7 @@ function DateField({
 
       <Modal visible={pickerOpen} transparent animationType="fade" onRequestClose={() => setPickerOpen(false)}>
         <TouchableOpacity style={dp.overlay} activeOpacity={1} onPress={() => setPickerOpen(false)}>
-          <TouchableOpacity activeOpacity={1} style={dp.sheet} onPress={() => {}}>
+          <TouchableOpacity activeOpacity={1} style={dp.sheet} onPress={() => { }}>
             {/* Header */}
             <View style={dp.header}>
               <Ionicons name="calendar" size={16} color={color} />
@@ -1477,13 +1483,15 @@ function MedicalCard({
           activeOpacity={0.85}
         >
           <View style={c.topRow}>
-            <View
-              style={[
-                c.avatar,
-                { borderColor: statusBorder, backgroundColor: statusBg },
-              ]}
-            >
-              <Text style={{ fontSize: 24 }}>🐄</Text>
+            <View style={[c.avatar, { borderColor: statusBorder, backgroundColor: statusBg }]}>
+              <Image
+                source={
+                  item.cowType === "bull" ? bullImg :
+                    item.cowType === "newborn" ? calfImg :
+                      cowImg
+                }
+                style={{ width: 32, height: 32, resizeMode: "contain" }}
+              />
             </View>
             <View style={{ flex: 1, marginLeft: 12 }}>
               <View
@@ -1737,11 +1745,22 @@ export default function MedicalScreen() {
     setLoading(true);
     setError(null);
     try {
-      const data = await api.getMedicalRecords(
-        q,
-        status === "all" ? undefined : status,
-      );
-      setRecords(data);
+      const [data, cowsData] = await Promise.all([
+        api.getMedicalRecords(q, status === "all" ? undefined : status),
+        api.getCows().catch(() => []),
+      ]);
+
+      const cowTypeMap: Record<string, string> = {};
+      for (const cow of cowsData) {
+        cowTypeMap[cow.tag] = cow.type;
+      }
+
+      const enriched = data.map((r: MedicalRecord) => ({
+        ...r,
+        cowType: cowTypeMap[r.cowSrNo] ?? "mature",
+      }));
+
+      setRecords(enriched);
     } catch (err: any) {
       setError(err.message ?? "Failed to load.");
     } finally {
@@ -1818,7 +1837,7 @@ export default function MedicalScreen() {
   );
 
   return (
-     <View style={[s.screen, { paddingTop: insets.top }]}>
+    <View style={[s.screen, { paddingTop: insets.top }]}>
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
 
       {/* ── Header ── */}
@@ -1826,7 +1845,7 @@ export default function MedicalScreen() {
         style={[
           s.header,
           {
-           
+
           },
         ]}
       >
@@ -1839,7 +1858,10 @@ export default function MedicalScreen() {
           <Ionicons name="arrow-back" size={20} color="#111827" />
         </TouchableOpacity>
         <View style={{ flex: 1, marginLeft: 12 }}>
-          <Text style={s.headerTitle}>Medical Records</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <Ionicons name="medkit" size={18} color="#16a34a" />
+            <Text style={s.headerTitle}>Medical Records</Text>
+          </View>
           <Text style={s.headerSub}>{records.length} records</Text>
         </View>
         {screen === "list" && (
@@ -1880,6 +1902,7 @@ export default function MedicalScreen() {
         >
           {/* Hero */}
           <View style={s.heroWrap}>
+            <Ionicons name="medkit" size={30} color="#fa3b4b" />
             <Text style={s.homeHeading}>Medical Records</Text>
             <Text style={s.homeSub}>
               Track health, vaccination & treatment for each cow
@@ -1887,88 +1910,81 @@ export default function MedicalScreen() {
           </View>
 
           {/* Action buttons */}
-          <View style={s.btnGroup}>
-            <TouchableOpacity
-              onPress={openAdd}
-              style={s.bigBtn}
-              activeOpacity={0.85}
-            >
-              <View style={{ flex: 1 }}>
-                <Text style={s.bigBtnTitle}>Add Medical Record</Text>
-                <Text style={s.bigBtnSub}>
-                  Register a new cow health record
-                </Text>
-              </View>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => setScreen("list")}
-              style={s.bigBtn}
-              activeOpacity={0.85}
-            >
-              <View style={{ flex: 1 }}>
-                <Text style={s.bigBtnTitle}>View All Records</Text>
-                <Text style={s.bigBtnSub}>
-                  Browse {records.length} medical records
-                </Text>
-              </View>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity onPress={openAdd} style={s.bigBtn} activeOpacity={0.85}>
+            <View style={[s.bigBtnIcon, { backgroundColor: "#f0fdf4" }]}>
+              <Ionicons name="add-circle" size={28} color="#16a34a" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={s.bigBtnTitle}>Add Medical Record</Text>
+              <Text style={s.bigBtnSub}>Register a new cow health record</Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity onPress={() => setScreen("list")} style={s.bigBtn} activeOpacity={0.85}>
+            <View style={[s.bigBtnIcon, { backgroundColor: "#eff6ff" }]}>
+              <Ionicons name="list-circle" size={28} color="#2563eb" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={s.bigBtnTitle}>View All Records</Text>
+              <Text style={s.bigBtnSub}>Browse {records.length} medical records</Text>
+            </View>
+          </TouchableOpacity>
 
           {/* Summary cards */}
           <View style={s.summaryRow}>
-              <TouchableOpacity
-                style={[
-                  s.summaryCard,
-                  { backgroundColor: "#f0fdf4", borderColor: "#bbf7d0" },
-                ]}
-                onPress={() => {
-                  setFilter("healthy");
-                  setScreen("list");
-                }}
-                activeOpacity={0.8}
-              >
-                <Text style={s.summaryEmoji}></Text>
-                <Text style={[s.summaryCount, { color: "#16a34a" }]}>
-                  {healthy}
-                </Text>
-                <Text style={[s.summaryLabel, { color: "#16a34a" }]}>
-                  Healthy
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  s.summaryCard,
-                  { backgroundColor: "#fff1f2", borderColor: "#fecdd3" },
-                ]}
-                onPress={() => {
-                  setFilter("unhealthy");
-                  setScreen("list");
-                }}
-                activeOpacity={0.8}
-              >
-                <Text style={s.summaryEmoji}></Text>
-                <Text style={[s.summaryCount, { color: "#dc2626" }]}>
-                  {unhealthy}
-                </Text>
-                <Text style={[s.summaryLabel, { color: "#dc2626" }]}>
-                  Unhealthy
-                </Text>
-              </TouchableOpacity>
-              <View
-                style={[
-                  s.summaryCard,
-                  { backgroundColor: "#faf5ff", borderColor: "#e9d5ff" },
-                ]}
-              >
-                <Text style={s.summaryEmoji}></Text>
-                <Text style={[s.summaryCount, { color: "#7c3aed" }]}>
-                  {records.filter((r) => !!r.nextVaccinationDate).length}
-                </Text>
-                <Text style={[s.summaryLabel, { color: "#7c3aed" }]}>
-                  Scheduled
-                </Text>
-              </View>
+            <TouchableOpacity
+              style={[
+                s.summaryCard,
+                { backgroundColor: "#f0fdf4", borderColor: "#bbf7d0" },
+              ]}
+              onPress={() => {
+                setFilter("healthy");
+                setScreen("list");
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={s.summaryEmoji}></Text>
+              <Text style={[s.summaryCount, { color: "#16a34a" }]}>
+                {healthy}
+              </Text>
+              <Text style={[s.summaryLabel, { color: "#16a34a" }]}>
+                Healthy
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                s.summaryCard,
+                { backgroundColor: "#fff1f2", borderColor: "#fecdd3" },
+              ]}
+              onPress={() => {
+                setFilter("unhealthy");
+                setScreen("list");
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={s.summaryEmoji}></Text>
+              <Text style={[s.summaryCount, { color: "#dc2626" }]}>
+                {unhealthy}
+              </Text>
+              <Text style={[s.summaryLabel, { color: "#dc2626" }]}>
+                Unhealthy
+              </Text>
+            </TouchableOpacity>
+            <View
+              style={[
+                s.summaryCard,
+                { backgroundColor: "#faf5ff", borderColor: "#e9d5ff" },
+              ]}
+            >
+              <Text style={s.summaryEmoji}></Text>
+              <Text style={[s.summaryCount, { color: "#7c3aed" }]}>
+                {records.filter((r) => !!r.nextVaccinationDate).length}
+              </Text>
+              <Text style={[s.summaryLabel, { color: "#7c3aed" }]}>
+                Scheduled
+              </Text>
             </View>
+          </View>
 
           {/* ── Calf Vaccine Schedule Section ── */}
           {calfRecords.length > 0 && (
@@ -2092,13 +2108,16 @@ export default function MedicalScreen() {
             />
           )}
         </View>
-      )}
+      )
+      }
 
-      {screen === "list" && (
-        <TouchableOpacity onPress={openAdd} style={s.fab}>
-          <Ionicons name="add" size={24} color="#fff" />
-        </TouchableOpacity>
-      )}
+      {
+        screen === "list" && (
+          <TouchableOpacity onPress={openAdd} style={s.fab}>
+            <Ionicons name="add" size={24} color="#fff" />
+          </TouchableOpacity>
+        )
+      }
 
       <MedicalFormModal
         visible={modalVisible}
@@ -2116,7 +2135,7 @@ export default function MedicalScreen() {
           }
         }}
       />
-    </View>
+    </View >
   );
 }
 
@@ -2242,6 +2261,7 @@ const s = StyleSheet.create({
     borderColor: "#ecd657",
     flexDirection: "row",
     alignItems: "center",
+    marginBottom: 16,
     gap: 12,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },

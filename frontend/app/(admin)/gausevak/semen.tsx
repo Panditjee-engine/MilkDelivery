@@ -15,6 +15,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   Alert,
+  Image,
 } from "react-native";
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from "expo-router";
@@ -59,6 +60,18 @@ const EMPTY_FORM: SemenForm = {
   totalDoses: 0,
   notes: "",
 };
+
+const cowImg = require("../../../assets/images/gir-cow.png");
+
+const BREEDS = [
+  { name: "Gir", image: cowImg, origin: "Gujarat" },
+  { name: "Sahiwal", image: cowImg, origin: "Punjab" },
+  { name: "Red Sindhi", image: cowImg, origin: "Sindh" },
+  { name: "Tharparkar", image: cowImg, origin: "Rajasthan" },
+  { name: "Rathi", image: cowImg, origin: "Rajasthan" },
+  { name: "Kankrej", image: cowImg, origin: "Gujarat" },
+  { name: "Badri / Pahadi", image: cowImg, origin: "Uttarakhand" },
+];
 
 function conceptionRate(record: SemenRecord): string {
   if (!record.totalDoses || record.totalDoses === 0) return "—";
@@ -123,6 +136,75 @@ function Counter({
           <Ionicons name="add" size={16} color="#fff" />
         </TouchableOpacity>
       </View>
+    </View>
+  );
+}
+
+function BreedSelector({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const searchRef = useRef<TextInput>(null);
+
+  const filtered = BREEDS.filter((b) => b.name.toLowerCase().includes(search.toLowerCase()));
+
+  const select = (name: string) => { onChange(name); setOpen(false); setSearch(""); };
+  const openDropdown = () => { setOpen(true); setTimeout(() => searchRef.current?.focus(), 150); };
+
+  return (
+    <View style={f.wrap}>
+      <Text style={f.label}>Breed</Text>
+      <TouchableOpacity onPress={openDropdown} style={[f.row, open && f.focused]} activeOpacity={0.8}>
+        <Ionicons name="paw-outline" size={15} color={open ? "#0891b2" : "#9ca3af"} style={{ marginRight: 8 }} />
+        <Text style={[f.input, { paddingVertical: 0 }, !value && { color: "#d1d5db" }]}>
+          {value || "Select or type breed"}
+        </Text>
+        <Ionicons name={open ? "chevron-up" : "chevron-down"} size={14} color="#9ca3af" />
+      </TouchableOpacity>
+
+      <Modal visible={open} transparent animationType="fade" onRequestClose={() => { setOpen(false); setSearch(""); }}>
+        <TouchableOpacity style={bd.overlay} activeOpacity={1} onPress={() => { setOpen(false); setSearch(""); }}>
+          <TouchableOpacity activeOpacity={1} style={bd.card}>
+            <View style={bd.header}>
+              <Text style={bd.title}>Select Breed</Text>
+              <TouchableOpacity onPress={() => { setOpen(false); setSearch(""); }} style={bd.closeBtn}>
+                <Ionicons name="close" size={16} color="#8B6854" />
+              </TouchableOpacity>
+            </View>
+            <View style={bd.searchRow}>
+              <Ionicons name="search-outline" size={15} color="#9ca3af" />
+              <TextInput ref={searchRef} style={bd.searchInput} value={search} onChangeText={setSearch} placeholder="Search breed..." placeholderTextColor="#d1d5db" returnKeyType="done" />
+              {search.length > 0 && <TouchableOpacity onPress={() => setSearch("")}><Ionicons name="close-circle" size={15} color="#9ca3af" /></TouchableOpacity>}
+            </View>
+            <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              {filtered.length === 0 ? (
+                <TouchableOpacity style={bd.customRow} onPress={() => select(search)}>
+                  <Ionicons name="add-circle-outline" size={18} color="#0891b2" />
+                  <View style={{ flex: 1, marginLeft: 10 }}>
+                    <Text style={bd.customLabel}>Add "{search}"</Text>
+                    <Text style={bd.customSub}>Custom breed</Text>
+                  </View>
+                </TouchableOpacity>
+              ) : (
+                filtered.map((b, i) => {
+                  const selected = value === b.name;
+                  return (
+                    <TouchableOpacity key={b.name} onPress={() => select(b.name)} style={[bd.item, selected && bd.itemSelected, i === filtered.length - 1 && { borderBottomWidth: 0 }]} activeOpacity={0.7}>
+                      <View style={[bd.emojiWrap, selected && { backgroundColor: "#ecfeff", borderColor: "#a5f3fc" }]}>
+                        <Image source={cowImg} style={{ width: 28, height: 28, resizeMode: "contain" }} />
+                      </View>
+                      <View style={{ flex: 1, marginLeft: 12 }}>
+                        <Text style={[bd.breedName, selected && { color: "#0891b2" }]}>{b.name}</Text>
+                        <Text style={bd.origin}>{b.origin}</Text>
+                      </View>
+                      {selected && <Ionicons name="checkmark-circle" size={20} color="#0891b2" />}
+                    </TouchableOpacity>
+                  );
+                })
+              )}
+            </ScrollView>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -320,13 +402,8 @@ function SemenFormModal({
                 placeholder="e.g. Hercules"
                 icon="text-outline"
               />
-              <Field
-                label="Breed"
-                value={form.breed}
-                onChange={setF("breed")}
-                placeholder="e.g. Gir, HF, Jersey"
-                icon="paw-outline"
-              />
+
+            <BreedSelector value={form.breed} onChange={setF("breed")} />
 
               <SectionHeader
                 title="Semen Doses"
@@ -632,7 +709,7 @@ function SemenCard({
                 { borderColor: "#e9d5ff", backgroundColor: "#faf5ff" },
               ]}
             >
-              
+
               <Text style={[c.detailCount, { color: "#7c3aed" }]}>
                 {item.totalDoses}
               </Text>
@@ -725,7 +802,7 @@ function SemenCard({
 }
 
 export default function SemenRecordScreen() {
-    const insets = useSafeAreaInsets();
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const [records, setRecords] = useState<SemenRecord[]>([]);
   const [screen, setScreen] = useState<"home" | "list">("home");
@@ -805,7 +882,7 @@ export default function SemenRecordScreen() {
       : "—";
 
   return (
-     <View style={[s.screen, { paddingTop: insets.top }]}>
+    <View style={[s.screen, { paddingTop: insets.top }]}>
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
 
       <View
@@ -874,7 +951,7 @@ export default function SemenRecordScreen() {
               activeOpacity={0.85}
             >
               <View style={[s.bigBtnIcon, { backgroundColor: "#ecfeff" }]}>
-                <Ionicons name="add-circle" size={18} color="#0891b2" />  
+                <Ionicons name="add-circle" size={18} color="#0891b2" />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={s.bigBtnTitle}>Add Semen Record</Text>
@@ -1482,6 +1559,24 @@ const f = StyleSheet.create({
     marginTop: 6,
   },
   sectionTitle: { fontSize: 12, fontWeight: "700", letterSpacing: 0.2 },
+});
+
+const bd = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: "rgba(204,137,92,0.45)", justifyContent: "center", alignItems: "center", paddingHorizontal: 20 },
+  card: { backgroundColor: "#fff", borderRadius: 20, width: "100%", maxWidth: 400, paddingBottom: 12, shadowColor: "#8B6854", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 20, elevation: 10 },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 18, paddingTop: 18, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: "#F5EDE5" },
+  title: { fontSize: 16, fontWeight: "800", color: "#111827", letterSpacing: -0.3 },
+  closeBtn: { width: 28, height: 28, borderRadius: 14, backgroundColor: "#F5EDE5", alignItems: "center", justifyContent: "center" },
+  searchRow: { flexDirection: "row", alignItems: "center", marginHorizontal: 14, marginVertical: 10, backgroundColor: "#FFF8F0", borderRadius: 12, borderWidth: 1.5, borderColor: "#F5EDE5", paddingHorizontal: 12, paddingVertical: 9, gap: 8 },
+  searchInput: { flex: 1, color: "#111827", fontSize: 14, fontWeight: "500" },
+  item: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#FFF8F0" },
+  itemSelected: { backgroundColor: "#f0fdf4" },
+  emojiWrap: { width: 42, height: 42, borderRadius: 12, backgroundColor: "#FFF8F0", borderWidth: 1, borderColor: "#F5EDE5", alignItems: "center", justifyContent: "center" },
+  breedName: { fontSize: 14, fontWeight: "700", color: "#111827", letterSpacing: -0.2 },
+  origin: { fontSize: 11, color: "#9ca3af", fontWeight: "500", marginTop: 2 },
+  customRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, backgroundColor: "#FFF8F0", margin: 10, borderRadius: 12, borderWidth: 1, borderColor: "#0891b2" },
+  customLabel: { fontSize: 14, fontWeight: "700", color: "#0891b2" },
+  customSub: { fontSize: 11, color: "#67e8f9", fontWeight: "500", marginTop: 1 },
 });
 
 const m = StyleSheet.create({

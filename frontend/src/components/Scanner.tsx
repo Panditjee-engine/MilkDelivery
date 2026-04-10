@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   Vibration,
   ScrollView,
   Dimensions,
+  Animated,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
@@ -33,6 +34,32 @@ export default function Scanner({
   const [torch, setTorch] = useState(false);
   const [detectedData, setDetectedData] = useState<string | null>(null);
   const [rawData, setRawData] = useState<string | null>(null);
+
+  const scanAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(scanAnim, {
+          toValue: 1,
+          duration: 1800,
+          useNativeDriver: true,
+        }),
+        Animated.timing(scanAnim, {
+          toValue: 0,
+          duration: 1800,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, []);
+
+  const scanLineTranslateY = scanAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, SCAN_BOX - 4],
+  });
 
   useEffect(() => {
     if (!permission?.granted) {
@@ -82,7 +109,7 @@ export default function Scanner({
 
   return (
     <View style={s.container}>
-      {/* ✅ FIX: enableTorch prop added — yahi flashlight control karta hai */}
+      {/* ✅ FIX: enableTorch prop added — on torch toggle */}
       <CameraView
         style={s.camera}
         facing="back"
@@ -111,7 +138,7 @@ export default function Scanner({
 
           <Text style={s.topTitle}>{title}</Text>
 
-          {/* ✅ FIX: torch state toggle — button press par camera torch on/off */}
+          {/* ✅ FIX: torch state toggle — button press camera torch on/off */}
           <TouchableOpacity
             style={[s.iconBtn, torch && s.iconBtnActive]}
             onPress={() => setTorch((v) => !v)}
@@ -164,15 +191,21 @@ export default function Scanner({
 
             {/* Scan line animation */}
             {!scanned && !detectedData && (
-              <View style={s.scanLineWrap}>
+              <Animated.View
+                style={[
+                  s.scanLineWrap,
+                  { transform: [{ translateY: scanLineTranslateY }] },
+                ]}
+              >
                 <LinearGradient
-                  colors={['transparent', '#f5c842', 'transparent']}
+                  colors={['transparent', '#00ff88', 'transparent']}
                   style={s.scanLine}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                 />
-              </View>
+              </Animated.View>
             )}
+
 
             {/* Success overlay */}
             {scanned && (
@@ -318,7 +351,7 @@ const s = StyleSheet.create({
     position: 'absolute',
     width: CORNER_SIZE,
     height: CORNER_SIZE,
-    borderColor: '#f5c842',
+    borderColor: '#00ff88',  // green
   },
   cornerTL: {
     top: 0, left: 0,
@@ -343,7 +376,7 @@ const s = StyleSheet.create({
 
   /* Scan line */
   scanLineWrap: {
-    position: 'absolute', top: '50%', left: 10, right: 10, height: 2, marginTop: -1,
+    position: 'absolute', top: 0, left: 10, right: 10, height: 2,
   },
   scanLine: { flex: 1, height: 2, borderRadius: 1 },
 

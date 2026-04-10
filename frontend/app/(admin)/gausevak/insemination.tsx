@@ -17,6 +17,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   Alert,
+  Image,
 } from "react-native";
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from "expo-router";
@@ -57,6 +58,10 @@ interface FormData {
   actualCalvingDate: string;
   heatAfterCalvingDate: string;
 }
+
+const cowImg = require("../../../assets/images/gir-cow.png");
+const bullImg = require("../../../assets/images/bull-cow.png");
+const calfImg = require("../../../assets/images/calf-cow.png");
 
 const EMPTY_FORM: FormData = {
   cowSrNo: "",
@@ -241,7 +246,7 @@ function CowSelector({
             <TouchableOpacity
               activeOpacity={1}
               style={cs.sheet}
-              onPress={() => {}}
+              onPress={() => { }}
             >
               <View style={cs.sheetHeader}>
                 <Text style={cs.sheetTitle}>Select Cow</Text>
@@ -300,9 +305,14 @@ function CowSelector({
                       activeOpacity={0.75}
                     >
                       <View style={cs.cowEmoji}>
-                        <Text style={{ fontSize: 20 }}>
-                          {item.type === "newborn" ? "🐮" : "🐄"}
-                        </Text>
+                        <Image
+                          source={
+                            item.type === "bull" ? bullImg :
+                              item.type === "newborn" ? calfImg :
+                                cowImg
+                          }
+                          style={{ width: 26, height: 26, resizeMode: "contain" }}
+                        />
                       </View>
                       <View style={{ flex: 1 }}>
                         <Text style={cs.cowTag}>{item.tag}</Text>
@@ -346,7 +356,10 @@ function CowSelector({
                   }
                   ListEmptyComponent={
                     <View style={cs.emptyWrap}>
-                      <Text style={{ fontSize: 32 }}>🐄</Text>
+                      <Image
+                        source={cowImg}
+                        style={{ width: 60, height: 60, resizeMode: "contain" }}
+                      />
                       <Text style={cs.emptyText}>No cows found</Text>
                     </View>
                   }
@@ -949,7 +962,10 @@ function InseminationCard({
       >
         <View style={c.topRow}>
           <View style={c.avatar}>
-            <Text style={{ fontSize: 22 }}>🐄</Text>
+            <Image
+              source={cowImg}
+              style={{ width: 28, height: 28, resizeMode: "contain" }}
+            />
           </View>
           <View style={{ flex: 1, marginLeft: 10 }}>
             <Text style={c.name}>{item.cowName}</Text>
@@ -1120,7 +1136,7 @@ function InseminationCard({
 }
 
 export default function InseminationScreen() {
-    const insets = useSafeAreaInsets();
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const [records, setRecords] = useState<InseminationRecord[]>([]);
   const [screen, setScreen] = useState<"home" | "list">("home");
@@ -1195,7 +1211,7 @@ export default function InseminationScreen() {
     Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0;
 
   return (
-   <View style={[s.screen, { paddingTop: insets.top }]}>
+    <View style={[s.screen, { paddingTop: insets.top }]}>
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
 
       <View
