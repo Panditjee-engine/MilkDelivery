@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   StatusBar,
   Platform,
   FlatList,
@@ -62,6 +63,7 @@ const EMPTY_FORM: SemenForm = {
 };
 
 const cowImg = require("../../../assets/images/gir-cow.png");
+const bullImg = require("../../../assets/images/bull-cow.png");
 
 const BREEDS = [
   { name: "Gir", image: cowImg, origin: "Gujarat" },
@@ -116,20 +118,11 @@ function Counter({
         >
           <Ionicons name="remove" size={16} color={color} />
         </TouchableOpacity>
-        <View
-          style={[
-            ct.countBox,
-            { borderColor: color + "30", backgroundColor: color + "08" },
-          ]}
-        >
+        <View style={[ct.countBox, { borderColor: color + "30", backgroundColor: color + "08" }]}>
           <Text style={[ct.count, { color }]}>{value}</Text>
         </View>
         <TouchableOpacity
-          style={[
-            ct.btn,
-            ct.plus,
-            { backgroundColor: color, borderColor: color },
-          ]}
+          style={[ct.btn, ct.plus, { backgroundColor: color, borderColor: color }]}
           onPress={() => onChange(value + 1)}
           activeOpacity={0.7}
         >
@@ -140,88 +133,352 @@ function Counter({
   );
 }
 
-function BreedSelector({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+// ── Bull Name Dropdown ────────────────────────────────────────────────────────
+
+function BullNameSelector({
+  value,
+  onChange,
+  existingBulls,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  existingBulls: string[];
+}) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const searchRef = useRef<TextInput>(null);
 
-  const filtered = BREEDS.filter((b) => b.name.toLowerCase().includes(search.toLowerCase()));
+  const filtered = existingBulls.filter((b) =>
+    b.toLowerCase().includes(search.toLowerCase())
+  );
 
-  const select = (name: string) => { onChange(name); setOpen(false); setSearch(""); };
-  const openDropdown = () => { setOpen(true); setTimeout(() => searchRef.current?.focus(), 150); };
+  const select = (name: string) => {
+    onChange(name);
+    setOpen(false);
+    setSearch("");
+  };
+
+  const openDropdown = () => {
+    setOpen(true);
+    setTimeout(() => searchRef.current?.focus(), 200);
+  };
+
+  const closeDropdown = () => {
+    setOpen(false);
+    setSearch("");
+  };
+
+  const showCustom =
+    search.trim().length > 0 &&
+    !existingBulls.some((b) => b.toLowerCase() === search.trim().toLowerCase());
 
   return (
     <View style={f.wrap}>
-      <Text style={f.label}>Breed</Text>
-      <TouchableOpacity onPress={openDropdown} style={[f.row, open && f.focused]} activeOpacity={0.8}>
-        <Ionicons name="paw-outline" size={15} color={open ? "#0891b2" : "#9ca3af"} style={{ marginRight: 8 }} />
-        <Text style={[f.input, { paddingVertical: 0 }, !value && { color: "#d1d5db" }]}>
-          {value || "Select or type breed"}
+      <Text style={f.label}>
+        Bull Name <Text style={{ color: "#dc2626" }}>*</Text>
+      </Text>
+
+      <TouchableOpacity
+        onPress={openDropdown}
+        style={[f.row, open && f.focused, !value && f.errorBorder]}
+        activeOpacity={0.8}
+      >
+        <Ionicons
+          name="chevron-down-circle-outline"
+          size={15}
+          color={open ? "#0891b2" : "#9ca3af"}
+          style={{ marginRight: 8 }}
+        />
+        <Text
+          style={[f.input, { paddingVertical: 0 }, !value && { color: "#d1d5db" }]}
+          pointerEvents="none"
+        >
+          {value || "Select or type bull name"}
         </Text>
         <Ionicons name={open ? "chevron-up" : "chevron-down"} size={14} color="#9ca3af" />
       </TouchableOpacity>
 
-      <Modal visible={open} transparent animationType="fade" onRequestClose={() => { setOpen(false); setSearch(""); }}>
-        <TouchableOpacity style={bd.overlay} activeOpacity={1} onPress={() => { setOpen(false); setSearch(""); }}>
-          <TouchableOpacity activeOpacity={1} style={bd.card}>
-            <View style={bd.header}>
-              <Text style={bd.title}>Select Breed</Text>
-              <TouchableOpacity onPress={() => { setOpen(false); setSearch(""); }} style={bd.closeBtn}>
-                <Ionicons name="close" size={16} color="#8B6854" />
-              </TouchableOpacity>
-            </View>
-            <View style={bd.searchRow}>
-              <Ionicons name="search-outline" size={15} color="#9ca3af" />
-              <TextInput ref={searchRef} style={bd.searchInput} value={search} onChangeText={setSearch} placeholder="Search breed..." placeholderTextColor="#d1d5db" returnKeyType="done" />
-              {search.length > 0 && <TouchableOpacity onPress={() => setSearch("")}><Ionicons name="close-circle" size={15} color="#9ca3af" /></TouchableOpacity>}
-            </View>
-            <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-              {filtered.length === 0 ? (
-                <TouchableOpacity style={bd.customRow} onPress={() => select(search)}>
-                  <Ionicons name="add-circle-outline" size={18} color="#0891b2" />
-                  <View style={{ flex: 1, marginLeft: 10 }}>
-                    <Text style={bd.customLabel}>Add "{search}"</Text>
-                    <Text style={bd.customSub}>Custom breed</Text>
-                  </View>
-                </TouchableOpacity>
-              ) : (
-                filtered.map((b, i) => {
-                  const selected = value === b.name;
-                  return (
-                    <TouchableOpacity key={b.name} onPress={() => select(b.name)} style={[bd.item, selected && bd.itemSelected, i === filtered.length - 1 && { borderBottomWidth: 0 }]} activeOpacity={0.7}>
-                      <View style={[bd.emojiWrap, selected && { backgroundColor: "#ecfeff", borderColor: "#a5f3fc" }]}>
-                        <Image source={cowImg} style={{ width: 28, height: 28, resizeMode: "contain" }} />
-                      </View>
-                      <View style={{ flex: 1, marginLeft: 12 }}>
-                        <Text style={[bd.breedName, selected && { color: "#0891b2" }]}>{b.name}</Text>
-                        <Text style={bd.origin}>{b.origin}</Text>
-                      </View>
-                      {selected && <Ionicons name="checkmark-circle" size={20} color="#0891b2" />}
+      <Modal
+        visible={open}
+        transparent
+        animationType="fade"
+        onRequestClose={closeDropdown}
+      >
+        <TouchableWithoutFeedback onPress={closeDropdown}>
+          <View style={bd.overlay}>
+            <TouchableWithoutFeedback onPress={() => { }}>
+              <View style={bd.card}>
+                <View style={bd.header}>
+                  <Text style={bd.title}>Select Bull Name</Text>
+                  <TouchableOpacity onPress={closeDropdown} style={bd.closeBtn}>
+                    <Ionicons name="close" size={16} color="#8B6854" />
+                  </TouchableOpacity>
+                </View>
+
+                <View style={bd.searchRow}>
+                  <Ionicons name="search-outline" size={15} color="#9ca3af" />
+                  <TextInput
+                    ref={searchRef}
+                    style={bd.searchInput}
+                    value={search}
+                    onChangeText={setSearch}
+                    placeholder="Search or type new name..."
+                    placeholderTextColor="#d1d5db"
+                    returnKeyType="done"
+                    onSubmitEditing={() => {
+                      if (showCustom) select(search.trim());
+                    }}
+                  />
+                  {search.length > 0 && (
+                    <TouchableOpacity onPress={() => setSearch("")}>
+                      <Ionicons name="close-circle" size={15} color="#9ca3af" />
                     </TouchableOpacity>
-                  );
-                })
-              )}
-            </ScrollView>
-          </TouchableOpacity>
-        </TouchableOpacity>
+                  )}
+                </View>
+
+                <ScrollView
+                  style={{ maxHeight: 320 }}
+                  showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                >
+                  {/* Custom / new entry */}
+                  {showCustom && (
+                    <TouchableOpacity
+                      style={bd.customRow}
+                      onPress={() => select(search.trim())}
+                    >
+                      <Ionicons name="add-circle-outline" size={18} color="#0891b2" />
+                      <View style={{ flex: 1, marginLeft: 10 }}>
+                        <Text style={bd.customLabel}>Add "{search.trim()}"</Text>
+                        <Text style={bd.customSub}>New bull name</Text>
+                      </View>
+                    </TouchableOpacity>
+                  )}
+
+                  {existingBulls.length === 0 ? (
+                    <View style={{ alignItems: "center" }}>
+
+                      <Image
+                        source={bullImg}
+                        style={{
+                          width: 36,
+                          height: 36,
+                          marginBottom: 6,
+                          resizeMode: "contain",
+                        }}
+                      />
+
+                      <Text style={{ textAlign: "center", color: "#666" }}>
+                        No bull available right now{"\n"}
+                        Type above to add a new one.
+                      </Text>
+
+                    </View>
+                  ) : filtered.length === 0 ? (
+                    <View style={{ padding: 20, alignItems: "center" }}>
+                      <Text style={{ color: "#9ca3af", fontSize: 13 }}>
+                        No match found — type above to add a new bull
+                      </Text>
+                    </View>
+                  ) : (
+                    filtered.map((name, i) => {
+                      const selected = value === name;
+                      return (
+                        <TouchableOpacity
+                          key={`${name}-${i}`}
+                          onPress={() => select(name)}
+                          style={[
+                            bd.item,
+                            selected && bd.itemSelected,
+                            i === filtered.length - 1 && { borderBottomWidth: 0 },
+                          ]}
+                          activeOpacity={0.7}
+                        >
+                          <View
+                            style={[
+                              bd.emojiWrap,
+                              selected && {
+                                backgroundColor: "#ecfeff",
+                                borderColor: "#a5f3fc",
+                              },
+                            ]}
+                          >
+                            <Image
+                              source={bullImg}
+                              style={{
+                                width: 22,
+                                height: 22,
+                                resizeMode: "contain",
+                              }}
+                            />
+                          </View>
+                          <View style={{ flex: 1, marginLeft: 12 }}>
+                            <Text style={[bd.breedName, selected && { color: "#0891b2" }]}>
+                              {name}
+                            </Text>
+                            <Text style={bd.origin}>Registered bull</Text>
+                          </View>
+                          {selected && (
+                            <Ionicons name="checkmark-circle" size={20} color="#0891b2" />
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })
+                  )}
+                </ScrollView>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
       </Modal>
     </View>
   );
 }
 
-function Field({
-  label,
-  value,
-  onChange,
-  placeholder,
-  icon,
-  keyboardType,
-}: any) {
+// ── Breed Selector ────────────────────────────────────────────────────────────
+
+function BreedSelector({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const searchRef = useRef<TextInput>(null);
+
+  const filtered = BREEDS.filter((b) =>
+    b.name.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const select = (name: string) => { onChange(name); setOpen(false); setSearch(""); };
+  const openDropdown = () => { setOpen(true); setTimeout(() => searchRef.current?.focus(), 200); };
+  const closeDropdown = () => { setOpen(false); setSearch(""); };
+
+  return (
+    <View style={f.wrap}>
+      <Text style={f.label}>
+        Breed <Text style={{ color: "#dc2626" }}>*</Text>
+      </Text>
+      <TouchableOpacity
+        onPress={openDropdown}
+        style={[f.row, open && f.focused, !value && f.errorBorder]}
+        activeOpacity={0.8}
+      >
+        <Ionicons
+          name="paw-outline"
+          size={15}
+          color={open ? "#0891b2" : "#9ca3af"}
+          style={{ marginRight: 8 }}
+        />
+        <Text
+          style={[f.input, { paddingVertical: 0 }, !value && { color: "#d1d5db" }]}
+          pointerEvents="none"
+        >
+          {value || "Select or type breed"}
+        </Text>
+        <Ionicons name={open ? "chevron-up" : "chevron-down"} size={14} color="#9ca3af" />
+      </TouchableOpacity>
+
+      <Modal
+        visible={open}
+        transparent
+        animationType="fade"
+        onRequestClose={closeDropdown}
+      >
+        <TouchableWithoutFeedback onPress={closeDropdown}>
+          <View style={bd.overlay}>
+            <TouchableWithoutFeedback onPress={() => { }}>
+              <View style={bd.card}>
+                <View style={bd.header}>
+                  <Text style={bd.title}>Select Breed</Text>
+                  <TouchableOpacity onPress={closeDropdown} style={bd.closeBtn}>
+                    <Ionicons name="close" size={16} color="#8B6854" />
+                  </TouchableOpacity>
+                </View>
+
+                <View style={bd.searchRow}>
+                  <Ionicons name="search-outline" size={15} color="#9ca3af" />
+                  <TextInput
+                    ref={searchRef}
+                    style={bd.searchInput}
+                    value={search}
+                    onChangeText={setSearch}
+                    placeholder="Search breed..."
+                    placeholderTextColor="#d1d5db"
+                    returnKeyType="done"
+                  />
+                  {search.length > 0 && (
+                    <TouchableOpacity onPress={() => setSearch("")}>
+                      <Ionicons name="close-circle" size={15} color="#9ca3af" />
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                <ScrollView
+                  style={{ maxHeight: 320 }}
+                  showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                >
+                  {filtered.length === 0 ? (
+                    <TouchableOpacity style={bd.customRow} onPress={() => select(search)}>
+                      <Ionicons name="add-circle-outline" size={18} color="#0891b2" />
+                      <View style={{ flex: 1, marginLeft: 10 }}>
+                        <Text style={bd.customLabel}>Add "{search}"</Text>
+                        <Text style={bd.customSub}>Custom breed</Text>
+                      </View>
+                    </TouchableOpacity>
+                  ) : (
+                    filtered.map((b, i) => {
+                      const selected = value === b.name;
+                      return (
+                        <TouchableOpacity
+                          key={b.name}
+                          onPress={() => select(b.name)}
+                          style={[
+                            bd.item,
+                            selected && bd.itemSelected,
+                            i === filtered.length - 1 && { borderBottomWidth: 0 },
+                          ]}
+                          activeOpacity={0.7}
+                        >
+                          <View
+                            style={[
+                              bd.emojiWrap,
+                              selected && { backgroundColor: "#ecfeff", borderColor: "#a5f3fc" },
+                            ]}
+                          >
+                            <Image source={cowImg} style={{ width: 28, height: 28, resizeMode: "contain" }} />
+                          </View>
+                          <View style={{ flex: 1, marginLeft: 12 }}>
+                            <Text style={[bd.breedName, selected && { color: "#0891b2" }]}>
+                              {b.name}
+                            </Text>
+                            <Text style={bd.origin}>{b.origin}</Text>
+                          </View>
+                          {selected && (
+                            <Ionicons name="checkmark-circle" size={20} color="#0891b2" />
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })
+                  )}
+                </ScrollView>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+    </View>
+  );
+}
+
+// ── Field ─────────────────────────────────────────────────────────────────────
+
+function Field({ label, value, onChange, placeholder, icon, keyboardType, required }: any) {
   const [focused, setFocused] = useState(false);
   return (
     <View style={f.wrap}>
-      <Text style={f.label}>{label}</Text>
-      <View style={[f.row, focused && f.focused]}>
+      <Text style={f.label}>
+        {label}
+        {required && <Text style={{ color: "#dc2626" }}> *</Text>}
+      </Text>
+      <View style={[f.row, focused && f.focused, required && !value && f.errorBorder]}>
         <Ionicons
           name={icon}
           size={15}
@@ -243,15 +500,7 @@ function Field({
   );
 }
 
-function SectionHeader({
-  title,
-  icon,
-  color,
-}: {
-  title: string;
-  icon: string;
-  color: string;
-}) {
+function SectionHeader({ title, icon, color }: { title: string; icon: string; color: string }) {
   return (
     <View style={[f.sectionHeader, { borderLeftColor: color }]}>
       <Ionicons name={icon as any} size={13} color={color} />
@@ -260,16 +509,20 @@ function SectionHeader({
   );
 }
 
+// ── Semen Form Modal ──────────────────────────────────────────────────────────
+
 function SemenFormModal({
   visible,
   onClose,
   onSave,
   editRecord,
+  existingBullNames,
 }: {
   visible: boolean;
   onClose: () => void;
   onSave: (r: SemenRecord) => void;
   editRecord: SemenRecord | null;
+  existingBullNames: string[];
 }) {
   const isEdit = !!editRecord;
   const [form, setForm] = useState<SemenForm>(EMPTY_FORM);
@@ -303,15 +556,24 @@ function SemenFormModal({
 
   const submit = async () => {
     if (!form.bullSrNo.trim()) {
-      Alert.alert("Missing Field", "Bull Sr. No. is required.");
+      Alert.alert("Required Field", "Bull Sr. No. is required");
       return;
     }
+    if (!form.bullName.trim()) {
+      Alert.alert("Required Field", "Bull Name is required");
+      return;
+    }
+    if (!form.breed.trim()) {
+      Alert.alert("Required Field", "Breed is required");
+      return;
+    }
+
     setSub(true);
     try {
       const payload = {
         bullSrNo: form.bullSrNo.trim(),
-        bullName: form.bullName || undefined,
-        breed: form.breed || undefined,
+        bullName: form.bullName.trim(),
+        breed: form.breed.trim(),
         femalCalves: form.femalCalves,
         maleCalves: form.maleCalves,
         damaged: form.damaged,
@@ -336,12 +598,7 @@ function SemenFormModal({
   };
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={reset}
-    >
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={reset}>
       <View style={m.overlay}>
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -351,12 +608,7 @@ function SemenFormModal({
             <View style={m.handle} />
 
             <View style={m.header}>
-              <View
-                style={[
-                  m.headerIcon,
-                  { backgroundColor: isEdit ? "#fff7ed" : "#ecfeff" },
-                ]}
-              >
+              <View style={[m.headerIcon, { backgroundColor: isEdit ? "#fff7ed" : "#ecfeff" }]}>
                 <Ionicons
                   name={isEdit ? "create" : "add-circle"}
                   size={18}
@@ -379,37 +631,34 @@ function SemenFormModal({
               </TouchableOpacity>
             </View>
 
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              style={{ maxHeight: 500 }}
-            >
-              <SectionHeader
-                title="Bull Information"
-                icon="male-outline"
-                color="#0891b2"
-              />
+            <View style={m.mandatoryNote}>
+              <Ionicons name="information-circle-outline" size={13} color="#0891b2" />
+              <Text style={m.mandatoryText}>
+                <Text style={{ color: "#dc2626" }}>*</Text> All required fields must be filled
+              </Text>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 500 }}>
+              <SectionHeader title="Bull Information" icon="male-outline" color="#0891b2" />
+
               <Field
                 label="Bull Sr. No."
                 value={form.bullSrNo}
                 onChange={setF("bullSrNo")}
                 placeholder="e.g. BULL-001"
                 icon="barcode-outline"
+                required
               />
-              <Field
-                label="Bull Name"
+
+              <BullNameSelector
                 value={form.bullName}
                 onChange={setF("bullName")}
-                placeholder="e.g. Hercules"
-                icon="text-outline"
+                existingBulls={existingBullNames}
               />
 
-            <BreedSelector value={form.breed} onChange={setF("breed")} />
+              <BreedSelector value={form.breed} onChange={setF("breed")} />
 
-              <SectionHeader
-                title="Semen Doses"
-                icon="flask-outline"
-                color="#7c3aed"
-              />
+              <SectionHeader title="Semen Doses" icon="flask-outline" color="#7c3aed" />
               <View style={m.counterGrid}>
                 <Counter
                   label="Total Doses"
@@ -429,11 +678,7 @@ function SemenFormModal({
                 />
               </View>
 
-              <SectionHeader
-                title="Calves Born"
-                icon="star-outline"
-                color="#16a34a"
-              />
+              <SectionHeader title="Calves Born" icon="star-outline" color="#16a34a" />
               <View style={m.counterGrid}>
                 <Counter
                   label="Female Calves"
@@ -453,11 +698,7 @@ function SemenFormModal({
                 />
               </View>
 
-              <SectionHeader
-                title="Conception"
-                icon="heart-outline"
-                color="#d97706"
-              />
+              <SectionHeader title="Conception" icon="heart-outline" color="#d97706" />
               <View style={m.counterGrid}>
                 <Counter
                   label="Conceptions"
@@ -469,21 +710,13 @@ function SemenFormModal({
                 />
                 <View style={m.ratePreview}>
                   <Text style={m.rateLabel}>Conception Rate</Text>
-                  <Text
-                    style={[
-                      m.rateValue,
-                      {
-                        color:
-                          form.totalDoses > 0
-                            ? form.conceptionCount / form.totalDoses >= 0.7
-                              ? "#16a34a"
-                              : form.conceptionCount / form.totalDoses >= 0.4
-                                ? "#d97706"
-                                : "#dc2626"
-                            : "#9ca3af",
-                      },
-                    ]}
-                  >
+                  <Text style={[m.rateValue, {
+                    color: form.totalDoses > 0
+                      ? form.conceptionCount / form.totalDoses >= 0.7 ? "#16a34a"
+                        : form.conceptionCount / form.totalDoses >= 0.4 ? "#d97706"
+                          : "#dc2626"
+                      : "#9ca3af",
+                  }]}>
                     {form.totalDoses > 0
                       ? `${((form.conceptionCount / form.totalDoses) * 100).toFixed(1)}%`
                       : "—"}
@@ -492,11 +725,7 @@ function SemenFormModal({
                 </View>
               </View>
 
-              <SectionHeader
-                title="Notes"
-                icon="document-text-outline"
-                color="#6b7280"
-              />
+              <SectionHeader title="Notes" icon="document-text-outline" color="#6b7280" />
               <Field
                 label="Notes"
                 value={form.notes}
@@ -539,6 +768,8 @@ function SemenFormModal({
   );
 }
 
+// ── Semen Card ────────────────────────────────────────────────────────────────
+
 function SemenCard({
   item,
   index,
@@ -559,98 +790,56 @@ function SemenCard({
 
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(opacity, {
-        toValue: 1,
-        duration: 320,
-        delay: index * 70,
-        useNativeDriver: true,
-      }),
-      Animated.spring(translateY, {
-        toValue: 0,
-        delay: index * 70,
-        tension: 65,
-        friction: 11,
-        useNativeDriver: true,
-      }),
+      Animated.timing(opacity, { toValue: 1, duration: 320, delay: index * 70, useNativeDriver: true }),
+      Animated.spring(translateY, { toValue: 0, delay: index * 70, tension: 65, friction: 11, useNativeDriver: true }),
     ]).start();
   }, []);
 
   return (
     <Animated.View style={[c.card, { opacity, transform: [{ translateY }] }]}>
-      <TouchableOpacity
-        onPress={() => setExpanded((e) => !e)}
-        activeOpacity={0.85}
-      >
-        {/* Top row */}
+      <TouchableOpacity onPress={() => setExpanded((e) => !e)} activeOpacity={0.85}>
         <View style={c.topRow}>
           <View style={c.bullAvatar}>
-            <Text style={{ fontSize: 26 }}></Text>
+            <Image
+              source={bullImg}
+              style={{
+                width: 26,
+                height: 26,
+                resizeMode: "contain",
+              }}
+            />
           </View>
           <View style={{ flex: 1, marginLeft: 12 }}>
-            <View
-              style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
-            >
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
               <Text style={c.bullSr}>{item.bullSrNo}</Text>
               {item.bullName && <Text style={c.bullName}>{item.bullName}</Text>}
             </View>
             <Text style={c.breed}>{item.breed ?? "Unknown breed"}</Text>
           </View>
-          <View
-            style={[
-              c.rateBadge,
-              { backgroundColor: rColor + "15", borderColor: rColor + "40" },
-            ]}
-          >
+          <View style={[c.rateBadge, { backgroundColor: rColor + "15", borderColor: rColor + "40" }]}>
             <Text style={[c.rateText, { color: rColor }]}>{rate}</Text>
             <Text style={[c.rateSubText, { color: rColor }]}>Rate</Text>
           </View>
-          <Ionicons
-            name={expanded ? "chevron-up" : "chevron-down"}
-            size={15}
-            color="#d1d5db"
-            style={{ marginLeft: 8 }}
-          />
+          <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={15} color="#d1d5db" style={{ marginLeft: 8 }} />
         </View>
 
         <View style={c.statsStrip}>
-          <View style={c.stripItem}>
-            <Text style={c.stripEmoji}></Text>
-            <Text style={c.stripCount}>{item.femalCalves}</Text>
-            <Text style={c.stripLabel}>Female</Text>
-          </View>
-          <View style={c.stripDivider} />
-          <View style={c.stripItem}>
-            <Text style={c.stripEmoji}></Text>
-            <Text style={c.stripCount}>{item.maleCalves}</Text>
-            <Text style={c.stripLabel}>Male</Text>
-          </View>
-          <View style={c.stripDivider} />
-          <View style={c.stripItem}>
-            <Text style={c.stripEmoji}></Text>
-            <Text style={c.stripCount}>{item.totalDoses}</Text>
-            <Text style={c.stripLabel}>Doses</Text>
-          </View>
-          <View style={c.stripDivider} />
-          <View style={c.stripItem}>
-            <Text style={c.stripEmoji}></Text>
-            <Text
-              style={[
-                c.stripCount,
-                { color: item.damaged > 0 ? "#dc2626" : "#9ca3af" },
-              ]}
-            >
-              {item.damaged}
-            </Text>
-            <Text style={c.stripLabel}>Damaged</Text>
-          </View>
-          <View style={c.stripDivider} />
-          <View style={c.stripItem}>
-            <Text style={c.stripEmoji}></Text>
-            <Text style={[c.stripCount, { color: "#d97706" }]}>
-              {item.conceptionCount}
-            </Text>
-            <Text style={c.stripLabel}>Concepts</Text>
-          </View>
+          {[
+            { emoji: "♀️", count: item.femalCalves, label: "Female" },
+            { emoji: "♂️", count: item.maleCalves, label: "Male" },
+            { emoji: "💉", count: item.totalDoses, label: "Doses" },
+            { emoji: "❌", count: item.damaged, label: "Damaged", color: item.damaged > 0 ? "#dc2626" : undefined },
+            { emoji: "❤️", count: item.conceptionCount, label: "Concepts", color: "#d97706" },
+          ].map((st, i, arr) => (
+            <React.Fragment key={i}>
+              <View style={c.stripItem}>
+                <Text style={c.stripEmoji}>{st.emoji}</Text>
+                <Text style={[c.stripCount, st.color ? { color: st.color } : {}]}>{st.count}</Text>
+                <Text style={c.stripLabel}>{st.label}</Text>
+              </View>
+              {i < arr.length - 1 && <View style={c.stripDivider} />}
+            </React.Fragment>
+          ))}
         </View>
       </TouchableOpacity>
 
@@ -658,90 +847,34 @@ function SemenCard({
         <>
           <View style={c.divider} />
           <View style={c.detailGrid}>
-            <View
-              style={[
-                c.detailCell,
-                { borderColor: "#fecdd3", backgroundColor: "#fff1f2" },
-              ]}
-            >
-              <Text style={c.detailEmoji}></Text>
-              <Text style={[c.detailCount, { color: "#e11d48" }]}>
-                {item.femalCalves}
-              </Text>
-              <Text style={[c.detailLabel, { color: "#e11d48" }]}>
-                Female Calves
-              </Text>
+            <View style={[c.detailCell, { borderColor: "#fecdd3", backgroundColor: "#fff1f2" }]}>
+              <Text style={c.detailEmoji}>♀️</Text>
+              <Text style={[c.detailCount, { color: "#e11d48" }]}>{item.femalCalves}</Text>
+              <Text style={[c.detailLabel, { color: "#e11d48" }]}>Female Calves</Text>
             </View>
-
-            <View
-              style={[
-                c.detailCell,
-                { borderColor: "#bfdbfe", backgroundColor: "#eff6ff" },
-              ]}
-            >
-              <Text style={c.detailEmoji}></Text>
-              <Text style={[c.detailCount, { color: "#2563eb" }]}>
-                {item.maleCalves}
-              </Text>
-              <Text style={[c.detailLabel, { color: "#2563eb" }]}>
-                Male Calves
-              </Text>
+            <View style={[c.detailCell, { borderColor: "#bfdbfe", backgroundColor: "#eff6ff" }]}>
+              <Text style={c.detailEmoji}>♂️</Text>
+              <Text style={[c.detailCount, { color: "#2563eb" }]}>{item.maleCalves}</Text>
+              <Text style={[c.detailLabel, { color: "#2563eb" }]}>Male Calves</Text>
             </View>
-
-            <View
-              style={[
-                c.detailCell,
-                { borderColor: "#bbf7d0", backgroundColor: "#f0fdf4" },
-              ]}
-            >
-              <Text style={c.detailEmoji}></Text>
-              <Text style={[c.detailCount, { color: "#16a34a" }]}>
-                {totalCalves}
-              </Text>
-              <Text style={[c.detailLabel, { color: "#16a34a" }]}>
-                Total Calves
-              </Text>
+            <View style={[c.detailCell, { borderColor: "#bbf7d0", backgroundColor: "#f0fdf4" }]}>
+              <Text style={c.detailEmoji}>🐄</Text>
+              <Text style={[c.detailCount, { color: "#16a34a" }]}>{totalCalves}</Text>
+              <Text style={[c.detailLabel, { color: "#16a34a" }]}>Total Calves</Text>
             </View>
-
-            <View
-              style={[
-                c.detailCell,
-                { borderColor: "#e9d5ff", backgroundColor: "#faf5ff" },
-              ]}
-            >
-
-              <Text style={[c.detailCount, { color: "#7c3aed" }]}>
-                {item.totalDoses}
-              </Text>
-              <Text style={[c.detailLabel, { color: "#7c3aed" }]}>
-                Total Doses
-              </Text>
+            <View style={[c.detailCell, { borderColor: "#e9d5ff", backgroundColor: "#faf5ff" }]}>
+              <Text style={[c.detailCount, { color: "#7c3aed" }]}>{item.totalDoses}</Text>
+              <Text style={[c.detailLabel, { color: "#7c3aed" }]}>Total Doses</Text>
             </View>
-
-            <View
-              style={[
-                c.detailCell,
-                { borderColor: "#fecdd3", backgroundColor: "#fff1f2" },
-              ]}
-            >
-              <Text style={c.detailEmoji}></Text>
-              <Text style={[c.detailCount, { color: "#dc2626" }]}>
-                {item.damaged}
-              </Text>
+            <View style={[c.detailCell, { borderColor: "#fecdd3", backgroundColor: "#fff1f2" }]}>
+              <Text style={c.detailEmoji}>❌</Text>
+              <Text style={[c.detailCount, { color: "#dc2626" }]}>{item.damaged}</Text>
               <Text style={[c.detailLabel, { color: "#dc2626" }]}>Damaged</Text>
             </View>
-
-            <View
-              style={[
-                c.detailCell,
-                { borderColor: rColor + "40", backgroundColor: rColor + "10" },
-              ]}
-            >
-              <Text style={c.detailEmoji}></Text>
+            <View style={[c.detailCell, { borderColor: rColor + "40", backgroundColor: rColor + "10" }]}>
+              <Text style={c.detailEmoji}>📊</Text>
               <Text style={[c.detailCount, { color: rColor }]}>{rate}</Text>
-              <Text style={[c.detailLabel, { color: rColor }]}>
-                Conception %
-              </Text>
+              <Text style={[c.detailLabel, { color: rColor }]}>Conception %</Text>
             </View>
           </View>
 
@@ -752,20 +885,13 @@ function SemenCard({
                 <Text style={[c.barPct, { color: rColor }]}>{rate}</Text>
               </View>
               <View style={c.barTrack}>
-                <Animated.View
-                  style={[
-                    c.barFill,
-                    {
-                      width:
-                        `${Math.min(100, (item.conceptionCount / item.totalDoses) * 100)}%` as any,
-                      backgroundColor: rColor,
-                    },
-                  ]}
-                />
+                <View style={[c.barFill, {
+                  width: `${Math.min(100, (item.conceptionCount / item.totalDoses) * 100)}%` as any,
+                  backgroundColor: rColor,
+                }]} />
               </View>
               <Text style={c.barHint}>
-                {item.conceptionCount} conceptions out of {item.totalDoses}{" "}
-                doses
+                {item.conceptionCount} conceptions out of {item.totalDoses} doses
               </Text>
             </View>
           )}
@@ -778,19 +904,11 @@ function SemenCard({
           ) : null}
 
           <View style={c.actionRow}>
-            <TouchableOpacity
-              style={[c.actionBtn, c.editBtn]}
-              onPress={() => onEdit(item)}
-              activeOpacity={0.8}
-            >
+            <TouchableOpacity style={[c.actionBtn, c.editBtn]} onPress={() => onEdit(item)} activeOpacity={0.8}>
               <Ionicons name="create-outline" size={15} color="#0891b2" />
               <Text style={[c.actionText, { color: "#0891b2" }]}>Edit</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[c.actionBtn, c.deleteBtn]}
-              onPress={() => onDelete(item)}
-              activeOpacity={0.8}
-            >
+            <TouchableOpacity style={[c.actionBtn, c.deleteBtn]} onPress={() => onDelete(item)} activeOpacity={0.8}>
               <Ionicons name="trash-outline" size={15} color="#dc2626" />
               <Text style={[c.actionText, { color: "#dc2626" }]}>Delete</Text>
             </TouchableOpacity>
@@ -800,6 +918,8 @@ function SemenCard({
     </Animated.View>
   );
 }
+
+// ── Main Screen ───────────────────────────────────────────────────────────────
 
 export default function SemenRecordScreen() {
   const insets = useSafeAreaInsets();
@@ -812,6 +932,9 @@ export default function SemenRecordScreen() {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // ✅ NEW: Bulls from cows/animals table
+  const [cowBulls, setCowBulls] = useState<string[]>([]);
 
   const fetchRecords = useCallback(async (q?: string) => {
     setLoading(true);
@@ -826,9 +949,24 @@ export default function SemenRecordScreen() {
     }
   }, []);
 
+  // ✅ NEW: Fetch all registered bulls from animals/cows table
+  const fetchBulls = useCallback(async () => {
+    try {
+      const allCows = await api.getCows();
+      const bullNames: string[] = allCows
+        .filter((c: any) => c.type === "bull" && c.name)
+        .map((c: any) => c.name as string);
+      setCowBulls(bullNames);
+    } catch {
+      // silent fail — semen records wali list kaam karegi
+    }
+  }, []);
+
+  // ✅ UPDATED: Both fetch on mount
   useEffect(() => {
     fetchRecords();
-  }, [fetchRecords]);
+    fetchBulls();
+  }, [fetchRecords, fetchBulls]);
 
   useEffect(() => {
     const t = setTimeout(() => fetchRecords(search || undefined), 400);
@@ -837,7 +975,10 @@ export default function SemenRecordScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchRecords(search || undefined);
+    await Promise.all([
+      fetchRecords(search || undefined),
+      fetchBulls(),
+    ]);
     setRefreshing(false);
   };
 
@@ -859,43 +1000,36 @@ export default function SemenRecordScreen() {
             }
           },
         },
-      ],
+      ]
     );
   };
 
-  const openAdd = () => {
-    setEditRecord(null);
-    setModal(true);
-  };
-  const openEdit = (r: SemenRecord) => {
-    setEditRecord(r);
-    setModal(true);
-  };
+  const openAdd = () => { setEditRecord(null); setModal(true); };
+  const openEdit = (r: SemenRecord) => { setEditRecord(r); setModal(true); };
+
+  // ✅ UPDATED: Merge bulls from animals table + semen records
+  const existingBullNames = Array.from(
+    new Set([
+      ...cowBulls,                                                      // Add Animal se registered bulls
+      ...(records.map((r) => r.bullName).filter(Boolean) as string[]),  // Semen records ke bull names
+    ])
+  );
 
   const totalFemalCalves = records.reduce((s, r) => s + r.femalCalves, 0);
   const totalMaleCalves = records.reduce((s, r) => s + r.maleCalves, 0);
   const totalDoses = records.reduce((s, r) => s + r.totalDoses, 0);
   const totalConceptions = records.reduce((s, r) => s + r.conceptionCount, 0);
-  const overallRate =
-    totalDoses > 0
-      ? `${((totalConceptions / totalDoses) * 100).toFixed(1)}%`
-      : "—";
+  const overallRate = totalDoses > 0
+    ? `${((totalConceptions / totalDoses) * 100).toFixed(1)}%`
+    : "—";
 
   return (
     <View style={[s.screen, { paddingTop: insets.top }]}>
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
 
-      <View
-        style={[
-          s.header,
-          {
-          },
-        ]}
-      >
+      <View style={s.header}>
         <TouchableOpacity
-          onPress={
-            screen === "home" ? () => router.back() : () => setScreen("home")
-          }
+          onPress={screen === "home" ? () => router.back() : () => setScreen("home")}
           style={s.backBtn}
         >
           <Ionicons name="arrow-back" size={20} color="#111827" />
@@ -914,21 +1048,11 @@ export default function SemenRecordScreen() {
       <View style={s.statsRow}>
         {[
           { label: "Bulls", value: records.length, color: "#0891b2" },
-          { label: "Female ", value: totalFemalCalves, color: "#e11d48" },
-          { label: "Male ", value: totalMaleCalves, color: "#2563eb" },
-          {
-            label: "Rate",
-            value: overallRate,
-            color: rateColor({
-              totalDoses,
-              conceptionCount: totalConceptions,
-            } as SemenRecord),
-          },
+          { label: "Female", value: totalFemalCalves, color: "#e11d48" },
+          { label: "Male", value: totalMaleCalves, color: "#2563eb" },
+          { label: "Rate", value: overallRate, color: rateColor({ totalDoses, conceptionCount: totalConceptions } as SemenRecord) },
         ].map((st, i, arr) => (
-          <View
-            key={i}
-            style={[s.statItem, i < arr.length - 1 && s.statBorder]}
-          >
+          <View key={i} style={[s.statItem, i < arr.length - 1 && s.statBorder]}>
             <Text style={[s.statValue, { color: st.color }]}>{st.value}</Text>
             <Text style={s.statLabel}>{st.label}</Text>
           </View>
@@ -939,44 +1063,30 @@ export default function SemenRecordScreen() {
         <View style={s.homeBody}>
           <View style={s.heroWrap}>
             <Text style={s.homeHeading}>Semen Records</Text>
-            <Text style={s.homeSub}>
-              Track bull performance, calves & conception rates
-            </Text>
+            <Text style={s.homeSub}>Track bull performance, calves & conception rates</Text>
           </View>
 
           <View style={s.btnGroup}>
-            <TouchableOpacity
-              onPress={openAdd}
-              style={s.bigBtn}
-              activeOpacity={0.85}
-            >
+            <TouchableOpacity onPress={openAdd} style={s.bigBtn} activeOpacity={0.85}>
               <View style={[s.bigBtnIcon, { backgroundColor: "#ecfeff" }]}>
                 <Ionicons name="add-circle" size={18} color="#0891b2" />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={s.bigBtnTitle}>Add Semen Record</Text>
-                <Text style={s.bigBtnSub}>
-                  Register a new bull's semen data
-                </Text>
+                <Text style={s.bigBtnSub}>Register a new bull's semen data</Text>
               </View>
               <View style={[s.bigBtnArrow, { backgroundColor: "#0891b2" }]}>
                 <Ionicons name="add" size={18} color="#fff" />
               </View>
             </TouchableOpacity>
 
-            <TouchableOpacity
-              onPress={() => setScreen("list")}
-              style={s.bigBtn}
-              activeOpacity={0.85}
-            >
+            <TouchableOpacity onPress={() => setScreen("list")} style={s.bigBtn} activeOpacity={0.85}>
               <View style={[s.bigBtnIcon, { backgroundColor: "#eff6ff" }]}>
                 <Ionicons name="list" size={18} color="#2563eb" />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={s.bigBtnTitle}>View All Records</Text>
-                <Text style={s.bigBtnSub}>
-                  Browse {records.length} bull records
-                </Text>
+                <Text style={s.bigBtnSub}>Browse {records.length} bull records</Text>
               </View>
               <View style={[s.bigBtnArrow, { backgroundColor: "#2563eb" }]}>
                 <Ionicons name="arrow-forward" size={18} color="#fff" />
@@ -986,48 +1096,17 @@ export default function SemenRecordScreen() {
 
           {records.length > 0 && (
             <View style={s.summaryRow}>
-              <View
-                style={[
-                  s.summaryCard,
-                  { backgroundColor: "#fff1f2", borderColor: "#fecdd3" },
-                ]}
-              >
-                <Text style={s.summaryEmoji}></Text>
-                <Text style={[s.summaryCount, { color: "#e11d48" }]}>
-                  {totalFemalCalves}
-                </Text>
-                <Text style={[s.summaryLabel, { color: "#e11d48" }]}>
-                  Female Calves
-                </Text>
-              </View>
-              <View
-                style={[
-                  s.summaryCard,
-                  { backgroundColor: "#eff6ff", borderColor: "#bfdbfe" },
-                ]}
-              >
-                <Text style={s.summaryEmoji}></Text>
-                <Text style={[s.summaryCount, { color: "#2563eb" }]}>
-                  {totalMaleCalves}
-                </Text>
-                <Text style={[s.summaryLabel, { color: "#2563eb" }]}>
-                  Male Calves
-                </Text>
-              </View>
-              <View
-                style={[
-                  s.summaryCard,
-                  { backgroundColor: "#fffbeb", borderColor: "#fcd34d" },
-                ]}
-              >
-                <Text style={s.summaryEmoji}></Text>
-                <Text style={[s.summaryCount, { color: "#d97706" }]}>
-                  {overallRate}
-                </Text>
-                <Text style={[s.summaryLabel, { color: "#d97706" }]}>
-                  Avg Rate
-                </Text>
-              </View>
+              {[
+                { bg: "#fff1f2", border: "#fecdd3", emoji: "♀️", count: totalFemalCalves, label: "Female Calves", color: "#e11d48" },
+                { bg: "#eff6ff", border: "#bfdbfe", emoji: "♂️", count: totalMaleCalves, label: "Male Calves", color: "#2563eb" },
+                { bg: "#fffbeb", border: "#fcd34d", emoji: "📊", count: overallRate, label: "Avg Rate", color: "#d97706" },
+              ].map((card, i) => (
+                <View key={i} style={[s.summaryCard, { backgroundColor: card.bg, borderColor: card.border }]}>
+                  <Text style={s.summaryEmoji}>{card.emoji}</Text>
+                  <Text style={[s.summaryCount, { color: card.color }]}>{card.count}</Text>
+                  <Text style={[s.summaryLabel, { color: card.color }]}>{card.label}</Text>
+                </View>
+              ))}
             </View>
           )}
         </View>
@@ -1056,12 +1135,9 @@ export default function SemenRecordScreen() {
             </View>
           ) : error ? (
             <View style={s.errorWrap}>
-              <Text style={{ fontSize: 36 }}></Text>
+              <Text style={{ fontSize: 36 }}>⚠️</Text>
               <Text style={s.errorText}>{error}</Text>
-              <TouchableOpacity
-                onPress={() => fetchRecords()}
-                style={s.retryBtn}
-              >
+              <TouchableOpacity onPress={() => fetchRecords()} style={s.retryBtn}>
                 <Ionicons name="refresh" size={14} color="#fff" />
                 <Text style={s.retryText}>Retry</Text>
               </TouchableOpacity>
@@ -1070,30 +1146,17 @@ export default function SemenRecordScreen() {
             <FlatList
               data={records}
               keyExtractor={(item) => item.id}
-              contentContainerStyle={{
-                paddingHorizontal: 14,
-                paddingTop: 8,
-                paddingBottom: 100,
-              }}
+              contentContainerStyle={{ paddingHorizontal: 14, paddingTop: 8, paddingBottom: 100 }}
               showsVerticalScrollIndicator={false}
               refreshControl={
-                <RefreshControl
-                  refreshing={refreshing}
-                  onRefresh={onRefresh}
-                  tintColor="#0891b2"
-                />
+                <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#0891b2" />
               }
               renderItem={({ item, index }) => (
-                <SemenCard
-                  item={item}
-                  index={index}
-                  onEdit={openEdit}
-                  onDelete={handleDelete}
-                />
+                <SemenCard item={item} index={index} onEdit={openEdit} onDelete={handleDelete} />
               )}
               ListEmptyComponent={
                 <View style={s.empty}>
-                  <Text style={{ fontSize: 44 }}></Text>
+                  <Image source={bullImg} style={{ width: 50, height: 50, resizeMode: "contain" }} />
                   <Text style={s.emptyText}>No records found</Text>
                   <TouchableOpacity onPress={openAdd} style={s.emptyAddBtn}>
                     <Ionicons name="add" size={14} color="#fff" />
@@ -1114,11 +1177,9 @@ export default function SemenRecordScreen() {
 
       <SemenFormModal
         visible={modalVisible}
-        onClose={() => {
-          setModal(false);
-          setEditRecord(null);
-        }}
+        onClose={() => { setModal(false); setEditRecord(null); }}
         editRecord={editRecord}
+        existingBullNames={existingBullNames}
         onSave={(r) => {
           if (editRecord) {
             setRecords((prev) => prev.map((x) => (x.id === r.id ? r : x)));
@@ -1126,438 +1187,118 @@ export default function SemenRecordScreen() {
             setRecords((prev) => [r, ...prev]);
             setScreen("list");
           }
+          // Refresh bull list after saving
+          fetchBulls();
         }}
       />
     </View>
   );
 }
 
+// ── Styles ────────────────────────────────────────────────────────────────────
+
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#FFF8F0" },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    backgroundColor: "#FFF8F0",
-    borderBottomWidth: 1,
-    borderBottomColor: "#f3b17a",
-  },
-  backBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "#FFF8F0",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "#f7cd98",
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#0f172a",
-    letterSpacing: -0.4,
-  },
-  headerSub: {
-    fontSize: 12,
-    color: "#94a3b8",
-    fontWeight: "500",
-    marginTop: 1,
-  },
-  countBadge: {
-    backgroundColor: "#ecfeff",
-    borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: "#a5f3fc",
-  },
+  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, backgroundColor: "#FFF8F0", borderBottomWidth: 1, borderBottomColor: "#f3b17a" },
+  backBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: "#FFF8F0", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#f7cd98" },
+  headerTitle: { fontSize: 18, fontWeight: "800", color: "#0f172a", letterSpacing: -0.4 },
+  headerSub: { fontSize: 12, color: "#94a3b8", fontWeight: "500", marginTop: 1 },
+  countBadge: { backgroundColor: "#ecfeff", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: "#a5f3fc" },
   countText: { fontSize: 12, fontWeight: "700", color: "#0891b2" },
-  statsRow: {
-    flexDirection: "row",
-    backgroundColor: "#FFF8F0",
-    borderBottomWidth: 1,
-    borderBottomColor: "#f7cd98",
-  },
+  statsRow: { flexDirection: "row", backgroundColor: "#FFF8F0", borderBottomWidth: 1, borderBottomColor: "#f7cd98" },
   statItem: { flex: 1, alignItems: "center", paddingVertical: 11 },
   statBorder: { borderRightWidth: 1, borderRightColor: "#f7cd98" },
   statValue: { fontSize: 16, fontWeight: "800", letterSpacing: -0.3 },
-  statLabel: {
-    fontSize: 9,
-    color: "#94a3b8",
-    marginTop: 2,
-    fontWeight: "600",
-    textTransform: "uppercase",
-  },
-
+  statLabel: { fontSize: 9, color: "#94a3b8", marginTop: 2, fontWeight: "600", textTransform: "uppercase" },
   homeBody: { flex: 1, paddingHorizontal: 20, paddingTop: 24 },
   heroWrap: { alignItems: "center", marginBottom: 28 },
-  heroEmoji: { fontSize: 48, marginBottom: 10 },
-  homeHeading: {
-    fontSize: 22,
-    fontWeight: "800",
-    color: "#0f172a",
-    letterSpacing: -0.4,
-    marginBottom: 6,
-    textAlign: "center",
-  },
-  homeSub: {
-    fontSize: 14,
-    color: "#94a3b8",
-    fontWeight: "500",
-    textAlign: "center",
-  },
-
+  homeHeading: { fontSize: 22, fontWeight: "800", color: "#0f172a", letterSpacing: -0.4, marginBottom: 6, textAlign: "center" },
+  homeSub: { fontSize: 14, color: "#94a3b8", fontWeight: "500", textAlign: "center" },
   btnGroup: { gap: 12, marginBottom: 24 },
-  bigBtn: {
-    backgroundColor: "#fcefec",
-    borderRadius: 18,
-    padding: 18,
-    borderWidth: 1.5,
-    borderColor: "#f7cd98",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 14,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  bigBtnIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  bigBtnTitle: {
-    fontSize: 15,
-    fontWeight: "800",
-    color: "#0f172a",
-    letterSpacing: -0.2,
-    marginBottom: 2,
-  },
+  bigBtn: { backgroundColor: "#fcefec", borderRadius: 18, padding: 18, borderWidth: 1.5, borderColor: "#f7cd98", flexDirection: "row", alignItems: "center", gap: 14, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
+  bigBtnIcon: { width: 52, height: 52, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  bigBtnTitle: { fontSize: 15, fontWeight: "800", color: "#0f172a", letterSpacing: -0.2, marginBottom: 2 },
   bigBtnSub: { fontSize: 12, color: "#94a3b8", fontWeight: "500" },
-  bigBtnArrow: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
+  bigBtnArrow: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center" },
   summaryRow: { flexDirection: "row", gap: 10 },
-  summaryCard: {
-    flex: 1,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    padding: 12,
-    alignItems: "center",
-    gap: 4,
-  },
+  summaryCard: { flex: 1, borderRadius: 14, borderWidth: 1.5, padding: 12, alignItems: "center", gap: 4 },
   summaryEmoji: { fontSize: 22 },
   summaryCount: { fontSize: 18, fontWeight: "800", letterSpacing: -0.3 },
   summaryLabel: { fontSize: 10, fontWeight: "700", textTransform: "uppercase" },
-
-  searchWrap: {
-    flexDirection: "row",
-    alignItems: "center",
-    margin: 14,
-    marginBottom: 8,
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 8,
-  },
+  searchWrap: { flexDirection: "row", alignItems: "center", margin: 14, marginBottom: 8, backgroundColor: "#fff", borderRadius: 12, borderWidth: 1, borderColor: "#e2e8f0", paddingHorizontal: 12, paddingVertical: 10, gap: 8 },
   searchInput: { flex: 1, color: "#0f172a", fontSize: 14 },
-  fab: {
-    position: "absolute",
-    bottom: 24,
-    right: 20,
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    backgroundColor: "#0891b2",
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#0891b2",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 10,
-    elevation: 8,
-  },
+  fab: { position: "absolute", bottom: 24, right: 20, width: 54, height: 54, borderRadius: 27, backgroundColor: "#0891b2", alignItems: "center", justifyContent: "center", shadowColor: "#0891b2", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 10, elevation: 8 },
   empty: { alignItems: "center", paddingTop: 60, gap: 10 },
   emptyText: { fontSize: 15, color: "#94a3b8", fontWeight: "600" },
-  emptyAddBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: "#0891b2",
-    borderRadius: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    marginTop: 4,
-  },
+  emptyAddBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#0891b2", borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10, marginTop: 4 },
   emptyAddText: { fontSize: 13, fontWeight: "700", color: "#fff" },
-  loadingWrap: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 12,
-  },
+  loadingWrap: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
   loadingText: { fontSize: 14, color: "#94a3b8", fontWeight: "500" },
-  errorWrap: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 12,
-  },
-  errorText: {
-    fontSize: 14,
-    color: "#dc2626",
-    fontWeight: "500",
-    textAlign: "center",
-    paddingHorizontal: 32,
-  },
-  retryBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: "#0891b2",
-    borderRadius: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
+  errorWrap: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
+  errorText: { fontSize: 14, color: "#dc2626", fontWeight: "500", textAlign: "center", paddingHorizontal: 32 },
+  retryBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#0891b2", borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10 },
   retryText: { fontSize: 13, fontWeight: "700", color: "#fff" },
 });
 
 const c = StyleSheet.create({
-  card: {
-    backgroundColor: "#fff",
-    borderRadius: 18,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "#f1f5f9",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
+  card: { backgroundColor: "#fff", borderRadius: 18, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: "#f1f5f9", shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
   topRow: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
-  bullAvatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 14,
-    backgroundColor: "#f8fafc",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1.5,
-    borderColor: "#e2e8f0",
-  },
+  bullAvatar: { width: 50, height: 50, borderRadius: 14, backgroundColor: "#f8fafc", alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: "#e2e8f0" },
   bullSr: { fontSize: 14, fontWeight: "800", color: "#0f172a" },
-  bullName: {
-    fontSize: 12,
-    color: "#64748b",
-    fontWeight: "500",
-    backgroundColor: "#f1f5f9",
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
+  bullName: { fontSize: 12, color: "#64748b", fontWeight: "500", backgroundColor: "#f1f5f9", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
   breed: { fontSize: 12, color: "#94a3b8", fontWeight: "500", marginTop: 2 },
-  rateBadge: {
-    borderRadius: 12,
-    borderWidth: 1.5,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    alignItems: "center",
-    minWidth: 52,
-  },
+  rateBadge: { borderRadius: 12, borderWidth: 1.5, paddingHorizontal: 10, paddingVertical: 6, alignItems: "center", minWidth: 52 },
   rateText: { fontSize: 14, fontWeight: "800" },
-  rateSubText: {
-    fontSize: 9,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    marginTop: 1,
-  },
-
-  statsStrip: {
-    flexDirection: "row",
-    backgroundColor: "#f8fafc",
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 4,
-  },
+  rateSubText: { fontSize: 9, fontWeight: "700", textTransform: "uppercase", marginTop: 1 },
+  statsStrip: { flexDirection: "row", backgroundColor: "#f8fafc", borderRadius: 12, paddingVertical: 10, paddingHorizontal: 4 },
   stripItem: { flex: 1, alignItems: "center", gap: 2 },
   stripDivider: { width: 1, backgroundColor: "#e2e8f0" },
   stripEmoji: { fontSize: 14 },
   stripCount: { fontSize: 14, fontWeight: "800", color: "#0f172a" },
-  stripLabel: {
-    fontSize: 8,
-    color: "#94a3b8",
-    fontWeight: "600",
-    textTransform: "uppercase",
-  },
-
+  stripLabel: { fontSize: 8, color: "#94a3b8", fontWeight: "600", textTransform: "uppercase" },
   divider: { height: 1, backgroundColor: "#f1f5f9", marginVertical: 14 },
-
-  detailGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 14,
-  },
-  detailCell: {
-    width: "30%",
-    flex: 1,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    padding: 12,
-    alignItems: "center",
-    gap: 4,
-    minWidth: 90,
-  },
+  detailGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 14 },
+  detailCell: { width: "30%", flex: 1, borderRadius: 12, borderWidth: 1.5, padding: 12, alignItems: "center", gap: 4, minWidth: 90 },
   detailEmoji: { fontSize: 20 },
   detailCount: { fontSize: 20, fontWeight: "800", letterSpacing: -0.5 },
-  detailLabel: {
-    fontSize: 10,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    textAlign: "center",
-  },
-
-  barWrap: {
-    backgroundColor: "#f8fafc",
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "#f1f5f9",
-  },
-  barHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 8,
-  },
+  detailLabel: { fontSize: 10, fontWeight: "700", textTransform: "uppercase", textAlign: "center" },
+  barWrap: { backgroundColor: "#f8fafc", borderRadius: 12, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: "#f1f5f9" },
+  barHeader: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
   barTitle: { fontSize: 12, fontWeight: "700", color: "#475569" },
   barPct: { fontSize: 13, fontWeight: "800" },
-  barTrack: {
-    height: 8,
-    backgroundColor: "#e2e8f0",
-    borderRadius: 4,
-    overflow: "hidden",
-    marginBottom: 6,
-  },
+  barTrack: { height: 8, backgroundColor: "#e2e8f0", borderRadius: 4, overflow: "hidden", marginBottom: 6 },
   barFill: { height: "100%" as any, borderRadius: 4 },
   barHint: { fontSize: 11, color: "#94a3b8", fontWeight: "500" },
-
-  notesBox: {
-    flexDirection: "row",
-    gap: 8,
-    backgroundColor: "#f8fafc",
-    borderRadius: 10,
-    padding: 10,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-  },
+  notesBox: { flexDirection: "row", gap: 8, backgroundColor: "#f8fafc", borderRadius: 10, padding: 10, marginBottom: 12, borderWidth: 1, borderColor: "#e2e8f0" },
   notesText: { flex: 1, fontSize: 12, color: "#475569", fontWeight: "500" },
-
   actionRow: { flexDirection: "row", gap: 10 },
-  actionBtn: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    paddingVertical: 11,
-    borderRadius: 12,
-    borderWidth: 1.5,
-  },
+  actionBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 11, borderRadius: 12, borderWidth: 1.5 },
   editBtn: { backgroundColor: "#ecfeff", borderColor: "#a5f3fc" },
   deleteBtn: { backgroundColor: "#fff1f2", borderColor: "#fecdd3" },
   actionText: { fontSize: 13, fontWeight: "700" },
 });
 
 const ct = StyleSheet.create({
-  wrap: {
-    flex: 1,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    padding: 12,
-    backgroundColor: "#fff",
-    alignItems: "center",
-    gap: 8,
-  },
+  wrap: { flex: 1, borderRadius: 14, borderWidth: 1.5, padding: 12, backgroundColor: "#fff", alignItems: "center", gap: 8 },
   top: { flexDirection: "row", alignItems: "center", gap: 6 },
   emoji: { fontSize: 16 },
-  label: {
-    fontSize: 11,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 0.3,
-  },
+  label: { fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.3 },
   row: { flexDirection: "row", alignItems: "center", gap: 8 },
-  btn: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  btn: { width: 32, height: 32, borderRadius: 10, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
   minus: { backgroundColor: "#fff" },
   plus: {},
-  countBox: {
-    minWidth: 48,
-    height: 36,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 10,
-  },
+  countBox: { minWidth: 48, height: 36, borderRadius: 10, borderWidth: 1.5, alignItems: "center", justifyContent: "center", paddingHorizontal: 10 },
   count: { fontSize: 18, fontWeight: "800", letterSpacing: -0.5 },
 });
 
 const f = StyleSheet.create({
   wrap: { marginBottom: 12 },
-  label: {
-    fontSize: 11,
-    color: "#64748b",
-    fontWeight: "700",
-    letterSpacing: 0.4,
-    marginBottom: 6,
-    textTransform: "uppercase",
-  },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#f8fafc",
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: "#e2e8f0",
-    paddingHorizontal: 12,
-    paddingVertical: 11,
-  },
+  label: { fontSize: 11, color: "#64748b", fontWeight: "700", letterSpacing: 0.4, marginBottom: 6, textTransform: "uppercase" },
+  row: { flexDirection: "row", alignItems: "center", backgroundColor: "#f8fafc", borderRadius: 12, borderWidth: 1.5, borderColor: "#e2e8f0", paddingHorizontal: 12, paddingVertical: 11 },
   focused: { borderColor: "#0891b2", backgroundColor: "#fff" },
+  errorBorder: { borderColor: "#fca5a5" },
   input: { flex: 1, color: "#0f172a", fontSize: 14, fontWeight: "500" },
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    borderLeftWidth: 3,
-    paddingLeft: 10,
-    marginBottom: 12,
-    marginTop: 6,
-  },
+  sectionHeader: { flexDirection: "row", alignItems: "center", gap: 8, borderLeftWidth: 3, paddingLeft: 10, marginBottom: 12, marginTop: 6 },
   sectionTitle: { fontSize: 12, fontWeight: "700", letterSpacing: 0.2 },
 });
 
@@ -1580,88 +1321,21 @@ const bd = StyleSheet.create({
 });
 
 const m = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.45)",
-    justifyContent: "flex-end",
-  },
-  sheet: {
-    backgroundColor: "#fcede7",
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    padding: 20,
-    paddingBottom: Platform.OS === "ios" ? 36 : 24,
-  },
-  handle: {
-    width: 36,
-    height: 4,
-    backgroundColor: "#e2e8f0",
-    borderRadius: 2,
-    alignSelf: "center",
-    marginBottom: 20,
-  },
-  header: { flexDirection: "row", alignItems: "center", marginBottom: 16 },
-  headerIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 10,
-  },
-  title: {
-    fontSize: 17,
-    fontWeight: "800",
-    color: "#0f172a",
-    letterSpacing: -0.3,
-  },
+  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },
+  sheet: { backgroundColor: "#fcede7", borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20, paddingBottom: Platform.OS === "ios" ? 36 : 24 },
+  handle: { width: 36, height: 4, backgroundColor: "#e2e8f0", borderRadius: 2, alignSelf: "center", marginBottom: 20 },
+  header: { flexDirection: "row", alignItems: "center", marginBottom: 8 },
+  headerIcon: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center", marginRight: 10 },
+  title: { fontSize: 17, fontWeight: "800", color: "#0f172a", letterSpacing: -0.3 },
   sub2: { fontSize: 12, color: "#94a3b8", fontWeight: "500", marginTop: 1 },
-  closeBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: "#f1f5f9",
-    alignItems: "center",
-    justifyContent: "center",
-    marginLeft: "auto" as any,
-  },
+  closeBtn: { width: 30, height: 30, borderRadius: 15, backgroundColor: "#f1f5f9", alignItems: "center", justifyContent: "center", marginLeft: "auto" as any },
+  mandatoryNote: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#eff6ff", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, marginBottom: 12, borderWidth: 1, borderColor: "#bfdbfe" },
+  mandatoryText: { fontSize: 12, color: "#1d4ed8", fontWeight: "500" },
   counterGrid: { flexDirection: "row", gap: 10, marginBottom: 12 },
-  ratePreview: {
-    flex: 1,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: "#fcd34d40",
-    backgroundColor: "#fffbeb",
-    padding: 12,
-    alignItems: "center",
-    gap: 4,
-  },
-  rateLabel: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#92400e",
-    textTransform: "uppercase",
-  },
+  ratePreview: { flex: 1, borderRadius: 14, borderWidth: 1.5, borderColor: "#fcd34d40", backgroundColor: "#fffbeb", padding: 12, alignItems: "center", gap: 4 },
+  rateLabel: { fontSize: 11, fontWeight: "700", color: "#92400e", textTransform: "uppercase" },
   rateValue: { fontSize: 22, fontWeight: "800", letterSpacing: -0.5 },
-  rateHint: {
-    fontSize: 9,
-    color: "#b45309",
-    fontWeight: "500",
-    textAlign: "center",
-  },
-  submitBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 14,
-    paddingVertical: 15,
-    gap: 8,
-    marginTop: 8,
-  },
-  submitText: {
-    fontSize: 15,
-    fontWeight: "800",
-    color: "#fff",
-    letterSpacing: -0.2,
-  },
+  rateHint: { fontSize: 9, color: "#b45309", fontWeight: "500", textAlign: "center" },
+  submitBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", borderRadius: 14, paddingVertical: 15, gap: 8, marginTop: 8 },
+  submitText: { fontSize: 15, fontWeight: "800", color: "#fff", letterSpacing: -0.2 },
 });

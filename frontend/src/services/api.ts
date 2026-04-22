@@ -565,35 +565,12 @@ async createSubscription(data: {
     return this.request<any>(`/worker/feed?cow_id=${cow_id}&date=${date}&shift=${shift}`, { method: 'DELETE' });
   }
 
-  async getAdminFeedLogs(token: string, date?: string, shift?: 'morning' | 'evening') {
+   async getAdminFeedLogs(date?: string, shift?: 'morning' | 'evening') {
     const params = new URLSearchParams();
     if (date) params.append('date', date);
     if (shift) params.append('shift', shift);
     const query = params.toString() ? `?${params.toString()}` : '';
-
-    const url = `${API_BASE}/api/admin/feed${query}`;
-    console.log("Fetching admin feed:", url);
-
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-    });
-
-    const text = await response.text();
-    console.log("Feed response status:", response.status, "body:", text.slice(0, 200));
-
-    if (!response.ok) {
-      throw new Error(`Feed API error ${response.status}: ${text}`);
-    }
-
-    try {
-      return JSON.parse(text);
-    } catch {
-      throw new Error(`Feed API returned invalid JSON: ${text.slice(0, 100)}`);
-    }
+    return this.request<any[]>(`/admin/feed${query}`);
   }
 
   async getAdminMilkLogs(date?: string) {
