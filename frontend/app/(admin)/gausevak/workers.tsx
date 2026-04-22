@@ -49,7 +49,7 @@ const AVATAR_COLORS = [
   ["#1b4332", "#40916c"],
 ];
 
-// ── Toast Component ────────────────────────────────────────────────────
+// ── Toast Component
 type ToastVariant = "success" | "error" | "info";
 function Toast({
   msg,
@@ -134,7 +134,7 @@ const toastS = StyleSheet.create({
   msg: { flex: 1, fontSize: 13.5, fontWeight: "600", lineHeight: 18 },
 });
 
-// ── Worker Detail / Edit Modal ─────────────────────────────────────────
+// ── Worker Detail / Edit Modal 
 function WorkerDetailModal({
   worker,
   visible,
@@ -596,7 +596,7 @@ const dm = StyleSheet.create({
   saveBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
 });
 
-// ── Worker Card ────────────────────────────────────────────────────────
+// ── Worker Card 
 function WorkerCard({
   item,
   index,
@@ -720,7 +720,7 @@ function WorkerCard({
   );
 }
 
-// ── Main Screen ────────────────────────────────────────────────────────
+// ── Main Screen 
 export default function WorkersScreen() {
   const router = useRouter();
   const [workers, setWorkers] = useState<Worker[]>([]);

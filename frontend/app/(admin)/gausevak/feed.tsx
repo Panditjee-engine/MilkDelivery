@@ -549,7 +549,7 @@ function FeedBadge({
           {feeds.map((f, i) => (
             <View key={i} style={bs.feedItem}>
               <Text style={bs.feedItemText} numberOfLines={1}>
-                🌾 {f.feed_type}
+                 {f.feed_type}
               </Text>
               <Text style={bs.feedItemQty}>{f.quantity_kg}kg</Text>
             </View>
@@ -594,7 +594,7 @@ function FeedBadge({
   );
 }
 
-// ─── FeedCard — collapsed by default, tap to expand 
+// ─── FeedCard — 
 function FeedCard({
   item,
   index,
@@ -898,7 +898,7 @@ export default function AdminFeedScreen() {
   const [editingCow, setEditingCow] = useState<CowFeedRow | null>(null);
   const [editingShift, setEditingShift] = useState<Shift>("morning");
 
-  // ✅ Auto-refresh state
+  //  Auto-refresh state
   const [autoRefreshActive, setAutoRefreshActive] = useState(true);
   const autoRefreshRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isMountedRef = useRef(true);
@@ -964,7 +964,7 @@ export default function AdminFeedScreen() {
     fetchAll(activeShift === "both" ? undefined : activeShift, false);
   }, [activeShift]);
 
-  // ✅ Auto-refresh every 2 seconds (silent — no spinner flicker)
+  //  Auto-refresh every 2 seconds (silent — no spinner flicker)
   useEffect(() => {
     isMountedRef.current = true;
 
@@ -1066,7 +1066,7 @@ export default function AdminFeedScreen() {
           <Text style={sc.headerSub}>{today}</Text>
         </View>
 
-        {/* ✅ Live dot toggle */}
+        {/*  Live dot toggle */}
         <TouchableOpacity
           onPress={() => setAutoRefreshActive((a) => !a)}
           style={sc.liveBtn}
@@ -1127,7 +1127,7 @@ export default function AdminFeedScreen() {
             <Text style={sc.cowCount}>{filtered.length} cows</Text>
           </View>
 
-          {/* ✅ Hint */}
+          {/*  Hint */}
           {filtered.length > 0 && (
             <Text style={sc.expandHint}>Tap a card to see feed details</Text>
           )}
@@ -1505,7 +1505,7 @@ const cs = StyleSheet.create({
   },
   cowSr: { fontSize: 11, color: "#FD9E69", fontWeight: "500", marginTop: 1 },
 
-  // ✅ mini pills for collapsed view
+  //  mini pills for collapsed view
   miniPillsRow: { flexDirection: "row", gap: 4 },
   miniPill: {
     flexDirection: "row",

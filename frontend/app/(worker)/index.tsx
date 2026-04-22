@@ -38,7 +38,7 @@ if (
 ) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Types 
 
 type QuickAction = "milk" | "feed" | "health" | null;
 type CowTab = "milk" | "feed" | "health";
@@ -60,7 +60,7 @@ interface CowStatus {
   healthDone: boolean;
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Helpers 
 
 const ACTION_KEYS = {
   milk:   { color: "#16a34a", gradient: ["#16a34a", "#15803d"] as const, bg: "#f0fdf4", emoji: "🥛" },
@@ -123,7 +123,7 @@ function buildStatusMap(
   return map;
 }
 
-// ─── Single Cow — Milk Tab ────────────────────────────────────────────────────
+// ─── Single Cow — Milk Tab 
 
 function SingleCowMilk({ cow, onDone }: { cow: Cow; onDone: () => void }) {
   const { t } = useLang();
@@ -293,7 +293,7 @@ function SingleCowMilk({ cow, onDone }: { cow: Cow; onDone: () => void }) {
   );
 }
 
-// ─── Single Cow — Feed Tab ────────────────────────────────────────────────────
+// ─── Single Cow — Feed Tab 
 
 function SingleCowFeed({ cow, onDone }: { cow: Cow; onDone: () => void }) {
   const { t } = useLang();
@@ -439,7 +439,7 @@ function SingleCowFeed({ cow, onDone }: { cow: Cow; onDone: () => void }) {
   );
 }
 
-// ─── Single Cow — Health Tab ──────────────────────────────────────────────────
+// ─── Single Cow — Health Tab 
 
 function SingleCowHealth({ cow, onDone }: { cow: Cow; onDone: () => void }) {
   const { t } = useLang();
@@ -561,7 +561,7 @@ function SingleCowHealth({ cow, onDone }: { cow: Cow; onDone: () => void }) {
   );
 }
 
-// ─── Scanned Cow Screen (tabbed, single cow) ──────────────────────────────────
+// ─── Scanned Cow Screen (tabbed, single cow) 
 
 function ScannedCowScreen({
   cow,
@@ -687,7 +687,7 @@ function ScannedCowScreen({
   );
 }
 
-// ─── Pending Banner ───────────────────────────────────────────────────────────
+// ─── Pending Banner 
 
 function PendingBanner({
   cows,
@@ -711,7 +711,7 @@ function PendingBanner({
   if (!anyPending) {
     return (
       <View style={pb.allDone}>
-        <Text style={{ fontSize: 28 }}>🎉</Text>
+        <Text style={{ fontSize: 28 }}></Text>
         <View>
           <Text style={pb.allDoneTitle}>{t("allTasksDone")}</Text>
           <Text style={pb.allDoneSub}>{t("allTasksSub")}</Text>
@@ -767,7 +767,7 @@ function PendingBanner({
   );
 }
 
-// ─── Big Action Button ────────────────────────────────────────────────────────
+// ─── Big Action Button
 
 function BigActionButton({
   actionKey,
@@ -850,7 +850,7 @@ function BigActionButton({
   );
 }
 
-// ─── Full-Screen Action Modal ─────────────────────────────────────────────────
+// ─── Full-Screen Action Modal 
 
 function FullScreenModal({
   action,
@@ -904,7 +904,7 @@ function FullScreenModal({
   );
 }
 
-// ─── Main Dashboard ───────────────────────────────────────────────────────────
+// ─── Main Dashboard 
 
 function DashboardContent() {
   const { worker, workerToken, workerLogout } = useAuth();
@@ -1044,7 +1044,7 @@ function DashboardContent() {
           <Text style={s.greeting}>{t("appName")}</Text>
           <Text style={s.workerName}>{firstName}</Text>
           {worker?.farm_name ? (
-            <Text style={s.farmName}>🏡 {worker.farm_name}</Text>
+            <Text style={s.farmName}> {worker.farm_name}</Text>
           ) : null}
         </View>
         <View style={s.topRight}>
@@ -1181,7 +1181,7 @@ function DashboardContent() {
   );
 }
 
-// ─── Root export — wraps everything in LanguageProvider ───────────────────────
+// ─── Root export — wraps everything in LanguageProvider 
 
 export default function DashboardScreen() {
   return (
@@ -1191,7 +1191,7 @@ export default function DashboardScreen() {
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
+// ─── Styles 
 
 const smk = StyleSheet.create({
   wrap: { padding: 32, alignItems: "center", gap: 28 },
@@ -1607,7 +1607,7 @@ const s = StyleSheet.create({
     alignItems: "center",
   },
   avatarText: { fontSize: 18, fontWeight: "900", color: "#fff" },
-  // ── NEW: language toggle button ──────────────────────────────────────────
+  // ── NEW: language toggle button 
   langBtn: {
     width: 38,
     height: 38,
@@ -1623,7 +1623,7 @@ const s = StyleSheet.create({
     fontWeight: "900",
     color: "#7c3aed",
   },
-  // ────────────────────────────────────────────────────────────────────────
+  
   scanBtn: {
     width: 38,
     height: 38,

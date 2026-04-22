@@ -187,7 +187,7 @@ function CowCard({
               color="#7c3aed"
             />
             <Text style={[cc.actionText, { color: "#7c3aed" }]}>
-              {item.checkupDone ? "Checkup Done ✓" : "Mark Checkup"}
+              {item.checkupDone ? "Checkup Done " : "Mark Checkup"}
             </Text>
           </TouchableOpacity>
         )}

@@ -34,7 +34,7 @@ function isValidIndianPhone(value: string): boolean {
   return digits.length === 10 && /^[6-9]/.test(digits);
 }
 
-// ── Toast ─────────────────────────────────────────────────────────────────────
+// ── Toast 
 function Toast({
   message,
   type,
@@ -133,7 +133,7 @@ const ts = StyleSheet.create({
   },
 });
 
-// ── OTP Popup Modal ───────────────────────────────────────────────────────────
+// ── OTP Popup Modal 
 function OTPPopupModal({
   visible,
   code,
@@ -366,7 +366,7 @@ const otp = StyleSheet.create({
   closeBtnText: { fontSize: 16, fontWeight: "800", color: "#fff" },
 });
 
-// ── Wrong Password Modal ──────────────────────────────────────────────────────
+// ── Wrong Password Modal 
 function WrongPasswordModal({
   visible,
   identifier,
@@ -584,7 +584,7 @@ const wm = StyleSheet.create({
   dismissText: { fontSize: 14, color: "#9ca3af", fontWeight: "600" },
 });
 
-// ── Forgot Password Modal ─────────────────────────────────────────────────────
+// ── Forgot Password Modal 
 type ForgotStep = "identifier" | "code" | "newPassword" | "done";
 
 function ForgotPasswordModal({
@@ -658,7 +658,7 @@ function ForgotPasswordModal({
     }).start();
   };
 
-  // ── Build the identifier to send to the backend ──────────────────────────
+  // ── Build the identifier to send to the backend 
   const buildSendIdentifier = (): string | null => {
     const val = fpIdentifier.trim();
     if (!val) return null;
@@ -1148,7 +1148,7 @@ const fm = StyleSheet.create({
   cancelText: { fontSize: 14, color: "#9ca3af", fontWeight: "600" },
 });
 
-// ── Main Login Screen ─────────────────────────────────────────────────────────
+// ── Main Login Screen 
 export default function LoginScreen() {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
@@ -1173,7 +1173,7 @@ export default function LoginScreen() {
 
   const isPhoneInput = looksLikePhone(identifier);
 
-  // ── Build the identifier to send to backend ──────────────────────────────
+  // ── Build the identifier to send to backend 
   const buildLoginIdentifier = (val: string): string => {
     if (looksLikePhone(val)) {
       return `+91${val.replace(/\D/g, "")}`;
@@ -1222,29 +1222,29 @@ export default function LoginScreen() {
     try {
       const loginId = buildLoginIdentifier(val);
 
-      // ── Step 1: Try USER login ─────────────────────────────────────────
+      // ── Step 1: Try USER login 
       try {
         await login(loginId, password);
-        showToast("Welcome back! 🎉", "success");
+        showToast("Welcome ", "success");
         setTimeout(() => router.replace("/"), 800);
         return;
       } catch (err: any) {
         userLoginError = err;
       }
 
-      // ── Step 2: Try WORKER login ───────────────────────────────────────
+      // ── Step 2: Try WORKER login 
       try {
         // workerLogin backend accepts email field but we send identifier
         // which could be phone — the backend finds by phone too
         await workerLogin(loginId, password);
-        showToast("Welcome, worker 👷", "success");
+        showToast("Welcome", "success");
         setTimeout(() => router.replace("/(worker)" as any), 800);
         return;
       } catch (err: any) {
         workerLoginError = err;
       }
 
-      // ── Step 3: Both failed ───────────────────────────────────────────
+      // ── Step 3: Both failed
       if (
         isWrongPassword(userLoginError) ||
         isWrongPassword(workerLoginError)

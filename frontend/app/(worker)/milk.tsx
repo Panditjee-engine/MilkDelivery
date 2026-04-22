@@ -17,7 +17,7 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useLang } from "../../src/contexts/LanguageContext";
 import { api } from "../../src/services/api";
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Helpers 
 
 function todayStr() {
   return new Date().toISOString().split("T")[0];
@@ -27,7 +27,7 @@ function getCurrentShift(): "morning" | "evening" {
   return new Date().getHours() < 12 ? "morning" : "evening";
 }
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Types 
 
 interface Cow {
   id: string;
@@ -58,7 +58,7 @@ interface MilkEntry {
   worker_name: string;
 }
 
-// ─── Modern Alert ─────────────────────────────────────────────────────────────
+// ─── Modern Alert 
 
 interface AlertConfig {
   visible: boolean;
@@ -220,7 +220,7 @@ const al = StyleSheet.create({
   },
 });
 
-// ─── Qty Input ────────────────────────────────────────────────────────────────
+// ─── Qty Input 
 
 function QtyInput({
   qty,
@@ -271,7 +271,7 @@ function QtyInput({
   );
 }
 
-// ─── Main Screen ──────────────────────────────────────────────────────────────
+// ─── Main Screen 
 
 function MilkScreenInner({
   onTotalChange,
@@ -722,7 +722,7 @@ function MilkScreenInner({
   );
 }
 
-// ─── Export ───────────────────────────────────────────────────────────────────
+// ─── Export 
 
 export default function MilkScreen(props: {
   token?: string;
@@ -732,7 +732,7 @@ export default function MilkScreen(props: {
   return <MilkScreenInner {...props} />;
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
+// ─── Styles 
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#ffffff" },

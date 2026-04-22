@@ -43,7 +43,7 @@ interface Summary {
   total_cows: number;
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Helpers 
 function todayStr() {
   return new Date().toISOString().split("T")[0];
 }
@@ -55,7 +55,7 @@ const todayLabel = new Date().toLocaleDateString("en-IN", {
   year: "numeric",
 });
 
-// ─── ShiftCard ────────────────────────────────────────────────────────────────
+// ─── ShiftCard 
 function ShiftCard({
   session,
   liters,
@@ -110,7 +110,7 @@ function ShiftCard({
   );
 }
 
-// ─── CapacityBar ──────────────────────────────────────────────────────────────
+// ─── CapacityBar 
 function CapacityBar({ total, capacity }: { total: number; capacity: number }) {
   const pct = capacity > 0 ? Math.min(total / capacity, 1) : 0;
   const barColor = pct >= 1 ? "#16a34a" : pct >= 0.7 ? "#d97706" : "#ef4444";
@@ -139,7 +139,7 @@ function CapacityBar({ total, capacity }: { total: number; capacity: number }) {
   );
 }
 
-// ─── PeakBadge ────────────────────────────────────────────────────────────────
+// ─── PeakBadge 
 function PeakBadge({ peak }: { peak: { date: string; total: number } | null }) {
   if (!peak) return null;
   const d = new Date(peak.date).toLocaleDateString("en-IN", {
@@ -156,7 +156,7 @@ function PeakBadge({ peak }: { peak: { date: string; total: number } | null }) {
   );
 }
 
-// ─── CapacityModal ────────────────────────────────────────────────────────────
+// ─── CapacityModal 
 function CapacityModal({
   visible,
   cow,
@@ -238,7 +238,7 @@ function CapacityModal({
   );
 }
 
-// ─── MilkCard — collapsible ───────────────────────────────────────────────────
+// ─── MilkCard — collapsible 
 function MilkCard({
   item,
   index,
@@ -398,7 +398,7 @@ function MilkCard({
   );
 }
 
-// ─── SummaryBar ───────────────────────────────────────────────────────────────
+// ─── SummaryBar 
 function SummaryBar({ summary }: { summary: Summary }) {
   return (
     <View style={s.summaryBar}>
@@ -442,7 +442,7 @@ function SummaryBar({ summary }: { summary: Summary }) {
   );
 }
 
-// ─── Auto-refresh indicator ───────────────────────────────────────────────────
+// ─── Auto-refresh indicator 
 function AutoRefreshDot({ active }: { active: boolean }) {
   const pulse = useRef(new Animated.Value(1)).current;
 
@@ -481,7 +481,7 @@ function AutoRefreshDot({ active }: { active: boolean }) {
   );
 }
 
-// ─── Main Screen ──────────────────────────────────────────────────────────────
+// ─── Main Screen 
 export default function MilkYieldScreen() {
   const router = useRouter();
   const [milkRows, setMilkRows] = useState<MilkRow[]>([]);
@@ -501,7 +501,7 @@ export default function MilkYieldScreen() {
   >("total");
   const [modalCow, setModalCow] = useState<MilkRow | null>(null);
 
-  // ✅ NEW: auto-refresh every 2 seconds
+  //  auto-refresh every 2 seconds
   const autoRefreshRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [autoRefreshActive, setAutoRefreshActive] = useState(true);
   const isMountedRef = useRef(true);
@@ -513,7 +513,7 @@ export default function MilkYieldScreen() {
       const data = await api.getMilkDashboard(todayStr());
       if (!isMountedRef.current) return;
 
-      // ✅ FIX 1 & 2: filter out bulls AND milk-inactive cows
+      //  FIX 1 & 2: filter out bulls AND milk-inactive cows
       const filtered = data.cows.filter(
         (c: any) => c.cow_type !== "bull" && c.milk_active !== false,
       );
@@ -547,7 +547,7 @@ export default function MilkYieldScreen() {
     fetchAll(false);
   }, []);
 
-  // ✅ Auto-refresh every 2 seconds
+  //  Auto-refresh every 2 seconds
   useEffect(() => {
     isMountedRef.current = true;
 
@@ -631,7 +631,7 @@ export default function MilkYieldScreen() {
           <Text style={s.headerTitle}>Milk Yield</Text>
           <Text style={s.headerSub}>{todayLabel}</Text>
         </View>
-        {/* ✅ Auto-refresh toggle */}
+        {/*  Auto-refresh toggle */}
         <TouchableOpacity
           onPress={() => setAutoRefreshActive((a) => !a)}
           style={s.refreshBtn}

@@ -233,10 +233,26 @@ async getMyOrders() {
   });
 }
 
+//  CORRECT — admin cancel hits the admin endpoint
 async cancelOrder(orderId: string) {
-  return this.request<any>(`/delivery/orders/${orderId}/reject`, {
-    method: "POST",
+  return this.request<any>(`/admin/orders/${orderId}/cancel`, {
+    method: "PATCH",
   });
+}
+
+// Keep reject separate for the rider app, using worker_token
+async rejectOrder(orderId: string) {
+  const token = await AsyncStorage.getItem("worker_token"); // ← rider token
+  const response = await fetch(
+    `${API_BASE}/api/delivery/orders/${orderId}/reject`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    }
+  );
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.detail || "Reject failed");
+  return data;
 }
 
   async updateOrderStatus(orderId: string, status: string) {
@@ -992,12 +1008,7 @@ async updateWorker(id: string, data: Partial<{ name: string; phone: string; desi
   });
 }
 
-// ─────────────────────────────────────────────────────────
-// ADD THESE TO api.ts  (inside the ApiService class)
-// ─────────────────────────────────────────────────────────
-
-// ── Bank Account ─────────────────────────────────────────
-
+// ── Bank Account 
 async getBankAccount() {
   return this.request<{
     accountHolderName: string;
@@ -1021,7 +1032,7 @@ async saveBankAccount(data: {
   });
 }
 
-// ── Withdrawal ───────────────────────────────────────────
+// ── Withdrawal 
 
 async requestWithdrawal(amount: number) {
   return this.request<{
@@ -1060,8 +1071,77 @@ async createOrder(data: {
     body: JSON.stringify(data),
   });
 }
-//------------------------------------------------------------//
 
+async getNotes(search?: string) {
+  const params = new URLSearchParams();
+  if (search) params.append("search", search);
+  const query = params.toString() ? `?${params.toString()}` : "";
+  return this.request<Array<{
+    id: string;
+    admin_id: string;
+    title: string;
+    content: string;
+    color: string;
+    is_pinned: boolean;
+    created_at: string;
+    updated_at: string;
+  }>>(`/notes/${query}`);
+}
+
+async createNote(data: {
+  title: string;
+  content: string;
+  color?: string;
+}) {
+  return this.request<{
+    id: string;
+    admin_id: string;
+    title: string;
+    content: string;
+    color: string;
+    is_pinned: boolean;
+    created_at: string;
+    updated_at: string;
+  }>("/notes/", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+async updateNote(id: string, data: Partial<{
+  title: string;
+  content: string;
+  color: string;
+  is_pinned: boolean;
+}>) {
+  return this.request<{
+    id: string;
+    admin_id: string;
+    title: string;
+    content: string;
+    color: string;
+    is_pinned: boolean;
+    created_at: string;
+    updated_at: string;
+  }>(`/notes/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+async deleteNote(id: string) {
+  return this.request<{ message: string; id: string }>(`/notes/${id}`, {
+    method: "DELETE",
+  });
+}
+
+async toggleNotePin(id: string) {
+  return this.request<{ id: string; is_pinned: boolean }>(`/notes/${id}/pin`, {
+    method: "PATCH",
+  });
+}
+
+// Logout
   logout = async () => {
     this.setToken(null);
     await AsyncStorage.removeItem('worker_token');

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -9,6 +9,9 @@ import {
   LayoutAnimation,
   UIManager,
   Platform,
+  Modal,
+  Animated,
+  ActivityIndicator,
 } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -16,7 +19,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { api } from "../../src/services/api";
 import LoadingScreen from "../../src/components/LoadingScreen";
 
-// Enable LayoutAnimation on Android
 if (
   Platform.OS === "android" &&
   UIManager.setLayoutAnimationEnabledExperimental
@@ -24,7 +26,15 @@ if (
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-type OrderStatus = "UNASSIGNED" | "ASSIGNED" | "DELIVERED";
+type OrderStatus =
+  | "UNASSIGNED"
+  | "ASSIGNED"
+  | "DELIVERED"
+  | "CANCELLED"
+  | "cancelled"
+  | "delivered"
+  | "assigned"
+  | "unassigned";
 
 interface Order {
   id: string;
@@ -41,6 +51,263 @@ interface Order {
   delivery_partner_phone?: string;
 }
 
+// Cancel Confirm Modal
+interface CancelModalProps {
+  visible: boolean;
+  order: Order | null;
+  onConfirm: () => void;
+  onDismiss: () => void;
+  loading: boolean;
+}
+
+function CancelModal({
+  visible,
+  order,
+  onConfirm,
+  onDismiss,
+  loading,
+}: CancelModalProps) {
+  const scaleAnim = useRef(new Animated.Value(0.88)).current;
+  const opacityAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (visible) {
+      Animated.parallel([
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          useNativeDriver: true,
+          tension: 220,
+          friction: 13,
+        }),
+        Animated.timing(opacityAnim, {
+          toValue: 1,
+          duration: 160,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      scaleAnim.setValue(0.88);
+      opacityAnim.setValue(0);
+    }
+  }, [visible]);
+
+  if (!order) return null;
+
+  const itemSummary = order.items
+    ?.map((i) =>
+      i.quantity ? `${i.product_name} ×${i.quantity}` : i.product_name,
+    )
+    .join(", ");
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="none"
+      onRequestClose={onDismiss}
+      statusBarTranslucent
+    >
+      <Animated.View style={[cm.overlay, { opacity: opacityAnim }]}>
+        <Animated.View
+          style={[cm.sheet, { transform: [{ scale: scaleAnim }] }]}
+        >
+          {/* Icon */}
+          <View style={cm.iconCircle}>
+            <Ionicons name="close-circle" size={34} color="#FF5C5C" />
+          </View>
+
+          {/* Title */}
+          <Text style={cm.title}>Cancel Order?</Text>
+          <Text style={cm.subtitle}>This action cannot be undone.</Text>
+
+          {/* Order preview card */}
+          <View style={cm.previewCard}>
+            <View style={cm.previewRow}>
+              <View style={cm.receiptIcon}>
+                <Ionicons name="receipt-outline" size={13} color="#FF9675" />
+              </View>
+              <Text style={cm.previewOrderId}>
+                #{order.id.slice(-6).toUpperCase()}
+              </Text>
+              {order.total_amount !== undefined && (
+                <Text style={cm.previewAmount}>₹{order.total_amount}</Text>
+              )}
+            </View>
+            {order.customer_name && (
+              <View style={cm.previewDetail}>
+                <Ionicons name="person-outline" size={11} color="#8B6854" />
+                <Text style={cm.previewDetailText}>{order.customer_name}</Text>
+              </View>
+            )}
+            {itemSummary && (
+              <View style={cm.previewDetail}>
+                <Ionicons name="bag-outline" size={11} color="#8B6854" />
+                <Text style={cm.previewDetailText} numberOfLines={1}>
+                  {itemSummary}
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {/* Buttons */}
+          <View style={cm.btnRow}>
+            <TouchableOpacity
+              style={cm.btnCancel}
+              onPress={onDismiss}
+              disabled={loading}
+              activeOpacity={0.75}
+            >
+              <Text style={cm.btnCancelText}>Keep Order</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[cm.btnConfirm, loading && { opacity: 0.6 }]}
+              onPress={onConfirm}
+              disabled={loading}
+              activeOpacity={0.8}
+            >
+              {loading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="trash-outline" size={15} color="#fff" />
+                  <Text style={cm.btnConfirmText}>Yes, Cancel</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
+      </Animated.View>
+    </Modal>
+  );
+}
+
+const cm = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+  },
+  sheet: {
+    width: "100%",
+    maxWidth: 360,
+    backgroundColor: "#fff",
+    borderRadius: 24,
+    paddingTop: 28,
+    paddingHorizontal: 22,
+    paddingBottom: 22,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.18,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 12,
+  },
+  iconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "#FFF0F0",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 14,
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#1A1A1A",
+    marginBottom: 6,
+  },
+  subtitle: {
+    fontSize: 13,
+    color: "#8B6854",
+    marginBottom: 18,
+    fontWeight: "500",
+  },
+  previewCard: {
+    width: "100%",
+    backgroundColor: "#FFF8F4",
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 22,
+    borderWidth: 1,
+    borderColor: "#FFE8DC",
+    gap: 6,
+  },
+  previewRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 4,
+  },
+  receiptIcon: {
+    width: 26,
+    height: 26,
+    borderRadius: 7,
+    backgroundColor: "#FF967515",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  previewOrderId: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#1A1A1A",
+  },
+  previewAmount: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#FF9675",
+  },
+  previewDetail: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  previewDetailText: {
+    fontSize: 12,
+    color: "#8B6854",
+    fontWeight: "500",
+    flex: 1,
+  },
+  btnRow: {
+    flexDirection: "row",
+    width: "100%",
+    gap: 10,
+  },
+  btnCancel: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: "#F5F0ED",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  btnCancelText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#8B6854",
+  },
+  btnConfirm: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: "#FF5C5C",
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 7,
+  },
+  btnConfirmText: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#fff",
+  },
+});
+
+// Main Screen
 const FILTERS = ["ALL", "PENDING", "DELIVERED"] as const;
 
 const statusConfig: Record<
@@ -77,6 +344,12 @@ const statusConfig: Record<
     icon: "navigate",
     label: "On the Way",
   },
+  cancelled: {
+    color: "#FF5C5C",
+    bg: "#FFF0F0",
+    icon: "close-circle",
+    label: "Cancelled",
+  },
 };
 
 export default function AdminOrdersScreen() {
@@ -86,6 +359,10 @@ export default function AdminOrdersScreen() {
   const [filter, setFilter] = useState<"ALL" | "PENDING" | "DELIVERED">("ALL");
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const isFocused = useIsFocused();
+
+  // Cancel modal state
+  const [cancelTarget, setCancelTarget] = useState<Order | null>(null);
+  const [cancelLoading, setCancelLoading] = useState(false);
 
   const fetchOrders = async () => {
     try {
@@ -105,16 +382,12 @@ export default function AdminOrdersScreen() {
     }
   };
 
-useEffect(() => {
-  if (!isFocused) return;
-
-  fetchOrders();
-  const interval = setInterval(() => {
+  useEffect(() => {
+    if (!isFocused) return;
     fetchOrders();
-  }, 2000);
-
-  return () => clearInterval(interval);
-}, [filter, isFocused]);
+    const interval = setInterval(() => fetchOrders(), 2000);
+    return () => clearInterval(interval);
+  }, [filter, isFocused]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -130,12 +403,38 @@ useEffect(() => {
     });
   };
 
+  // ── Cancel handler 
+  const handleCancelConfirm = async () => {
+    if (!cancelTarget) return;
+    setCancelLoading(true);
+    try {
+      await api.cancelOrder(cancelTarget.id); // ← add this to your api service (see below)
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.id === cancelTarget.id ? { ...o, status: "cancelled" } : o,
+        ),
+      );
+      setCancelTarget(null);
+    } catch (e) {
+      console.error("Cancel failed", e);
+    } finally {
+      setCancelLoading(false);
+    }
+  };
+
   if (loading) return <LoadingScreen />;
+
+  const isCancellable = (order: Order) => {
+    const s = order.status?.toLowerCase();
+    return s !== "delivered" && s !== "cancelled";
+  };
 
   const isDelivered = (order: Order) =>
     order.status?.toLowerCase() === "delivered";
 
-  // Build a compact item summary string: "Milk ×2, Bread ×1, ..."
+  const isCancelled = (order: Order) =>
+    order.status?.toLowerCase() === "cancelled";
+
   const getItemSummary = (items: Order["items"]) => {
     if (!items?.length) return "No items";
     return items
@@ -150,22 +449,33 @@ useEffect(() => {
       statusConfig[item.status?.toLowerCase()] ?? statusConfig["unassigned"];
     const expanded = expandedIds.has(item.id);
     const delivered = isDelivered(item);
+    const cancelled = isCancelled(item);
+    const cancellable = isCancellable(item);
 
     return (
-      <View style={styles.card}>
-        {/* ── Collapsed / always-visible summary ── */}
+      <View style={[styles.card, cancelled && styles.cardCancelled]}>
+        {/* ── Collapsed summary ── */}
         <TouchableOpacity
           activeOpacity={0.75}
           onPress={() => toggleExpand(item.id)}
           style={styles.summary}
         >
-          {/* Top row: order ID + status pill + chevron */}
+          {/* Top row */}
           <View style={styles.cardHeader}>
             <View style={styles.orderIdRow}>
-              <View style={styles.receiptIcon}>
-                <Ionicons name="receipt-outline" size={14} color="#FF9675" />
+              <View
+                style={[
+                  styles.receiptIcon,
+                  cancelled && { backgroundColor: "#FF5C5C15" },
+                ]}
+              >
+                <Ionicons
+                  name="receipt-outline"
+                  size={14}
+                  color={cancelled ? "#FF5C5C" : "#FF9675"}
+                />
               </View>
-              <Text style={styles.orderId}>
+              <Text style={[styles.orderId, cancelled && { color: "#aaa" }]}>
                 #{item.id.slice(-6).toUpperCase()}
               </Text>
             </View>
@@ -186,17 +496,26 @@ useEffect(() => {
             </View>
           </View>
 
-          {/* Items summary row */}
+          {/* Items summary */}
           <View style={styles.itemSummaryRow}>
             <Ionicons name="bag-outline" size={13} color="#8B6854" />
-            <Text style={styles.itemSummaryText} numberOfLines={1}>
+            <Text
+              style={[
+                styles.itemSummaryText,
+                cancelled && {
+                  color: "#bbb",
+                  textDecorationLine: "line-through",
+                },
+              ]}
+              numberOfLines={1}
+            >
               {getItemSummary(item.items)}
             </Text>
           </View>
 
-          {/* Bottom row: OTP (if not delivered) + amount */}
+          {/* Footer row */}
           <View style={styles.summaryFooter}>
-            {!delivered && item.admin_otp ? (
+            {!delivered && !cancelled && item.admin_otp ? (
               <View style={styles.otpPill}>
                 <Text style={styles.otpPillLabel}>OTP</Text>
                 <Text style={styles.otpPillValue}>{item.admin_otp}</Text>
@@ -213,11 +532,49 @@ useEffect(() => {
                   Delivered
                 </Text>
               </View>
+            ) : cancelled ? (
+              <View style={[styles.otpPill, styles.otpPillCancelled]}>
+                <Ionicons name="close-circle" size={13} color="#FF5C5C" />
+                <Text
+                  style={[
+                    styles.otpPillLabel,
+                    { color: "#FF5C5C", marginLeft: 4 },
+                  ]}
+                >
+                  Cancelled
+                </Text>
+              </View>
             ) : null}
 
-            {item.total_amount !== undefined && (
-              <Text style={styles.summaryAmount}>₹{item.total_amount}</Text>
-            )}
+            <View style={styles.footerRight}>
+              {item.total_amount !== undefined && (
+                <Text
+                  style={[styles.summaryAmount, cancelled && { color: "#bbb" }]}
+                >
+                  ₹{item.total_amount}
+                </Text>
+              )}
+
+              {/* Cancel button — only on non-terminal orders */}
+              {cancellable && (
+                <TouchableOpacity
+                  style={styles.cancelChip}
+                  onPress={(e) => {
+                    e.stopPropagation?.();
+                    setCancelTarget(item);
+                  }}
+                  activeOpacity={0.75}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Ionicons
+                    name="close-circle-outline"
+                    size={13}
+                    color="#FF5C5C"
+                  />
+                  <Text style={styles.cancelChipText}>Cancel</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
         </TouchableOpacity>
 
@@ -226,7 +583,6 @@ useEffect(() => {
           <View style={styles.expandedSection}>
             <View style={styles.divider} />
 
-            {/* Date / Slot */}
             {(item.delivery_date || item.delivery_slot) && (
               <View style={styles.detailRow}>
                 <Ionicons name="calendar-outline" size={13} color="#8B6854" />
@@ -238,7 +594,6 @@ useEffect(() => {
             )}
 
             <View style={styles.twoCol}>
-              {/* Customer */}
               <View style={styles.col}>
                 <Text style={styles.colLabel}>CUSTOMER</Text>
                 <Text style={styles.colName}>
@@ -254,7 +609,6 @@ useEffect(() => {
 
               <View style={styles.colDivider} />
 
-              {/* Rider */}
               <View style={styles.col}>
                 <Text style={styles.colLabel}>RIDER</Text>
                 {item.delivery_partner_name ? (
@@ -286,7 +640,6 @@ useEffect(() => {
 
             <View style={styles.divider} />
 
-            {/* Items full list */}
             <Text style={styles.colLabel}>ITEMS</Text>
             <View style={styles.itemsList}>
               {item.items?.map((p, i) => (
@@ -300,7 +653,6 @@ useEffect(() => {
               ))}
             </View>
 
-            {/* Address */}
             {item.address && (
               <>
                 <View style={styles.divider} />
@@ -316,8 +668,7 @@ useEffect(() => {
               </>
             )}
 
-            {/* OTP in expanded view — only if NOT delivered */}
-            {!delivered && item.admin_otp && (
+            {!delivered && !cancelled && item.admin_otp && (
               <>
                 <View style={styles.divider} />
                 <View style={styles.otpExpandedRow}>
@@ -337,14 +688,38 @@ useEffect(() => {
               </>
             )}
 
-            {/* For delivered: just show total */}
-            {delivered && item.total_amount !== undefined && (
+            {(delivered || cancelled) && item.total_amount !== undefined && (
               <>
                 <View style={styles.divider} />
                 <View style={styles.amountBox}>
                   <Text style={styles.amountLabel}>Total</Text>
-                  <Text style={styles.amountValue}>₹{item.total_amount}</Text>
+                  <Text
+                    style={[styles.amountValue, cancelled && { color: "#bbb" }]}
+                  >
+                    ₹{item.total_amount}
+                  </Text>
                 </View>
+              </>
+            )}
+
+            {/* Cancel button in expanded view — prominent */}
+            {cancellable && (
+              <>
+                <View style={styles.divider} />
+                <TouchableOpacity
+                  style={styles.cancelExpandedBtn}
+                  onPress={() => setCancelTarget(item)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons
+                    name="close-circle-outline"
+                    size={16}
+                    color="#FF5C5C"
+                  />
+                  <Text style={styles.cancelExpandedText}>
+                    Cancel This Order
+                  </Text>
+                </TouchableOpacity>
               </>
             )}
           </View>
@@ -355,6 +730,15 @@ useEffect(() => {
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
+      {/* Cancel confirmation modal */}
+      <CancelModal
+        visible={!!cancelTarget}
+        order={cancelTarget}
+        onConfirm={handleCancelConfirm}
+        onDismiss={() => !cancelLoading && setCancelTarget(null)}
+        loading={cancelLoading}
+      />
+
       <View style={styles.header}>
         <Text style={styles.title}>Orders</Text>
         <View style={styles.countBadge}>
@@ -445,10 +829,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: "transparent",
   },
-  filterChipActive: {
-    backgroundColor: "#FF967512",
-    borderColor: "#FF9675",
-  },
+  filterChipActive: { backgroundColor: "#FF967512", borderColor: "#FF9675" },
   filterText: { fontSize: 13, fontWeight: "600", color: "#8B6854" },
   filterTextActive: { color: "#FF9675" },
 
@@ -464,6 +845,10 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
     elevation: 2,
     overflow: "hidden",
+  },
+  cardCancelled: {
+    backgroundColor: "#FDFAFA",
+    shadowOpacity: 0.03,
   },
 
   summary: { padding: 16 },
@@ -514,6 +899,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
+  footerRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
   otpPill: {
     flexDirection: "row",
     alignItems: "center",
@@ -523,9 +913,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
-  otpPillDelivered: {
-    backgroundColor: "#FFF3E8",
-  },
+  otpPillDelivered: { backgroundColor: "#FFF3E8" },
+  otpPillCancelled: { backgroundColor: "#FFF0F0" },
   otpPillLabel: {
     fontSize: 10,
     fontWeight: "700",
@@ -539,15 +928,24 @@ const styles = StyleSheet.create({
     color: "#FFBF55",
     letterSpacing: 2,
   },
-  summaryAmount: {
-    fontSize: 17,
-    fontWeight: "800",
-    color: "#1A1A1A",
+  summaryAmount: { fontSize: 17, fontWeight: "800", color: "#1A1A1A" },
+
+  // Cancel chip (collapsed view)
+  cancelChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "#FFF0F0",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: "#FFCDD2",
   },
+  cancelChipText: { fontSize: 12, fontWeight: "700", color: "#FF5C5C" },
 
   // ── Expanded section ──
   expandedSection: { paddingHorizontal: 16, paddingBottom: 16 },
-
   divider: { height: 1, backgroundColor: "#FFF0E8", marginVertical: 14 },
 
   detailRow: {
@@ -619,6 +1017,20 @@ const styles = StyleSheet.create({
   amountBox: { alignItems: "flex-end" },
   amountLabel: { fontSize: 10, color: "#8B6854", fontWeight: "600" },
   amountValue: { fontSize: 18, fontWeight: "800", color: "#1A1A1A" },
+
+  // Cancel button in expanded view
+  cancelExpandedBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 13,
+    borderRadius: 14,
+    backgroundColor: "#FFF0F0",
+    borderWidth: 1,
+    borderColor: "#FFCDD2",
+  },
+  cancelExpandedText: { fontSize: 14, fontWeight: "700", color: "#FF5C5C" },
 
   emptyState: { alignItems: "center", paddingTop: 80, gap: 8 },
   emptyTitle: { fontSize: 16, fontWeight: "700", color: "#8B6854" },

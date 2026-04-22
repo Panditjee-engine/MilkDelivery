@@ -22,7 +22,7 @@ import Input from "../../src/components/Input";
 
 const { width } = Dimensions.get("window");
 
-// ─── Custom Alert Component ───────────────────────────────────────────────────
+// ─── Custom Alert Component 
 type AlertAction = {
   text: string;
   style?: "default" | "cancel" | "destructive";
@@ -191,7 +191,7 @@ const alertStyles = StyleSheet.create({
   actionTextCancel: { color: "#666" },
 });
 
-// ─── Toast Notification ───────────────────────────────────────────────────────
+// ─── Toast Notification 
 function Toast({
   visible,
   message,
@@ -294,7 +294,7 @@ const toastStyles = StyleSheet.create({
   text: { fontSize: 14, fontWeight: "600", color: "#16a34a" },
 });
 
-// ─── Main Screen ──────────────────────────────────────────────────────────────
+// ─── Main Screen 
 export default function ProfileScreen() {
   const { user, logout, updateUser } = useAuth();
   const router = useRouter();

@@ -44,7 +44,6 @@ type ModalType =
   | "password"
   | null;
 
-// OTP step: 'input' → 'verify' → 'change'
 type OtpStep = "input" | "verify" | "change";
 
 interface Settings {

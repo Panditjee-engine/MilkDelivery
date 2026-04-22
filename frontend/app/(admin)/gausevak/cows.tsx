@@ -19,7 +19,7 @@ import {
   Alert,
   Image,
 } from "react-native";
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../../../src/services/api";
@@ -54,6 +54,9 @@ interface Cow {
   purpose?: string;
   damYield?: number;
   qrCode?: string;
+  isExpired?: boolean;
+  expiryDate?: string;
+  expiryReason?: string;
 }
 
 interface CowForm {
@@ -76,6 +79,10 @@ interface CowForm {
   successRate: string;
   purpose: string;
   damYield: string;
+  // ── NEW expiry fields ──
+  isExpired: boolean;
+  expiryDate: string;
+  expiryReason: string;
 }
 
 const cowImg = require("../../../assets/images/gir-cow.png");
@@ -108,6 +115,10 @@ const EMPTY_FORM: CowForm = {
   successRate: "",
   purpose: "breeding",
   damYield: "",
+  // ── NEW ──
+  isExpired: false,
+  expiryDate: "",
+  expiryReason: "",
 };
 
 // Palette:
@@ -456,18 +467,27 @@ function BreedSelector({
         visible={open}
         transparent
         animationType="fade"
-        onRequestClose={() => { setOpen(false); setSearch(""); }}
+        onRequestClose={() => {
+          setOpen(false);
+          setSearch("");
+        }}
       >
         <TouchableOpacity
           style={bd.overlay}
           activeOpacity={1}
-          onPress={() => { setOpen(false); setSearch(""); }}
+          onPress={() => {
+            setOpen(false);
+            setSearch("");
+          }}
         >
           <TouchableOpacity activeOpacity={1} style={bd.card}>
             <View style={bd.header}>
               <Text style={bd.title}>Select Breed</Text>
               <TouchableOpacity
-                onPress={() => { setOpen(false); setSearch(""); }}
+                onPress={() => {
+                  setOpen(false);
+                  setSearch("");
+                }}
                 style={bd.closeBtn}
               >
                 <Ionicons name="close" size={16} color="#8B6854" />
@@ -500,7 +520,11 @@ function BreedSelector({
                   style={bd.customRow}
                   onPress={() => select(search)}
                 >
-                  <Ionicons name="add-circle-outline" size={18} color="#BB6B3F" />
+                  <Ionicons
+                    name="add-circle-outline"
+                    size={18}
+                    color="#BB6B3F"
+                  />
                   <View style={{ flex: 1, marginLeft: 10 }}>
                     <Text style={bd.customLabel}>Add "{search}"</Text>
                     <Text style={bd.customSub}>Custom breed</Text>
@@ -523,22 +547,38 @@ function BreedSelector({
                       <View
                         style={[
                           bd.emojiWrap,
-                          selected && { backgroundColor: "#FFF8F0", borderColor: "#8B6854" },
+                          selected && {
+                            backgroundColor: "#FFF8F0",
+                            borderColor: "#8B6854",
+                          },
                         ]}
                       >
                         <Image
                           source={b.image}
-                          style={{ width: 28, height: 28, resizeMode: "contain" }}
+                          style={{
+                            width: 28,
+                            height: 28,
+                            resizeMode: "contain",
+                          }}
                         />
                       </View>
                       <View style={{ flex: 1, marginLeft: 12 }}>
-                        <Text style={[bd.breedName, selected && { color: "#16a34a" }]}>
+                        <Text
+                          style={[
+                            bd.breedName,
+                            selected && { color: "#16a34a" },
+                          ]}
+                        >
                           {b.name}
                         </Text>
                         <Text style={bd.origin}>{b.origin}</Text>
                       </View>
                       {selected && (
-                        <Ionicons name="checkmark-circle" size={20} color="#BB6B3F" />
+                        <Ionicons
+                          name="checkmark-circle"
+                          size={20}
+                          color="#BB6B3F"
+                        />
                       )}
                     </TouchableOpacity>
                   );
@@ -579,7 +619,12 @@ function PurposeSelector({
   onChange: (v: string) => void;
 }) {
   const options = [
-    { key: "breeding", label: "Breeding", icon: "heart-outline", color: "#7c3aed" },
+    {
+      key: "breeding",
+      label: "Breeding",
+      icon: "heart-outline",
+      color: "#7c3aed",
+    },
     { key: "dairy", label: "Dairy", icon: "water-outline", color: "#0891b2" },
     { key: "both", label: "Both", icon: "star-outline", color: "#d97706" },
   ];
@@ -604,12 +649,97 @@ function PurposeSelector({
               size={13}
               color={value === o.key ? o.color : "#C4A882"}
             />
-            <Text style={[f.purposeText, value === o.key && { color: o.color }]}>
+            <Text
+              style={[f.purposeText, value === o.key && { color: o.color }]}
+            >
               {o.label}
             </Text>
           </TouchableOpacity>
         ))}
       </View>
+    </View>
+  );
+}
+
+// ── NEW: Expiry section shown only when isExpired is true ──
+function ExpirySection({
+  form,
+  setF,
+}: {
+  form: CowForm;
+  setF: (k: keyof CowForm) => (v: any) => void;
+}) {
+  return (
+    <View style={ex.wrap}>
+      {/* Toggle row inside the card */}
+      <View style={ex.toggleRow}>
+        <View style={ex.toggleLeft}>
+          <View style={ex.iconWrap}>
+            <Ionicons name="warning-outline" size={15} color="#dc2626" />
+          </View>
+          <View>
+            <Text style={ex.toggleLabel}>Mark as Expired</Text>
+            <Text
+              style={[
+                ex.toggleSub,
+                { color: form.isExpired ? "#dc2626" : "#C4A882" },
+              ]}
+            >
+              {form.isExpired ? "Yes – expired" : "No"}
+            </Text>
+          </View>
+        </View>
+        <Switch
+          value={form.isExpired}
+          onValueChange={(v) => {
+            setF("isExpired")(v);
+            if (!v) {
+              setF("expiryDate")("");
+              setF("expiryReason")("");
+            }
+          }}
+          trackColor={{ false: "#F5EDE5", true: "#dc262644" }}
+          thumbColor={form.isExpired ? "#dc2626" : "#D4B8A8"}
+        />
+      </View>
+
+      {/* Conditional fields – only shown when toggled on */}
+      {form.isExpired && (
+        <View style={ex.fields}>
+          <View style={ex.divider} />
+          <DateField
+            label="Expiry Date"
+            value={form.expiryDate}
+            onChange={setF("expiryDate")}
+            placeholder="DD/MM/YYYY"
+          />
+          <View style={f.wrap}>
+            <Text style={f.label}>Reason for Expiry</Text>
+            <View
+              style={[
+                f.row,
+                { alignItems: "flex-start", paddingTop: 10, paddingBottom: 10 },
+              ]}
+            >
+              <Ionicons
+                name="document-text-outline"
+                size={15}
+                color="#C4A882"
+                style={{ marginRight: 8, marginTop: 2 }}
+              />
+              <TextInput
+                style={[f.input, { minHeight: 64, textAlignVertical: "top" }]}
+                value={form.expiryReason}
+                onChangeText={setF("expiryReason")}
+                placeholder="e.g. Natural death, disease, injury..."
+                placeholderTextColor="#D4B8A8"
+                multiline
+                numberOfLines={3}
+              />
+            </View>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -840,6 +970,10 @@ function CowFormFields({
           </View>
         </>
       )}
+
+      {/* ── NEW: Expiry section (appears for all types) ── */}
+      <ExpirySection form={form} setF={setF} />
+
       <View style={{ height: 12 }} />
     </>
   );
@@ -895,25 +1029,36 @@ function AddCowModal({
         breed: form.breed,
         weight: form.weight ? `${form.weight} kg` : undefined,
         father: !isBull && form.father ? form.father : undefined,
-        mother: form.type === "newborn" && form.mother ? form.mother : undefined,
+        mother:
+          form.type === "newborn" && form.mother ? form.mother : undefined,
         size: form.size || undefined,
         isActive: form.isActive,
         isSold: form.isSold,
         type: form.type,
         milkActive: !isBull ? form.milkActive : undefined,
         activeSince: form.isActive ? getTodayStr() : undefined,
+        // ── NEW expiry fields ──
+        isExpired: form.isExpired,
+        expiryDate:
+          form.isExpired && form.expiryDate ? form.expiryDate : undefined,
+        expiryReason:
+          form.isExpired && form.expiryReason ? form.expiryReason : undefined,
         ...(isBull && {
           semenAvailable: form.semenAvailable,
           totalDoses: form.totalDoses ? parseInt(form.totalDoses) : undefined,
-          successRate: form.successRate ? parseFloat(form.successRate) : undefined,
+          successRate: form.successRate
+            ? parseFloat(form.successRate)
+            : undefined,
           lastUsedDate: form.lastUsedDate || undefined,
           purpose: form.purpose,
           boughtDate: form.boughtDate || undefined,
           damYield: form.damYield ? parseFloat(form.damYield) : undefined,
         }),
         ...(!isBull && {
-          boughtDate: form.type === "mature" ? form.boughtDate || undefined : undefined,
-          bornDate: form.type === "newborn" ? form.bornDate || undefined : undefined,
+          boughtDate:
+            form.type === "mature" ? form.boughtDate || undefined : undefined,
+          bornDate:
+            form.type === "newborn" ? form.bornDate || undefined : undefined,
         }),
       };
       const created: Cow = await api.createCow(payload);
@@ -987,15 +1132,28 @@ function AddCowModal({
                       >
                         <Image
                           source={opt.image}
-                          style={{ width: 50, height: 50, resizeMode: "contain" }}
+                          style={{
+                            width: 50,
+                            height: 50,
+                            resizeMode: "contain",
+                          }}
                         />
                         <Text style={[m.typeTitle, { color: opt.titleColor }]}>
                           {opt.title}
                         </Text>
                         <Text style={m.typeSub}>{opt.sub}</Text>
-                        <View style={[m.typePill, { backgroundColor: opt.pillColor }]}>
+                        <View
+                          style={[
+                            m.typePill,
+                            { backgroundColor: opt.pillColor },
+                          ]}
+                        >
                           <Text style={m.typePillText}>SELECT</Text>
-                          <Ionicons name="arrow-forward" size={10} color="#fff" />
+                          <Ionicons
+                            name="arrow-forward"
+                            size={10}
+                            color="#fff"
+                          />
                         </View>
                       </View>
                     </TouchableOpacity>
@@ -1037,7 +1195,14 @@ function AddCowModal({
                   >
                     <Ionicons name="arrow-back" size={16} color="#8B6854" />
                   </TouchableOpacity>
-                  <View style={{ flexDirection: "row", alignItems: "center", flex: 1, marginLeft: 10 }}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      flex: 1,
+                      marginLeft: 10,
+                    }}
+                  >
                     <Image
                       source={
                         form.type === "bull"
@@ -1046,7 +1211,12 @@ function AddCowModal({
                             ? calfImg
                             : cowImg
                       }
-                      style={{ width: 50, height: 50, resizeMode: "contain", marginRight: 6 }}
+                      style={{
+                        width: 50,
+                        height: 50,
+                        resizeMode: "contain",
+                        marginRight: 6,
+                      }}
                     />
                     <Text style={m.title}>
                       {form.type === "mature"
@@ -1065,7 +1235,12 @@ function AddCowModal({
                   showsVerticalScrollIndicator={false}
                   style={{ maxHeight: 400 }}
                 >
-                  <CowFormFields form={form} setF={setF} showTagField cows={cows} />
+                  <CowFormFields
+                    form={form}
+                    setF={setF}
+                    showTagField
+                    cows={cows}
+                  />
                 </ScrollView>
                 <TouchableOpacity
                   onPress={submit}
@@ -1081,7 +1256,11 @@ function AddCowModal({
                     <ActivityIndicator color="#fff" size="small" />
                   ) : (
                     <>
-                      <Ionicons name="checkmark-circle-outline" size={18} color="#fff" />
+                      <Ionicons
+                        name="checkmark-circle-outline"
+                        size={18}
+                        color="#fff"
+                      />
                       <Text style={m.submitText}>
                         {form.type === "bull"
                           ? "Register Bull"
@@ -1143,6 +1322,10 @@ function EditCowModal({
         successRate: cow.successRate?.toString() ?? "",
         purpose: cow.purpose ?? "breeding",
         damYield: cow.damYield?.toString() ?? "",
+        // ── NEW ──
+        isExpired: cow.isExpired ?? false,
+        expiryDate: cow.expiryDate ?? "",
+        expiryReason: cow.expiryReason ?? "",
       });
     }
   }, [cow]);
@@ -1172,25 +1355,36 @@ function EditCowModal({
         breed: form.breed,
         weight: form.weight ? `${form.weight} kg` : undefined,
         father: !isBull && form.father ? form.father : undefined,
-        mother: form.type === "newborn" && form.mother ? form.mother : undefined,
+        mother:
+          form.type === "newborn" && form.mother ? form.mother : undefined,
         size: form.size || undefined,
         isActive: form.isActive,
         isSold: form.isSold,
         type: form.type,
         activeSince: activeSince ?? undefined,
         milkActive: !isBull ? form.milkActive : undefined,
+        // ── NEW expiry fields ──
+        isExpired: form.isExpired,
+        expiryDate:
+          form.isExpired && form.expiryDate ? form.expiryDate : undefined,
+        expiryReason:
+          form.isExpired && form.expiryReason ? form.expiryReason : undefined,
         ...(isBull && {
           semenAvailable: form.semenAvailable,
           totalDoses: form.totalDoses ? parseInt(form.totalDoses) : undefined,
-          successRate: form.successRate ? parseFloat(form.successRate) : undefined,
+          successRate: form.successRate
+            ? parseFloat(form.successRate)
+            : undefined,
           lastUsedDate: form.lastUsedDate || undefined,
           purpose: form.purpose,
           boughtDate: form.boughtDate || undefined,
           damYield: form.damYield ? parseFloat(form.damYield) : undefined,
         }),
         ...(!isBull && {
-          boughtDate: form.type === "mature" ? form.boughtDate || undefined : undefined,
-          bornDate: form.type === "newborn" ? form.bornDate || undefined : undefined,
+          boughtDate:
+            form.type === "mature" ? form.boughtDate || undefined : undefined,
+          bornDate:
+            form.type === "newborn" ? form.bornDate || undefined : undefined,
         }),
       };
       const updated: Cow = await api.updateCow(cow.id, payload);
@@ -1220,46 +1414,54 @@ function EditCowModal({
           <View style={m.sheet}>
             <View style={m.handle} />
             <View style={m.header}>
-              <View style={[m.editIconWrap, isBull && { backgroundColor: "#f5f3ff" }]}>
-      <Ionicons
-        name="create-outline"
-        size={16}
-        color={isBull ? "#FFBF55" : "#BB6B3F"}
-      />
-    </View>
-    <Text style={[m.title, { marginLeft: 10, flex: 1 }]}>
-      Edit {isBull ? "Bull" : "Cow"}
-    </Text>
-    <TouchableOpacity onPress={onClose} style={m.closeBtn}>
-      <Ionicons name="close" size={18} color="#8B6854" />
-    </TouchableOpacity>
-  </View>
-    <Text style={m.sub}>Update the details below</Text>
-    <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
-      <CowFormFields form={form} setF={setF} showTagField cows={cows} />
-    </ScrollView>
-    <TouchableOpacity
-      onPress={submit}
-      style={[
-        m.submitBtn,
-        isBull ? { backgroundColor: "#8B6854" } : m.submitBtnTerra,
-        submitting && { opacity: 0.7 },
-      ]}
-      disabled={submitting}
-    >
-      {submitting ? (
-        <ActivityIndicator color="#fff" size="small" />
-      ) : (
-        <>
-          <Ionicons name="save-outline" size={18} color="#fff" />
-          <Text style={m.submitText}>Save Changes</Text>
-        </>
-      )}
-    </TouchableOpacity>
-          </View >
-        </KeyboardAvoidingView >
-      </View >
-    </Modal >
+              <View
+                style={[
+                  m.editIconWrap,
+                  isBull && { backgroundColor: "#f5f3ff" },
+                ]}
+              >
+                <Ionicons
+                  name="create-outline"
+                  size={16}
+                  color={isBull ? "#FFBF55" : "#BB6B3F"}
+                />
+              </View>
+              <Text style={[m.title, { marginLeft: 10, flex: 1 }]}>
+                Edit {isBull ? "Bull" : "Cow"}
+              </Text>
+              <TouchableOpacity onPress={onClose} style={m.closeBtn}>
+                <Ionicons name="close" size={18} color="#8B6854" />
+              </TouchableOpacity>
+            </View>
+            <Text style={m.sub}>Update the details below</Text>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              style={{ maxHeight: 420 }}
+            >
+              <CowFormFields form={form} setF={setF} showTagField cows={cows} />
+            </ScrollView>
+            <TouchableOpacity
+              onPress={submit}
+              style={[
+                m.submitBtn,
+                isBull ? { backgroundColor: "#8B6854" } : m.submitBtnTerra,
+                submitting && { opacity: 0.7 },
+              ]}
+              disabled={submitting}
+            >
+              {submitting ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <>
+                  <Ionicons name="save-outline" size={18} color="#fff" />
+                  <Text style={m.submitText}>Save Changes</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </View>
+    </Modal>
   );
 }
 
@@ -1284,7 +1486,11 @@ function QRModal({
         <TouchableOpacity activeOpacity={1} style={qr.card}>
           <View style={qr.header}>
             <Text style={{ fontSize: 22 }}>
-              {cow.type === "bull" ? "🐂" : cow.type === "newborn" ? "🐮" : "🐄"}
+              {cow.type === "bull"
+                ? "🐂"
+                : cow.type === "newborn"
+                  ? "🐮"
+                  : "🐄"}
             </Text>
             <View style={{ flex: 1, marginLeft: 10 }}>
               <Text style={qr.name}>{cow.name}</Text>
@@ -1296,7 +1502,11 @@ function QRModal({
           </View>
           <View style={qr.qrWrap}>
             {cow.qrCode ? (
-              <Image source={{ uri: cow.qrCode }} style={qr.qrImage} resizeMode="contain" />
+              <Image
+                source={{ uri: cow.qrCode }}
+                style={qr.qrImage}
+                resizeMode="contain"
+              />
             ) : (
               <View style={qr.qrPlaceholder}>
                 <Ionicons name="qr-code-outline" size={48} color="#D4B8A8" />
@@ -1313,7 +1523,15 @@ function QRModal({
   );
 }
 
-function DetailItem({ icon, label, value }: { icon: string; label: string; value: string }) {
+function DetailItem({
+  icon,
+  label,
+  value,
+}: {
+  icon: string;
+  label: string;
+  value: string;
+}) {
   return (
     <View style={c.detailItem}>
       <Ionicons name={icon as any} size={13} color="#C4A882" />
@@ -1382,185 +1600,435 @@ function CowCard({
 
   return (
     <Animated.View
-      style={[c.card, { opacity, transform: [{ translateY }] }, isBull && c.bullCard]}
+      style={[
+        c.card,
+        { opacity, transform: [{ translateY }] },
+        isBull && c.bullCard,
+      ]}
     >
-      <TouchableOpacity onPress={() => setExpanded((e) => !e)} activeOpacity={0.8}>
+      <TouchableOpacity
+        onPress={() => setExpanded((e) => !e)}
+        activeOpacity={0.8}
+      >
         <View style={c.topRow}>
-  <View style={[c.avatarWrap, isBull && { backgroundColor: "#f5f3ff", borderColor: "#ddd6fe" }]}>
-    <Image source={getAnimalImage(item.type)} style={{ width: 40, height: 40, resizeMode: "contain" }} />
-    </View>
-    <View style={{ flex: 1, marginLeft: 12, minWidth: 0 }}>
-      <View style={c.nameRow}>
-        <Text style={c.name} numberOfLines={1}>{item.name}</Text>
-        <View style={c.badgeGroup}>
-          <View style={[c.badge, { backgroundColor: st.bg, borderColor: st.border }]}>
-            <View style={[c.dot, { backgroundColor: st.color }]} />
-            <Text style={[c.badgeText, { color: st.color }]}>{st.label}</Text>
+          <View
+            style={[
+              c.avatarWrap,
+              isBull && { backgroundColor: "#f5f3ff", borderColor: "#ddd6fe" },
+            ]}
+          >
+            <Image
+              source={getAnimalImage(item.type)}
+              style={{ width: 40, height: 40, resizeMode: "contain" }}
+            />
           </View>
-          {item.pregnancyStatus === "pregnant" && (
-            <View style={[c.badge, { backgroundColor: "#fdf4ff", borderColor: "#e9d5ff" }]}>
-              <Text style={{ fontSize: 9 }}>🤰</Text>
-              <Text style={[c.badgeText, { color: "#9333ea" }]}>Pregnant</Text>
+          <View style={{ flex: 1, marginLeft: 12, minWidth: 0 }}>
+            <View style={c.nameRow}>
+              <Text style={c.name} numberOfLines={1}>
+                {item.name}
+              </Text>
+              <View style={c.badgeGroup}>
+                <View
+                  style={[
+                    c.badge,
+                    { backgroundColor: st.bg, borderColor: st.border },
+                  ]}
+                >
+                  <View style={[c.dot, { backgroundColor: st.color }]} />
+                  <Text style={[c.badgeText, { color: st.color }]}>
+                    {st.label}
+                  </Text>
+                </View>
+                {item.pregnancyStatus === "pregnant" && (
+                  <View
+                    style={[
+                      c.badge,
+                      { backgroundColor: "#fdf4ff", borderColor: "#e9d5ff" },
+                    ]}
+                  >
+                    <Text style={{ fontSize: 9 }}>🤰</Text>
+                    <Text style={[c.badgeText, { color: "#9333ea" }]}>
+                      Pregnant
+                    </Text>
+                  </View>
+                )}
+                {isBull && item.semenAvailable && (
+                  <View
+                    style={[
+                      c.badge,
+                      { backgroundColor: "#f0fdf4", borderColor: "#bbf7d0" },
+                    ]}
+                  >
+                    <Ionicons name="flask" size={9} color="#16a34a" />
+                    <Text style={[c.badgeText, { color: "#16a34a" }]}>
+                      Semen ✓
+                    </Text>
+                  </View>
+                )}
+                {item.isExpired && (
+                  <View
+                    style={[
+                      c.badge,
+                      { backgroundColor: "#fff1f2", borderColor: "#fecdd3" },
+                    ]}
+                  >
+                    <Ionicons name="warning" size={9} color="#dc2626" />
+                    <Text style={[c.badgeText, { color: "#dc2626" }]}>
+                      Expired
+                    </Text>
+                  </View>
+                )}
+              </View>
             </View>
-          )}
-          {isBull && item.semenAvailable && (
-            <View style={[c.badge, { backgroundColor: "#f0fdf4", borderColor: "#bbf7d0" }]}>
-              <Ionicons name="flask" size={9} color="#16a34a" />
-              <Text style={[c.badgeText, { color: "#16a34a" }]}>Semen ✓</Text>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 6,
+                flexWrap: "wrap",
+              }}
+            >
+              <Text style={c.tag}>
+                {item.tag} · {item.breed} ·{" "}
+                {isBull
+                  ? "Bull"
+                  : item.type === "newborn"
+                    ? "Newborn"
+                    : "Adult"}
+              </Text>
+              {item.isActive && activeDays !== null && (
+                <View style={c.miniDaysBadge}>
+                  <Ionicons name="time-outline" size={9} color="#BB6B3F" />
+                  <Text style={c.miniDaysText}>{activeDays}d active</Text>
                 </View>
               )}
             </View>
-            </View>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-              <Text style={c.tag}>
-          {item.tag} · {item.breed} ·{" "}
-          {isBull ? "Bull" : item.type === "newborn" ? "Newborn" : "Adult"}
-        </Text>
-        {item.isActive && activeDays !== null && (
-          <View style={c.miniDaysBadge}>
-            <Ionicons name="time-outline" size={9} color="#BB6B3F" />
-            <Text style={c.miniDaysText}>{activeDays}d active</Text>
           </View>
-        )}
-      </View>
-  </View>
-    <Ionicons
-      name={expanded ? "chevron-up" : "chevron-down"}
-      size={16}
-      color="#C4A882"
-      style={{ marginLeft: 8 }}
-    />
-        </View >
-      </TouchableOpacity >
+          <Ionicons
+            name={expanded ? "chevron-up" : "chevron-down"}
+            size={16}
+            color="#C4A882"
+            style={{ marginLeft: 8 }}
+          />
+        </View>
+      </TouchableOpacity>
 
-    { expanded && (
-      <>
-        <View style={c.divider} />
-        <ActiveDaysBadge activeSince={item.activeSince} isActive={item.isActive} />
-        {isBull ? (
-          <>
-            <View style={c.bullStatsRow}>
-              <View style={c.bullStat}>
-                <Text style={c.bullStatVal}>{item.totalDoses ?? "—"}</Text>
-                <Text style={c.bullStatLabel}>Doses</Text>
+      {expanded && (
+        <>
+          <View style={c.divider} />
+          <ActiveDaysBadge
+            activeSince={item.activeSince}
+            isActive={item.isActive}
+          />
+          {isBull ? (
+            <>
+              <View style={c.bullStatsRow}>
+                <View style={c.bullStat}>
+                  <Text style={c.bullStatVal}>{item.totalDoses ?? "—"}</Text>
+                  <Text style={c.bullStatLabel}>Doses</Text>
+                </View>
+                <View style={c.bullStatDivider} />
+                <View style={c.bullStat}>
+                  <Text style={c.bullStatVal}>
+                    {item.successRate != null ? `${item.successRate}%` : "—"}
+                  </Text>
+                  <Text style={c.bullStatLabel}>Success Rate</Text>
+                </View>
+                <View style={c.bullStatDivider} />
+                <View style={c.bullStat}>
+                  <Text style={c.bullStatVal}>{item.purpose ?? "—"}</Text>
+                  <Text style={c.bullStatLabel}>Purpose</Text>
+                </View>
               </View>
-              <View style={c.bullStatDivider} />
-              <View style={c.bullStat}>
-                <Text style={c.bullStatVal}>
-                  {item.successRate != null ? `${item.successRate}%` : "—"}
-                </Text>
-                <Text style={c.bullStatLabel}>Success Rate</Text>
+              <View style={c.grid}>
+                <DetailItem
+                  icon="scale-outline"
+                  label="Weight"
+                  value={item.weight || "—"}
+                />
+                <DetailItem
+                  icon="resize-outline"
+                  label="Size"
+                  value={item.size || "—"}
+                />
+                <DetailItem
+                  icon="calendar-outline"
+                  label="Bought"
+                  value={item.boughtDate || "—"}
+                />
+                <DetailItem
+                  icon="time-outline"
+                  label="Last Used"
+                  value={item.lastUsedDate || "—"}
+                />
+                {item.damYield != null && (
+                  <DetailItem
+                    icon="water-outline"
+                    label="Dam Yield"
+                    value={`${item.damYield} L/day`}
+                  />
+                )}
               </View>
-              <View style={c.bullStatDivider} />
-              <View style={c.bullStat}>
-                <Text style={c.bullStatVal}>{item.purpose ?? "—"}</Text>
-                <Text style={c.bullStatLabel}>Purpose</Text>
-              </View>
-            </View>
-            <View style={c.grid}>
-              <DetailItem icon="scale-outline" label="Weight" value={item.weight || "—"} />
-              <DetailItem icon="resize-outline" label="Size" value={item.size || "—"} />
-              <DetailItem icon="calendar-outline" label="Bought" value={item.boughtDate || "—"} />
-              <DetailItem icon="time-outline" label="Last Used" value={item.lastUsedDate || "—"} />
-              {item.damYield != null && (
-                <DetailItem icon="water-outline" label="Dam Yield" value={`${item.damYield} L/day`} />
-              )}
-            </View>
-            <View style={c.pillRow}>
-                <View style={[c.pill, { backgroundColor: item.semenAvailable ? "#f0fdf4" : "#f9fafb", borderColor: item.semenAvailable ? "#86efac" : "#e5e7eb" }]}>
-                  <Ionicons name="flask-outline" size={12} color={item.semenAvailable ? "#16a34a" : "#9ca3af"} />
-                  <Text style={[c.pillText, { color: item.semenAvailable ? "#16a34a" : "#9ca3af" }]}>
+              <View style={c.pillRow}>
+                <View
+                  style={[
+                    c.pill,
+                    {
+                      backgroundColor: item.semenAvailable
+                        ? "#f0fdf4"
+                        : "#f9fafb",
+                      borderColor: item.semenAvailable ? "#86efac" : "#e5e7eb",
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name="flask-outline"
+                    size={12}
+                    color={item.semenAvailable ? "#16a34a" : "#9ca3af"}
+                  />
+                  <Text
+                    style={[
+                      c.pillText,
+                      { color: item.semenAvailable ? "#16a34a" : "#9ca3af" },
+                    ]}
+                  >
                     {item.semenAvailable ? "Semen Available" : "No Semen"}
                   </Text>
                 </View>
-                <View style={[c.pill, { backgroundColor: item.isActive ? "#f0fdf4" : "#fff1f2", borderColor: item.isActive ? "#86efac" : "#fecdd3" }]}>
-                  <Ionicons name={item.isActive ? "checkmark-circle" : "close-circle"} size={12} color={item.isActive ? "#16a34a" : "#dc2626"} />
-                  <Text style={[c.pillText, { color: item.isActive ? "#16a34a" : "#dc2626" }]}>
-            {item.isActive ? "Active" : "Inactive"}
-          </Text>
-        </View>
-    </View>
+                <View
+                  style={[
+                    c.pill,
+                    {
+                      backgroundColor: item.isActive ? "#f0fdf4" : "#fff1f2",
+                      borderColor: item.isActive ? "#86efac" : "#fecdd3",
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name={item.isActive ? "checkmark-circle" : "close-circle"}
+                    size={12}
+                    color={item.isActive ? "#16a34a" : "#dc2626"}
+                  />
+                  <Text
+                    style={[
+                      c.pillText,
+                      { color: item.isActive ? "#16a34a" : "#dc2626" },
+                    ]}
+                  >
+                    {item.isActive ? "Active" : "Inactive"}
+                  </Text>
+                </View>
+              </View>
             </>
           ) : (
-    <>
-      <View style={c.grid}>
-        <DetailItem icon="scale-outline" label="Weight" value={item.weight || "—"} />
-        <DetailItem icon="male-outline" label="Father" value={item.father || "—"} />
-        {item.type === "newborn" && (
-          <DetailItem icon="female-outline" label="Mother" value={(item as any).mother || "—"} />
-        )}
-        <DetailItem icon="resize-outline" label="Size" value={item.size || "—"} />
-        <DetailItem
-          icon="calendar-outline"
-          label={item.type === "newborn" ? "Born" : "Bought"}
-          value={item.bornDate || item.boughtDate || "—"}
-        />
-      </View>
-      <View style={c.pillRow}>
-  <View style={[c.pill, { backgroundColor: item.isActive ? "#f0fdf4" : "#fff1f2", borderColor: item.isActive ? "#86efac" : "#fecdd3" }]}>
-    <Ionicons name={item.isActive ? "checkmark-circle" : "close-circle"} size={12} color={item.isActive ? "#16a34a" : "#dc2626"} />
-    <Text style={[c.pillText, { color: item.isActive ? "#16a34a" : "#dc2626" }]}>
-          {item.isActive ? "Active" : "Inactive"}
-        </Text>
-      </View>
-      {item.isSold && (
-        <View style={[c.pill, { backgroundColor: "#fff7ed", borderColor: "#fed7aa" }]}>
-          <Ionicons name="pricetag" size={12} color="#ea580c" />
-          <Text style={[c.pillText, { color: "#ea580c" }]}>Sold</Text>
-        </View>
-      )}
-      <View style={[c.pill, { backgroundColor: "#eff6ff", borderColor: "#bfdbfe" }]}>
-        <Ionicons name={item.type === "newborn" ? "star" : "shield-checkmark"} size={12} color="#2563eb" />
-        <Text style={[c.pillText, { color: "#2563eb" }]}>
-              {item.type === "newborn" ? "New Born" : "Mature"}
-            </Text>
-          </View>
-          {item.pregnancyStatus !== "unknown" && (
-            <View style={[c.pill, { backgroundColor: item.pregnancyStatus === "pregnant" ? "#fdf4ff" : "#f9fafb", borderColor: item.pregnancyStatus === "pregnant" ? "#e9d5ff" : "#e5e7eb" }]}>
-              <Text style={{ fontSize: 11 }}>
-                {item.pregnancyStatus === "pregnant" ? "🤰" : ""}
-              </Text>
-              <Text style={[c.pillText, { color: item.pregnancyStatus === "pregnant" ? "#9333ea" : "#9ca3af" }]}>
-                {item.pregnancyStatus === "pregnant" ? "Pregnant" : "Not Pregnant"}
-              </Text>
+            <>
+              <View style={c.grid}>
+                <DetailItem
+                  icon="scale-outline"
+                  label="Weight"
+                  value={item.weight || "—"}
+                />
+                <DetailItem
+                  icon="male-outline"
+                  label="Father"
+                  value={item.father || "—"}
+                />
+                {item.type === "newborn" && (
+                  <DetailItem
+                    icon="female-outline"
+                    label="Mother"
+                    value={(item as any).mother || "—"}
+                  />
+                )}
+                <DetailItem
+                  icon="resize-outline"
+                  label="Size"
+                  value={item.size || "—"}
+                />
+                <DetailItem
+                  icon="calendar-outline"
+                  label={item.type === "newborn" ? "Born" : "Bought"}
+                  value={item.bornDate || item.boughtDate || "—"}
+                />
+              </View>
+              <View style={c.pillRow}>
+                <View
+                  style={[
+                    c.pill,
+                    {
+                      backgroundColor: item.isActive ? "#f0fdf4" : "#fff1f2",
+                      borderColor: item.isActive ? "#86efac" : "#fecdd3",
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name={item.isActive ? "checkmark-circle" : "close-circle"}
+                    size={12}
+                    color={item.isActive ? "#16a34a" : "#dc2626"}
+                  />
+                  <Text
+                    style={[
+                      c.pillText,
+                      { color: item.isActive ? "#16a34a" : "#dc2626" },
+                    ]}
+                  >
+                    {item.isActive ? "Active" : "Inactive"}
+                  </Text>
+                </View>
+                {item.isSold && (
+                  <View
+                    style={[
+                      c.pill,
+                      { backgroundColor: "#fff7ed", borderColor: "#fed7aa" },
+                    ]}
+                  >
+                    <Ionicons name="pricetag" size={12} color="#ea580c" />
+                    <Text style={[c.pillText, { color: "#ea580c" }]}>Sold</Text>
+                  </View>
+                )}
+                <View
+                  style={[
+                    c.pill,
+                    { backgroundColor: "#eff6ff", borderColor: "#bfdbfe" },
+                  ]}
+                >
+                  <Ionicons
+                    name={item.type === "newborn" ? "star" : "shield-checkmark"}
+                    size={12}
+                    color="#2563eb"
+                  />
+                  <Text style={[c.pillText, { color: "#2563eb" }]}>
+                    {item.type === "newborn" ? "New Born" : "Mature"}
+                  </Text>
+                </View>
+                {item.pregnancyStatus !== "unknown" && (
+                  <View
+                    style={[
+                      c.pill,
+                      {
+                        backgroundColor:
+                          item.pregnancyStatus === "pregnant"
+                            ? "#fdf4ff"
+                            : "#f9fafb",
+                        borderColor:
+                          item.pregnancyStatus === "pregnant"
+                            ? "#e9d5ff"
+                            : "#e5e7eb",
+                      },
+                    ]}
+                  >
+                    <Text style={{ fontSize: 11 }}>
+                      {item.pregnancyStatus === "pregnant" ? "🤰" : ""}
+                    </Text>
+                    <Text
+                      style={[
+                        c.pillText,
+                        {
+                          color:
+                            item.pregnancyStatus === "pregnant"
+                              ? "#9333ea"
+                              : "#9ca3af",
+                        },
+                      ]}
+                    >
+                      {item.pregnancyStatus === "pregnant"
+                        ? "Pregnant"
+                        : "Not Pregnant"}
+                    </Text>
+                  </View>
+                )}
+                <View
+                  style={[
+                    c.pill,
+                    {
+                      backgroundColor: item.milkActive ? "#ecfeff" : "#f9fafb",
+                      borderColor: item.milkActive ? "#a5f3fc" : "#e5e7eb",
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name="water-outline"
+                    size={12}
+                    color={item.milkActive ? "#0891b2" : "#9ca3af"}
+                  />
+                  <Text
+                    style={[
+                      c.pillText,
+                      { color: item.milkActive ? "#0891b2" : "#9ca3af" },
+                    ]}
+                  >
+                    {item.milkActive ? "Milk Active" : "Milk Off"}
+                  </Text>
+                </View>
+              </View>
+            </>
+          )}
+
+          {/* ── Show expiry info in expanded card if set ── */}
+          {item.isExpired && (
+            <View style={c.expiryBanner}>
+              <Ionicons name="warning" size={14} color="#dc2626" />
+              <View style={{ flex: 1, marginLeft: 8 }}>
+                <Text style={c.expiryBannerTitle}>Expired</Text>
+                {item.expiryDate ? (
+                  <Text style={c.expiryBannerSub}>Date: {item.expiryDate}</Text>
+                ) : null}
+                {item.expiryReason ? (
+                  <Text style={c.expiryBannerSub}>
+                    Reason: {item.expiryReason}
+                  </Text>
+                ) : null}
+              </View>
             </View>
           )}
-          <View style={[c.pill, { backgroundColor: item.milkActive ? "#ecfeff" : "#f9fafb", borderColor: item.milkActive ? "#a5f3fc" : "#e5e7eb" }]}>
-            <Ionicons name="water-outline" size={12} color={item.milkActive ? "#0891b2" : "#9ca3af"} />
-            <Text style={[c.pillText, { color: item.milkActive ? "#0891b2" : "#9ca3af" }]}>
-                  {item.milkActive ? "Milk Active" : "Milk Off"}
-                </Text>
-              </View>
+
+          <View style={c.actionRow}>
+            <TouchableOpacity
+              style={[c.actionBtn, c.editBtn]}
+              onPress={() => onEdit(item)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="create-outline" size={15} color="#2563eb" />
+              <Text style={[c.actionText, { color: "#2563eb" }]}>Edit</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[c.actionBtn, c.qrBtn]}
+              onPress={handleQR}
+              activeOpacity={0.8}
+              disabled={qrLoading}
+            >
+              {qrLoading ? (
+                <ActivityIndicator size="small" color="#FFBF55" />
+              ) : (
+                <>
+                  <Ionicons
+                    name={item.qrCode ? "qr-code" : "qr-code-outline"}
+                    size={15}
+                    color="#7c3aed"
+                  />
+                  <Text style={[c.actionText, { color: "#7c3aed" }]}>
+                    {item.qrCode ? "View QR" : "Gen QR"}
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[c.actionBtn, c.deleteBtn]}
+              onPress={() => onDelete(item)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="trash-outline" size={15} color="#dc2626" />
+              <Text style={[c.actionText, { color: "#dc2626" }]}>Delete</Text>
+            </TouchableOpacity>
           </View>
         </>
-          )}
-        <View style={c.actionRow}>
-  <TouchableOpacity style={[c.actionBtn, c.editBtn]} onPress={() => onEdit(item)} activeOpacity={0.8}>
-    <Ionicons name="create-outline" size={15} color="#2563eb" />
-    <Text style={[c.actionText, { color: "#2563eb" }]}>Edit</Text>
-    </TouchableOpacity>
-    <TouchableOpacity style={[c.actionBtn, c.qrBtn]} onPress={handleQR} activeOpacity={0.8} disabled={qrLoading}>
-      {qrLoading ? (
-        <ActivityIndicator size="small" color="#FFBF55" />
-      ) : (
-        <>
-                  <Ionicons name={item.qrCode ? "qr-code" : "qr-code-outline"} size={15} color="#7c3aed" />
-                  <Text style={[c.actionText, { color: "#7c3aed" }]}>
-        {item.qrCode ? "View QR" : "Gen QR"}
-      </Text>
-    </>
-              )
-}
-            </TouchableOpacity >
-  <TouchableOpacity style={[c.actionBtn, c.deleteBtn]} onPress={() => onDelete(item)} activeOpacity={0.8}>
-    <Ionicons name="trash-outline" size={15} color="#dc2626" />
-    <Text style={[c.actionText, { color: "#dc2626" }]}>Delete</Text>
-    </TouchableOpacity>
-  </View>
-        </>
       )}
-<QRModal visible={qrVisible} onClose={() => setQrVisible(false)} cow={item} />
-    </Animated.View >
+      <QRModal
+        visible={qrVisible}
+        onClose={() => setQrVisible(false)}
+        cow={item}
+      />
+    </Animated.View>
   );
 }
 
@@ -1570,7 +2038,9 @@ export default function CowsScreen() {
   const [cows, setCows] = useState<Cow[]>([]);
   const [screen, setScreen] = useState<Screen>("home");
   const [search, setSearch] = useState("");
-  const [filterType, setFilterType] = useState<"all" | "mature" | "newborn" | "bull">("all");
+  const [filterType, setFilterType] = useState<
+    "all" | "mature" | "newborn" | "bull"
+  >("all");
   const [addVisible, setAddVisible] = useState(false);
   const [editCow, setEditCow] = useState<Cow | null>(null);
   const [loading, setLoading] = useState(false);
@@ -1597,7 +2067,9 @@ export default function CowsScreen() {
         ...cow,
         pregnancyStatus:
           cow.tag in pregnancyMap
-            ? pregnancyMap[cow.tag] ? "pregnant" : "not_pregnant"
+            ? pregnancyMap[cow.tag]
+              ? "pregnant"
+              : "not_pregnant"
             : "unknown",
       }));
 
@@ -1666,16 +2138,15 @@ export default function CowsScreen() {
         c.breed.toLowerCase().includes(search.toLowerCase()),
     );
 
-  // ── KEY FIX: Use plain View instead of SafeAreaView
-  // paddingTop on the screen handles the status bar on Android
-  // On iOS the notch/status bar is handled natively by the OS
   return (
     <View style={[s.screen, { paddingTop: insets.top }]}>
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
 
       <View style={s.header}>
         <TouchableOpacity
-          onPress={screen === "home" ? () => router.back() : () => setScreen("home")}
+          onPress={
+            screen === "home" ? () => router.back() : () => setScreen("home")
+          }
           style={s.backBtn}
         >
           <Ionicons name="arrow-back" size={20} color="#8B6854" />
@@ -1701,7 +2172,10 @@ export default function CowsScreen() {
           { label: "Newborns", value: stats.newborns, color: "#8B6854" },
           { label: "Sold", value: stats.sold, color: "#FF9675" },
         ].map((st, i, arr) => (
-          <View key={i} style={[s.statItem, i < arr.length - 1 && s.statBorder]}>
+          <View
+            key={i}
+            style={[s.statItem, i < arr.length - 1 && s.statBorder]}
+          >
             <Text style={[s.statValue, { color: st.color }]}>{st.value}</Text>
             <Text style={s.statLabel}>{st.label}</Text>
           </View>
@@ -1713,119 +2187,179 @@ export default function CowsScreen() {
           <Text style={s.homeHeading}>What would you like to do?</Text>
           <Text style={s.homeSub}>Manage your cattle records easily</Text>
           <View style={s.btnGroup}>
-  <TouchableOpacity onPress={() => setAddVisible(true)} style={s.bigBtn} activeOpacity={0.85}>
-    <View style={[s.bigBtnIcon, { backgroundColor: "#f5f3ff" }]}>
-      <Image source={cowImg} style={{ width: 60, height: 60, resizeMode: "contain" }} />
+            <TouchableOpacity
+              onPress={() => setAddVisible(true)}
+              style={s.bigBtn}
+              activeOpacity={0.85}
+            >
+              <View style={[s.bigBtnIcon, { backgroundColor: "#f5f3ff" }]}>
+                <Image
+                  source={cowImg}
+                  style={{ width: 60, height: 60, resizeMode: "contain" }}
+                />
+              </View>
+              <Text style={s.bigBtnTitle}>Add Animal</Text>
+              <Text style={s.bigBtnSub}>Register cow, calf, or bull</Text>
+              <View style={[s.bigBtnArrow, { backgroundColor: "#BB6B3F" }]}>
+                <Ionicons name="add" size={18} color="#fff" />
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setScreen("list")}
+              style={s.bigBtn}
+              activeOpacity={0.85}
+            >
+              <View style={[s.bigBtnIcon, { backgroundColor: "#eff6ff" }]}>
+                <Text style={{ fontSize: 32 }}>📋</Text>
+              </View>
+              <Text style={s.bigBtnTitle}>See All Animals</Text>
+              <Text style={s.bigBtnSub}>
+                View, edit and manage all {cows.length} animals
+              </Text>
+              <View style={[s.bigBtnArrow, { backgroundColor: "#2563eb" }]}>
+                <Ionicons name="arrow-forward" size={18} color="#fff" />
+              </View>
+            </TouchableOpacity>
+          </View>
         </View>
-        <Text style={s.bigBtnTitle}>Add Animal</Text>
-        <Text style={s.bigBtnSub}>Register cow, calf, or bull</Text>
-        <View style={[s.bigBtnArrow, { backgroundColor: "#BB6B3F" }]}>
-          <Ionicons name="add" size={18} color="#fff" />
-        </View>
-      </TouchableOpacity>
-  <TouchableOpacity onPress={() => setScreen("list")} style={s.bigBtn} activeOpacity={0.85}>
-    <View style={[s.bigBtnIcon, { backgroundColor: "#eff6ff" }]}>
-      <Text style={{ fontSize: 32 }}>📋</Text>
-    </View>
-    <Text style={s.bigBtnTitle}>See All Animals</Text>
-    <Text style={s.bigBtnSub}>View, edit and manage all {cows.length} animals</Text>
-    <View style={[s.bigBtnArrow, { backgroundColor: "#2563eb" }]}>
-          <Ionicons name="arrow-forward" size={18} color="#fff" />
-        </View>
-      </TouchableOpacity>
-    </View>
-  </View>
       ) : (
-    <View style={{ flex: 1 }}>
-      <View style={s.searchWrap}>
-        <Ionicons name="search-outline" size={16} color="#C4A882" />
-        <TextInput
-          style={s.searchInput}
-          placeholder="Search name, tag, breed..."
-          placeholderTextColor="#D4B8A8"
-          value={search}
-          onChangeText={setSearch}
-        />
-        {search.length > 0 && (
-          <TouchableOpacity onPress={() => setSearch("")}>
-            <Ionicons name="close-circle" size={16} color="#C4A882" />
-          </TouchableOpacity>
-        )}
-      </View>
+        <View style={{ flex: 1 }}>
+          <View style={s.searchWrap}>
+            <Ionicons name="search-outline" size={16} color="#C4A882" />
+            <TextInput
+              style={s.searchInput}
+              placeholder="Search name, tag, breed..."
+              placeholderTextColor="#D4B8A8"
+              value={search}
+              onChangeText={setSearch}
+            />
+            {search.length > 0 && (
+              <TouchableOpacity onPress={() => setSearch("")}>
+                <Ionicons name="close-circle" size={16} color="#C4A882" />
+              </TouchableOpacity>
+            )}
+          </View>
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={s.filterRow}
-        contentContainerStyle={{ paddingHorizontal: 16, gap: 8, paddingBottom: 4 }}
-      >
-        {(["all", "mature", "newborn", "bull"] as const).map((t) => (
-          <TouchableOpacity
-            key={t}
-            onPress={() => setFilterType(t)}
-            style={[s.filterChip, filterType === t && s.filterChipActive]}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={s.filterRow}
+            contentContainerStyle={{
+              paddingHorizontal: 16,
+              gap: 8,
+              paddingBottom: 4,
+            }}
           >
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-              <Image
-                source={t === "bull" ? bullImg : t === "newborn" ? calfImg : cowImg}
-                style={{ width: 25, height: 25, resizeMode: "contain" }}
-              />
-  <Text style={[s.filterChipText, filterType === t && s.filterChipTextActive]}>
-    {t === "all" ? "All" : t === "mature" ? "Cows" : t === "newborn" ? "Calves" : "Bulls"}
-    </Text>
-  </View>
-              </TouchableOpacity >
-            ))
-}
-          </ScrollView >
+            {(["all", "mature", "newborn", "bull"] as const).map((t) => (
+              <TouchableOpacity
+                key={t}
+                onPress={() => setFilterType(t)}
+                style={[s.filterChip, filterType === t && s.filterChipActive]}
+              >
+                <View
+                  style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
+                >
+                  <Image
+                    source={
+                      t === "bull"
+                        ? bullImg
+                        : t === "newborn"
+                          ? calfImg
+                          : cowImg
+                    }
+                    style={{ width: 25, height: 25, resizeMode: "contain" }}
+                  />
+                  <Text
+                    style={[
+                      s.filterChipText,
+                      filterType === t && s.filterChipTextActive,
+                    ]}
+                  >
+                    {t === "all"
+                      ? "All"
+                      : t === "mature"
+                        ? "Cows"
+                        : t === "newborn"
+                          ? "Calves"
+                          : "Bulls"}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
 
-  { loading && cows.length === 0 ? (
-  <View style={s.loadingWrap}>
-    <ActivityIndicator size="large" color="#FFBF55" />
-    <Text style={s.loadingText}>Loading animals...</Text>
-  </View>
-) : error ? (
-  <View style={s.errorWrap}>
-    <Text style={{ fontSize: 40 }}>⚠️</Text>
-    <Text style={s.errorText}>{error}</Text>
-    <TouchableOpacity onPress={() => fetchCows(search || undefined)} style={s.retryBtn}>
-      <Ionicons name="refresh" size={14} color="#fff" />
-      <Text style={s.retryText}>Retry</Text>
-    </TouchableOpacity>
-  </View>
-) : (
-  <FlatList
-    data={filteredCows}
-    keyExtractor={(item) => item.id}
-    contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 100 }}
-    showsVerticalScrollIndicator={false}
-    refreshControl={
-      <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#16a34a" />
-    }
-    renderItem={({ item, index }) => (
-      <CowCard
-        item={item}
-        index={index}
-        onEdit={(cow) => setEditCow(cow)}
-        onDelete={handleDelete}
-        onUpdate={(updated) =>
-          setCows((prev) => prev.map((c) => (c.id === updated.id ? updated : c)))
-        }
-      />
-    )}
-    ListEmptyComponent={
-      <View style={s.empty}>
-        <Text style={{ fontSize: 48 }}>
-          {filterType === "bull" ? "🐂" : filterType === "newborn" ? "🐮" : "🐄"}
-        </Text>
-        <Text style={s.emptyText}>
-          No {filterType === "all" ? "animals" : filterType === "bull" ? "bulls" : filterType === "newborn" ? "calves" : "cows"} found
-        </Text>
-      </View>
-    }
-  />
-)}
-        </View >
+          {loading && cows.length === 0 ? (
+            <View style={s.loadingWrap}>
+              <ActivityIndicator size="large" color="#FFBF55" />
+              <Text style={s.loadingText}>Loading animals...</Text>
+            </View>
+          ) : error ? (
+            <View style={s.errorWrap}>
+              <Text style={{ fontSize: 40 }}>⚠️</Text>
+              <Text style={s.errorText}>{error}</Text>
+              <TouchableOpacity
+                onPress={() => fetchCows(search || undefined)}
+                style={s.retryBtn}
+              >
+                <Ionicons name="refresh" size={14} color="#fff" />
+                <Text style={s.retryText}>Retry</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <FlatList
+              data={filteredCows}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={{
+                paddingHorizontal: 16,
+                paddingTop: 8,
+                paddingBottom: 100,
+              }}
+              showsVerticalScrollIndicator={false}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={onRefresh}
+                  tintColor="#16a34a"
+                />
+              }
+              renderItem={({ item, index }) => (
+                <CowCard
+                  item={item}
+                  index={index}
+                  onEdit={(cow) => setEditCow(cow)}
+                  onDelete={handleDelete}
+                  onUpdate={(updated) =>
+                    setCows((prev) =>
+                      prev.map((c) => (c.id === updated.id ? updated : c)),
+                    )
+                  }
+                />
+              )}
+              ListEmptyComponent={
+                <View style={s.empty}>
+                  <Text style={{ fontSize: 48 }}>
+                    {filterType === "bull"
+                      ? "🐂"
+                      : filterType === "newborn"
+                        ? "🐮"
+                        : "🐄"}
+                  </Text>
+                  <Text style={s.emptyText}>
+                    No{" "}
+                    {filterType === "all"
+                      ? "animals"
+                      : filterType === "bull"
+                        ? "bulls"
+                        : filterType === "newborn"
+                          ? "calves"
+                          : "cows"}{" "}
+                    found
+                  </Text>
+                </View>
+              }
+            />
+          )}
+        </View>
       )}
 
       <AddCowModal
@@ -1839,18 +2373,19 @@ export default function CowsScreen() {
         visible={!!editCow}
         onClose={() => setEditCow(null)}
         onSaved={(updated) =>
-          setCows((prev) => prev.map((c) => (c.id === updated.id ? updated : c)))
+          setCows((prev) =>
+            prev.map((c) => (c.id === updated.id ? updated : c)),
+          )
         }
         cows={cows}
       />
-    </View >
+    </View>
   );
 }
 
 // Styles
 
 const s = StyleSheet.create({
-
   screen: {
     flex: 1,
     backgroundColor: "#fff",
@@ -1954,7 +2489,12 @@ const s = StyleSheet.create({
     letterSpacing: -0.3,
     marginBottom: 4,
   },
-  bigBtnSub: { fontSize: 13, color: "#9ca3af", fontWeight: "500", marginBottom: 16 },
+  bigBtnSub: {
+    fontSize: 13,
+    color: "#9ca3af",
+    fontWeight: "500",
+    marginBottom: 16,
+  },
   bigBtnArrow: {
     width: 36,
     height: 36,
@@ -1991,9 +2531,19 @@ const s = StyleSheet.create({
   searchInput: { flex: 1, color: "#8B6854", fontSize: 14 },
   empty: { alignItems: "center", paddingTop: 60, gap: 10 },
   emptyText: { fontSize: 15, color: "#9ca3af", fontWeight: "600" },
-  loadingWrap: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
+  loadingWrap: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+  },
   loadingText: { fontSize: 14, color: "#9ca3af", fontWeight: "500" },
-  errorWrap: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
+  errorWrap: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+  },
   errorText: {
     fontSize: 14,
     color: "#BB6B3F",
@@ -2047,8 +2597,18 @@ const c = StyleSheet.create({
     flexWrap: "wrap",
     gap: 4,
   },
-  name: { fontSize: 15, fontWeight: "700", color: "#111827", letterSpacing: -0.2 },
-  badgeGroup: { flexDirection: "row", alignItems: "center", gap: 4, flexShrink: 1 },
+  name: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#111827",
+    letterSpacing: -0.2,
+  },
+  badgeGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    flexShrink: 1,
+  },
   tag: { fontSize: 12, color: "#9ca3af", fontWeight: "500" },
   miniDaysBadge: {
     flexDirection: "row",
@@ -2084,8 +2644,18 @@ const c = StyleSheet.create({
     borderColor: "#F5EDE5",
   },
   bullStat: { flex: 1, alignItems: "center" },
-  bullStatVal: { fontSize: 16, fontWeight: "800", color: "#7c3aed", letterSpacing: -0.3 },
-  bullStatLabel: { fontSize: 10, color: "#a78bfa", fontWeight: "600", marginTop: 2 },
+  bullStatVal: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#7c3aed",
+    letterSpacing: -0.3,
+  },
+  bullStatLabel: {
+    fontSize: 10,
+    color: "#a78bfa",
+    fontWeight: "600",
+    marginTop: 2,
+  },
   bullStatDivider: { width: 1, backgroundColor: "#ddd6fe" },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 },
   detailItem: {
@@ -2132,6 +2702,25 @@ const c = StyleSheet.create({
   deleteBtn: { backgroundColor: "#FFF5F2", borderColor: "#FFD4C4" },
   qrBtn: { backgroundColor: "#F5EFEA", borderColor: "#D4B8A8" },
   actionText: { fontSize: 13, fontWeight: "700" },
+  // ── NEW: expiry banner shown in expanded card ──
+  expiryBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    backgroundColor: "#fff1f2",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#fecdd3",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 12,
+  },
+  expiryBannerTitle: { fontSize: 12, fontWeight: "700", color: "#dc2626" },
+  expiryBannerSub: {
+    fontSize: 11,
+    color: "#dc2626",
+    opacity: 0.8,
+    marginTop: 2,
+  },
 });
 
 const ad = StyleSheet.create({
@@ -2332,8 +2921,18 @@ const m = StyleSheet.create({
     justifyContent: "space-between",
   },
   typeEmoji: { fontSize: 36, marginBottom: 10 },
-  typeTitle: { fontSize: 15, fontWeight: "800", letterSpacing: -0.2, marginBottom: 3 },
-  typeSub: { fontSize: 12, color: "#9ca3af", fontWeight: "500", marginBottom: 14 },
+  typeTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    letterSpacing: -0.2,
+    marginBottom: 3,
+  },
+  typeSub: {
+    fontSize: 12,
+    color: "#9ca3af",
+    fontWeight: "500",
+    marginBottom: 14,
+  },
   typePill: {
     flexDirection: "row",
     alignItems: "center",
@@ -2343,7 +2942,12 @@ const m = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: 20,
   },
-  typePillText: { fontSize: 10, fontWeight: "800", color: "#fff", letterSpacing: 0.5 },
+  typePillText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#fff",
+    letterSpacing: 0.5,
+  },
   bullCard: { marginBottom: 8 },
   bullInner: {
     flexDirection: "row",
@@ -2354,7 +2958,12 @@ const m = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: "#F5EDE5",
   },
-  bullTitle: { fontSize: 16, fontWeight: "800", color: "#7c3aed", marginBottom: 3 },
+  bullTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#7c3aed",
+    marginBottom: 3,
+  },
   bullSub: { fontSize: 12, color: "#a78bfa", fontWeight: "500" },
   toggleCard: {
     backgroundColor: "#FFF8F0",
@@ -2377,7 +2986,12 @@ const m = StyleSheet.create({
   },
   submitBtnTerra: { backgroundColor: "#C4A882" },
   submitBtnBlue: { backgroundColor: "#2563eb" },
-  submitText: { fontSize: 15, fontWeight: "800", color: "#fff", letterSpacing: -0.2 },
+  submitText: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#fff",
+    letterSpacing: -0.2,
+  },
 });
 
 const qr = StyleSheet.create({
@@ -2405,7 +3019,12 @@ const qr = StyleSheet.create({
     width: "100%",
     marginBottom: 16,
   },
-  name: { fontSize: 16, fontWeight: "800", color: "#111827", letterSpacing: -0.2 },
+  name: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#111827",
+    letterSpacing: -0.2,
+  },
   tag: { fontSize: 11, color: "#9ca3af", fontWeight: "600", marginTop: 1 },
   closeBtn: {
     width: 28,
@@ -2433,7 +3052,13 @@ const qr = StyleSheet.create({
     width: "100%",
     height: "100%",
   },
-  hint: { fontSize: 11, color: "#9ca3af", fontWeight: "500", marginTop: 14, marginBottom: 4 },
+  hint: {
+    fontSize: 11,
+    color: "#9ca3af",
+    fontWeight: "500",
+    marginTop: 14,
+    marginBottom: 4,
+  },
   doneBtn: {
     marginTop: 14,
     backgroundColor: "#8B6854",
@@ -2441,7 +3066,12 @@ const qr = StyleSheet.create({
     paddingHorizontal: 32,
     paddingVertical: 11,
   },
-  doneBtnText: { color: "#fff", fontWeight: "700", fontSize: 13, letterSpacing: 0.2 },
+  doneBtnText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 13,
+    letterSpacing: 0.2,
+  },
 });
 
 const bd = StyleSheet.create({
@@ -2474,7 +3104,12 @@ const bd = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#F5EDE5",
   },
-  title: { fontSize: 16, fontWeight: "800", color: "#111827", letterSpacing: -0.3 },
+  title: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#111827",
+    letterSpacing: -0.3,
+  },
   closeBtn: {
     width: 28,
     height: 28,
@@ -2516,7 +3151,12 @@ const bd = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  breedName: { fontSize: 14, fontWeight: "700", color: "#111827", letterSpacing: -0.2 },
+  breedName: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#111827",
+    letterSpacing: -0.2,
+  },
   origin: { fontSize: 11, color: "#9ca3af", fontWeight: "500", marginTop: 2 },
   customRow: {
     flexDirection: "row",
@@ -2530,5 +3170,55 @@ const bd = StyleSheet.create({
     borderColor: "#8B6854",
   },
   customLabel: { fontSize: 14, fontWeight: "700", color: "#16a34a" },
-  customSub: { fontSize: 11, color: "#86efac", fontWeight: "500", marginTop: 1 },
+  customSub: {
+    fontSize: 11,
+    color: "#86efac",
+    fontWeight: "500",
+    marginTop: 1,
+  },
+});
+
+// ── NEW: Expiry section styles ──
+const ex = StyleSheet.create({
+  wrap: {
+    backgroundColor: "#fff1f2",
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: "#fecdd3",
+    overflow: "hidden",
+    marginBottom: 4,
+    marginTop: 8,
+  },
+  toggleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  toggleLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  iconWrap: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    backgroundColor: "#fecdd3",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  toggleLabel: { fontSize: 14, fontWeight: "700", color: "#dc2626" },
+  toggleSub: { fontSize: 11, fontWeight: "500", marginTop: 2 },
+  fields: {
+    paddingHorizontal: 14,
+    paddingBottom: 14,
+    backgroundColor: "#fff5f5",
+  },
+  divider: {
+    height: 1,
+    backgroundColor: "#fecdd3",
+    marginBottom: 14,
+  },
 });
