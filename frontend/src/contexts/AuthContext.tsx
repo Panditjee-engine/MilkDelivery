@@ -1,6 +1,8 @@
+// src/contexts/AuthContext.tsx
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from '../services/api';
+import { notificationService } from '../services/notificationService'; // ← NEW
 
 interface User {
   id: string;
@@ -35,7 +37,7 @@ interface AuthContextType {
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   workerLogin: (email: string, password: string) => Promise<void>;
-  workerLogout: () => Promise<void>;  // ← add this
+  workerLogout: () => Promise<void>;
   register: (data: any) => Promise<void>;
   logout: () => Promise<void>;
   updateUser: (data: Partial<User>) => void;
@@ -50,7 +52,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [workerToken, setWorkerToken] = useState<string | null>(null);
   const [loading,     setLoading]     = useState(true);
 
-  // Derived flag — true when a worker session is active
   const isWorker = worker !== null;
 
   useEffect(() => {
@@ -61,7 +62,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await api.init();
 
-      // ── Check regular user session ──────────────────────────────
       const storedToken = await AsyncStorage.getItem('access_token');
       if (storedToken) {
         setToken(storedToken);
@@ -73,7 +73,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(null);
       }
 
-      // ── Check worker session ────────────────────────────────────
       const storedWorkerToken = await AsyncStorage.getItem('worker_token');
       const storedWorkerData  = await AsyncStorage.getItem('worker_data');
       if (storedWorkerToken && storedWorkerData) {
@@ -103,17 +102,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(response.user);
   };
 
- const workerLogin = async (identifier: string, password: string) => {
-  const data = await api.workerLogin(identifier, password);
-  setWorkerToken(data.access_token);
-  setWorker(data.worker);
-};
+  const workerLogin = async (identifier: string, password: string) => {
+    const data = await api.workerLogin(identifier, password);
+    setWorkerToken(data.access_token);
+    setWorker(data.worker);
+  };
 
-const workerLogout = async () => {
-  await api.workerLogout();
-  setWorkerToken(null);
-  setWorker(null);
-};
+  const workerLogout = async () => {
+    await api.workerLogout();
+    setWorkerToken(null);
+    setWorker(null);
+  };
 
   const register = async (data: any) => {
     const response = await api.register(data);
@@ -125,7 +124,8 @@ const workerLogout = async () => {
   const logout = async () => {
     console.log('LOGOUT FUNCTION CALLED');
 
-    // Clear both sessions on logout
+    notificationService.stopPolling(); // ← NEW: logout pe polling band karo
+
     await api.logout();
     await AsyncStorage.multiRemove(['access_token', 'worker_token', 'worker_data']);
 
