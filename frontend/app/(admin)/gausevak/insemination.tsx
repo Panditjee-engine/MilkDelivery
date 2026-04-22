@@ -1068,14 +1068,14 @@ function InseminationCard({
               color="#16a34a"
             />
           )}
-          <Text style={c.section}>❤️ Pregnancy Status</Text>
+          <Text style={c.section}>Pregnancy Status</Text>
           <DetailRow
             icon="heart"
             label="Status"
-            value={item.pregnancyStatus ? "Pregnant ✓" : "Not Confirmed"}
+            value={item.pregnancyStatus ? "Pregnant " : "Not Confirmed"}
             color={item.pregnancyStatus ? "#e11d48" : "#9ca3af"}
           />
-          <Text style={c.section}>🩺 PD Details</Text>
+          <Text style={c.section}> PD Details</Text>
           <DetailRow
             icon="checkmark-circle-outline"
             label="PD Done"
@@ -1098,7 +1098,7 @@ function InseminationCard({
               />
             </>
           )}
-          <Text style={c.section}>🍼 Calving</Text>
+          <Text style={c.section}> Calving</Text>
           <DetailRow
             icon="calendar-outline"
             label="Calving Date"

@@ -31,7 +31,7 @@ import { Colors } from "../../src/constants/colors";
 import Button from "../../src/components/Button";
 import LoadingScreen from "../../src/components/LoadingScreen";
 
-// ─── Category config ──────────────────────────────────────────────────────────
+// ─── Category config 
 const CATEGORY_THEMES: Record<
   string,
   { bg: string; accent: string; icon: string }
@@ -47,7 +47,7 @@ const CATEGORY_THEMES: Record<
 const getCategoryTheme = (cat: string) =>
   CATEGORY_THEMES[cat?.toLowerCase()] || CATEGORY_THEMES.other;
 
-// ─── Delivery pattern config ──────────────────────────────────────────────────
+// ─── Delivery pattern config 
 const patterns = [
   {
     value: "daily",
@@ -84,7 +84,7 @@ const weekDays = [
   { value: 6, label: "S" },
 ];
 
-// ─── Status helpers ───────────────────────────────────────────────────────────
+// ─── Status helpers 
 const statusConfig = (status: string) => {
   switch (status) {
     case "delivered":
@@ -122,7 +122,7 @@ const statusConfig = (status: string) => {
   }
 };
 
-// ─── Animated brand logo (Zomato / Paytm style) ───────────────────────────────
+// ─── Animated brand logo (Zomato / Paytm style) 
 function BrandHeader() {
   const leafRotate = useRef(new Animated.Value(0)).current;
   const leafScale = useRef(new Animated.Value(0.7)).current;
@@ -264,7 +264,7 @@ const brandStyles = StyleSheet.create({
   },
 });
 
-// ─── Product row item ─────────────────────────────────────────────────────────
+// ─── Product row item 
 function ProductRow({
   product,
   index,
@@ -373,7 +373,7 @@ const productRowStyles = StyleSheet.create({
   },
 });
 
-// ─── Main Screen ──────────────────────────────────────────────────────────────
+// ─── Main Screen 
 export default function CustomerHome() {
   const { user } = useAuth();
   const router = useRouter();
@@ -460,29 +460,30 @@ useEffect(() => {
       prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day],
     );
 
-  const handleSubscribe = async () => {
-    if (pattern === "custom" && customDays.length === 0) return;
-    setSubmitting(true);
-    try {
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      await api.createSubscription({
-        product_id: selectedProduct.id,
-        quantity,
-        pattern,
-        custom_days: pattern === "custom" ? customDays : null,
-        start_date: tomorrow.toISOString().split("T")[0],
-        end_date:
-          pattern === "buy_once" ? tomorrow.toISOString().split("T")[0] : null,
-      });
-      setModalVisible(false);
-    } catch (e: any) {
-      // handle via toast in parent or silent
-    } finally {
-      setSubmitting(false);
-    }
-  };
+const handleSubscribe = async () => {
+  if (pattern === "custom" && customDays.length === 0) return;
+  setSubmitting(true);
+  try {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = tomorrow.toISOString().split("T")[0];
 
+    await api.createSubscription({
+      product_id: selectedProduct.id,
+      quantity,
+      pattern,
+      custom_days: pattern === "custom" ? customDays : null,
+      start_date: tomorrowStr,
+      end_date: pattern === "buy_once" ? tomorrowStr : null,
+      amount: selectedProduct.price * quantity,  // ← ADD THIS
+    });
+    setModalVisible(false);
+  } catch (e: any) {
+    // handle via toast
+  } finally {
+    setSubmitting(false);
+  }
+};
   if (loading) return <LoadingScreen />;
 
   const formatDate = (d: string) =>
@@ -858,7 +859,7 @@ useEffect(() => {
   );
 }
 
-// ─── Paytm-style Brand Footer ─────────────────────────────────────────────────
+// ─── Paytm-style Brand Footer 
 function BrandFooter() {
   const countAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -1260,7 +1261,7 @@ const footerStyles = StyleSheet.create({
   },
 });
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
+// ─── Styles 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F4F4F6" },
 

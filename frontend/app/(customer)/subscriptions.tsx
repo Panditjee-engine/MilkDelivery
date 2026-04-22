@@ -29,7 +29,7 @@ if (
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-// ─── Helpers ───────────────────────────────────────────────────────────────────
+// ─── Helpers 
 const formatTime = (iso: string) => {
   if (!iso) return "";
   try {
@@ -109,7 +109,7 @@ const STATUS_META: Record<
 const getMeta = (status: string) =>
   STATUS_META[status] || STATUS_META["unassigned"];
 
-// ─── Status Summary Bar ────────────────────────────────────────────────────────
+// ─── Status Summary Bar 
 function StatusSummaryBar({ subscriptions }: { subscriptions: any[] }) {
   const counts: Record<string, number> = {};
   subscriptions.forEach((s) => {
@@ -188,7 +188,7 @@ const sb = StyleSheet.create({
   pillLabel: { fontSize: 11, fontWeight: "600" },
 });
 
-// ─── Progress Steps ────────────────────────────────────────────────────────────
+// ─── Progress Steps 
 const STEPS = ["Placed", "Assigned", "On way", "Delivered"];
 
 function DeliveryProgress({ status }: { status: string }) {
@@ -269,7 +269,7 @@ const pg = StyleSheet.create({
   line: { flex: 1, height: 2, marginTop: 9, borderRadius: 2 },
 });
 
-// ─── Confirm Modal ─────────────────────────────────────────────────────────────
+// ─── Confirm Modal 
 function ConfirmModal({
   visible,
   onConfirm,
@@ -361,7 +361,7 @@ function ConfirmModal({
   );
 }
 
-// ─── Success Modal ─────────────────────────────────────────────────────────────
+// ─── Success Modal 
 function SuccessModal({
   visible,
   onClose,
@@ -583,7 +583,7 @@ const ms = StyleSheet.create({
   btnPrimaryText: { fontSize: 16, fontWeight: "800", color: "#fff" },
 });
 
-// ─── Floating OTP Pill ─────────────────────────────────────────────────────────
+// ─── Floating OTP Pill 
 // Tapping it animates "flying down" then scrolls to the large OTP block
 function FloatingOTPPill({
   otp,
@@ -682,7 +682,7 @@ const fp = StyleSheet.create({
   value: { fontSize: 18, fontWeight: "900", letterSpacing: 3 },
 });
 
-// ─── OTP Block with entrance animation ────────────────────────────────────────
+// ─── OTP Block with entrance animation 
 function OTPBlockAnimated({ otp, color }: { otp: string; color: string }) {
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
@@ -761,7 +761,7 @@ const ob = StyleSheet.create({
   hint: { fontSize: 11, color: "#9ca3af", marginTop: 6 },
 });
 
-// ─── Subscription Card ─────────────────────────────────────────────────────────
+// ─── Subscription Card 
 function SubscriptionCard({
   sub,
   onCancelPress,
@@ -810,7 +810,7 @@ function SubscriptionCard({
   const isCancelled = sub.status === "cancelled";
   const meta = getMeta(sub.status);
 
-  // ── Admin name — now populated by backend fix ───────────────────────────────
+  // ── Admin name — now populated by backend fix 
   const adminName = sub.admin_name || `Store ${sub.admin_id?.slice(-4) || ""}`;
 
   const chevronRotate = chevronAnim.interpolate({
@@ -1159,7 +1159,7 @@ const cd = StyleSheet.create({
   },
 });
 
-// ─── Card entrance animation wrapper ──────────────────────────────────────────
+// ─── Card entrance animation wrapper 
 function CardEntrance({
   children,
   delay,
@@ -1196,7 +1196,7 @@ function CardEntrance({
   );
 }
 
-// ─── Main Screen ───────────────────────────────────────────────────────────────
+// ─── Main Screen 
 export default function SubscriptionsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);

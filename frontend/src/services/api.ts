@@ -224,6 +224,7 @@ async createSubscription(data: {
     return this.request<any[]>("/delivery/available");
   }
 
+<<<<<<< HEAD
   async getMyOrders() {
     return this.request<any[]>("/delivery/my-orders");
   }
@@ -239,6 +240,29 @@ async createSubscription(data: {
       method: "POST",
     });
   }
+=======
+//  CORRECT — admin cancel hits the admin endpoint
+async cancelOrder(orderId: string) {
+  return this.request<any>(`/admin/orders/${orderId}/cancel`, {
+    method: "PATCH",
+  });
+}
+>>>>>>> dd60f8503fb4ba63f0f2ca0e7658ba440eaad999
+
+// Keep reject separate for the rider app, using worker_token
+async rejectOrder(orderId: string) {
+  const token = await AsyncStorage.getItem("worker_token"); // ← rider token
+  const response = await fetch(
+    `${API_BASE}/api/delivery/orders/${orderId}/reject`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    }
+  );
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.detail || "Reject failed");
+  return data;
+}
 
   async updateOrderStatus(orderId: string, status: string) {
     return this.request<any>("/delivery/status-update", {
@@ -984,6 +1008,7 @@ async createSubscription(data: {
     });
   }
 
+<<<<<<< HEAD
   // ─────────────────────────────────────────────────────────
   // ADD THESE TO api.ts  (inside the ApiService class)
   // ─────────────────────────────────────────────────────────
@@ -1001,6 +1026,11 @@ async createSubscription(data: {
   }
 
   async saveBankAccount(data: {
+=======
+// ── Bank Account 
+async getBankAccount() {
+  return this.request<{
+>>>>>>> dd60f8503fb4ba63f0f2ca0e7658ba440eaad999
     accountHolderName: string;
     accountNumber: string;
     ifscCode: string;
@@ -1015,6 +1045,7 @@ async createSubscription(data: {
 
   // ── Withdrawal ───────────────────────────────────────────
 
+<<<<<<< HEAD
   async requestWithdrawal(amount: number) {
     return this.request<{
       message: string;
@@ -1026,6 +1057,9 @@ async createSubscription(data: {
       body: JSON.stringify({ amount }),
     });
   }
+=======
+// ── Withdrawal 
+>>>>>>> dd60f8503fb4ba63f0f2ca0e7658ba440eaad999
 
   async getWithdrawalHistory() {
     return this.request<Array<{
@@ -1059,12 +1093,85 @@ async createSubscription(data: {
     body: JSON.stringify({ reason }),
   });
 }
+<<<<<<< HEAD
 
 async getZoneRequestStatus() {
   return this.request<any>("/delivery/zone-request-status");
 }
   //------------------------------------------------------------//
+=======
+>>>>>>> dd60f8503fb4ba63f0f2ca0e7658ba440eaad999
 
+async getNotes(search?: string) {
+  const params = new URLSearchParams();
+  if (search) params.append("search", search);
+  const query = params.toString() ? `?${params.toString()}` : "";
+  return this.request<Array<{
+    id: string;
+    admin_id: string;
+    title: string;
+    content: string;
+    color: string;
+    is_pinned: boolean;
+    created_at: string;
+    updated_at: string;
+  }>>(`/notes/${query}`);
+}
+
+async createNote(data: {
+  title: string;
+  content: string;
+  color?: string;
+}) {
+  return this.request<{
+    id: string;
+    admin_id: string;
+    title: string;
+    content: string;
+    color: string;
+    is_pinned: boolean;
+    created_at: string;
+    updated_at: string;
+  }>("/notes/", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+async updateNote(id: string, data: Partial<{
+  title: string;
+  content: string;
+  color: string;
+  is_pinned: boolean;
+}>) {
+  return this.request<{
+    id: string;
+    admin_id: string;
+    title: string;
+    content: string;
+    color: string;
+    is_pinned: boolean;
+    created_at: string;
+    updated_at: string;
+  }>(`/notes/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+async deleteNote(id: string) {
+  return this.request<{ message: string; id: string }>(`/notes/${id}`, {
+    method: "DELETE",
+  });
+}
+
+async toggleNotePin(id: string) {
+  return this.request<{ id: string; is_pinned: boolean }>(`/notes/${id}/pin`, {
+    method: "PATCH",
+  });
+}
+
+// Logout
   logout = async () => {
     this.setToken(null);
     await AsyncStorage.removeItem('worker_token');

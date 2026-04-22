@@ -91,6 +91,15 @@ const MENU = [
     gradient: ["#1a2e1a", "#2d5a27"] as const,
     accent: "#a3d977",
   },
+  {
+    id: "notes",
+    title: "Notes",
+    subtitle: "Quick reminders",
+    icon: "pencil", // ← unique icon
+    route: "/(admin)/gausevak/notes",
+    gradient: ["#3d2b1f", "#7c4a2d"] as const, // warm brown matching your palette
+    accent: "#FF9675", // ← your brand primary colour
+  },
 ];
 
 interface WeatherData {
@@ -100,7 +109,7 @@ interface WeatherData {
   condition: string;
 }
 
-// ── Weather hook: fetches from wttr.in, retries once ──────────────────────
+// Weather hook: fetches from wttr.in, retries once
 function useWeather(): WeatherData | null {
   const [weather, setWeather] = useState<WeatherData | null>(null);
 
@@ -111,8 +120,6 @@ function useWeather(): WeatherData | null {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 15000);
       try {
-        // wttr.in plain-text format: no API key, very fast
-        // %t = temp, %h = humidity, %w = wind, %C = condition
         const url = "https://wttr.in/Ghaziabad?format=%t|%h|%w|%C";
         const res = await fetch(url, {
           signal: controller.signal,
@@ -142,13 +149,15 @@ function useWeather(): WeatherData | null {
     };
 
     tryFetch(1);
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return weather;
 }
 
-// ── Inline weather row inside the header (no card wrapper) ─────────────────
+// ── Inline weather row inside the header (no card wrapper)
 function InlineWeather({ weather }: { weather: WeatherData | null }) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -350,13 +359,13 @@ function Header() {
       >
         <View style={styles.headerGlow} />
 
-        {/* ── Top badge ─────────────────────────────────────────────── */}
+        {/* ── Top badge */}
         <View style={styles.badge}>
           <View style={styles.badgeDot} />
           <Text style={styles.badgeText}>LIVESTOCK MANAGEMENT</Text>
         </View>
 
-        {/* ── Logo row with weather inline below title ───────────────── */}
+        {/* ── Logo row with weather inline below title */}
         <View style={styles.headerRow}>
           <View style={styles.logoRing}>
             <Image
@@ -392,7 +401,7 @@ function Header() {
           </View>
         </View>
 
-        {/* ── Cow stats ─────────────────────────────────────────────── */}
+        {/* ── Cow stats  */}
         <View style={styles.statsRow}>
           {loading ? (
             <View style={styles.loadingContainer}>
@@ -447,7 +456,7 @@ export default function GausevakScreen() {
 const IS_IOS = Platform.OS === "ios";
 const STATUS_BAR_HEIGHT = IS_IOS ? 0 : (StatusBar.currentHeight ?? 0);
 
-// ── Inline weather styles (no card/box) ───────────────────────────────────
+// ── Inline weather styles (no card/box)
 const inlineStyles = StyleSheet.create({
   row: {
     flexDirection: "row",
@@ -487,7 +496,7 @@ const inlineStyles = StyleSheet.create({
   },
 });
 
-// ── Main styles ────────────────────────────────────────────────────────────
+// ── Main styles
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#FFF8EF" },
   listContent: { paddingHorizontal: 12, paddingTop: 10 },

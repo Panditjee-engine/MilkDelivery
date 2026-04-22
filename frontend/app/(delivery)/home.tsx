@@ -105,7 +105,7 @@ export default function DeliveryHome() {
         <View style={styles.header}>
           <View>
             <Text style={styles.greeting}>{getGreeting()},</Text>
-            <Text style={styles.userName}>{user?.name || "Partner"} 👋</Text>
+            <Text style={styles.userName}>{user?.name || "Partner"} </Text>
             <Text style={styles.date}>{today}</Text>
           </View>
           <View style={styles.zoneBadge}>

@@ -19,7 +19,7 @@ import { api } from "../../src/services/api";
 import { Colors } from "../../src/constants/colors";
 import LoadingScreen from "../../src/components/LoadingScreen";
 
-// ─── Pattern config ────────────────────────────────────────────────────────────
+// ─── Pattern config 
 const PATTERN_CONFIG: Record<
   string,
   { label: string; color: string; bg: string; icon: string }
@@ -50,7 +50,7 @@ const PATTERN_CONFIG: Record<
   },
 };
 
-// ─── Status config ─────────────────────────────────────────────────────────────
+// ─── Status config 
 const STATUS_CONFIG: Record<
   string,
   { label: string; color: string; bg: string }
@@ -63,7 +63,7 @@ const STATUS_CONFIG: Record<
   delivered: { label: "Delivered", color: "#22c55e", bg: "#F0FDF4" },
 };
 
-// ─── OTP Verified Toast ────────────────────────────────────────────────────────
+// ─── OTP Verified Toast 
 function OtpSuccessToast({
   visible,
   message,
@@ -135,7 +135,7 @@ const toast = StyleSheet.create({
   text: { flex: 1, fontSize: 13.5, fontWeight: "700", color: "#1C1C1C" },
 });
 
-// ─── Pattern Badge ─────────────────────────────────────────────────────────────
+// ─── Pattern Badge 
 function PatternBadge({ pattern }: { pattern?: string }) {
   if (!pattern) return null;
   const cfg = PATTERN_CONFIG[pattern];
@@ -160,7 +160,7 @@ const pb = StyleSheet.create({
   text: { fontSize: 9, fontWeight: "800", letterSpacing: 0.3 },
 });
 
-// ─── OTP Modal ─────────────────────────────────────────────────────────────────
+// ─── OTP Modal 
 function OtpModal({
   visible,
   type,
@@ -389,7 +389,7 @@ const otp = StyleSheet.create({
   cancelText: { fontSize: 14, fontWeight: "600", color: "#aaa" },
 });
 
-// ─── Order Card ─────────────────────────────────────────────────────────────────
+// ─── Order Card
 function OrderCard({
   order,
   onAccept,
@@ -712,7 +712,7 @@ const oc = StyleSheet.create({
   completedAmount: { fontSize: 18, fontWeight: "800", color: "#1A1A1A" },
 });
 
-// ─── Section Header ────────────────────────────────────────────────────────────
+// ─── Section Header 
 function SectionHeader({
   label,
   count,
@@ -754,7 +754,7 @@ const sh = StyleSheet.create({
   badgeText: { fontSize: 11, fontWeight: "700" },
 });
 
-// ─── Main Screen ───────────────────────────────────────────────────────────────
+// ─── Main Screen 
 export default function DeliveriesScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -849,7 +849,7 @@ export default function DeliveriesScreen() {
       if (enteredOtp === otpOrder.delivery_otp) {
         setOtpModal(false);
         await updateStatus(otpOrder.id || otpOrder._id, "delivered");
-        showToast("Delivery completed! ✅");
+        showToast("Delivery completed! ");
         Vibration.vibrate([0, 60, 40, 80]);
       } else {
         Alert.alert("Wrong OTP", "The customer OTP you entered is incorrect.");

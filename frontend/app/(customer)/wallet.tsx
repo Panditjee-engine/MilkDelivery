@@ -23,7 +23,7 @@ const quickAmounts = [100, 200, 500, 1000];
 const MIN_AMOUNT = 100;
 const MAX_AMOUNT = 99999;
 
-// ─── Limit Toast ──────────────────────────────────────────────────────────────
+// ─── Limit Toast 
 type ToastType = "min" | "max" | null;
 
 function LimitToast({ type }: { type: ToastType }) {
@@ -91,7 +91,7 @@ function LimitToast({ type }: { type: ToastType }) {
   );
 }
 
-// ─── Particle ─────────────────────────────────────────────────────────────────
+// ─── Particle 
 const PARTICLE_COLORS = [
   "#22c55e",
   "#4ade80",
@@ -150,7 +150,7 @@ function Particle({ delay, color }: { delay: number; color: string }) {
   );
 }
 
-// ─── Success Modal ─────────────────────────────────────────────────────────────
+// ─── Success Modal 
 function SuccessModal({
   visible,
   amount,
@@ -465,7 +465,7 @@ const ss = StyleSheet.create({
   },
 });
 
-// ─── Main Screen ──────────────────────────────────────────────────────────────
+// ─── Main Screen 
 export default function WalletScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -871,7 +871,7 @@ export default function WalletScreen() {
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
+// ─── Styles 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F8F7F4" },
 
