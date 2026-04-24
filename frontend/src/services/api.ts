@@ -916,6 +916,47 @@ async workerGetTodayMilk() {
   return data;
 }
 
+async workerGetTodayExtraTasks() {
+  const token = await AsyncStorage.getItem('worker_token');
+  const response = await fetch(`${API_BASE}/api/worker/extra-tasks/today`, {
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.detail || 'Failed to fetch extra tasks');
+  return data;
+}
+
+async workerAddExtraTask(data: {
+  task_type: string;
+  custom_label?: string;
+  description?: string;
+  date: string;
+}) {
+  const token = await AsyncStorage.getItem('worker_token');
+  const response = await fetch(`${API_BASE}/api/worker/extra-tasks`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.detail || 'Failed to save extra task');
+  return result;
+}
+
+async workerDeleteExtraTask(taskId: string) {
+  const token = await AsyncStorage.getItem('worker_token');
+  const response = await fetch(`${API_BASE}/api/worker/extra-tasks/${taskId}`, {
+    method: 'DELETE',
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.detail || 'Failed to delete extra task');
+  return result;
+}
+
 async workerAddMilk(data: {
   cow_id: string;
   cow_name: string;
@@ -1140,6 +1181,7 @@ async toggleNotePin(id: string) {
     method: "PATCH",
   });
 }
+
 
 // Logout
   logout = async () => {

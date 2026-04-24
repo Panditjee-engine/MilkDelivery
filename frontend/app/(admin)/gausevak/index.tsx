@@ -390,14 +390,14 @@ function Header() {
             >
               <Ionicons name="qr-code-outline" size={20} color="#7ca9d4" />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.notifBtn}>
+            {/* <TouchableOpacity style={styles.notifBtn}> Notification icon 
               <Ionicons
                 name="notifications-outline"
                 size={20}
                 color="#7ca9d4"
               />
               <View style={styles.notifDot} />
-            </TouchableOpacity>
+            </TouchableOpacity> */}
           </View>
         </View>
 
