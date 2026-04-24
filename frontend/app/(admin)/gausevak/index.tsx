@@ -30,7 +30,6 @@ import { useNotifications } from "../../../src/contexts/NotificationContext";
 import type { NotificationSummary } from "../../../src/services/notificationService";
 
 // ── Menu ───────────────────────────────────────────────────────────────────────
-
 const MENU = [
   {
     id: "cows",
@@ -108,21 +107,12 @@ const MENU = [
     id: "notes",
     title: "Notes",
     subtitle: "Quick reminders",
-    icon: "pencil", // ← unique icon
+    icon: "pencil",
     route: "/(admin)/gausevak/notes",
-    gradient: ["#3d2b1f", "#7c4a2d"] as const, // warm brown matching your palette
-    accent: "#FF9675", // ← your brand primary colour
+    gradient: ["#3d2b1f", "#7c4a2d"] as const,
+    accent: "#FF9675",
   },
-  { id: "cows",         title: "Cows",          subtitle: "Manage herd",        icon: "paw",           route: "/(admin)/gausevak/cows",          gradient: ["#1a472a","#2d6a4f"] as const, accent: "#52b788" },
-  { id: "feed",         title: "Feed",           subtitle: "Diet & nutrition",   icon: "restaurant",    route: "/(admin)/gausevak/feed",          gradient: ["#1b4332","#40916c"] as const, accent: "#74c69d" },
-  { id: "milkyield",    title: "Milkyield",      subtitle: "Milk Yield Records", icon: "water-outline", route: "/(admin)/gausevak/milkyield",     gradient: ["#1c2b3a","#4b75a5"] as const, accent: "#e27f2d" },
-  { id: "health",       title: "Health",         subtitle: "Wellness tracker",   icon: "heart",         route: "/(admin)/gausevak/health",        gradient: ["#2d1b33","#6a0572"] as const, accent: "#c77dff" },
-  { id: "insemination", title: "Insemination",   subtitle: "Breeding cycles",    icon: "flask",         route: "/(admin)/gausevak/insemination",  gradient: ["#1a1a2e","#16213e"] as const, accent: "#7b8cde" },
-  { id: "semen",        title: "Semen Record",   subtitle: "Lab data & logs",    icon: "document-text", route: "/(admin)/gausevak/semen",         gradient: ["#2b1b17","#6b3c2e"] as const, accent: "#e07a5f" },
-  { id: "medical",      title: "Medical",        subtitle: "Checkup history",    icon: "medkit",        route: "/(admin)/gausevak/medical",       gradient: ["#1c2b3a","#243b55"] as const, accent: "#56b4d3" },
-  { id: "workers",      title: "Workers",        subtitle: "Farm staff",         icon: "people",        route: "/(admin)/gausevak/workers",       gradient: ["#1a2e1a","#2d5a27"] as const, accent: "#a3d977" },
 ];
-
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 interface WeatherData {
@@ -388,9 +378,9 @@ function NotificationModal({
             <View style={nm.allGoodIcon}>
               <Ionicons name="checkmark-circle" size={44} color="#4ade80" />
             </View>
-            <Text style={nm.allGoodTitle}>Sab Complete! 🎉</Text>
+            <Text style={nm.allGoodTitle}>No Cow Recorded 🎉</Text>
             <Text style={nm.allGoodSub}>
-              Feed, Milk aur Health — aaj ka sab kaam ho gaya.
+              Worker Notification
             </Text>
           </View>
         ) : (
@@ -610,13 +600,13 @@ function Header({
           </TouchableOpacity>
         )} */}
 
-        {/* All clear strip */}
+        {/* All clear strip 
         {showAllClear && (
           <View style={styles.allClearStrip}>
             <Ionicons name="checkmark-circle" size={14} color="#4ade80" />
-            <Text style={styles.allClearText}>Sab complete — Feed, Milk & Health ✓</Text>
+            <Text style={styles.allClearText}>No Cow Recorded — Feed, Milk & Health ✓</Text>
           </View>
-        )}
+        )}*/}
       </LinearGradient>
 
       {/* QR Scanner modal */}

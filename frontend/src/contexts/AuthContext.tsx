@@ -46,11 +46,11 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user,        setUser]        = useState<User | null>(null);
-  const [token,       setToken]       = useState<string | null>(null);
-  const [worker,      setWorker]      = useState<Worker | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [token, setToken] = useState<string | null>(null);
+  const [worker, setWorker] = useState<Worker | null>(null);
   const [workerToken, setWorkerToken] = useState<string | null>(null);
-  const [loading,     setLoading]     = useState(true);
+  const [loading, setLoading] = useState(true);
 
   const isWorker = worker !== null;
 
@@ -66,15 +66,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (storedToken) {
         setToken(storedToken);
         api.setToken(storedToken);
-        const userData = await api.getMe();
-        setUser(userData);
+        try {
+          const userData = await api.getMe();
+          setUser(userData);
+        } catch (err: any) {
+          
+          if (err.message === "UNAUTHORIZED") {
+            await AsyncStorage.removeItem('access_token');
+            api.setToken(null);
+            setToken(null);
+            setUser(null);
+          }
+        }
       } else {
         setToken(null);
         setUser(null);
       }
 
       const storedWorkerToken = await AsyncStorage.getItem('worker_token');
-      const storedWorkerData  = await AsyncStorage.getItem('worker_data');
+      const storedWorkerData = await AsyncStorage.getItem('worker_data');
       if (storedWorkerToken && storedWorkerData) {
         setWorkerToken(storedWorkerToken);
         setWorker(JSON.parse(storedWorkerData));
@@ -87,14 +97,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('Auth check failed:', error);
       setUser(null);
       setToken(null);
-      setWorker(null);
-      setWorkerToken(null);
-      await AsyncStorage.multiRemove(['access_token', 'worker_token', 'worker_data']);
+      
     } finally {
       setLoading(false);
     }
   };
-
   const login = async (email: string, password: string) => {
     const response = await api.login(email, password);
     await AsyncStorage.setItem('access_token', response.access_token);

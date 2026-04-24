@@ -509,12 +509,7 @@ export default function MilkYieldScreen() {
   >("total");
   const [modalCow, setModalCow] = useState<MilkRow | null>(null);
 
-<<<<<<< HEAD
   // Auto-refresh state and refs
-=======
-  //  auto-refresh every 2 seconds
-  const autoRefreshRef = useRef<ReturnType<typeof setInterval> | null>(null);
->>>>>>> dd60f8503fb4ba63f0f2ca0e7658ba440eaad999
   const [autoRefreshActive, setAutoRefreshActive] = useState(true);
   const autoRefreshRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isMountedRef = useRef(true);

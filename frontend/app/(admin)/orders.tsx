@@ -408,7 +408,7 @@ export default function AdminOrdersScreen() {
     if (!cancelTarget) return;
     setCancelLoading(true);
     try {
-      await api.cancelOrder(cancelTarget.id); // ← add this to your api service (see below)
+      await api.adminCancelOrder(cancelTarget.id); // ← add this to your api service (see below)
       setOrders((prev) =>
         prev.map((o) =>
           o.id === cancelTarget.id ? { ...o, status: "cancelled" } : o,

@@ -282,8 +282,8 @@ export default function AdminDashboard() {
   const [refreshing, setRefreshing] = useState(false);
   const [stats, setStats] = useState<any>(null);
   const [products, setProducts] = useState<any[]>([]);
-  const [customers, setCustomers] = useState<any[]>([]); // ← NEW
-  const [orders, setOrders] = useState<any[]>([]); // ← NEW
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
   const [modalType, setModalType] = useState<ModalType>(null);
   const isFocused = useIsFocused();
 
@@ -293,8 +293,8 @@ export default function AdminDashboard() {
         await Promise.all([
           api.getAdminDashboard(),
           api.getProducts(),
-          api.getAllUsers("customer"), // ← fetch customers list
-          api.getAllOrders(), // ← fetch today's orders list
+          api.getAllUsers("customer"),
+          api.getAllOrders(), // ← no filter, sab orders aayenge
         ]);
       setStats(dashboardData);
       setProducts(productsData);
@@ -332,11 +332,14 @@ export default function AdminDashboard() {
     day: "numeric",
   });
 
-  const deliveryRate = stats?.today_orders
-    ? Math.round((stats.delivered_today / stats.today_orders) * 100)
-    : 0;
+  // ── orders.length = source of truth
+  const totalOrdersToday = orders.length;
+  const deliveredToday = orders.filter((o: any) => o.status === "delivered").length;
+  const pending = totalOrdersToday - deliveredToday;
 
-  const pending = (stats?.today_orders || 0) - (stats?.delivered_today || 0);
+  const deliveryRate = totalOrdersToday
+    ? Math.round((deliveredToday / totalOrdersToday) * 100)
+    : 0;
 
   return (
     <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
@@ -421,6 +424,7 @@ export default function AdminDashboard() {
             </View>
           </TouchableOpacity>
 
+          {/* ── FIXED: Total Orders — orders.length use karo ── */}
           <TouchableOpacity
             style={[styles.statCard, { backgroundColor: "#FFE8D6" }]}
             onPress={() => setModalType("orders")}
@@ -432,7 +436,7 @@ export default function AdminDashboard() {
               <Ionicons name="receipt" size={20} color={C.dark} />
             </View>
             <Text style={[styles.statValue, { color: C.dark }]}>
-              {stats?.today_orders || 0}
+              {totalOrdersToday}
             </Text>
             <Text style={styles.statLabel}>Total Orders</Text>
             <View style={styles.tapHint}>
@@ -449,7 +453,7 @@ export default function AdminDashboard() {
               <Ionicons name="checkmark-circle" size={20} color={C.deep} />
             </View>
             <Text style={[styles.statValue, { color: C.deep }]}>
-              {stats?.delivered_today || 0}
+              {deliveredToday}
             </Text>
             <Text style={styles.statLabel}>Delivered</Text>
             <View style={styles.tapHint}>
@@ -483,7 +487,7 @@ export default function AdminDashboard() {
               activeOpacity={0.7}
             >
               <Text style={styles.progressStatVal}>
-                {stats?.today_orders || 0}
+                {totalOrdersToday}
               </Text>
               <Text style={styles.progressStatLabel}>Total</Text>
               <Ionicons
@@ -502,7 +506,7 @@ export default function AdminDashboard() {
               activeOpacity={0.7}
             >
               <Text style={[styles.progressStatVal, { color: C.dark }]}>
-                {stats?.delivered_today || 0}
+                {deliveredToday}
               </Text>
               <Text style={styles.progressStatLabel}>Delivered</Text>
               <Ionicons
