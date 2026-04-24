@@ -2,9 +2,11 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true,
-    "jsx": "react-native",          // Add this
-    "moduleResolution": "bundler",  // Add this (Expo SDK 49+)
-    "allowImportingTsExtensions": true, // Add this
+    "noImplicitAny": false,
+    "skipLibCheck": true,
+    "jsx": "react-native",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
     "paths": {
       "@/*": ["./*"]
     }

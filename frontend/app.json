@@ -2,24 +2,27 @@
   "expo": {
     "name": "Gau Satva",
     "slug": "frontend",
-    "version": "1.0.2",
+    "version": "1.0.4",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "frontend",
+    "scheme": "gausatv",
     "userInterfaceStyle": "automatic",
     "ios": {
+      "bundleIdentifier": "com.cowsatva.gausatv",
       "supportsTablet": true,
       "infoPlist": {
-        "NSCameraUsageDescription": "Allow $(PRODUCT_NAME) to access your camera"
+        "NSCameraUsageDescription": "Allow $(PRODUCT_NAME) to access your camera",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
       "newArchEnabled": true,
+      "versionCode": 6,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#000000"
       },
-      "package": "com.badal_12.frontend",
+      "package": "com.cowsatva.gausatv",
       "permissions": [
         "android.permission.CAMERA"
       ]
@@ -42,8 +45,8 @@
       ],
       "expo-font",
       "expo-web-browser",
-      "@react-native-community/datetimepicker",
-      "react-native-vision-camera"
+      "react-native-vision-camera",
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true
