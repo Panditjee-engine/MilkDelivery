@@ -56,17 +56,28 @@ interface Cow {
   isExpired?: boolean;
   expiryDate?: string;
   expiryReason?: string;
-  // Transfer fields
   isTransferred?: boolean;
   transferGaushalaName?: string;
   transferAddress?: string;
   transferDate?: string;
-  // Extended sold fields
   soldGaushalaName?: string;
   soldAddress?: string;
   soldDate?: string;
   soldPrice?: string;
   soldReason?: string;
+}
+
+interface Insurance {
+  id: string;
+  company: string;
+  policy_number: string;
+  sum_insured: number;
+  annual_premium: number;
+  expiry_date: string;
+  status: string;
+  days_to_expiry?: number;
+  claim_filed?: boolean;
+  claim_status?: string;
 }
 
 interface CowForm {
@@ -92,12 +103,10 @@ interface CowForm {
   isExpired: boolean;
   expiryDate: string;
   expiryReason: string;
-  // Transfer
   isTransferred: boolean;
   transferGaushalaName: string;
   transferAddress: string;
   transferDate: string;
-  // Extended sold
   soldGaushalaName: string;
   soldAddress: string;
   soldDate: string;
@@ -211,7 +220,7 @@ function getActiveDays(activeSince?: string): number | null {
   return diff >= 0 ? diff : null;
 }
 
-// ── DateField ──────────────────────────────────────────
+// ── DateField 
 function DateField({
   label,
   value,
@@ -300,7 +309,7 @@ function DateField({
   );
 }
 
-// ── Field ──────────────────────────────────────────────
+// ── Field 
 function Field({
   label,
   value,
@@ -611,7 +620,6 @@ function PurposeSelector({
   );
 }
 
-// ── Transfer Section ────────────────────────────────────
 function TransferSection({
   form,
   setF,
@@ -685,7 +693,6 @@ function TransferSection({
   );
 }
 
-// ── Extended Sold Section ───────────────────────────────
 function SoldSection({
   form,
   setF,
@@ -773,7 +780,6 @@ function SoldSection({
   );
 }
 
-// ── Expiry Section ──────────────────────────────────────
 function ExpirySection({
   form,
   setF,
@@ -836,7 +842,6 @@ function ExpirySection({
   );
 }
 
-// ── CowFormFields ───────────────────────────────────────
 function CowFormFields({
   form,
   setF,
@@ -1048,21 +1053,15 @@ function CowFormFields({
         </>
       )}
 
-      {/* Transfer Section */}
       <TransferSection form={form} setF={setF} />
-
-      {/* Sold Section (extended) */}
       <SoldSection form={form} setF={setF} />
-
-      {/* Expiry Section */}
       <ExpirySection form={form} setF={setF} />
-
       <View style={{ height: 12 }} />
     </>
   );
 }
 
-// ── AddCowModal ─────────────────────────────────────────
+// ── AddCowModal 
 function AddCowModal({
   visible,
   onClose,
@@ -1078,7 +1077,6 @@ function AddCowModal({
   const [form, setForm] = useState<CowForm>(EMPTY_FORM);
   const [submitting, setSub] = useState(false);
   const fade = useRef(new Animated.Value(0)).current;
-
   const setF = (k: keyof CowForm) => (v: any) =>
     setForm((p) => ({ ...p, [k]: v }));
 
@@ -1126,7 +1124,6 @@ function AddCowModal({
           form.isExpired && form.expiryDate ? form.expiryDate : undefined,
         expiryReason:
           form.isExpired && form.expiryReason ? form.expiryReason : undefined,
-        // Transfer
         isTransferred: form.isTransferred,
         transferGaushalaName:
           form.isTransferred && form.transferGaushalaName
@@ -1140,7 +1137,6 @@ function AddCowModal({
           form.isTransferred && form.transferDate
             ? form.transferDate
             : undefined,
-        // Extended sold
         soldGaushalaName:
           form.isSold && form.soldGaushalaName
             ? form.soldGaushalaName
@@ -1290,7 +1286,6 @@ function AddCowModal({
                 </TouchableOpacity>
               </View>
             )}
-
             {step === "form" && (
               <Animated.View style={{ opacity: fade }}>
                 <View style={m.header}>
@@ -1388,7 +1383,7 @@ function AddCowModal({
   );
 }
 
-// ── EditCowModal ────────────────────────────────────────
+// ── EditCowModal 
 function EditCowModal({
   cow,
   visible,
@@ -1535,7 +1530,6 @@ function EditCowModal({
   };
 
   const isBull = cow?.type === "bull";
-
   return (
     <Modal
       visible={visible}
@@ -1602,7 +1596,7 @@ function EditCowModal({
   );
 }
 
-// ── QRModal ─────────────────────────────────────────────
+// ── QRModal 
 function QRModal({
   visible,
   onClose,
@@ -1679,7 +1673,31 @@ function DetailItem({
   );
 }
 
-// ── CowCard ─────────────────────────────────────────────
+// ── Insurance helpers 
+function getInsuranceColors(status: string) {
+  if (status === "expired")
+    return {
+      bg: "#fff1f2",
+      border: "#fecdd3",
+      color: "#dc2626",
+      icon: "shield-outline" as const,
+    };
+  if (status === "expiring")
+    return {
+      bg: "#fffbeb",
+      border: "#fde68a",
+      color: "#d97706",
+      icon: "shield-half-outline" as const,
+    };
+  return {
+    bg: "#f0fdf4",
+    border: "#bbf7d0",
+    color: "#16a34a",
+    icon: "shield-checkmark" as const,
+  };
+}
+
+// ── CowCard 
 function CowCard({
   item,
   index,
@@ -1693,11 +1711,20 @@ function CowCard({
   onDelete: (cow: Cow) => void;
   onUpdate: (cow: Cow) => void;
 }) {
+  const router = useRouter();
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(16)).current;
   const [expanded, setExpanded] = useState(false);
   const [qrLoading, setQrLoading] = useState(false);
   const [qrVisible, setQrVisible] = useState(false);
+
+  // ── Insurance state 
+  const [insurance, setInsurance] = useState<Insurance | null | undefined>(
+    undefined,
+  );
+  const [insuranceLoading, setInsuranceLoading] = useState(false);
+  const insuranceFetched = useRef(false);
+
   const st = STATUS[derivedStatus(item)];
   const isBull = item.type === "bull";
   const activeDays = getActiveDays(item.activeSince);
@@ -1720,6 +1747,19 @@ function CowCard({
     ]).start();
   }, []);
 
+  // Fetch insurance when card is first expanded
+  useEffect(() => {
+    if (expanded && !insuranceFetched.current) {
+      insuranceFetched.current = true;
+      setInsuranceLoading(true);
+      api
+        .getCowInsurance(item.id)
+        .then((ins) => setInsurance(ins ?? null))
+        .catch(() => setInsurance(null))
+        .finally(() => setInsuranceLoading(false));
+    }
+  }, [expanded]);
+
   const handleQR = async () => {
     if (item.qrCode) {
       setQrVisible(true);
@@ -1736,6 +1776,24 @@ function CowCard({
       setQrLoading(false);
     }
   };
+
+  const navigateToInsurance = () => {
+    router.push({
+      pathname: "/gausevak/insurance",
+      params: {
+        cowId: String(item.id),
+        cowTag: item.tag,
+        cowName: item.name,
+      },
+    });
+  };
+
+  // Determine the insurance badge shown in collapsed header
+  const insuranceBadgeColor = insurance
+    ? getInsuranceColors(insurance.status).color
+    : insurance === null
+      ? "#d97706"
+      : undefined;
 
   return (
     <Animated.View
@@ -1827,6 +1885,51 @@ function CowCard({
                     <Ionicons name="swap-horizontal" size={9} color="#7c3aed" />
                     <Text style={[c.badgeText, { color: "#7c3aed" }]}>
                       Transferred
+                    </Text>
+                  </View>
+                )}
+                {/* Insurance badge in header */}
+                {insurance !== undefined && insurance !== null && (
+                  <View
+                    style={[
+                      c.badge,
+                      {
+                        backgroundColor: getInsuranceColors(insurance.status)
+                          .bg,
+                        borderColor: getInsuranceColors(insurance.status)
+                          .border,
+                      },
+                    ]}
+                  >
+                    <Ionicons
+                      name={getInsuranceColors(insurance.status).icon}
+                      size={9}
+                      color={getInsuranceColors(insurance.status).color}
+                    />
+                    <Text
+                      style={[
+                        c.badgeText,
+                        { color: getInsuranceColors(insurance.status).color },
+                      ]}
+                    >
+                      {insurance.status === "expiring"
+                        ? "Exp Soon"
+                        : insurance.status === "expired"
+                          ? "Ins Exp"
+                          : "Insured"}
+                    </Text>
+                  </View>
+                )}
+                {insurance === null && (
+                  <View
+                    style={[
+                      c.badge,
+                      { backgroundColor: "#fffbeb", borderColor: "#fde68a" },
+                    ]}
+                  >
+                    <Ionicons name="shield-outline" size={9} color="#d97706" />
+                    <Text style={[c.badgeText, { color: "#d97706" }]}>
+                      Uninsured
                     </Text>
                   </View>
                 )}
@@ -2052,6 +2155,176 @@ function CowCard({
             </View>
           )}
 
+          {/* ── Insurance Section*/}
+          <View style={ins.sectionHeader}>
+            <View style={ins.sectionTitleRow}>
+              <Ionicons name="shield-outline" size={13} color="#8B6854" />
+              <Text style={ins.sectionTitle}>Insurance</Text>
+            </View>
+          </View>
+
+          {insuranceLoading && (
+            <View style={ins.loadingRow}>
+              <ActivityIndicator size="small" color="#16a34a" />
+              <Text style={ins.loadingText}>Checking insurance...</Text>
+            </View>
+          )}
+
+          {!insuranceLoading && insurance && (
+            <View
+              style={[
+                ins.infoBanner,
+                {
+                  backgroundColor: getInsuranceColors(insurance.status).bg,
+                  borderColor: getInsuranceColors(insurance.status).border,
+                },
+              ]}
+            >
+              <View
+                style={[
+                  ins.shieldIconWrap,
+                  {
+                    backgroundColor:
+                      getInsuranceColors(insurance.status).color + "20",
+                  },
+                ]}
+              >
+                <Ionicons
+                  name={getInsuranceColors(insurance.status).icon}
+                  size={18}
+                  color={getInsuranceColors(insurance.status).color}
+                />
+              </View>
+              <View style={{ flex: 1, marginLeft: 10 }}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <Text
+                    style={[
+                      ins.insCompany,
+                      { color: getInsuranceColors(insurance.status).color },
+                    ]}
+                  >
+                    {insurance.company}
+                  </Text>
+                  <View
+                    style={[
+                      ins.statusPill,
+                      {
+                        backgroundColor:
+                          getInsuranceColors(insurance.status).color + "20",
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        ins.statusPillText,
+                        { color: getInsuranceColors(insurance.status).color },
+                      ]}
+                    >
+                      {insurance.status === "expiring"
+                        ? "Expiring Soon"
+                        : insurance.status === "expired"
+                          ? "Expired"
+                          : "Active"}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={ins.policyNo}>
+                  Policy: {insurance.policy_number}
+                </Text>
+                <View style={ins.insDetailsRow}>
+                  <View style={ins.insDetailItem}>
+                    <Ionicons name="cash-outline" size={11} color="#6b7280" />
+                    <Text style={ins.insDetailText}>
+                      ₹{insurance.sum_insured?.toLocaleString("en-IN")}
+                    </Text>
+                  </View>
+                  <View style={ins.insDetailItem}>
+                    <Ionicons
+                      name="calendar-outline"
+                      size={11}
+                      color="#6b7280"
+                    />
+                    <Text style={ins.insDetailText}>
+                      Exp: {insurance.expiry_date}
+                    </Text>
+                  </View>
+                  {insurance.days_to_expiry != null && (
+                    <View style={ins.insDetailItem}>
+                      <Ionicons
+                        name="time-outline"
+                        size={11}
+                        color={getInsuranceColors(insurance.status).color}
+                      />
+                      <Text
+                        style={[
+                          ins.insDetailText,
+                          {
+                            color: getInsuranceColors(insurance.status).color,
+                            fontWeight: "700",
+                          },
+                        ]}
+                      >
+                        {insurance.days_to_expiry}d left
+                      </Text>
+                    </View>
+                  )}
+                </View>
+                {insurance.claim_filed && (
+                  <View style={ins.claimRow}>
+                    <Ionicons
+                      name="document-text-outline"
+                      size={10}
+                      color="#7c3aed"
+                    />
+                    <Text style={ins.claimText}>
+                      Claim {insurance.claim_status ?? "filed"}
+                    </Text>
+                  </View>
+                )}
+                <TouchableOpacity
+                  style={ins.editInsBtn}
+                  onPress={navigateToInsurance}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="create-outline" size={12} color="#fff" />
+                  <Text style={ins.editInsBtnText}>Manage Insurance</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {!insuranceLoading && insurance === null && (
+            <TouchableOpacity
+              style={ins.addInsuranceBtn}
+              onPress={navigateToInsurance}
+              activeOpacity={0.85}
+            >
+              <View style={ins.addInsuranceBtnLeft}>
+                <View style={ins.addInsuranceIcon}>
+                  <Ionicons name="shield-outline" size={16} color="#16a34a" />
+                </View>
+                <View>
+                  <Text style={ins.addInsuranceBtnTitle}>
+                    No Insurance Found
+                  </Text>
+                  <Text style={ins.addInsuranceBtnSub}>
+                    Tap to add insurance coverage
+                  </Text>
+                </View>
+              </View>
+              <View style={ins.addInsuranceArrow}>
+                <Ionicons name="arrow-forward" size={14} color="#16a34a" />
+              </View>
+            </TouchableOpacity>
+          )}
+          {/* ── End Insurance Section ───────────────────────── */}
+
           <View style={c.actionRow}>
             <TouchableOpacity
               style={[c.actionBtn, c.editBtn]}
@@ -2102,7 +2375,7 @@ function CowCard({
   );
 }
 
-// ── Main Screen ─────────────────────────────────────────
+// ── Main Screen 
 export default function CowsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -2405,7 +2678,7 @@ export default function CowsScreen() {
   );
 }
 
-// ── Styles ──────────────────────────────────────────────
+// ── Styles 
 
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#fff" },
@@ -2517,7 +2790,6 @@ const s = StyleSheet.create({
     paddingVertical: 10,
   },
   retryText: { fontSize: 13, fontWeight: "700", color: "#fff" },
-  // Floating Add Button
   fab: {
     position: "absolute",
     bottom: 30,
@@ -2581,6 +2853,7 @@ const c = StyleSheet.create({
     alignItems: "center",
     gap: 4,
     flexShrink: 1,
+    flexWrap: "wrap",
   },
   tag: { fontSize: 12, color: "#9ca3af", fontWeight: "500" },
   miniDaysBadge: {
@@ -2644,7 +2917,7 @@ const c = StyleSheet.create({
   },
   detailLabel: { fontSize: 11, color: "#C4A882", fontWeight: "500" },
   detailValue: { fontSize: 11, color: "#5C3D2E", fontWeight: "600" },
-  actionRow: { flexDirection: "row", gap: 8 },
+  actionRow: { flexDirection: "row", gap: 8, marginTop: 12 },
   actionBtn: {
     flex: 1,
     flexDirection: "row",
@@ -2659,7 +2932,6 @@ const c = StyleSheet.create({
   deleteBtn: { backgroundColor: "#FFF5F2", borderColor: "#FFD4C4" },
   qrBtn: { backgroundColor: "#F5EFEA", borderColor: "#D4B8A8" },
   actionText: { fontSize: 13, fontWeight: "700" },
-  // Unified info banner (transfer, sold, expired)
   infoBanner: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -3095,7 +3367,6 @@ const bd = StyleSheet.create({
   },
 });
 
-// ── Transfer Section Styles ──
 const tr = StyleSheet.create({
   wrap: {
     backgroundColor: "#fdf4ff",
@@ -3132,7 +3403,6 @@ const tr = StyleSheet.create({
   divider: { height: 1, backgroundColor: "#e9d5ff", marginBottom: 14 },
 });
 
-// ── Sold Section Styles ──
 const sd = StyleSheet.create({
   wrap: {
     backgroundColor: "#fff7ed",
@@ -3169,7 +3439,6 @@ const sd = StyleSheet.create({
   divider: { height: 1, backgroundColor: "#fed7aa", marginBottom: 14 },
 });
 
-// ── Expiry Section Styles ──
 const ex = StyleSheet.create({
   wrap: {
     backgroundColor: "#fff1f2",
@@ -3204,4 +3473,172 @@ const ex = StyleSheet.create({
     backgroundColor: "#fff5f5",
   },
   divider: { height: 1, backgroundColor: "#fecdd3", marginBottom: 14 },
+});
+
+// ── Insurance Styles 
+const ins = StyleSheet.create({
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+    marginTop: 4,
+  },
+  sectionTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  sectionTitle: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#8B6854",
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+  },
+  loadingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+    marginBottom: 12,
+  },
+  loadingText: {
+    fontSize: 12,
+    color: "#9ca3af",
+    fontWeight: "500",
+  },
+  // ── Insured banner ──
+  infoBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    borderRadius: 14,
+    borderWidth: 1.5,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    marginBottom: 12,
+  },
+  shieldIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  insCompany: {
+    fontSize: 13,
+    fontWeight: "800",
+    letterSpacing: -0.2,
+  },
+  statusPill: {
+    borderRadius: 20,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  statusPillText: {
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  policyNo: {
+    fontSize: 11,
+    color: "#6b7280",
+    fontWeight: "500",
+    marginTop: 2,
+    marginBottom: 8,
+  },
+  insDetailsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginBottom: 6,
+  },
+  insDetailItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  insDetailText: {
+    fontSize: 11,
+    color: "#374151",
+    fontWeight: "600",
+  },
+  claimRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginBottom: 10,
+  },
+  claimText: {
+    fontSize: 11,
+    color: "#7c3aed",
+    fontWeight: "600",
+  },
+  editInsBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    alignSelf: "flex-start",
+    backgroundColor: "#16a34a",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginTop: 4,
+  },
+  editInsBtnText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#fff",
+  },
+  // ── Uninsured / Add button ──
+  addInsuranceBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#f0fdf4",
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: "#bbf7d0",
+    borderStyle: "dashed",
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    marginBottom: 12,
+  },
+  addInsuranceBtnLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    flex: 1,
+  },
+  addInsuranceIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: "#dcfce7",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#bbf7d0",
+  },
+  addInsuranceBtnTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#15803d",
+    letterSpacing: -0.2,
+  },
+  addInsuranceBtnSub: {
+    fontSize: 11,
+    color: "#4ade80",
+    fontWeight: "500",
+    marginTop: 1,
+  },
+  addInsuranceArrow: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: "#dcfce7",
+    alignItems: "center",
+    justifyContent: "center",
+  },
 });
