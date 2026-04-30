@@ -16,7 +16,7 @@ import {
   KeyboardAvoidingView,
   Alert,
 } from "react-native";
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Image } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -37,16 +37,16 @@ const getAnimalImage = (type?: string) => {
 };
 
 const FEED_OPTIONS = [
-  { label: "Dry Fodder", icon: "🌾" },
-  { label: "Green Fodder", icon: "🌿" },
-  { label: "Concentrate", icon: "🟤" },
+  { label: "Dry Fodder", icon: "" },
+  { label: "Green Fodder", icon: "" },
+  { label: "Concentrate", icon: "" },
   { label: "Silage", icon: "🫙" },
-  { label: "Mixed Feed", icon: "🥗" },
-  { label: "Mineral Mix", icon: "🔬" },
-  { label: "Wheat Bran", icon: "🌻" },
-  { label: "Rice Straw", icon: "🍂" },
-  { label: "Cotton Seed", icon: "☁️" },
-  { label: "Mustard Cake", icon: "🟡" },
+  { label: "Mixed Feed", icon: "" },
+  { label: "Mineral Mix", icon: "" },
+  { label: "Wheat Bran", icon: "" },
+  { label: "Rice Straw", icon: "" },
+  { label: "Cotton Seed", icon: "" },
+  { label: "Mustard Cake", icon: "" },
 ];
 
 interface FeedItem {
@@ -77,6 +77,12 @@ interface Summary {
 }
 
 const FILTERS = ["All", "Both Fed", "Pending"] as const;
+
+// Auto-detect shift: morning = 2am–2pm, evening = rest
+function getCurrentShift(): Shift {
+  const hour = new Date().getHours();
+  return hour >= 2 && hour < 14 ? "morning" : "evening";
+}
 
 function todayStr() {
   return new Date().toISOString().split("T")[0];
@@ -135,7 +141,7 @@ const STATUS_CFG: Record<
   },
 };
 
-// ─── Auto-refresh dot 
+// ─── Auto-refresh dot
 function AutoRefreshDot({ active }: { active: boolean }) {
   const pulse = useRef(new Animated.Value(1)).current;
 
@@ -174,7 +180,7 @@ function AutoRefreshDot({ active }: { active: boolean }) {
   );
 }
 
-// ─── FeedDetailModal 
+// ─── FeedDetailModal
 function FeedDetailModal({
   visible,
   cow,
@@ -205,29 +211,22 @@ function FeedDetailModal({
     }
   }, [visible, currentFeeds]);
 
-  const updateRow = (idx: number, patch: Partial<FeedItem>) => {
+  const updateRow = (idx: number, patch: Partial<FeedItem>) =>
     setFeedRows((prev) =>
       prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)),
     );
-  };
 
   const addRow = () =>
     setFeedRows((prev) => [...prev, { feed_type: "", quantity_kg: 0 }]);
 
   const removeRow = (idx: number) => {
-    if (feedRows.length === 1) {
-      setFeedRows([{ feed_type: "", quantity_kg: 0 }]);
-    } else {
-      setFeedRows((prev) => prev.filter((_, i) => i !== idx));
-    }
+    if (feedRows.length === 1) setFeedRows([{ feed_type: "", quantity_kg: 0 }]);
+    else setFeedRows((prev) => prev.filter((_, i) => i !== idx));
   };
 
   const toggleOption = (idx: number, label: string) => {
-    if (feedRows[idx]?.feed_type === label) {
-      updateRow(idx, { feed_type: "" });
-    } else {
-      updateRow(idx, { feed_type: label });
-    }
+    if (feedRows[idx]?.feed_type === label) updateRow(idx, { feed_type: "" });
+    else updateRow(idx, { feed_type: label });
   };
 
   const handleSave = async () => {
@@ -269,8 +268,7 @@ function FeedDetailModal({
               <View style={{ flex: 1 }}>
                 <Text style={md.title}>Feed Details</Text>
                 <Text style={md.sub}>
-                  {cow.name} ·{" "}
-                  {shift === "morning" ? " Morning" : " Evening"}
+                  {cow.name} · {shift === "morning" ? "Morning" : "Evening"}
                 </Text>
               </View>
               <TouchableOpacity style={md.closeBtn} onPress={onClose}>
@@ -503,7 +501,88 @@ function FeedDetailModal({
   );
 }
 
-// ─── FeedBadge 
+// ─── MarkFedButton — one-tap mark fed for current shift
+function MarkFedButton({
+  cow,
+  shift,
+  onMarked,
+}: {
+  cow: CowFeedRow;
+  shift: Shift;
+  onMarked: (cowId: string, shift: Shift) => void;
+}) {
+  const currentStatus = shift === "morning" ? cow.morning : cow.evening;
+  const [marking, setMarking] = useState(false);
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  const handleMark = async () => {
+    if (currentStatus === "fed") return;
+    setMarking(true);
+
+    // Bounce animation
+    Animated.sequence([
+      Animated.timing(scaleAnim, {
+        toValue: 0.92,
+        duration: 80,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 200,
+        friction: 8,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    try {
+      await api.adminMarkFed({
+        cow_id: cow.id,
+        cow_name: cow.name,
+        cow_tag: cow.srNo,
+        date: todayStr(),
+        shift,
+      });
+      onMarked(cow.id, shift);
+    } catch (e: any) {
+      Alert.alert("Error", e?.message || "Failed to mark as fed");
+    } finally {
+      setMarking(false);
+    }
+  };
+
+  const isFed = currentStatus === "fed";
+
+  return (
+    <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+      <TouchableOpacity
+        style={[mfb.btn, isFed ? mfb.btnFed : mfb.btnPending]}
+        onPress={handleMark}
+        disabled={marking || isFed}
+        activeOpacity={0.85}
+      >
+        {marking ? (
+          <ActivityIndicator size="small" color="#fff" />
+        ) : isFed ? (
+          <>
+            <Ionicons name="checkmark-circle" size={15} color="#16a34a" />
+            <Text style={[mfb.btnText, { color: "#16a34a" }]}>
+              {shift === "morning" ? "" : ""} Fed
+            </Text>
+          </>
+        ) : (
+          <>
+            <Ionicons name="add-circle-outline" size={15} color="#fff" />
+            <Text style={mfb.btnText}>
+              Mark {shift === "morning" ? " Morning" : " Evening"} Fed
+            </Text>
+          </>
+        )}
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}
+
+// ─── FeedBadge
 function FeedBadge({
   status,
   note,
@@ -549,7 +628,7 @@ function FeedBadge({
           {feeds.map((f, i) => (
             <View key={i} style={bs.feedItem}>
               <Text style={bs.feedItemText} numberOfLines={1}>
-                 {f.feed_type}
+                • {f.feed_type}
               </Text>
               <Text style={bs.feedItemQty}>{f.quantity_kg}kg</Text>
             </View>
@@ -594,22 +673,24 @@ function FeedBadge({
   );
 }
 
-// ─── FeedCard — 
+// ─── FeedCard
 function FeedCard({
   item,
   index,
   activeShift,
+  currentShift,
   onEditFeed,
+  onMarkedFed,
 }: {
   item: CowFeedRow;
   index: number;
   activeShift: Shift | "both";
+  currentShift: Shift;
   onEditFeed: (cow: CowFeedRow, shift: Shift) => void;
+  onMarkedFed: (cowId: string, shift: Shift) => void;
 }) {
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(16)).current;
-
-  // ✅ collapsed by default — user scrolls down to see details
   const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
@@ -652,7 +733,6 @@ function FeedCard({
         ? "Fully Fed"
         : "Partially Fed";
 
-  // Mini shift pills shown in collapsed row
   const morningColor = item.morning === "fed" ? "#16a34a" : "#BB6B3F";
   const eveningColor = item.evening === "fed" ? "#16a34a" : "#BB6B3F";
   const morningBg = item.morning === "fed" ? "#f0fdf4" : "#FFF5EA";
@@ -660,15 +740,18 @@ function FeedCard({
   const morningBorder = item.morning === "fed" ? "#86efac" : "#FFCFAA";
   const eveningBorder = item.evening === "fed" ? "#86efac" : "#FFCFAA";
 
+  // Show mark fed for current shift only if not yet fed
+  const currentShiftStatus =
+    currentShift === "morning" ? item.morning : item.evening;
+
   return (
     <Animated.View style={[cs.card, { opacity, transform: [{ translateY }] }]}>
-      {/* ── Collapsed row — always visible, tap to expand ── */}
+      {/* ── Collapsed header ── */}
       <TouchableOpacity
         onPress={() => setExpanded((e) => !e)}
         activeOpacity={0.8}
         style={cs.cardHeader}
       >
-        {/* Cow avatar */}
         <View style={cs.cowAvatarWrap}>
           <Image
             source={getAnimalImage(item.type)}
@@ -676,8 +759,6 @@ function FeedCard({
             resizeMode="contain"
           />
         </View>
-
-        {/* Name + tag */}
         <View style={{ flex: 1, marginLeft: 10 }}>
           <Text style={cs.cowName} numberOfLines={1}>
             {item.name}
@@ -687,8 +768,6 @@ function FeedCard({
             {item.breed ? ` · ${item.breed}` : ""}
           </Text>
         </View>
-
-        {/* Mini morning/evening pills */}
         <View style={cs.miniPillsRow}>
           <View
             style={[
@@ -713,8 +792,6 @@ function FeedCard({
             </Text>
           </View>
         </View>
-
-        {/* Overall badge */}
         <View
           style={[
             cs.overallBadge,
@@ -730,8 +807,6 @@ function FeedCard({
             {overallLabel}
           </Text>
         </View>
-
-        {/* Chevron */}
         <Ionicons
           name={expanded ? "chevron-up" : "chevron-down"}
           size={16}
@@ -739,6 +814,17 @@ function FeedCard({
           style={{ marginLeft: 6 }}
         />
       </TouchableOpacity>
+
+      {/* ── Quick Mark Fed button — always visible if not fed ── */}
+      {currentShiftStatus === "pending" && (
+        <View style={cs.markFedRow}>
+          <MarkFedButton
+            cow={item}
+            shift={currentShift}
+            onMarked={onMarkedFed}
+          />
+        </View>
+      )}
 
       {/* ── Expanded details ── */}
       {expanded && (
@@ -770,7 +856,7 @@ function FeedCard({
   );
 }
 
-// ─── SummaryStrip 
+// ─── SummaryStrip
 function SummaryStrip({
   summary,
   activeShift,
@@ -829,7 +915,7 @@ function SummaryStrip({
   );
 }
 
-// ─── ShiftToggle 
+// ─── ShiftToggle
 function ShiftToggle({
   active,
   onChange,
@@ -869,7 +955,35 @@ function ShiftToggle({
   );
 }
 
-// ─── Main Screen 
+// ─── ShiftBanner — shows current auto-detected shift
+function ShiftBanner({ shift }: { shift: Shift }) {
+  const isMorning = shift === "morning";
+  return (
+    <View
+      style={[
+        sb.wrap,
+        {
+          backgroundColor: isMorning ? "#fffbeb" : "#eef2ff",
+          borderColor: isMorning ? "#fcd34d" : "#c7d2fe",
+        },
+      ]}
+    >
+      <Ionicons
+        name={isMorning ? "sunny" : "moon"}
+        size={14}
+        color={isMorning ? "#d97706" : "#6366f1"}
+      />
+      <Text style={[sb.text, { color: isMorning ? "#d97706" : "#6366f1" }]}>
+        Current shift:{" "}
+        <Text style={sb.bold}>{isMorning ? "Morning" : "Evening"}</Text>
+        {"  ·  "}
+        <Text style={sb.sub}>Mark Fed uses this shift automatically</Text>
+      </Text>
+    </View>
+  );
+}
+
+// ─── Main Screen
 export default function AdminFeedScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -878,6 +992,9 @@ export default function AdminFeedScreen() {
     day: "numeric",
     month: "long",
   });
+
+  // Auto-detect current shift
+  const currentShift = getCurrentShift();
 
   const [cowRows, setCowRows] = useState<CowFeedRow[]>([]);
   const [summary, setSummary] = useState<Summary>({
@@ -898,13 +1015,11 @@ export default function AdminFeedScreen() {
   const [editingCow, setEditingCow] = useState<CowFeedRow | null>(null);
   const [editingShift, setEditingShift] = useState<Shift>("morning");
 
-  //  Auto-refresh state
   const [autoRefreshActive, setAutoRefreshActive] = useState(true);
   const autoRefreshRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isMountedRef = useRef(true);
   const activeShiftRef = useRef(activeShift);
 
-  // Keep ref in sync so interval always uses latest shift
   useEffect(() => {
     activeShiftRef.current = activeShift;
   }, [activeShift]);
@@ -958,29 +1073,24 @@ export default function AdminFeedScreen() {
     }
   }, []);
 
-  // Initial load + reload when shift changes
   useEffect(() => {
     setLoading(true);
     fetchAll(activeShift === "both" ? undefined : activeShift, false);
   }, [activeShift]);
 
-  //  Auto-refresh every 2 seconds (silent — no spinner flicker)
   useEffect(() => {
     isMountedRef.current = true;
-
     if (autoRefreshActive) {
       autoRefreshRef.current = setInterval(() => {
         const s = activeShiftRef.current;
         fetchAll(s === "both" ? undefined : s, true);
       }, 2000);
     }
-
     return () => {
       if (autoRefreshRef.current) clearInterval(autoRefreshRef.current);
     };
   }, [autoRefreshActive, fetchAll]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       isMountedRef.current = false;
@@ -1004,7 +1114,6 @@ export default function AdminFeedScreen() {
     const authToken = await AsyncStorage.getItem("access_token");
     if (!authToken) return;
     api.setToken(authToken);
-
     await api.updateAdminFeedDetails(
       editingCow.id,
       todayStr(),
@@ -1012,7 +1121,6 @@ export default function AdminFeedScreen() {
       feeds,
       saveAsDefault,
     );
-
     setCowRows((prev) =>
       prev.map((row) => {
         if (row.id !== editingCow.id) return row;
@@ -1022,11 +1130,30 @@ export default function AdminFeedScreen() {
     );
   };
 
+  // Optimistic update after marking fed
+  const handleMarkedFed = (cowId: string, shift: Shift) => {
+    setCowRows((prev) =>
+      prev.map((row) => {
+        if (row.id !== cowId) return row;
+        if (shift === "morning")
+          return { ...row, morning: "fed", morningNote: "By Admin" };
+        return { ...row, evening: "fed", eveningNote: "By Admin" };
+      }),
+    );
+    setSummary((prev) => ({
+      ...prev,
+      morning_fed:
+        shift === "morning" ? prev.morning_fed + 1 : prev.morning_fed,
+      evening_fed:
+        shift === "evening" ? prev.evening_fed + 1 : prev.evening_fed,
+      not_fed_at_all: Math.max(0, prev.not_fed_at_all - 1),
+    }));
+  };
+
   const filtered = cowRows.filter((d) => {
     const matchSearch =
       d.name.toLowerCase().includes(search.toLowerCase()) ||
       d.srNo.toLowerCase().includes(search.toLowerCase());
-
     const shiftStatus =
       activeShift === "morning"
         ? d.morning
@@ -1035,29 +1162,20 @@ export default function AdminFeedScreen() {
           : d.morning === "fed" && d.evening === "fed"
             ? "fed"
             : "pending";
-
     const matchFilter =
       activeFilter === "All" ||
       (activeFilter === "Both Fed" &&
         d.morning === "fed" &&
         d.evening === "fed") ||
       (activeFilter === "Pending" && shiftStatus === "pending");
-
     return matchSearch && matchFilter;
   });
 
   return (
-     <View style={[sc.screen, { paddingTop: insets.top }]}>
+    <View style={[sc.screen, { paddingTop: insets.top }]}>
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
 
-      {/* Header */}
-      <View
-        style={[
-          sc.header,
-          {
-          },
-        ]}
-      >
+      <View style={sc.header}>
         <TouchableOpacity onPress={() => router.back()} style={sc.backBtn}>
           <Ionicons name="arrow-back" size={20} color="#8B6854" />
         </TouchableOpacity>
@@ -1065,15 +1183,12 @@ export default function AdminFeedScreen() {
           <Text style={sc.headerTitle}>Feed Status</Text>
           <Text style={sc.headerSub}>{today}</Text>
         </View>
-
-        {/*  Live dot toggle */}
         <TouchableOpacity
           onPress={() => setAutoRefreshActive((a) => !a)}
           style={sc.liveBtn}
         >
           <AutoRefreshDot active={autoRefreshActive} />
         </TouchableOpacity>
-
         <TouchableOpacity style={sc.refreshBtn} onPress={onRefresh}>
           <Ionicons name="refresh-outline" size={18} color="#BB6B3F" />
         </TouchableOpacity>
@@ -1087,6 +1202,7 @@ export default function AdminFeedScreen() {
       ) : (
         <>
           <SummaryStrip summary={summary} activeShift={activeShift} />
+          <ShiftBanner shift={currentShift} />
 
           <View style={sc.controlsRow}>
             <ShiftToggle active={activeShift} onChange={setActiveShift} />
@@ -1123,11 +1239,9 @@ export default function AdminFeedScreen() {
                 </TouchableOpacity>
               );
             })}
-            {/* cow count */}
             <Text style={sc.cowCount}>{filtered.length} cows</Text>
           </View>
 
-          {/*  Hint */}
           {filtered.length > 0 && (
             <Text style={sc.expandHint}>Tap a card to see feed details</Text>
           )}
@@ -1137,6 +1251,7 @@ export default function AdminFeedScreen() {
             keyExtractor={(item) => item.id}
             contentContainerStyle={sc.listContent}
             showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}
@@ -1149,12 +1264,14 @@ export default function AdminFeedScreen() {
                 item={item}
                 index={index}
                 activeShift={activeShift}
+                currentShift={currentShift}
                 onEditFeed={handleEditFeed}
+                onMarkedFed={handleMarkedFed}
               />
             )}
             ListEmptyComponent={
               <View style={sc.empty}>
-                <Text style={{ fontSize: 40 }}></Text>
+                <Text style={{ fontSize: 40 }}>🐄</Text>
                 <Text style={sc.emptyText}>No records found</Text>
               </View>
             }
@@ -1179,12 +1296,46 @@ export default function AdminFeedScreen() {
   );
 }
 
-// ─── Styles 
+// ─── Styles
 
 const ar = StyleSheet.create({
   wrap: { flexDirection: "row", alignItems: "center", gap: 4 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   label: { fontSize: 10, fontWeight: "700" },
+});
+
+const sb = StyleSheet.create({
+  wrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginHorizontal: 14,
+    marginTop: 10,
+    marginBottom: 2,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  text: { fontSize: 12, fontWeight: "600", flex: 1 },
+  bold: { fontWeight: "800" },
+  sub: { fontWeight: "500", opacity: 0.7 },
+});
+
+const mfb = StyleSheet.create({
+  btn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    borderRadius: 10,
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+  },
+  btnPending: { backgroundColor: "#BB6B3F", borderColor: "#BB6B3F" },
+  btnFed: { backgroundColor: "#f0fdf4", borderColor: "#86efac" },
+  btnText: { fontSize: 13, fontWeight: "700", color: "#fff" },
 });
 
 const md = StyleSheet.create({
@@ -1504,8 +1655,6 @@ const cs = StyleSheet.create({
     letterSpacing: -0.2,
   },
   cowSr: { fontSize: 11, color: "#FD9E69", fontWeight: "500", marginTop: 1 },
-
-  //  mini pills for collapsed view
   miniPillsRow: { flexDirection: "row", gap: 4 },
   miniPill: {
     flexDirection: "row",
@@ -1517,7 +1666,6 @@ const cs = StyleSheet.create({
     borderWidth: 1,
   },
   miniPillText: { fontSize: 10, fontWeight: "700" },
-
   overallBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -1529,6 +1677,7 @@ const cs = StyleSheet.create({
   },
   overallDot: { width: 6, height: 6, borderRadius: 3 },
   overallText: { fontSize: 10, fontWeight: "700" },
+  markFedRow: { marginTop: 10 },
   divider: { height: 1, backgroundColor: "#FFF0DC", marginVertical: 12 },
   sessionsRow: { flexDirection: "row", gap: 10 },
 });
@@ -1642,7 +1791,7 @@ const sc = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#FFE8CC",
   },
-  controlsRow: { paddingHorizontal: 14, paddingTop: 12, paddingBottom: 4 },
+  controlsRow: { paddingHorizontal: 14, paddingTop: 10, paddingBottom: 4 },
   searchWrap: {
     flexDirection: "row",
     alignItems: "center",

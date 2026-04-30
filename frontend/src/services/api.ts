@@ -6,6 +6,93 @@ export interface FeedItem {
   feed_type: string;
   quantity_kg: number;
 }
+export interface InsuranceCreate {
+  cow_id: string;
+  cow_name: string;
+  cow_tag: string;
+  policy_number: string;
+  company: string;
+  sum_insured: number;
+  annual_premium: number;
+  start_date: string;        // YYYY-MM-DD
+  expiry_date: string;       // YYYY-MM-DD
+  premium_due_date: string;  // YYYY-MM-DD
+  notify_before_expiry?: boolean;
+  notify_before_due?: boolean;
+  expiry_alert_days?: number;
+  due_alert_days?: number;
+  notes?: string;
+  claim_filed?: boolean;
+  claim_date?: string;
+  claim_amount?: number;
+  claim_status?: string;
+  claim_notes?: string;
+}
+ 
+export interface Insurance {
+  id: string;
+  admin_id: string;
+  cow_id: string;
+  cow_name: string;
+  cow_tag: string;
+  policy_number: string;
+  company: string;
+  sum_insured: number;
+  annual_premium: number;
+  start_date: string;
+  expiry_date: string;
+  premium_due_date: string;
+  notify_before_expiry: boolean;
+  notify_before_due: boolean;
+  expiry_alert_days: number;
+  due_alert_days: number;
+  notes?: string;
+  claim_filed: boolean;
+  claim_date?: string;
+  claim_amount?: number;
+  claim_status?: string;   // "pending" | "approved" | "rejected"
+  claim_notes?: string;
+  status: string;          // "active" | "expiring" | "expired"
+  days_to_expiry?: number;
+  created_at: string;
+  updated_at?: string;
+}
+ 
+export interface InsuranceSummary {
+  total_insured: number;
+  active: number;
+  expiring_soon: number;
+  expired: number;
+  uninsured: number;
+  total_cows: number;
+  total_insured_value: number;
+  total_annual_premium: number;
+}
+ 
+export interface InsuranceNotificationLog {
+  id: string;
+  admin_id: string;
+  insurance_id: string;
+  cow_id: string;
+  cow_name: string;
+  cow_tag: string;
+  notification_type: string;
+  message: string;
+  sent_at: string;
+  success: boolean;
+}
+ 
+export interface InsuranceNotificationSettings {
+  admin_id: string;
+  notify_expiry: boolean;
+  notify_due: boolean;
+  notify_renewal: boolean;
+  notify_claim: boolean;
+  expiry_alert_days: number;
+  due_alert_days: number;
+  fcm_tokens: string[];
+  updated_at?: string;
+}
 
 class ApiService {
   private token: string | null = null;
@@ -611,6 +698,8 @@ async getAdminFeedLogs(token: string, date?: string, shift?: 'morning' | 'evenin
   }
 }
 
+
+
 async getAdminMilkLogs(date?: string) {
   const params = new URLSearchParams();
   if (date) params.append('date', date);
@@ -957,6 +1046,43 @@ async workerDeleteExtraTask(taskId: string) {
   return result;
 }
 
+async adminGetWorkerExtraTasks(workerId: string) {
+  const token = await AsyncStorage.getItem('access_token'); // ← was 'admin_token'
+  const response = await fetch(`${API_BASE}/api/admin/extra-tasks/${workerId}`, {
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.detail || 'Failed to fetch worker extra tasks');
+  return data.tasks;
+}
+
+async adminAddMilk(data: {
+  cow_id: string;
+  cow_name: string;
+  cow_tag: string;
+  quantity: number;
+  shift: 'morning' | 'evening';
+  date: string;
+}) {
+  return this.request<any>('/admin/milk/entry', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+async adminMarkFed(data: {
+  cow_id: string;
+  cow_name: string;
+  cow_tag: string;
+  date: string;
+  shift: 'morning' | 'evening';
+}) {
+  return this.request<any>('/admin/feed/mark', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
 async workerAddMilk(data: {
   cow_id: string;
   cow_name: string;
@@ -1182,6 +1308,103 @@ async toggleNotePin(id: string) {
   });
 }
 
+async createInsurance(data: InsuranceCreate): Promise<Insurance> {
+  return this.request<Insurance>('/gausevak/insurance', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+ 
+async getAllInsurances(params?: { status?: string; search?: string }): Promise<Insurance[]> {
+  const p = new URLSearchParams();
+  if (params?.status) p.append('status', params.status);
+  if (params?.search) p.append('search', params.search);
+  const q = p.toString() ? `?${p.toString()}` : '';
+  return this.request<Insurance[]>(`/gausevak/insurance${q}`);
+}
+ 
+async getCowInsurance(cowId: string): Promise<Insurance | null> {
+  try {
+    return await this.request<Insurance>(`/gausevak/cows/${cowId}/insurance`);
+  } catch {
+    return null;
+  }
+}
+ 
+async updateInsurance(insuranceId: string, data: Partial<InsuranceCreate>): Promise<Insurance> {
+  return this.request<Insurance>(`/gausevak/insurance/${insuranceId}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+ 
+async deleteInsurance(insuranceId: string): Promise<{ message: string; id: string }> {
+  return this.request(`/gausevak/insurance/${insuranceId}`, { method: 'DELETE' });
+}
+ 
+async getExpiringInsurances(days: number = 30): Promise<Insurance[]> {
+  return this.request<Insurance[]>(`/gausevak/insurance/expiring?days=${days}`);
+}
+ 
+// --- Claim ---
+ 
+async updateInsuranceClaim(insuranceId: string, data: {
+  claim_filed: boolean;
+  claim_date?: string;
+  claim_amount?: number;
+  claim_status?: string;
+  claim_notes?: string;
+}): Promise<Insurance> {
+  return this.request<Insurance>(`/gausevak/insurance/${insuranceId}/claim`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+ 
+// --- Summary & Logs ---
+ 
+async getInsuranceSummary(): Promise<InsuranceSummary> {
+  return this.request<InsuranceSummary>('/admin/insurance/summary');
+}
+ 
+async getInsuranceNotificationLogs(limit: number = 50): Promise<InsuranceNotificationLog[]> {
+  return this.request<InsuranceNotificationLog[]>(
+    `/admin/insurance/notifications?limit=${limit}`
+  );
+}
+ 
+// --- Notification Settings ---
+ 
+async getInsuranceNotificationSettings(): Promise<InsuranceNotificationSettings> {
+  return this.request<InsuranceNotificationSettings>(
+    '/admin/insurance/notification-settings'
+  );
+}
+ 
+async updateInsuranceNotificationSettings(data: {
+  notify_expiry?: boolean;
+  notify_due?: boolean;
+  notify_renewal?: boolean;
+  notify_claim?: boolean;
+  expiry_alert_days?: number;
+  due_alert_days?: number;
+  fcm_token?: string;
+}): Promise<InsuranceNotificationSettings> {
+  return this.request<InsuranceNotificationSettings>(
+    '/admin/insurance/notification-settings',
+    { method: 'PUT', body: JSON.stringify(data) }
+  );
+}
+ 
+async registerFcmToken(token: string): Promise<{ success: boolean; message: string }> {
+  return this.request(`/admin/insurance/register-fcm-token?token=${encodeURIComponent(token)}`, {
+    method: 'POST',
+  });
+}
+ 
+async sendTestInsuranceNotification(): Promise<{ success: boolean; tokens_count: number }> {
+  return this.request('/admin/insurance/send-test-notification', { method: 'POST' });
+}
 
 // Logout
   logout = async () => {

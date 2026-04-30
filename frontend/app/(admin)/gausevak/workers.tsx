@@ -32,6 +32,14 @@ interface Worker {
   admin_id?: string;
 }
 
+interface ExtraTask {
+  id: string;
+  task_type: string;
+  custom_label?: string;
+  description?: string;
+  date: string;
+}
+
 const DESIGNATIONS = [
   "Farm Manager",
   "Milking Operator",
@@ -134,7 +142,107 @@ const toastS = StyleSheet.create({
   msg: { flex: 1, fontSize: 13.5, fontWeight: "600", lineHeight: 18 },
 });
 
-// ── Worker Detail / Edit Modal 
+// ── Extra Task Item
+function ExtraTaskItem({ task, index }: { task: ExtraTask; index: number }) {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(12)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 300,
+        delay: index * 60,
+        useNativeDriver: true,
+      }),
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        delay: index * 60,
+        tension: 80,
+        friction: 12,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
+  const label = task.custom_label || task.task_type;
+  const formattedDate = new Date(task.date).toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+
+  return (
+    <Animated.View
+      style={[
+        etS.item,
+        { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
+      ]}
+    >
+      <View style={etS.iconBox}>
+        <Ionicons name="checkmark-done-outline" size={15} color="#2d6a4f" />
+      </View>
+      <View style={etS.info}>
+        <Text style={etS.label} numberOfLines={1}>
+          {label}
+        </Text>
+        {task.description ? (
+          <Text style={etS.desc} numberOfLines={2}>
+            {task.description}
+          </Text>
+        ) : null}
+        <View style={etS.dateRow}>
+          <Ionicons name="calendar-outline" size={10} color="#aaa" />
+          <Text style={etS.date}>{formattedDate}</Text>
+        </View>
+      </View>
+      <View style={etS.typeBadge}>
+        <Text style={etS.typeText} numberOfLines={1}>
+          {task.task_type}
+        </Text>
+      </View>
+    </Animated.View>
+  );
+}
+
+const etS = StyleSheet.create({
+  item: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    backgroundColor: "#f8fffe",
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: "#e8f5ee",
+  },
+  iconBox: {
+    width: 30,
+    height: 30,
+    borderRadius: 9,
+    backgroundColor: "#e8f5ee",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 1,
+  },
+  info: { flex: 1, gap: 2 },
+  label: { fontSize: 13, fontWeight: "700", color: "#1a1a1a" },
+  desc: { fontSize: 12, color: "#777", lineHeight: 16 },
+  dateRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 3 },
+  date: { fontSize: 10, color: "#aaa", fontWeight: "500" },
+  typeBadge: {
+    backgroundColor: "#e8f5ee",
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    alignSelf: "flex-start",
+    maxWidth: 90,
+  },
+  typeText: { fontSize: 10, color: "#2d6a4f", fontWeight: "700" },
+});
+
+// ── Worker Detail / Edit Modal
 function WorkerDetailModal({
   worker,
   visible,
@@ -150,6 +258,8 @@ function WorkerDetailModal({
 }) {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [extraTasks, setExtraTasks] = useState<ExtraTask[]>([]);
+  const [loadingTasks, setLoadingTasks] = useState(false);
   const [form, setForm] = useState({
     name: "",
     phone: "",
@@ -169,6 +279,7 @@ function WorkerDetailModal({
         farm_name: worker.farm_name || "",
       });
       setEditing(false);
+      setExtraTasks([]);
       scaleAnim.setValue(0.92);
       opacityAnim.setValue(0);
       slideAnim.setValue(40);
@@ -191,8 +302,24 @@ function WorkerDetailModal({
           stiffness: 200,
         }),
       ]).start();
+
+      // Fetch extra tasks for this worker
+      fetchExtraTasks(worker.id);
     }
   }, [visible, worker]);
+
+  const fetchExtraTasks = async (workerId: string) => {
+    try {
+      setLoadingTasks(true);
+      // Call the worker extra tasks endpoint scoped to this worker
+      const data = await api.adminGetWorkerExtraTasks(workerId);
+      setExtraTasks(Array.isArray(data) ? data : []);
+    } catch {
+      setExtraTasks([]);
+    } finally {
+      setLoadingTasks(false);
+    }
+  };
 
   if (!worker) return null;
 
@@ -394,11 +521,6 @@ function WorkerDetailModal({
                     label: "Farm",
                     val: worker.farm_name || "—",
                   },
-                  {
-                    icon: "shield-checkmark-outline",
-                    label: "Verified",
-                    val: worker.is_verified ? "Yes" : "No",
-                  },
                 ].map((row) => (
                   <View key={row.label} style={dm.detailRow}>
                     <View style={dm.detailIconBox}>
@@ -429,6 +551,50 @@ function WorkerDetailModal({
                     thumbColor={worker.is_active ? "#16a34a" : "#dc2626"}
                   />
                 </View>
+
+                {/* ── Extra Tasks Section ── */}
+                <View style={dm.extraTasksDivider} />
+                <View style={dm.extraTasksHeader}>
+                  <View style={dm.extraTasksHeaderLeft}>
+                    <View style={dm.extraTasksIconBox}>
+                      <Ionicons
+                        name="list-circle-outline"
+                        size={16}
+                        color="#2d6a4f"
+                      />
+                    </View>
+                    <Text style={dm.extraTasksTitle}>Extra Tasks Done</Text>
+                  </View>
+                  {!loadingTasks && extraTasks.length > 0 && (
+                    <View style={dm.extraTasksCountBadge}>
+                      <Text style={dm.extraTasksCountText}>
+                        {extraTasks.length}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+
+                {loadingTasks ? (
+                  <View style={dm.tasksLoading}>
+                    <ActivityIndicator size="small" color="#2d6a4f" />
+                    <Text style={dm.tasksLoadingText}>Loading tasks...</Text>
+                  </View>
+                ) : extraTasks.length === 0 ? (
+                  <View style={dm.noTasksBox}>
+                    <Ionicons
+                      name="clipboard-outline"
+                      size={28}
+                      color="#d0e8da"
+                    />
+                    <Text style={dm.noTasksText}>No extra tasks recorded</Text>
+                  </View>
+                ) : (
+                  <>
+                    {extraTasks.map((task, idx) => (
+                      <ExtraTaskItem key={task.id} task={task} index={idx} />
+                    ))}
+                  </>
+                )}
               </>
             )}
             <View style={{ height: 24 }} />
@@ -594,9 +760,76 @@ const dm = StyleSheet.create({
     paddingVertical: 15,
   },
   saveBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
+
+  // Extra Tasks styles
+  extraTasksDivider: {
+    height: 1,
+    backgroundColor: "#f0f0f0",
+    marginVertical: 16,
+  },
+  extraTasksHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  extraTasksHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  extraTasksIconBox: {
+    width: 30,
+    height: 30,
+    borderRadius: 9,
+    backgroundColor: "#e8f5ee",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  extraTasksTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#1a1a1a",
+    letterSpacing: 0.1,
+  },
+  extraTasksCountBadge: {
+    backgroundColor: "#2d6a4f",
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    minWidth: 22,
+    alignItems: "center",
+  },
+  extraTasksCountText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#fff",
+  },
+  tasksLoading: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 16,
+    justifyContent: "center",
+  },
+  tasksLoadingText: {
+    fontSize: 13,
+    color: "#999",
+    fontWeight: "500",
+  },
+  noTasksBox: {
+    alignItems: "center",
+    paddingVertical: 20,
+    gap: 8,
+  },
+  noTasksText: {
+    fontSize: 13,
+    color: "#bbb",
+    fontWeight: "500",
+  },
 });
 
-// ── Worker Card 
+// ── Worker Card
 function WorkerCard({
   item,
   index,
@@ -720,7 +953,7 @@ function WorkerCard({
   );
 }
 
-// ── Main Screen 
+// ── Main Screen
 export default function WorkersScreen() {
   const router = useRouter();
   const [workers, setWorkers] = useState<Worker[]>([]);
