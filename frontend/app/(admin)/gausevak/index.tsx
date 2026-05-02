@@ -550,26 +550,14 @@ function Header({
             <TouchableOpacity style={styles.notifBtn} onPress={() => setShowScanner(true)}>
               <Ionicons name="qr-code-outline" size={20} color="#7ca9d4" />
             </TouchableOpacity>
-
-            {/* Notification bell */}
-            <TouchableOpacity style={styles.notifBtn} onPress={onOpenNotifications}>
-              <Ionicons name="notifications-outline" size={20} color="#7ca9d4" />
-
-              {/* Loading dot — yellow */}
-              {notifLoading && (
-                <View style={[styles.notifDot, { backgroundColor: "#f5c842" }]} />
-              )}
-
-              {/* Pending dot — red pulsing */}
-              {!notifLoading && hasPending && (
-                <Animated.View style={[styles.notifDot, { transform: [{ scale: pulseAnim }] }]} />
-              )}
-
-              {/* All clear dot — green */}
-              {!notifLoading && showAllClear && (
-                <View style={[styles.notifDot, { backgroundColor: "#4ade80" }]} />
-              )}
-            </TouchableOpacity>
+            {/* <TouchableOpacity style={styles.notifBtn}> Notification icon 
+              <Ionicons
+                name="notifications-outline"
+                size={20}
+                color="#7ca9d4"
+              />
+              <View style={styles.notifDot} />
+            </TouchableOpacity> */}
           </View>
         </View>
 

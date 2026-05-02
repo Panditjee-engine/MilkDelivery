@@ -19,7 +19,7 @@ import {
   Alert,
   Image,
 } from "react-native";
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../../../src/services/api";
@@ -30,12 +30,16 @@ interface InseminationRecord {
   cowSrNo: string;
   cowName: string;
   inseminationDate: string;
+  aiDate?: string;
   pregnancyStatus: boolean;
   pdDone: boolean;
   pregnancyStatusDate?: string;
   doctorName?: string;
   actualCalvingDate?: string;
   heatAfterCalvingDate?: string;
+  sire?: string;
+  lastCalvingDate?: string;
+  lastCalvingCalfGender?: string; // NEW — "male" | "female"
   created_at: string;
 }
 
@@ -51,12 +55,16 @@ interface FormData {
   cowSrNo: string;
   cowName: string;
   inseminationDate: string;
+  aiDate: string;
   pregnancyStatus: boolean;
   pdDone: boolean;
   pregnancyStatusDate: string;
   doctorName: string;
   actualCalvingDate: string;
   heatAfterCalvingDate: string;
+  sire: string;
+  lastCalvingDate: string;
+  lastCalvingCalfGender: string; // NEW
 }
 
 const cowImg = require("../../../assets/images/gir-cow.png");
@@ -67,17 +75,20 @@ const EMPTY_FORM: FormData = {
   cowSrNo: "",
   cowName: "",
   inseminationDate: "",
+  aiDate: "",
   pregnancyStatus: false,
   pdDone: false,
   pregnancyStatusDate: "",
   doctorName: "",
   actualCalvingDate: "",
   heatAfterCalvingDate: "",
+  sire: "",
+  lastCalvingDate: "",
+  lastCalvingCalfGender: "", // NEW
 };
 
 const PAGE_SIZE = 4;
 
-// ── Auto-calculate expected calving date (insemination + 9 months + 9 days) ──
 function calcExpectedCalving(dateStr: string): string {
   if (!dateStr || dateStr.length < 8) return "";
   const parts = dateStr.split("/");
@@ -128,6 +139,7 @@ function getStatus(r: InseminationRecord) {
   };
 }
 
+// ─── CowSelector
 function CowSelector({
   value,
   onSelect,
@@ -157,7 +169,7 @@ function CowSelector({
       const first = data.slice(0, PAGE_SIZE);
       setVisibleCows(first);
       setHasMore(data.length > PAGE_SIZE);
-    } catch (e) {
+    } catch {
       setAllCows([]);
       setVisibleCows([]);
       setHasMore(false);
@@ -254,7 +266,6 @@ function CowSelector({
                   <Ionicons name="close" size={18} color="#6b7280" />
                 </TouchableOpacity>
               </View>
-
               <View style={cs.searchRow}>
                 <Ionicons name="search-outline" size={15} color="#9ca3af" />
                 <TextInput
@@ -273,13 +284,11 @@ function CowSelector({
                   </TouchableOpacity>
                 )}
               </View>
-
               {!loading && allCows.length > 0 && (
                 <Text style={cs.countHint}>
                   Showing {visibleCows.length} of {allCows.length} cows
                 </Text>
               )}
-
               {loading ? (
                 <View style={cs.loadingWrap}>
                   <ActivityIndicator color="#7c3aed" size="large" />
@@ -290,7 +299,7 @@ function CowSelector({
                   data={visibleCows}
                   keyExtractor={(item) => item.id}
                   style={cs.list}
-                  showsVerticalScrollIndicator={true}
+                  showsVerticalScrollIndicator
                   keyboardShouldPersistTaps="handled"
                   contentContainerStyle={{ paddingBottom: 8 }}
                   onEndReached={loadMore}
@@ -373,11 +382,10 @@ function CowSelector({
   );
 }
 
-
+// ─── Field 
 function Field({ label, value, onChange, placeholder, icon }: any) {
   const [focused, setFocused] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
-
   const isDateField = icon === "calendar-outline";
 
   const handleDateChange = (event: any, selectedDate?: Date) => {
@@ -393,7 +401,6 @@ function Field({ label, value, onChange, placeholder, icon }: any) {
   return (
     <View style={f.wrap}>
       <Text style={f.label}>{label}</Text>
-
       <TouchableOpacity
         activeOpacity={isDateField ? 0.7 : 1}
         onPress={() => {
@@ -410,19 +417,294 @@ function Field({ label, value, onChange, placeholder, icon }: any) {
               if (isDateField) setShowPicker(true);
             }}
           />
-
           <TextInput
             style={f.input}
             value={value}
             onChangeText={onChange}
             placeholder={placeholder ?? label}
             placeholderTextColor="#d1d5db"
-            editable={!isDateField} // typing disable for date
+            editable={!isDateField}
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
           />
         </View>
       </TouchableOpacity>
+      {showPicker && (
+        <DateTimePicker
+          value={new Date()}
+          mode="date"
+          display="default"
+          onChange={handleDateChange}
+        />
+      )}
+    </View>
+  );
+}
+
+// ─── AiDateField 
+function AiDateField({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const [showPicker, setShowPicker] = useState(false);
+
+  const handleDateChange = (event: any, selectedDate?: Date) => {
+    setShowPicker(false);
+    if (selectedDate) {
+      const day = String(selectedDate.getDate()).padStart(2, "0");
+      const month = String(selectedDate.getMonth() + 1).padStart(2, "0");
+      const year = selectedDate.getFullYear();
+      onChange(`${day}/${month}/${year}`);
+    }
+  };
+
+  return (
+    <View style={f.wrap}>
+      <Text style={f.label}>AI DATE (ARTIFICIAL INSEMINATION)</Text>
+      <TouchableOpacity activeOpacity={0.7} onPress={() => setShowPicker(true)}>
+        <View style={[f.row, f.aiDateRow]}>
+          <View style={f.aiIconBadge}>
+            <Text style={{ fontSize: 13 }}>🧬</Text>
+          </View>
+          <Text
+            style={[f.input, value ? f.aiDateValueText : f.aiDatePlaceholder]}
+          >
+            {value || "DD/MM/YYYY"}
+          </Text>
+          {!!value && (
+            <TouchableOpacity
+              onPress={() => onChange("")}
+              style={{ padding: 2 }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons name="close-circle" size={16} color="#a78bfa" />
+            </TouchableOpacity>
+          )}
+          <Ionicons
+            name="calendar"
+            size={15}
+            color="#7c3aed"
+            style={{ marginLeft: 4 }}
+          />
+        </View>
+      </TouchableOpacity>
+      {!!value && <Text style={f.aiDateHint}>📅 AI performed on {value}</Text>}
+      {showPicker && (
+        <DateTimePicker
+          value={new Date()}
+          mode="date"
+          display="default"
+          onChange={handleDateChange}
+        />
+      )}
+    </View>
+  );
+}
+
+// ─── LastCalvingDateField — date + gender picker 
+function LastCalvingDateField({
+  dateValue,
+  genderValue,
+  onDateChange,
+  onGenderChange,
+}: {
+  dateValue: string;
+  genderValue: string;
+  onDateChange: (v: string) => void;
+  onGenderChange: (v: string) => void;
+}) {
+  const [showPicker, setShowPicker] = useState(false);
+
+  const handleDateChange = (event: any, selectedDate?: Date) => {
+    setShowPicker(false);
+    if (selectedDate) {
+      const day = String(selectedDate.getDate()).padStart(2, "0");
+      const month = String(selectedDate.getMonth() + 1).padStart(2, "0");
+      const year = selectedDate.getFullYear();
+      onDateChange(`${day}/${month}/${year}`);
+    }
+  };
+
+  const clearDate = () => {
+    onDateChange("");
+    onGenderChange("");
+  };
+
+  return (
+    <View style={f.wrap}>
+      {/* Date picker row */}
+      <Text style={f.label}>LAST CALVING DATE</Text>
+      <TouchableOpacity activeOpacity={0.7} onPress={() => setShowPicker(true)}>
+        <View style={[f.row, !!dateValue && f.calvingDateActive]}>
+          <Ionicons
+            name="calendar-outline"
+            size={15}
+            color={dateValue ? "#16a34a" : "#9ca3af"}
+            style={{ marginRight: 8 }}
+          />
+          <Text
+            style={[
+              f.input,
+              dateValue ? f.calvingDateText : { color: "#d1d5db" },
+            ]}
+          >
+            {dateValue || "DD/MM/YYYY"}
+          </Text>
+          {!!dateValue && (
+            <TouchableOpacity
+              onPress={clearDate}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons name="close-circle" size={16} color="#86efac" />
+            </TouchableOpacity>
+          )}
+          <Ionicons
+            name="calendar"
+            size={15}
+            color={dateValue ? "#16a34a" : "#9ca3af"}
+            style={{ marginLeft: 4 }}
+          />
+        </View>
+      </TouchableOpacity>
+
+      {/* Gender selector — appears after date is selected */}
+      {!!dateValue && (
+        <View style={gb.container}>
+          <View style={gb.headerRow}>
+            <Ionicons name="git-branch-outline" size={13} color="#374151" />
+            <Text style={gb.headerText}>LAST CALF GENDER</Text>
+            {!!genderValue && (
+              <View
+                style={[
+                  gb.selectedBadge,
+                  {
+                    backgroundColor:
+                      genderValue === "male" ? "#dbeafe" : "#fce7f3",
+                    borderColor: genderValue === "male" ? "#93c5fd" : "#f9a8d4",
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    gb.selectedBadgeText,
+                    {
+                      color: genderValue === "male" ? "#1d4ed8" : "#be185d",
+                    },
+                  ]}
+                >
+                  {genderValue === "male"
+                    ? "🐂 Male selected"
+                    : "🐄 Female selected"}
+                </Text>
+              </View>
+            )}
+          </View>
+
+          <View style={gb.btnRow}>
+            {/* Male button */}
+            <TouchableOpacity
+              onPress={() =>
+                onGenderChange(genderValue === "male" ? "" : "male")
+              }
+              style={[
+                gb.btn,
+                genderValue === "male" ? gb.maleActive : gb.maleInactive,
+              ]}
+              activeOpacity={0.8}
+            >
+              {genderValue === "male" && (
+                <View style={gb.checkmark}>
+                  <Ionicons name="checkmark-circle" size={15} color="#1d4ed8" />
+                </View>
+              )}
+              <View
+                style={[
+                  gb.iconCircle,
+                  {
+                    backgroundColor:
+                      genderValue === "male" ? "#bfdbfe" : "#f3f4f6",
+                    borderColor: genderValue === "male" ? "#93c5fd" : "#e5e7eb",
+                  },
+                ]}
+              >
+                <Text style={{ fontSize: 26 }}>🐂</Text>
+              </View>
+              <Text
+                style={[
+                  gb.btnLabel,
+                  { color: genderValue === "male" ? "#1d4ed8" : "#374151" },
+                ]}
+              >
+                Male
+              </Text>
+              <Text
+                style={[
+                  gb.btnSub,
+                  { color: genderValue === "male" ? "#3b82f6" : "#9ca3af" },
+                ]}
+              >
+                Bull calf
+              </Text>
+            </TouchableOpacity>
+
+            {/* Female button */}
+            <TouchableOpacity
+              onPress={() =>
+                onGenderChange(genderValue === "female" ? "" : "female")
+              }
+              style={[
+                gb.btn,
+                genderValue === "female" ? gb.femaleActive : gb.femaleInactive,
+              ]}
+              activeOpacity={0.8}
+            >
+              {genderValue === "female" && (
+                <View style={gb.checkmark}>
+                  <Ionicons name="checkmark-circle" size={15} color="#be185d" />
+                </View>
+              )}
+              <View
+                style={[
+                  gb.iconCircle,
+                  {
+                    backgroundColor:
+                      genderValue === "female" ? "#fce7f3" : "#f3f4f6",
+                    borderColor:
+                      genderValue === "female" ? "#f9a8d4" : "#e5e7eb",
+                  },
+                ]}
+              >
+                <Text style={{ fontSize: 26 }}>🐄</Text>
+              </View>
+              <Text
+                style={[
+                  gb.btnLabel,
+                  { color: genderValue === "female" ? "#be185d" : "#374151" },
+                ]}
+              >
+                Female
+              </Text>
+              <Text
+                style={[
+                  gb.btnSub,
+                  { color: genderValue === "female" ? "#ec4899" : "#9ca3af" },
+                ]}
+              >
+                Heifer calf
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {!genderValue && (
+            <Text style={gb.hintText}>
+              👆 Tap to select the gender of the calf born
+            </Text>
+          )}
+        </View>
+      )}
 
       {showPicker && (
         <DateTimePicker
@@ -436,6 +718,7 @@ function Field({ label, value, onChange, placeholder, icon }: any) {
   );
 }
 
+// ─── ToggleCard 
 function ToggleCard({
   label,
   sub,
@@ -479,6 +762,7 @@ function ToggleCard({
   );
 }
 
+// ─── SectionHeader 
 function SectionHeader({
   title,
   icon,
@@ -496,6 +780,7 @@ function SectionHeader({
   );
 }
 
+// ─── RecordFormBody 
 function RecordFormBody({
   form,
   setF,
@@ -510,11 +795,11 @@ function RecordFormBody({
   const selectedCow = form.cowSrNo
     ? { tag: form.cowSrNo, name: form.cowName }
     : null;
-
   const expectedCalving = calcExpectedCalving(form.inseminationDate);
 
   return (
     <>
+      {/* ── Cow Info ── */}
       <SectionHeader
         title="Cow Information"
         icon="paw-outline"
@@ -544,6 +829,7 @@ function RecordFormBody({
         </View>
       ) : null}
 
+      {/* ── Insemination ── */}
       <SectionHeader
         title="Insemination"
         icon="flask-outline"
@@ -558,7 +844,29 @@ function RecordFormBody({
         icon="calendar-outline"
       />
 
-      {/* ── Auto-calculated Expected Calving Date ── */}
+      <AiDateField value={form.aiDate} onChange={setF("aiDate")} />
+
+      <Field
+        label="Sire (Bull Name)"
+        value={form.sire}
+        onChange={setF("sire")}
+        placeholder="e.g. HF Bull / Jersey Bull"
+        icon="male-outline"
+      />
+
+      {/* ── Last Calving Date + Gender (NEW combined field) ── */}
+      <SectionHeader title="Last Calving" icon="star-outline" color="#16a34a" />
+      <LastCalvingDateField
+        dateValue={form.lastCalvingDate}
+        genderValue={form.lastCalvingCalfGender}
+        onDateChange={(v) => {
+          setF("lastCalvingDate")(v);
+          if (!v) setF("lastCalvingCalfGender")(""); // clear gender when date cleared
+        }}
+        onGenderChange={setF("lastCalvingCalfGender")}
+      />
+
+      {/* Auto expected calving */}
       {!!expectedCalving && (
         <View style={f.expectedWrap}>
           <Text style={f.label}>EXPECTED CALVING DATE</Text>
@@ -580,6 +888,7 @@ function RecordFormBody({
         </View>
       )}
 
+      {/* ── Pregnancy ── */}
       <SectionHeader
         title="Pregnancy Status"
         icon="heart-outline"
@@ -593,6 +902,7 @@ function RecordFormBody({
         activeColor="#e11d48"
       />
 
+      {/* ── PD ── */}
       <SectionHeader
         title="Pregnancy Determination (PD)"
         icon="medical-outline"
@@ -624,10 +934,11 @@ function RecordFormBody({
         </View>
       )}
 
+      {/* ── Calving Details ── */}
       <SectionHeader
         title="Calving Details"
-        icon="star-outline"
-        color="#16a34a"
+        icon="leaf-outline"
+        color="#059669"
       />
       <Field
         label="Actual Calving Date"
@@ -648,6 +959,7 @@ function RecordFormBody({
   );
 }
 
+// ─── AddModal 
 function AddModal({
   visible,
   onClose,
@@ -669,6 +981,7 @@ function AddModal({
     setForm(EMPTY_FORM);
     onClose();
   };
+
   const submit = async () => {
     if (!form.cowSrNo || !form.inseminationDate) {
       Alert.alert(
@@ -683,6 +996,7 @@ function AddModal({
         cowSrNo: form.cowSrNo,
         cowName: form.cowName,
         inseminationDate: form.inseminationDate,
+        aiDate: form.aiDate || undefined,
         pregnancyStatus: form.pregnancyStatus,
         pdDone: form.pdDone,
         pregnancyStatusDate: form.pdDone
@@ -691,6 +1005,9 @@ function AddModal({
         doctorName: form.pdDone ? form.doctorName || undefined : undefined,
         actualCalvingDate: form.actualCalvingDate || undefined,
         heatAfterCalvingDate: form.heatAfterCalvingDate || undefined,
+        sire: form.sire || undefined,
+        lastCalvingDate: form.lastCalvingDate || undefined,
+        lastCalvingCalfGender: form.lastCalvingCalfGender || undefined, // NEW
       };
       const created = await api.createInsemination(payload);
       onAdd(created);
@@ -701,7 +1018,9 @@ function AddModal({
       setSub(false);
     }
   };
+
   const canSubmit = !!form.cowSrNo && !!form.inseminationDate;
+
   return (
     <Modal
       visible={visible}
@@ -766,6 +1085,7 @@ function AddModal({
   );
 }
 
+// ─── EditModal 
 function EditModal({
   visible,
   record,
@@ -779,27 +1099,34 @@ function EditModal({
 }) {
   const [form, setForm] = useState<FormData>(EMPTY_FORM);
   const [submitting, setSub] = useState(false);
+
   useEffect(() => {
     if (record) {
       setForm({
         cowSrNo: record.cowSrNo,
         cowName: record.cowName,
         inseminationDate: record.inseminationDate,
+        aiDate: record.aiDate ?? "",
         pregnancyStatus: record.pregnancyStatus,
         pdDone: record.pdDone,
         pregnancyStatusDate: record.pregnancyStatusDate ?? "",
         doctorName: record.doctorName ?? "",
         actualCalvingDate: record.actualCalvingDate ?? "",
         heatAfterCalvingDate: record.heatAfterCalvingDate ?? "",
+        sire: record.sire ?? "",
+        lastCalvingDate: record.lastCalvingDate ?? "",
+        lastCalvingCalfGender: record.lastCalvingCalfGender ?? "", // NEW
       });
     }
   }, [record]);
+
   const setF = (k: keyof FormData) => (v: any) =>
     setForm((p) => ({ ...p, [k]: v }));
   const handleCowSelect = (cow: Cow) =>
     setForm((p) => ({ ...p, cowSrNo: cow.tag, cowName: cow.name }));
   const handleCowClear = () =>
     setForm((p) => ({ ...p, cowSrNo: "", cowName: "" }));
+
   const save = async () => {
     if (!record || !form.cowSrNo || !form.inseminationDate) return;
     setSub(true);
@@ -808,6 +1135,7 @@ function EditModal({
         cowSrNo: form.cowSrNo,
         cowName: form.cowName,
         inseminationDate: form.inseminationDate,
+        aiDate: form.aiDate || undefined,
         pregnancyStatus: form.pregnancyStatus,
         pdDone: form.pdDone,
         pregnancyStatusDate: form.pdDone
@@ -816,6 +1144,9 @@ function EditModal({
         doctorName: form.pdDone ? form.doctorName || undefined : undefined,
         actualCalvingDate: form.actualCalvingDate || undefined,
         heatAfterCalvingDate: form.heatAfterCalvingDate || undefined,
+        sire: form.sire || undefined,
+        lastCalvingDate: form.lastCalvingDate || undefined,
+        lastCalvingCalfGender: form.lastCalvingCalfGender || undefined, // NEW
       };
       const updated = await api.updateInsemination(record.id, payload);
       onSave(updated);
@@ -826,7 +1157,9 @@ function EditModal({
       setSub(false);
     }
   };
+
   const canSave = !!form.cowSrNo && !!form.inseminationDate;
+
   return (
     <Modal
       visible={visible}
@@ -894,6 +1227,7 @@ function EditModal({
   );
 }
 
+// ─── DetailRow 
 function DetailRow({
   icon,
   label,
@@ -919,6 +1253,7 @@ function DetailRow({
   );
 }
 
+// ─── InseminationCard 
 function InseminationCard({
   item,
   index,
@@ -954,6 +1289,20 @@ function InseminationCard({
     ]).start();
   }, []);
 
+  const genderLabel =
+    item.lastCalvingCalfGender === "male"
+      ? "🐂 Male"
+      : item.lastCalvingCalfGender === "female"
+        ? "🐄 Female"
+        : "";
+
+  const genderColor =
+    item.lastCalvingCalfGender === "male"
+      ? "#1d4ed8"
+      : item.lastCalvingCalfGender === "female"
+        ? "#be185d"
+        : undefined;
+
   return (
     <Animated.View style={[c.card, { opacity, transform: [{ translateY }] }]}>
       <TouchableOpacity
@@ -970,6 +1319,7 @@ function InseminationCard({
           <View style={{ flex: 1, marginLeft: 10 }}>
             <Text style={c.name}>{item.cowName}</Text>
             <Text style={c.sr}>{item.cowSrNo}</Text>
+            {!!item.sire && <Text style={c.sireLabel}>🐂 {item.sire}</Text>}
           </View>
           <View
             style={[
@@ -993,12 +1343,26 @@ function InseminationCard({
             style={{ marginLeft: 8 }}
           />
         </View>
+
+        {/* Pills row */}
         <View style={c.pills}>
           <View style={c.pill}>
             <Ionicons name="flask-outline" size={10} color="#7c3aed" />
             <Text style={c.pillText}>{item.inseminationDate}</Text>
           </View>
-          {/* Expected calving pill */}
+          {!!item.aiDate && (
+            <View
+              style={[
+                c.pill,
+                { backgroundColor: "#fdf4ff", borderColor: "#e879f9" },
+              ]}
+            >
+              <Text style={{ fontSize: 9 }}>🧬</Text>
+              <Text style={[c.pillText, { color: "#a21caf" }]}>
+                AI {item.aiDate}
+              </Text>
+            </View>
+          )}
           {!!expectedCalving && !item.actualCalvingDate && (
             <View
               style={[
@@ -1046,12 +1410,63 @@ function InseminationCard({
               <Text style={[c.pillText, { color: "#0891b2" }]}>PD Done</Text>
             </View>
           )}
+          {!!item.sire && (
+            <View
+              style={[
+                c.pill,
+                { backgroundColor: "#fef3c7", borderColor: "#fcd34d" },
+              ]}
+            >
+              <Ionicons name="male-outline" size={10} color="#92400e" />
+              <Text style={[c.pillText, { color: "#92400e" }]}>
+                {item.sire}
+              </Text>
+            </View>
+          )}
+          {/* NEW — Last calf gender pill */}
+          {!!item.lastCalvingCalfGender && (
+            <View
+              style={[
+                c.pill,
+                {
+                  backgroundColor:
+                    item.lastCalvingCalfGender === "male"
+                      ? "#eff6ff"
+                      : "#fdf2f8",
+                  borderColor:
+                    item.lastCalvingCalfGender === "male"
+                      ? "#93c5fd"
+                      : "#f9a8d4",
+                },
+              ]}
+            >
+              <Text style={{ fontSize: 9 }}>
+                {item.lastCalvingCalfGender === "male" ? "🐂" : "🐄"}
+              </Text>
+              <Text
+                style={[
+                  c.pillText,
+                  {
+                    color:
+                      item.lastCalvingCalfGender === "male"
+                        ? "#1d4ed8"
+                        : "#be185d",
+                  },
+                ]}
+              >
+                {item.lastCalvingCalfGender === "male"
+                  ? "Male Calf"
+                  : "Female Calf"}
+              </Text>
+            </View>
+          )}
         </View>
       </TouchableOpacity>
 
       {expanded && (
         <View>
           <View style={c.divider} />
+
           <Text style={c.section}>📋 Insemination</Text>
           <DetailRow
             icon="calendar-outline"
@@ -1059,7 +1474,18 @@ function InseminationCard({
             value={item.inseminationDate}
             color="#7c3aed"
           />
-          {/* Expected calving in expanded view */}
+          <DetailRow
+            icon="flask"
+            label="AI Date"
+            value={item.aiDate ?? ""}
+            color="#a21caf"
+          />
+          <DetailRow
+            icon="male-outline"
+            label="Sire"
+            value={item.sire ?? ""}
+            color="#92400e"
+          />
           {!!expectedCalving && (
             <DetailRow
               icon="calendar"
@@ -1068,14 +1494,16 @@ function InseminationCard({
               color="#16a34a"
             />
           )}
-          <Text style={c.section}>Pregnancy Status</Text>
+
+          <Text style={c.section}>❤️ Pregnancy Status</Text>
           <DetailRow
             icon="heart"
             label="Status"
-            value={item.pregnancyStatus ? "Pregnant " : "Not Confirmed"}
+            value={item.pregnancyStatus ? "Pregnant ✓" : "Not Confirmed"}
             color={item.pregnancyStatus ? "#e11d48" : "#9ca3af"}
           />
-          <Text style={c.section}> PD Details</Text>
+
+          <Text style={c.section}>🏥 PD Details</Text>
           <DetailRow
             icon="checkmark-circle-outline"
             label="PD Done"
@@ -1098,10 +1526,26 @@ function InseminationCard({
               />
             </>
           )}
-          <Text style={c.section}> Calving</Text>
+
+          <Text style={c.section}>🐣 Calving</Text>
           <DetailRow
             icon="calendar-outline"
-            label="Calving Date"
+            label="Last Calving"
+            value={item.lastCalvingDate || "—"}
+            color={item.lastCalvingDate ? "#7c3aed" : "#9ca3af"}
+          />
+          {/* NEW — Last calf gender detail row */}
+          {!!item.lastCalvingCalfGender && (
+            <DetailRow
+              icon="male-female-outline"
+              label="Last Calf Gender"
+              value={genderLabel}
+              color={genderColor}
+            />
+          )}
+          <DetailRow
+            icon="calendar-outline"
+            label="Actual Calving"
             value={item.actualCalvingDate || "—"}
             color={item.actualCalvingDate ? "#16a34a" : "#9ca3af"}
           />
@@ -1111,6 +1555,7 @@ function InseminationCard({
             value={item.heatAfterCalvingDate || "—"}
             color={item.heatAfterCalvingDate ? "#d97706" : "#9ca3af"}
           />
+
           <View style={c.actionRow}>
             <TouchableOpacity
               style={[c.actionBtn, c.editBtn]}
@@ -1135,6 +1580,7 @@ function InseminationCard({
   );
 }
 
+// ─── Main Screen 
 export default function InseminationScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -1166,7 +1612,6 @@ export default function InseminationScreen() {
   useEffect(() => {
     fetchRecords();
   }, [fetchRecords]);
-
   useEffect(() => {
     const t = setTimeout(() => fetchRecords(search || undefined), 400);
     return () => clearTimeout(t);
@@ -1207,20 +1652,12 @@ export default function InseminationScreen() {
     calved: records.filter((r) => !!r.actualCalvingDate).length,
   };
 
-  const ANDROID_STATUS_BAR =
-    Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0;
-
   return (
     <View style={[s.screen, { paddingTop: insets.top }]}>
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
 
-      <View
-        style={[
-          s.header,
-          {
-          },
-        ]}
-      >
+      {/* ── Header ── */}
+      <View style={s.header}>
         <TouchableOpacity
           onPress={
             screen === "home" ? () => router.back() : () => setScreen("home")
@@ -1233,8 +1670,15 @@ export default function InseminationScreen() {
           <Text style={s.headerTitle}>Insemination</Text>
           <Text style={s.headerSub}>{records.length} records</Text>
         </View>
+        <TouchableOpacity
+          onPress={() => setAddModal(true)}
+          style={s.headerAddBtn}
+        >
+          <Ionicons name="add" size={20} color="#7c3aed" />
+        </TouchableOpacity>
       </View>
 
+      {/* ── Stats bar ── */}
       <View style={s.statsRow}>
         {[
           { label: "Total", value: stats.total, color: "#7c3aed" },
@@ -1252,6 +1696,7 @@ export default function InseminationScreen() {
         ))}
       </View>
 
+      {/* ── Home screen ── */}
       {screen === "home" ? (
         <View style={s.homeBody}>
           <Text style={s.homeHeading}>Insemination Records</Text>
@@ -1271,6 +1716,7 @@ export default function InseminationScreen() {
                 <Ionicons name="add" size={18} color="#fff" />
               </View>
             </TouchableOpacity>
+
             <TouchableOpacity
               onPress={() => setScreen("list")}
               style={s.bigBtn}
@@ -1394,6 +1840,7 @@ export default function InseminationScreen() {
   );
 }
 
+// Styles
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#FFF8F0" },
   header: {
@@ -1426,6 +1873,16 @@ const s = StyleSheet.create({
     color: "#9ca3af",
     fontWeight: "500",
     marginTop: 1,
+  },
+  headerAddBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#faf5ff",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#e9d5ff",
   },
   statsRow: {
     flexDirection: "row",
@@ -1601,6 +2058,12 @@ const c = StyleSheet.create({
     letterSpacing: -0.2,
   },
   sr: { fontSize: 12, color: "#9ca3af", fontWeight: "500", marginTop: 1 },
+  sireLabel: {
+    fontSize: 11,
+    color: "#92400e",
+    fontWeight: "600",
+    marginTop: 2,
+  },
   badge: {
     flexDirection: "row",
     alignItems: "center",
@@ -1688,6 +2151,41 @@ const f = StyleSheet.create({
   },
   focused: { borderColor: "#7c3aed", backgroundColor: "#fff" },
   input: { flex: 1, color: "#111827", fontSize: 14, fontWeight: "500" },
+
+  // AI Date
+  aiDateRow: {
+    backgroundColor: "#fdf4ff",
+    borderColor: "#e879f9",
+    borderWidth: 1.5,
+  },
+  aiIconBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: "#fae8ff",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+    borderWidth: 1,
+    borderColor: "#e879f9",
+  },
+  aiDateValueText: { color: "#a21caf", fontWeight: "700" },
+  aiDatePlaceholder: { color: "#d8b4fe", fontWeight: "500" },
+  aiDateHint: {
+    fontSize: 11,
+    color: "#c026d3",
+    marginTop: 4,
+    paddingLeft: 2,
+    fontWeight: "500",
+  },
+
+  // Last calving date active state
+  calvingDateActive: {
+    backgroundColor: "#f0fdf4",
+    borderColor: "#86efac",
+  },
+  calvingDateText: { color: "#15803d", fontWeight: "700" },
+
   sectionHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -1738,8 +2236,6 @@ const f = StyleSheet.create({
     color: "#fff",
     letterSpacing: 0.4,
   },
-
-  // ── Expected calving styles ──
   expectedWrap: { marginBottom: 12 },
   expectedRow: {
     flexDirection: "row",
@@ -1994,5 +2490,103 @@ const cs = StyleSheet.create({
     color: "#d1d5db",
     textAlign: "center",
     paddingVertical: 12,
+  },
+});
+
+// ─── Gender Button Styles (NEW)
+const gb = StyleSheet.create({
+  container: {
+    marginTop: 10,
+    marginBottom: 4,
+    backgroundColor: "#f9fafb",
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: "#e5e7eb",
+    padding: 14,
+  },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 12,
+  },
+  headerText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#374151",
+    letterSpacing: 0.4,
+    flex: 1,
+    textTransform: "uppercase",
+  },
+  selectedBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  selectedBadgeText: {
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  btnRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  btn: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 16,
+    paddingHorizontal: 8,
+    borderRadius: 14,
+    borderWidth: 2,
+    gap: 6,
+    position: "relative",
+  },
+  maleInactive: {
+    backgroundColor: "#f9fafb",
+    borderColor: "#e5e7eb",
+  },
+  maleActive: {
+    backgroundColor: "#eff6ff",
+    borderColor: "#3b82f6",
+  },
+  femaleInactive: {
+    backgroundColor: "#f9fafb",
+    borderColor: "#e5e7eb",
+  },
+  femaleActive: {
+    backgroundColor: "#fdf2f8",
+    borderColor: "#ec4899",
+  },
+  iconCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.5,
+    marginBottom: 2,
+  },
+  btnLabel: {
+    fontSize: 14,
+    fontWeight: "800",
+    letterSpacing: -0.2,
+  },
+  btnSub: {
+    fontSize: 11,
+    fontWeight: "500",
+  },
+  checkmark: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+  },
+  hintText: {
+    fontSize: 11,
+    color: "#9ca3af",
+    textAlign: "center",
+    marginTop: 10,
+    fontWeight: "500",
   },
 });

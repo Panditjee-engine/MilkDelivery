@@ -58,15 +58,19 @@ export default function Index() {
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.logoContainer}>
-        <View style={styles.logoCircle}>
-          <Text style={styles.logoEmoji}>🥛</Text>
-        </View>
-        <Text style={styles.title}>FreshMilk</Text>
-        <Text style={styles.subtitle}>Daily Essentials Delivered</Text>
-      </View>
+   <View style={styles.container}>
+  <View style={styles.logoContainer}>
+    <View style={styles.logoCircle}>
+      <Image
+        source={require('../assets/images/GawSatva.png')}
+        style={styles.logoImage}
+        resizeMode="contain"
+      />
     </View>
+    <Text style={styles.title}>Gau<Text style={styles.titleItalic}>satv</Text></Text>
+    <Text style={styles.subtitle}>Cow Farm Management</Text>
+  </View>
+</View>
   );
 }
 
@@ -80,20 +84,19 @@ const styles = StyleSheet.create({
   logoContainer: {
     alignItems: 'center',
   },
-  logoCircle: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: Colors.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-  },
+ logoCircle: {
+  width: 100,
+  height: 100,
+  borderRadius: 50,
+  backgroundColor: '#F5C97A',
+  justifyContent: 'center',
+  alignItems: 'center',
+  marginBottom: 20,
+},
+logoImage: {
+  width: 70,
+  height: 70,
+},
   logoEmoji: {
     fontSize: 60,
   },
@@ -102,6 +105,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Colors.textInverse,
     marginBottom: 8,
+  },
+  titleItalic: {
+    fontStyle: 'italic',
   },
   subtitle: {
     fontSize: 16,

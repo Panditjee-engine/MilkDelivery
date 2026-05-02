@@ -25,7 +25,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { api } from "../../../src/services/api";
 
 type CowType = "mature" | "newborn" | "bull";
-type Screen = "home" | "list";
 type PregnancyStatus = "pregnant" | "not_pregnant" | "unknown";
 
 interface Cow {
@@ -57,6 +56,28 @@ interface Cow {
   isExpired?: boolean;
   expiryDate?: string;
   expiryReason?: string;
+  isTransferred?: boolean;
+  transferGaushalaName?: string;
+  transferAddress?: string;
+  transferDate?: string;
+  soldGaushalaName?: string;
+  soldAddress?: string;
+  soldDate?: string;
+  soldPrice?: string;
+  soldReason?: string;
+}
+
+interface Insurance {
+  id: string;
+  company: string;
+  policy_number: string;
+  sum_insured: number;
+  annual_premium: number;
+  expiry_date: string;
+  status: string;
+  days_to_expiry?: number;
+  claim_filed?: boolean;
+  claim_status?: string;
 }
 
 interface CowForm {
@@ -79,10 +100,18 @@ interface CowForm {
   successRate: string;
   purpose: string;
   damYield: string;
-  // ── NEW expiry fields ──
   isExpired: boolean;
   expiryDate: string;
   expiryReason: string;
+  isTransferred: boolean;
+  transferGaushalaName: string;
+  transferAddress: string;
+  transferDate: string;
+  soldGaushalaName: string;
+  soldAddress: string;
+  soldDate: string;
+  soldPrice: string;
+  soldReason: string;
 }
 
 const cowImg = require("../../../assets/images/gir-cow.png");
@@ -115,19 +144,19 @@ const EMPTY_FORM: CowForm = {
   successRate: "",
   purpose: "breeding",
   damYield: "",
-  // ── NEW ──
   isExpired: false,
   expiryDate: "",
   expiryReason: "",
+  isTransferred: false,
+  transferGaushalaName: "",
+  transferAddress: "",
+  transferDate: "",
+  soldGaushalaName: "",
+  soldAddress: "",
+  soldDate: "",
+  soldPrice: "",
+  soldReason: "",
 };
-
-// Palette:
-// Primary:   #FFBF55 (golden amber)
-// Dark:      #8B6854 (warm brown)
-// Accent:    #BB6B3F (terracotta)
-// Light:     #8B6854 (pale gold)
-// Mid:       #8B6854 (peach orange)
-// Soft:      #FF9675 (salmon)
 
 const STATUS = {
   healthy: {
@@ -136,28 +165,20 @@ const STATUS = {
     border: "#8B6854",
     label: "Healthy",
   },
-  sick: {
-    color: "#8B6854",
-    bg: "#F5EFEA",
-    border: "#D4B8A8",
-    label: "Sick",
-  },
-  sold: {
-    color: "#FF9675",
-    bg: "#FFF5F2",
-    border: "#FFD4C4",
-    label: "Sold",
-  },
-  bull: {
-    color: "#FFBF55",
-    bg: "#FFFBF0",
-    border: "#8B6854",
-    label: "Bull",
+  sick: { color: "#8B6854", bg: "#F5EFEA", border: "#D4B8A8", label: "Sick" },
+  sold: { color: "#FF9675", bg: "#FFF5F2", border: "#FFD4C4", label: "Sold" },
+  bull: { color: "#FFBF55", bg: "#FFFBF0", border: "#8B6854", label: "Bull" },
+  transferred: {
+    color: "#7c3aed",
+    bg: "#fdf4ff",
+    border: "#e9d5ff",
+    label: "Transferred",
   },
 } as const;
 
 function derivedStatus(cow: Cow): keyof typeof STATUS {
   if (cow.type === "bull") return "bull";
+  if (cow.isTransferred) return "transferred";
   if (cow.isSold) return "sold";
   if (!cow.isActive) return "sick";
   return "healthy";
@@ -167,8 +188,7 @@ function getTodayStr(): string {
   const today = new Date();
   const dd = String(today.getDate()).padStart(2, "0");
   const mm = String(today.getMonth() + 1).padStart(2, "0");
-  const yyyy = today.getFullYear();
-  return `${dd}/${mm}/${yyyy}`;
+  return `${dd}/${mm}/${today.getFullYear()}`;
 }
 
 function strToDate(str: string): Date {
@@ -183,8 +203,7 @@ function strToDate(str: string): Date {
 function dateToStr(date: Date): string {
   const dd = String(date.getDate()).padStart(2, "0");
   const mm = String(date.getMonth() + 1).padStart(2, "0");
-  const yyyy = date.getFullYear();
-  return `${dd}/${mm}/${yyyy}`;
+  return `${dd}/${mm}/${date.getFullYear()}`;
 }
 
 function getActiveDays(activeSince?: string): number | null {
@@ -201,75 +220,7 @@ function getActiveDays(activeSince?: string): number | null {
   return diff >= 0 ? diff : null;
 }
 
-function ActiveDaysBadge({
-  activeSince,
-  isActive,
-}: {
-  activeSince?: string;
-  isActive: boolean;
-}) {
-  if (!isActive || !activeSince) return null;
-  const days = getActiveDays(activeSince);
-  if (days === null) return null;
-
-  const color =
-    days >= 365
-      ? "#8B6854"
-      : days >= 90
-        ? "#BB6B3F"
-        : days >= 30
-          ? "#8B6854"
-          : "#FF9675";
-  const bg =
-    days >= 365
-      ? "#F5EFEA"
-      : days >= 90
-        ? "#FFF8F0"
-        : days >= 30
-          ? "#FFF5EE"
-          : "#FFF5F2";
-  const border =
-    days >= 365
-      ? "#D4B8A8"
-      : days >= 90
-        ? "#8B6854"
-        : days >= 30
-          ? "#FFC4A0"
-          : "#FFD4C4";
-  const emoji =
-    days >= 365 ? "🏆" : days >= 90 ? "⭐" : days >= 30 ? "✅" : "🌱";
-  const milestone =
-    days >= 365
-      ? `${Math.floor(days / 365)}yr milestone`
-      : days >= 90
-        ? "3mo milestone"
-        : days >= 30
-          ? "1mo milestone"
-          : "Getting started";
-
-  return (
-    <View style={[ad.wrap, { backgroundColor: bg, borderColor: border }]}>
-      <View style={[ad.iconBox, { backgroundColor: color }]}>
-        <Ionicons name="calendar" size={18} color="#fff" />
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={[ad.title, { color }]}>Total Active Days</Text>
-        <View style={{ flexDirection: "row", alignItems: "baseline", gap: 4 }}>
-          <Text style={[ad.count, { color }]}>{days}</Text>
-          <Text style={[ad.unit, { color: color + "aa" }]}>days</Text>
-        </View>
-        <Text style={[ad.milestone, { color: color + "99" }]}>{milestone}</Text>
-      </View>
-      <View style={{ alignItems: "flex-end" }}>
-        <Text style={{ fontSize: 24 }}>{emoji}</Text>
-        <Text style={[ad.since, { color: color + "99" }]}>
-          Since {activeSince}
-        </Text>
-      </View>
-    </View>
-  );
-}
-
+// ── DateField 
 function DateField({
   label,
   value,
@@ -283,14 +234,11 @@ function DateField({
 }) {
   const [focused, setFocused] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
-
   const currentDate = value ? strToDate(value) : new Date();
 
   const handlePickerChange = (_: any, selectedDate?: Date) => {
     if (Platform.OS === "android") setShowPicker(false);
-    if (selectedDate) {
-      onChange(dateToStr(selectedDate));
-    }
+    if (selectedDate) onChange(dateToStr(selectedDate));
   };
 
   return (
@@ -324,7 +272,6 @@ function DateField({
           </TouchableOpacity>
         )}
       </View>
-
       {showPicker && Platform.OS === "ios" && (
         <Modal transparent animationType="slide" visible={showPicker}>
           <View style={f.pickerOverlay}>
@@ -349,7 +296,6 @@ function DateField({
           </View>
         </Modal>
       )}
-
       {showPicker && Platform.OS === "android" && (
         <DateTimePicker
           value={currentDate}
@@ -363,6 +309,7 @@ function DateField({
   );
 }
 
+// ── Field 
 function Field({
   label,
   value,
@@ -370,25 +317,41 @@ function Field({
   placeholder,
   icon,
   keyboardType,
+  multiline,
 }: any) {
   const [focused, setFocused] = useState(false);
   return (
     <View style={f.wrap}>
       <Text style={f.label}>{label}</Text>
-      <View style={[f.row, focused && f.focused]}>
+      <View
+        style={[
+          f.row,
+          focused && f.focused,
+          multiline && {
+            alignItems: "flex-start",
+            paddingTop: 10,
+            paddingBottom: 10,
+          },
+        ]}
+      >
         <Ionicons
           name={icon}
           size={15}
           color={focused ? "#FFBF55" : "#C4A882"}
-          style={{ marginRight: 8 }}
+          style={{ marginRight: 8, marginTop: multiline ? 2 : 0 }}
         />
         <TextInput
-          style={f.input}
+          style={[
+            f.input,
+            multiline && { minHeight: 64, textAlignVertical: "top" },
+          ]}
           value={value}
           onChangeText={onChange}
           placeholder={placeholder ?? label}
           placeholderTextColor="#D4B8A8"
           keyboardType={keyboardType ?? "default"}
+          multiline={multiline}
+          numberOfLines={multiline ? 3 : 1}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
         />
@@ -417,17 +380,14 @@ function BreedSelector({
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const searchRef = useRef<TextInput>(null);
-
   const filtered = BREEDS.filter((b) =>
     b.name.toLowerCase().includes(search.toLowerCase()),
   );
-
   const select = (name: string) => {
     onChange(name);
     setOpen(false);
     setSearch("");
   };
-
   const openDropdown = () => {
     setOpen(true);
     setTimeout(() => searchRef.current?.focus(), 150);
@@ -462,7 +422,6 @@ function BreedSelector({
           color="#C4A882"
         />
       </TouchableOpacity>
-
       <Modal
         visible={open}
         transparent
@@ -661,7 +620,166 @@ function PurposeSelector({
   );
 }
 
-// ── NEW: Expiry section shown only when isExpired is true ──
+function TransferSection({
+  form,
+  setF,
+}: {
+  form: CowForm;
+  setF: (k: keyof CowForm) => (v: any) => void;
+}) {
+  return (
+    <View style={tr.wrap}>
+      <View style={tr.toggleRow}>
+        <View style={tr.toggleLeft}>
+          <View style={tr.iconWrap}>
+            <Ionicons
+              name="swap-horizontal-outline"
+              size={15}
+              color="#7c3aed"
+            />
+          </View>
+          <View>
+            <Text style={tr.toggleLabel}>Mark as Transferred</Text>
+            <Text
+              style={[
+                tr.toggleSub,
+                { color: form.isTransferred ? "#7c3aed" : "#C4A882" },
+              ]}
+            >
+              {form.isTransferred ? "Yes – transferred" : "No"}
+            </Text>
+          </View>
+        </View>
+        <Switch
+          value={form.isTransferred}
+          onValueChange={(v) => {
+            setF("isTransferred")(v);
+            if (!v) {
+              setF("transferGaushalaName")("");
+              setF("transferAddress")("");
+              setF("transferDate")("");
+            }
+          }}
+          trackColor={{ false: "#F5EDE5", true: "#7c3aed44" }}
+          thumbColor={form.isTransferred ? "#7c3aed" : "#D4B8A8"}
+        />
+      </View>
+      {form.isTransferred && (
+        <View style={tr.fields}>
+          <View style={tr.divider} />
+          <Field
+            label="Gaushala Name"
+            value={form.transferGaushalaName}
+            onChange={setF("transferGaushalaName")}
+            placeholder="e.g. Shri Radha Gaushala"
+            icon="home-outline"
+          />
+          <Field
+            label="Address"
+            value={form.transferAddress}
+            onChange={setF("transferAddress")}
+            placeholder="City, State"
+            icon="location-outline"
+          />
+          <DateField
+            label="Transfer Date"
+            value={form.transferDate}
+            onChange={setF("transferDate")}
+            placeholder="DD/MM/YYYY"
+          />
+        </View>
+      )}
+    </View>
+  );
+}
+
+function SoldSection({
+  form,
+  setF,
+}: {
+  form: CowForm;
+  setF: (k: keyof CowForm) => (v: any) => void;
+}) {
+  return (
+    <View style={sd.wrap}>
+      <View style={sd.toggleRow}>
+        <View style={sd.toggleLeft}>
+          <View style={sd.iconWrap}>
+            <Ionicons name="pricetag-outline" size={15} color="#ea580c" />
+          </View>
+          <View>
+            <Text style={sd.toggleLabel}>Mark as Sold</Text>
+            <Text
+              style={[
+                sd.toggleSub,
+                { color: form.isSold ? "#ea580c" : "#C4A882" },
+              ]}
+            >
+              {form.isSold ? "Yes – sold" : "No"}
+            </Text>
+          </View>
+        </View>
+        <Switch
+          value={form.isSold}
+          onValueChange={(v) => {
+            setF("isSold")(v);
+            if (!v) {
+              setF("soldGaushalaName")("");
+              setF("soldAddress")("");
+              setF("soldDate")("");
+              setF("soldPrice")("");
+              setF("soldReason")("");
+            }
+          }}
+          trackColor={{ false: "#F5EDE5", true: "#ea580c44" }}
+          thumbColor={form.isSold ? "#ea580c" : "#D4B8A8"}
+        />
+      </View>
+      {form.isSold && (
+        <View style={sd.fields}>
+          <View style={sd.divider} />
+          <Field
+            label="Gaushala / Buyer Name"
+            value={form.soldGaushalaName}
+            onChange={setF("soldGaushalaName")}
+            placeholder="e.g. Ram Dairy Farm"
+            icon="person-outline"
+          />
+          <Field
+            label="Address"
+            value={form.soldAddress}
+            onChange={setF("soldAddress")}
+            placeholder="City, State"
+            icon="location-outline"
+          />
+          <DateField
+            label="Sale Date"
+            value={form.soldDate}
+            onChange={setF("soldDate")}
+            placeholder="DD/MM/YYYY"
+          />
+          <Field
+            label="Sale Price (₹)"
+            value={form.soldPrice}
+            onChange={setF("soldPrice")}
+            placeholder="e.g. 45000"
+            icon="cash-outline"
+            keyboardType="numeric"
+          />
+          <Field
+            label="Reason for Selling"
+            value={form.soldReason}
+            onChange={setF("soldReason")}
+            placeholder="e.g. Surplus cattle, low yield..."
+            icon="document-text-outline"
+            multiline
+          />
+        </View>
+      )}
+    </View>
+  );
+}
+
 function ExpirySection({
   form,
   setF,
@@ -671,7 +789,6 @@ function ExpirySection({
 }) {
   return (
     <View style={ex.wrap}>
-      {/* Toggle row inside the card */}
       <View style={ex.toggleRow}>
         <View style={ex.toggleLeft}>
           <View style={ex.iconWrap}>
@@ -702,8 +819,6 @@ function ExpirySection({
           thumbColor={form.isExpired ? "#dc2626" : "#D4B8A8"}
         />
       </View>
-
-      {/* Conditional fields – only shown when toggled on */}
       {form.isExpired && (
         <View style={ex.fields}>
           <View style={ex.divider} />
@@ -713,31 +828,14 @@ function ExpirySection({
             onChange={setF("expiryDate")}
             placeholder="DD/MM/YYYY"
           />
-          <View style={f.wrap}>
-            <Text style={f.label}>Reason for Expiry</Text>
-            <View
-              style={[
-                f.row,
-                { alignItems: "flex-start", paddingTop: 10, paddingBottom: 10 },
-              ]}
-            >
-              <Ionicons
-                name="document-text-outline"
-                size={15}
-                color="#C4A882"
-                style={{ marginRight: 8, marginTop: 2 }}
-              />
-              <TextInput
-                style={[f.input, { minHeight: 64, textAlignVertical: "top" }]}
-                value={form.expiryReason}
-                onChangeText={setF("expiryReason")}
-                placeholder="e.g. Natural death, disease, injury..."
-                placeholderTextColor="#D4B8A8"
-                multiline
-                numberOfLines={3}
-              />
-            </View>
-          </View>
+          <Field
+            label="Reason for Expiry"
+            value={form.expiryReason}
+            onChange={setF("expiryReason")}
+            placeholder="e.g. Natural death, disease, injury..."
+            icon="document-text-outline"
+            multiline
+          />
         </View>
       )}
     </View>
@@ -848,13 +946,6 @@ function CowFormFields({
               onChange={setF("isActive")}
               color="#BB6B3F"
             />
-            <View style={m.divider} />
-            <Toggle
-              label="Sold Status"
-              value={form.isSold}
-              onChange={setF("isSold")}
-              color="#8B6854"
-            />
           </View>
         </>
       ) : (
@@ -866,7 +957,6 @@ function CowFormFields({
             placeholder="e.g. BULL-001"
             icon="male-outline"
           />
-
           {isNewborn && (
             <View style={f.wrap}>
               <Text style={f.label}>Mother (Dam)</Text>
@@ -918,7 +1008,6 @@ function CowFormFields({
               )}
             </View>
           )}
-
           <Field
             label="Weight (kg)"
             value={form.weight}
@@ -958,13 +1047,6 @@ function CowFormFields({
             />
             <View style={m.divider} />
             <Toggle
-              label="Sold Status"
-              value={form.isSold}
-              onChange={setF("isSold")}
-              color="#8B6854"
-            />
-            <View style={m.divider} />
-            <Toggle
               label="Milk Recording"
               value={form.milkActive}
               onChange={setF("milkActive")}
@@ -974,14 +1056,15 @@ function CowFormFields({
         </>
       )}
 
-      {/* ── NEW: Expiry section (appears for all types) ── */}
+      <TransferSection form={form} setF={setF} />
+      <SoldSection form={form} setF={setF} />
       <ExpirySection form={form} setF={setF} />
-
       <View style={{ height: 12 }} />
     </>
   );
 }
 
+// ── AddCowModal 
 function AddCowModal({
   visible,
   onClose,
@@ -997,7 +1080,6 @@ function AddCowModal({
   const [form, setForm] = useState<CowForm>(EMPTY_FORM);
   const [submitting, setSub] = useState(false);
   const fade = useRef(new Animated.Value(0)).current;
-
   const setF = (k: keyof CowForm) => (v: any) =>
     setForm((p) => ({ ...p, [k]: v }));
 
@@ -1040,12 +1122,34 @@ function AddCowModal({
         type: form.type,
         milkActive: !isBull ? form.milkActive : undefined,
         activeSince: form.isActive ? getTodayStr() : undefined,
-        // ── NEW expiry fields ──
         isExpired: form.isExpired,
         expiryDate:
           form.isExpired && form.expiryDate ? form.expiryDate : undefined,
         expiryReason:
           form.isExpired && form.expiryReason ? form.expiryReason : undefined,
+        isTransferred: form.isTransferred,
+        transferGaushalaName:
+          form.isTransferred && form.transferGaushalaName
+            ? form.transferGaushalaName
+            : undefined,
+        transferAddress:
+          form.isTransferred && form.transferAddress
+            ? form.transferAddress
+            : undefined,
+        transferDate:
+          form.isTransferred && form.transferDate
+            ? form.transferDate
+            : undefined,
+        soldGaushalaName:
+          form.isSold && form.soldGaushalaName
+            ? form.soldGaushalaName
+            : undefined,
+        soldAddress:
+          form.isSold && form.soldAddress ? form.soldAddress : undefined,
+        soldDate: form.isSold && form.soldDate ? form.soldDate : undefined,
+        soldPrice: form.isSold && form.soldPrice ? form.soldPrice : undefined,
+        soldReason:
+          form.isSold && form.soldReason ? form.soldReason : undefined,
         ...(isBull && {
           semenAvailable: form.semenAvailable,
           totalDoses: form.totalDoses ? parseInt(form.totalDoses) : undefined,
@@ -1185,7 +1289,6 @@ function AddCowModal({
                 </TouchableOpacity>
               </View>
             )}
-
             {step === "form" && (
               <Animated.View style={{ opacity: fade }}>
                 <View style={m.header}>
@@ -1283,6 +1386,7 @@ function AddCowModal({
   );
 }
 
+// ── EditCowModal 
 function EditCowModal({
   cow,
   visible,
@@ -1325,10 +1429,18 @@ function EditCowModal({
         successRate: cow.successRate?.toString() ?? "",
         purpose: cow.purpose ?? "breeding",
         damYield: cow.damYield?.toString() ?? "",
-        // ── NEW ──
         isExpired: cow.isExpired ?? false,
         expiryDate: cow.expiryDate ?? "",
         expiryReason: cow.expiryReason ?? "",
+        isTransferred: cow.isTransferred ?? false,
+        transferGaushalaName: cow.transferGaushalaName ?? "",
+        transferAddress: cow.transferAddress ?? "",
+        transferDate: cow.transferDate ?? "",
+        soldGaushalaName: cow.soldGaushalaName ?? "",
+        soldAddress: cow.soldAddress ?? "",
+        soldDate: cow.soldDate ?? "",
+        soldPrice: cow.soldPrice ?? "",
+        soldReason: cow.soldReason ?? "",
       });
     }
   }, [cow]);
@@ -1346,11 +1458,9 @@ function EditCowModal({
     try {
       const isBull = form.type === "bull";
       let activeSince: string | undefined | null = originalActiveSince.current;
-      if (!originalIsActive.current && form.isActive) {
+      if (!originalIsActive.current && form.isActive)
         activeSince = getTodayStr();
-      } else if (originalIsActive.current && !form.isActive) {
-        activeSince = null;
-      }
+      else if (originalIsActive.current && !form.isActive) activeSince = null;
 
       const payload: any = {
         tag: form.tag,
@@ -1366,12 +1476,34 @@ function EditCowModal({
         type: form.type,
         activeSince: activeSince ?? undefined,
         milkActive: !isBull ? form.milkActive : undefined,
-        // ── NEW expiry fields ──
         isExpired: form.isExpired,
         expiryDate:
           form.isExpired && form.expiryDate ? form.expiryDate : undefined,
         expiryReason:
           form.isExpired && form.expiryReason ? form.expiryReason : undefined,
+        isTransferred: form.isTransferred,
+        transferGaushalaName:
+          form.isTransferred && form.transferGaushalaName
+            ? form.transferGaushalaName
+            : undefined,
+        transferAddress:
+          form.isTransferred && form.transferAddress
+            ? form.transferAddress
+            : undefined,
+        transferDate:
+          form.isTransferred && form.transferDate
+            ? form.transferDate
+            : undefined,
+        soldGaushalaName:
+          form.isSold && form.soldGaushalaName
+            ? form.soldGaushalaName
+            : undefined,
+        soldAddress:
+          form.isSold && form.soldAddress ? form.soldAddress : undefined,
+        soldDate: form.isSold && form.soldDate ? form.soldDate : undefined,
+        soldPrice: form.isSold && form.soldPrice ? form.soldPrice : undefined,
+        soldReason:
+          form.isSold && form.soldReason ? form.soldReason : undefined,
         ...(isBull && {
           semenAvailable: form.semenAvailable,
           totalDoses: form.totalDoses ? parseInt(form.totalDoses) : undefined,
@@ -1401,7 +1533,6 @@ function EditCowModal({
   };
 
   const isBull = cow?.type === "bull";
-
   return (
     <Modal
       visible={visible}
@@ -1460,6 +1591,7 @@ function EditCowModal({
   );
 }
 
+// ── QRModal 
 function QRModal({
   visible,
   onClose,
@@ -1533,6 +1665,31 @@ function DetailItem({
   );
 }
 
+// ── Insurance helpers 
+function getInsuranceColors(status: string) {
+  if (status === "expired")
+    return {
+      bg: "#fff1f2",
+      border: "#fecdd3",
+      color: "#dc2626",
+      icon: "shield-outline" as const,
+    };
+  if (status === "expiring")
+    return {
+      bg: "#fffbeb",
+      border: "#fde68a",
+      color: "#d97706",
+      icon: "shield-half-outline" as const,
+    };
+  return {
+    bg: "#f0fdf4",
+    border: "#bbf7d0",
+    color: "#16a34a",
+    icon: "shield-checkmark" as const,
+  };
+}
+
+// ── CowCard 
 function CowCard({
   item,
   index,
@@ -1546,11 +1703,20 @@ function CowCard({
   onDelete: (cow: Cow) => void;
   onUpdate: (cow: Cow) => void;
 }) {
+  const router = useRouter();
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(16)).current;
   const [expanded, setExpanded] = useState(false);
   const [qrLoading, setQrLoading] = useState(false);
   const [qrVisible, setQrVisible] = useState(false);
+
+  // ── Insurance state 
+  const [insurance, setInsurance] = useState<Insurance | null | undefined>(
+    undefined,
+  );
+  const [insuranceLoading, setInsuranceLoading] = useState(false);
+  const insuranceFetched = useRef(false);
+
   const st = STATUS[derivedStatus(item)];
   const isBull = item.type === "bull";
   const activeDays = getActiveDays(item.activeSince);
@@ -1573,6 +1739,19 @@ function CowCard({
     ]).start();
   }, []);
 
+  // Fetch insurance when card is first expanded
+  useEffect(() => {
+    if (expanded && !insuranceFetched.current) {
+      insuranceFetched.current = true;
+      setInsuranceLoading(true);
+      api
+        .getCowInsurance(item.id)
+        .then((ins) => setInsurance(ins ?? null))
+        .catch(() => setInsurance(null))
+        .finally(() => setInsuranceLoading(false));
+    }
+  }, [expanded]);
+
   const handleQR = async () => {
     if (item.qrCode) {
       setQrVisible(true);
@@ -1589,6 +1768,24 @@ function CowCard({
       setQrLoading(false);
     }
   };
+
+  const navigateToInsurance = () => {
+    router.push({
+      pathname: "/(admin)/gausevak/insurance",
+      params: {
+        cowId: String(item.id),
+        cowTag: item.tag,
+        cowName: item.name,
+      },
+    } as any);
+  };
+
+  // Determine the insurance badge shown in collapsed header
+  const insuranceBadgeColor = insurance
+    ? getInsuranceColors(insurance.status).color
+    : insurance === null
+      ? "#d97706"
+      : undefined;
 
   return (
     <Animated.View
@@ -1626,6 +1823,64 @@ function CowCard({
                     <Text style={[c.badgeText, { color: "#16a34a" }]}>Semen ✓</Text>
                   </View>
                 )}
+                {item.isTransferred && (
+                  <View
+                    style={[
+                      c.badge,
+                      { backgroundColor: "#fdf4ff", borderColor: "#e9d5ff" },
+                    ]}
+                  >
+                    <Ionicons name="swap-horizontal" size={9} color="#7c3aed" />
+                    <Text style={[c.badgeText, { color: "#7c3aed" }]}>
+                      Transferred
+                    </Text>
+                  </View>
+                )}
+                {/* Insurance badge in header */}
+                {insurance !== undefined && insurance !== null && (
+                  <View
+                    style={[
+                      c.badge,
+                      {
+                        backgroundColor: getInsuranceColors(insurance.status)
+                          .bg,
+                        borderColor: getInsuranceColors(insurance.status)
+                          .border,
+                      },
+                    ]}
+                  >
+                    <Ionicons
+                      name={getInsuranceColors(insurance.status).icon}
+                      size={9}
+                      color={getInsuranceColors(insurance.status).color}
+                    />
+                    <Text
+                      style={[
+                        c.badgeText,
+                        { color: getInsuranceColors(insurance.status).color },
+                      ]}
+                    >
+                      {insurance.status === "expiring"
+                        ? "Exp Soon"
+                        : insurance.status === "expired"
+                          ? "Ins Exp"
+                          : "Insured"}
+                    </Text>
+                  </View>
+                )}
+                {insurance === null && (
+                  <View
+                    style={[
+                      c.badge,
+                      { backgroundColor: "#fffbeb", borderColor: "#fde68a" },
+                    ]}
+                  >
+                    <Ionicons name="shield-outline" size={9} color="#d97706" />
+                    <Text style={[c.badgeText, { color: "#d97706" }]}>
+                      Uninsured
+                    </Text>
+                  </View>
+                )}
               </View>
             </View>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
@@ -1653,7 +1908,82 @@ function CowCard({
       {expanded && (
         <>
           <View style={c.divider} />
-          <ActiveDaysBadge activeSince={item.activeSince} isActive={item.isActive} />
+
+          {/* Transfer info banner */}
+          {item.isTransferred && (
+            <View
+              style={[
+                c.infoBanner,
+                { backgroundColor: "#fdf4ff", borderColor: "#e9d5ff" },
+              ]}
+            >
+              <Ionicons name="swap-horizontal" size={14} color="#7c3aed" />
+              <View style={{ flex: 1, marginLeft: 8 }}>
+                <Text style={[c.infoBannerTitle, { color: "#7c3aed" }]}>
+                  Transferred
+                </Text>
+                {item.transferGaushalaName ? (
+                  <Text style={[c.infoBannerSub, { color: "#7c3aed" }]}>
+                    To: {item.transferGaushalaName}
+                  </Text>
+                ) : null}
+                {item.transferAddress ? (
+                  <Text style={[c.infoBannerSub, { color: "#7c3aed" }]}>
+                    Address: {item.transferAddress}
+                  </Text>
+                ) : null}
+                {item.transferDate ? (
+                  <Text style={[c.infoBannerSub, { color: "#7c3aed" }]}>
+                    Date: {item.transferDate}
+                  </Text>
+                ) : null}
+              </View>
+            </View>
+          )}
+
+          {/* Sold info banner */}
+          {item.isSold &&
+            (item.soldGaushalaName || item.soldDate || item.soldPrice) && (
+              <View
+                style={[
+                  c.infoBanner,
+                  { backgroundColor: "#fff7ed", borderColor: "#fed7aa" },
+                ]}
+              >
+                <Ionicons name="pricetag" size={14} color="#ea580c" />
+                <View style={{ flex: 1, marginLeft: 8 }}>
+                  <Text style={[c.infoBannerTitle, { color: "#ea580c" }]}>
+                    Sold
+                  </Text>
+                  {item.soldGaushalaName ? (
+                    <Text style={[c.infoBannerSub, { color: "#ea580c" }]}>
+                      To: {item.soldGaushalaName}
+                    </Text>
+                  ) : null}
+                  {item.soldAddress ? (
+                    <Text style={[c.infoBannerSub, { color: "#ea580c" }]}>
+                      Address: {item.soldAddress}
+                    </Text>
+                  ) : null}
+                  {item.soldDate ? (
+                    <Text style={[c.infoBannerSub, { color: "#ea580c" }]}>
+                      Date: {item.soldDate}
+                    </Text>
+                  ) : null}
+                  {item.soldPrice ? (
+                    <Text style={[c.infoBannerSub, { color: "#ea580c" }]}>
+                      Price: ₹{item.soldPrice}
+                    </Text>
+                  ) : null}
+                  {item.soldReason ? (
+                    <Text style={[c.infoBannerSub, { color: "#ea580c" }]}>
+                      Reason: {item.soldReason}
+                    </Text>
+                  ) : null}
+                </View>
+              </View>
+            )}
+
           {isBull ? (
             <>
               <View style={c.bullStatsRow}>
@@ -1683,74 +2013,235 @@ function CowCard({
                   <DetailItem icon="water-outline" label="Dam Yield" value={`${item.damYield} L/day`} />
                 )}
               </View>
-              <View style={c.pillRow}>
-                <View style={[c.pill, { backgroundColor: item.semenAvailable ? "#f0fdf4" : "#f9fafb", borderColor: item.semenAvailable ? "#86efac" : "#e5e7eb" }]}>
-                  <Ionicons name="flask-outline" size={12} color={item.semenAvailable ? "#16a34a" : "#9ca3af"} />
-                  <Text style={[c.pillText, { color: item.semenAvailable ? "#16a34a" : "#9ca3af" }]}>
-                    {item.semenAvailable ? "Semen Available" : "No Semen"}
-                  </Text>
-                </View>
-                <View style={[c.pill, { backgroundColor: item.isActive ? "#f0fdf4" : "#fff1f2", borderColor: item.isActive ? "#86efac" : "#fecdd3" }]}>
-                  <Ionicons name={item.isActive ? "checkmark-circle" : "close-circle"} size={12} color={item.isActive ? "#16a34a" : "#dc2626"} />
-                  <Text style={[c.pillText, { color: item.isActive ? "#16a34a" : "#dc2626" }]}>
-                    {item.isActive ? "Active" : "Inactive"}
-                  </Text>
-                </View>
-              </View>
             </>
           ) : (
-            <>
-              <View style={c.grid}>
-                <DetailItem icon="scale-outline" label="Weight" value={item.weight || "—"} />
-                <DetailItem icon="male-outline" label="Father" value={item.father || "—"} />
-                {item.type === "newborn" && (
-                  <DetailItem icon="female-outline" label="Mother" value={(item as any).mother || "—"} />
-                )}
-                <DetailItem icon="resize-outline" label="Size" value={item.size || "—"} />
+            <View style={c.grid}>
+              <DetailItem
+                icon="scale-outline"
+                label="Weight"
+                value={item.weight || "—"}
+              />
+              <DetailItem
+                icon="male-outline"
+                label="Father"
+                value={item.father || "—"}
+              />
+              {item.type === "newborn" && (
                 <DetailItem
-                  icon="calendar-outline"
-                  label={item.type === "newborn" ? "Born" : "Bought"}
-                  value={item.bornDate || item.boughtDate || "—"}
+                  icon="female-outline"
+                  label="Mother"
+                  value={(item as any).mother || "—"}
+                />
+              )}
+              <DetailItem
+                icon="resize-outline"
+                label="Size"
+                value={item.size || "—"}
+              />
+              <DetailItem
+                icon="calendar-outline"
+                label={item.type === "newborn" ? "Born" : "Bought"}
+                value={item.bornDate || item.boughtDate || "—"}
+              />
+            </View>
+          )}
+
+          {item.isExpired && (
+            <View
+              style={[
+                c.infoBanner,
+                { backgroundColor: "#fff1f2", borderColor: "#fecdd3" },
+              ]}
+            >
+              <Ionicons name="warning" size={14} color="#dc2626" />
+              <View style={{ flex: 1, marginLeft: 8 }}>
+                <Text style={[c.infoBannerTitle, { color: "#dc2626" }]}>
+                  Expired
+                </Text>
+                {item.expiryDate ? (
+                  <Text style={[c.infoBannerSub, { color: "#dc2626" }]}>
+                    Date: {item.expiryDate}
+                  </Text>
+                ) : null}
+                {item.expiryReason ? (
+                  <Text style={[c.infoBannerSub, { color: "#dc2626" }]}>
+                    Reason: {item.expiryReason}
+                  </Text>
+                ) : null}
+              </View>
+            </View>
+          )}
+
+          {/* ── Insurance Section*/}
+          <View style={ins.sectionHeader}>
+            <View style={ins.sectionTitleRow}>
+              <Ionicons name="shield-outline" size={13} color="#8B6854" />
+              <Text style={ins.sectionTitle}>Insurance</Text>
+            </View>
+          </View>
+
+          {insuranceLoading && (
+            <View style={ins.loadingRow}>
+              <ActivityIndicator size="small" color="#16a34a" />
+              <Text style={ins.loadingText}>Checking insurance...</Text>
+            </View>
+          )}
+
+          {!insuranceLoading && insurance && (
+            <View
+              style={[
+                ins.infoBanner,
+                {
+                  backgroundColor: getInsuranceColors(insurance.status).bg,
+                  borderColor: getInsuranceColors(insurance.status).border,
+                },
+              ]}
+            >
+              <View
+                style={[
+                  ins.shieldIconWrap,
+                  {
+                    backgroundColor:
+                      getInsuranceColors(insurance.status).color + "20",
+                  },
+                ]}
+              >
+                <Ionicons
+                  name={getInsuranceColors(insurance.status).icon}
+                  size={18}
+                  color={getInsuranceColors(insurance.status).color}
                 />
               </View>
-              <View style={c.pillRow}>
-                <View style={[c.pill, { backgroundColor: item.isActive ? "#f0fdf4" : "#fff1f2", borderColor: item.isActive ? "#86efac" : "#fecdd3" }]}>
-                  <Ionicons name={item.isActive ? "checkmark-circle" : "close-circle"} size={12} color={item.isActive ? "#16a34a" : "#dc2626"} />
-                  <Text style={[c.pillText, { color: item.isActive ? "#16a34a" : "#dc2626" }]}>
-                    {item.isActive ? "Active" : "Inactive"}
+              <View style={{ flex: 1, marginLeft: 10 }}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <Text
+                    style={[
+                      ins.insCompany,
+                      { color: getInsuranceColors(insurance.status).color },
+                    ]}
+                  >
+                    {insurance.company}
                   </Text>
+                  <View
+                    style={[
+                      ins.statusPill,
+                      {
+                        backgroundColor:
+                          getInsuranceColors(insurance.status).color + "20",
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        ins.statusPillText,
+                        { color: getInsuranceColors(insurance.status).color },
+                      ]}
+                    >
+                      {insurance.status === "expiring"
+                        ? "Expiring Soon"
+                        : insurance.status === "expired"
+                          ? "Expired"
+                          : "Active"}
+                    </Text>
+                  </View>
                 </View>
-                {item.isSold && (
-                  <View style={[c.pill, { backgroundColor: "#fff7ed", borderColor: "#fed7aa" }]}>
-                    <Ionicons name="pricetag" size={12} color="#ea580c" />
-                    <Text style={[c.pillText, { color: "#ea580c" }]}>Sold</Text>
+                <Text style={ins.policyNo}>
+                  Policy: {insurance.policy_number}
+                </Text>
+                <View style={ins.insDetailsRow}>
+                  <View style={ins.insDetailItem}>
+                    <Ionicons name="cash-outline" size={11} color="#6b7280" />
+                    <Text style={ins.insDetailText}>
+                      ₹{insurance.sum_insured?.toLocaleString("en-IN")}
+                    </Text>
+                  </View>
+                  <View style={ins.insDetailItem}>
+                    <Ionicons
+                      name="calendar-outline"
+                      size={11}
+                      color="#6b7280"
+                    />
+                    <Text style={ins.insDetailText}>
+                      Exp: {insurance.expiry_date}
+                    </Text>
+                  </View>
+                  {insurance.days_to_expiry != null && (
+                    <View style={ins.insDetailItem}>
+                      <Ionicons
+                        name="time-outline"
+                        size={11}
+                        color={getInsuranceColors(insurance.status).color}
+                      />
+                      <Text
+                        style={[
+                          ins.insDetailText,
+                          {
+                            color: getInsuranceColors(insurance.status).color,
+                            fontWeight: "700",
+                          },
+                        ]}
+                      >
+                        {insurance.days_to_expiry}d left
+                      </Text>
+                    </View>
+                  )}
+                </View>
+                {insurance.claim_filed && (
+                  <View style={ins.claimRow}>
+                    <Ionicons
+                      name="document-text-outline"
+                      size={10}
+                      color="#7c3aed"
+                    />
+                    <Text style={ins.claimText}>
+                      Claim {insurance.claim_status ?? "filed"}
+                    </Text>
                   </View>
                 )}
-                <View style={[c.pill, { backgroundColor: "#eff6ff", borderColor: "#bfdbfe" }]}>
-                  <Ionicons name={item.type === "newborn" ? "star" : "shield-checkmark"} size={12} color="#2563eb" />
-                  <Text style={[c.pillText, { color: "#2563eb" }]}>
-                    {item.type === "newborn" ? "New Born" : "Mature"}
-                  </Text>
+                <TouchableOpacity
+                  style={ins.editInsBtn}
+                  onPress={navigateToInsurance}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="create-outline" size={12} color="#fff" />
+                  <Text style={ins.editInsBtnText}>Manage Insurance</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {!insuranceLoading && insurance === null && (
+            <TouchableOpacity
+              style={ins.addInsuranceBtn}
+              onPress={navigateToInsurance}
+              activeOpacity={0.85}
+            >
+              <View style={ins.addInsuranceBtnLeft}>
+                <View style={ins.addInsuranceIcon}>
+                  <Ionicons name="shield-outline" size={16} color="#16a34a" />
                 </View>
-                {item.pregnancyStatus !== "unknown" && (
-                  <View style={[c.pill, { backgroundColor: item.pregnancyStatus === "pregnant" ? "#fdf4ff" : "#f9fafb", borderColor: item.pregnancyStatus === "pregnant" ? "#e9d5ff" : "#e5e7eb" }]}>
-                    <Text style={{ fontSize: 11 }}>
-                      {item.pregnancyStatus === "pregnant" ? "🤰" : ""}
-                    </Text>
-                    <Text style={[c.pillText, { color: item.pregnancyStatus === "pregnant" ? "#9333ea" : "#9ca3af" }]}>
-                      {item.pregnancyStatus === "pregnant" ? "Pregnant" : "Not Pregnant"}
-                    </Text>
-                  </View>
-                )}
-                <View style={[c.pill, { backgroundColor: item.milkActive ? "#ecfeff" : "#f9fafb", borderColor: item.milkActive ? "#a5f3fc" : "#e5e7eb" }]}>
-                  <Ionicons name="water-outline" size={12} color={item.milkActive ? "#0891b2" : "#9ca3af"} />
-                  <Text style={[c.pillText, { color: item.milkActive ? "#0891b2" : "#9ca3af" }]}>
-                    {item.milkActive ? "Milk Active" : "Milk Off"}
+                <View>
+                  <Text style={ins.addInsuranceBtnTitle}>
+                    No Insurance Found
+                  </Text>
+                  <Text style={ins.addInsuranceBtnSub}>
+                    Tap to add insurance coverage
                   </Text>
                 </View>
               </View>
-            </>
+              <View style={ins.addInsuranceArrow}>
+                <Ionicons name="arrow-forward" size={14} color="#16a34a" />
+              </View>
+            </TouchableOpacity>
           )}
+          {/* ── End Insurance Section ───────────────────────── */}
+
           <View style={c.actionRow}>
             <TouchableOpacity style={[c.actionBtn, c.editBtn]} onPress={() => onEdit(item)} activeOpacity={0.8}>
               <Ionicons name="create-outline" size={15} color="#2563eb" />
@@ -1781,11 +2272,11 @@ function CowCard({
   );
 }
 
+// ── Main Screen 
 export default function CowsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [cows, setCows] = useState<Cow[]>([]);
-  const [screen, setScreen] = useState<Screen>("home");
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState<
     "all" | "mature" | "newborn" | "bull"
@@ -1804,14 +2295,12 @@ export default function CowsScreen() {
         api.getCows(searchTerm),
         api.getInseminations().catch(() => []),
       ]);
-
       const pregnancyMap: Record<string, boolean> = {};
       for (const ins of inseminations) {
         const tag = ins.cowSrNo;
         if (!(tag in pregnancyMap)) pregnancyMap[tag] = ins.pregnancyStatus;
         else if (ins.pregnancyStatus === true) pregnancyMap[tag] = true;
       }
-
       const enriched: Cow[] = cowsData.map((cow: Cow) => ({
         ...cow,
         pregnancyStatus:
@@ -1821,7 +2310,6 @@ export default function CowsScreen() {
               : "not_pregnant"
             : "unknown",
       }));
-
       setCows(enriched);
     } catch (err: any) {
       setError(err.message ?? "Failed to load cows.");
@@ -1833,7 +2321,6 @@ export default function CowsScreen() {
   useEffect(() => {
     fetchCows();
   }, [fetchCows]);
-
   useEffect(() => {
     const t = setTimeout(() => fetchCows(search || undefined), 400);
     return () => clearTimeout(t);
@@ -1869,7 +2356,6 @@ export default function CowsScreen() {
 
   const bulls = cows.filter((c) => c.type === "bull");
   const nonBulls = cows.filter((c) => c.type !== "bull");
-
   const stats = {
     total: cows.length,
     active: nonBulls.filter((c) => c.isActive && !c.isSold).length,
@@ -1891,28 +2377,30 @@ export default function CowsScreen() {
     <View style={[s.screen, { paddingTop: insets.top }]}>
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
 
+      {/* Header */}
       <View style={s.header}>
-        <TouchableOpacity
-          onPress={
-            screen === "home" ? () => router.back() : () => setScreen("home")
-          }
-          style={s.backBtn}
-        >
+        <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
           <Ionicons name="arrow-back" size={20} color="#8B6854" />
         </TouchableOpacity>
         <View style={{ flex: 1, marginLeft: 12 }}>
-          <Text style={s.headerTitle}>
-            {screen === "home" ? "Cattle" : "All Animals"}
-          </Text>
+          <Text style={s.headerTitle}>Cattle</Text>
           <Text style={s.headerSub}>{cows.length} animals registered</Text>
         </View>
-        {screen === "list" && (
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
           <View style={s.countBadge}>
             <Text style={s.countText}>{filteredCows.length}</Text>
           </View>
-        )}
+          <TouchableOpacity
+            style={s.headerAddBtn}
+            onPress={() => setAddVisible(true)}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="add" size={27} color="#184d20" />
+          </TouchableOpacity>
+        </View>
       </View>
 
+      {/* Stats */}
       <View style={s.statsRow}>
         {[
           { label: "Total", value: stats.total, color: "#8B6854" },
@@ -1931,153 +2419,148 @@ export default function CowsScreen() {
         ))}
       </View>
 
-      {screen === "home" ? (
-        <View style={s.homeBody}>
-          <Text style={s.homeHeading}>What would you like to do?</Text>
-          <Text style={s.homeSub}>Manage your cattle records easily</Text>
-          <View style={s.btnGroup}>
-            <TouchableOpacity onPress={() => setAddVisible(true)} style={s.bigBtn} activeOpacity={0.85}>
-              <View style={[s.bigBtnIcon, { backgroundColor: "#f5f3ff" }]}>
-                <Image source={cowImg} style={{ width: 60, height: 60, resizeMode: "contain" }} />
-              </View>
-              <Text style={s.bigBtnTitle}>Add Animal</Text>
-              <Text style={s.bigBtnSub}>Register cow, calf, or bull</Text>
-              <View style={[s.bigBtnArrow, { backgroundColor: "#BB6B3F" }]}>
-                <Ionicons name="add" size={18} color="#fff" />
+      {/* Search */}
+      <View style={s.searchWrap}>
+        <Ionicons name="search-outline" size={16} color="#C4A882" />
+        <TextInput
+          style={s.searchInput}
+          placeholder="Search name, tag, breed..."
+          placeholderTextColor="#D4B8A8"
+          value={search}
+          onChangeText={setSearch}
+        />
+        {search.length > 0 && (
+          <TouchableOpacity onPress={() => setSearch("")}>
+            <Ionicons name="close-circle" size={16} color="#C4A882" />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Filter chips */}
+      <View style={s.filterCard}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{
+            paddingHorizontal: 12,
+            gap: 8,
+            paddingVertical: 2,
+          }}
+        >
+          {(["all", "mature", "newborn", "bull"] as const).map((t) => (
+            <TouchableOpacity
+              key={t}
+              onPress={() => setFilterType(t)}
+              style={[s.filterChip, filterType === t && s.filterChipActive]}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                <Image
+                  source={
+                    t === "bull" ? bullImg : t === "newborn" ? calfImg : cowImg
+                  }
+                  style={{ width: 20, height: 20, resizeMode: "contain" }}
+                />
+                <Text
+                  style={[
+                    s.filterChipText,
+                    filterType === t && s.filterChipTextActive,
+                  ]}
+                >
+                  {t === "all"
+                    ? "All"
+                    : t === "mature"
+                      ? "Cows"
+                      : t === "newborn"
+                        ? "Calves"
+                        : "Bulls"}
+                </Text>
               </View>
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => setScreen("list")} style={s.bigBtn} activeOpacity={0.85}>
-              <View style={[s.bigBtnIcon, { backgroundColor: "#eff6ff" }]}>
-                <Text style={{ fontSize: 32 }}>📋</Text>
-              </View>
-              <Text style={s.bigBtnTitle}>See All Animals</Text>
-              <Text style={s.bigBtnSub}>View, edit and manage all {cows.length} animals</Text>
-              <View style={[s.bigBtnArrow, { backgroundColor: "#2563eb" }]}>
-                <Ionicons name="arrow-forward" size={18} color="#fff" />
-              </View>
-            </TouchableOpacity>
-          </View>
+          ))}
+        </ScrollView>
+      </View>
+
+      {/* List */}
+      {loading && cows.length === 0 ? (
+        <View style={s.loadingWrap}>
+          <ActivityIndicator size="large" color="#FFBF55" />
+          <Text style={s.loadingText}>Loading animals...</Text>
+        </View>
+      ) : error ? (
+        <View style={s.errorWrap}>
+          <Text style={{ fontSize: 40 }}>⚠️</Text>
+          <Text style={s.errorText}>{error}</Text>
+          <TouchableOpacity
+            onPress={() => fetchCows(search || undefined)}
+            style={s.retryBtn}
+          >
+            <Ionicons name="refresh" size={14} color="#fff" />
+            <Text style={s.retryText}>Retry</Text>
+          </TouchableOpacity>
         </View>
       ) : (
-        <View style={{ flex: 1 }}>
-          <View style={s.searchWrap}>
-            <Ionicons name="search-outline" size={16} color="#C4A882" />
-            <TextInput
-              style={s.searchInput}
-              placeholder="Search name, tag, breed..."
-              placeholderTextColor="#D4B8A8"
-              value={search}
-              onChangeText={setSearch}
+        <FlatList
+          data={filteredCows}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={{
+            paddingHorizontal: 16,
+            paddingTop: 8,
+            paddingBottom: 120,
+          }}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor="#BB6B3F"
             />
-            {search.length > 0 && (
-              <TouchableOpacity onPress={() => setSearch("")}>
-                <Ionicons name="close-circle" size={16} color="#C4A882" />
-              </TouchableOpacity>
-            )}
-          </View>
-
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={s.filterRow}
-            contentContainerStyle={{ paddingHorizontal: 16, gap: 8, paddingBottom: 4 }}
-          >
-            {(["all", "mature", "newborn", "bull"] as const).map((t) => (
-              <TouchableOpacity
-                key={t}
-                onPress={() => setFilterType(t)}
-                style={[s.filterChip, filterType === t && s.filterChipActive]}
-              >
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                  <Image
-                    source={t === "bull" ? bullImg : t === "newborn" ? calfImg : cowImg}
-                    style={{ width: 25, height: 25, resizeMode: "contain" }}
-                  />
-                  <Text style={[s.filterChipText, filterType === t && s.filterChipTextActive]}>
-                    {t === "all" ? "All" : t === "mature" ? "Cows" : t === "newborn" ? "Calves" : "Bulls"}
-                  </Text>
-                </View>
-              </TouchableOpacity >
-            ))
-            }
-          </ScrollView >
-
-          {loading && cows.length === 0 ? (
-            <View style={s.loadingWrap}>
-              <ActivityIndicator size="large" color="#FFBF55" />
-              <Text style={s.loadingText}>Loading animals...</Text>
-            </View>
-          ) : error ? (
-            <View style={s.errorWrap}>
-              <Text style={{ fontSize: 40 }}>⚠️</Text>
-              <Text style={s.errorText}>{error}</Text>
-              <TouchableOpacity
-                onPress={() => fetchCows(search || undefined)}
-                style={s.retryBtn}
-              >
-                <Ionicons name="refresh" size={14} color="#fff" />
-                <Text style={s.retryText}>Retry</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <FlatList
-              data={filteredCows}
-              keyExtractor={(item) => item.id}
-              contentContainerStyle={{
-                paddingHorizontal: 16,
-                paddingTop: 8,
-                paddingBottom: 100,
-              }}
-              showsVerticalScrollIndicator={false}
-              refreshControl={
-                <RefreshControl
-                  refreshing={refreshing}
-                  onRefresh={onRefresh}
-                  tintColor="#FFBF55"
-                />
-              }
-              renderItem={({ item, index }) => (
-                <CowCard
-                  item={item}
-                  index={index}
-                  onEdit={(cow) => setEditCow(cow)}
-                  onDelete={handleDelete}
-                  onUpdate={(updated) =>
-                    setCows((prev) =>
-                      prev.map((c) => (c.id === updated.id ? updated : c)),
-                    )
-                  }
-                />
-              )}
-              ListEmptyComponent={
-                <View style={s.empty}>
-                  <Image
-                    source={
-                      filterType === "bull"
-                        ? bullImg
-                        : filterType === "newborn"
-                          ? calfImg
-                          : cowImg
-                    }
-                    style={{ width: 80, height: 80, resizeMode: "contain" }}
-                  />
-                  <Text style={s.emptyText}>
-                    No{" "}
-                    {filterType === "all"
-                      ? "animals"
-                      : filterType === "bull"
-                        ? "bulls"
-                        : filterType === "newborn"
-                          ? "calves"
-                          : "cows"}{" "}
-                    found
-                  </Text>
-                </View>
+          }
+          renderItem={({ item, index }) => (
+            <CowCard
+              item={item}
+              index={index}
+              onEdit={(cow) => setEditCow(cow)}
+              onDelete={handleDelete}
+              onUpdate={(updated) =>
+                setCows((prev) =>
+                  prev.map((c) => (c.id === updated.id ? updated : c)),
+                )
               }
             />
           )}
-        </View>
+          ListEmptyComponent={
+            <View style={s.empty}>
+              <Text style={{ fontSize: 48 }}>
+                {filterType === "bull"
+                  ? "🐂"
+                  : filterType === "newborn"
+                    ? "🐮"
+                    : "🐄"}
+              </Text>
+              <Text style={s.emptyText}>
+                No{" "}
+                {filterType === "all"
+                  ? "animals"
+                  : filterType === "bull"
+                    ? "bulls"
+                    : filterType === "newborn"
+                      ? "calves"
+                      : "cows"}{" "}
+                found
+              </Text>
+            </View>
+          }
+        />
       )}
+
+      {/* Floating Add Button 
+      <TouchableOpacity
+        style={s.fab}
+        onPress={() => setAddVisible(true)}
+        activeOpacity={0.85}
+      >
+        <Ionicons name="add" size={28} color="#fff" />
+      </TouchableOpacity> */}
 
       <AddCowModal
         visible={addVisible}
@@ -2100,13 +2583,10 @@ export default function CowsScreen() {
   );
 }
 
-// Styles
+// ── Styles 
 
 const s = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: "#fff",
-  },
+  screen: { flex: 1, backgroundColor: "#fff" },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -2125,6 +2605,16 @@ const s = StyleSheet.create({
     justifyContent: "center",
     borderWidth: 1,
     borderColor: "#f0ba9b",
+  },
+  headerAddBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 18,
+    backgroundColor: "#81df8f",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#185810",
   },
   headerTitle: {
     fontSize: 18,
@@ -2157,69 +2647,6 @@ const s = StyleSheet.create({
   statBorder: { borderRightWidth: 1, borderRightColor: "#F5EDE5" },
   statValue: { fontSize: 16, fontWeight: "800", letterSpacing: -0.3 },
   statLabel: { fontSize: 9, color: "#C4A882", marginTop: 2, fontWeight: "500" },
-  homeBody: {
-    flex: 1,
-    paddingHorizontal: 20,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  homeHeading: {
-    fontSize: 22,
-    fontWeight: "800",
-    color: "#fcad8",
-    letterSpacing: -0.4,
-    marginBottom: 6,
-    textAlign: "center",
-  },
-  homeSub: {
-    fontSize: 14,
-    color: "#C4A882",
-    fontWeight: "500",
-    marginBottom: 36,
-    textAlign: "center",
-  },
-  btnGroup: { width: "100%", gap: 14 },
-  bigBtn: {
-    backgroundColor: "#fff",
-    borderRadius: 20,
-    padding: 20,
-    borderWidth: 1.5,
-    borderColor: "#F5EDE5",
-    shadowColor: "#fcad80",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  bigBtnIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 14,
-  },
-  bigBtnTitle: {
-    fontSize: 17,
-    fontWeight: "800",
-    color: "#fcad80",
-    letterSpacing: -0.3,
-    marginBottom: 4,
-  },
-  bigBtnSub: {
-    fontSize: 13,
-    color: "#9ca3af",
-    fontWeight: "500",
-    marginBottom: 16,
-  },
-  bigBtnArrow: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-    alignSelf: "flex-start",
-  },
   filterRow: { maxHeight: 44, marginTop: 4 },
   filterChip: {
     paddingHorizontal: 12,
@@ -2228,10 +2655,27 @@ const s = StyleSheet.create({
     backgroundColor: "#FFF8F0",
     borderWidth: 1,
     borderColor: "#F5EDE5",
+    overflow: "hidden",
   },
   filterChipActive: { backgroundColor: "#8B6854", borderColor: "#8B6854" },
   filterChipText: { fontSize: 12, color: "#8B6854", fontWeight: "600" },
   filterChipTextActive: { color: "#fff" },
+
+  filterCard: {
+    marginHorizontal: 16,
+    marginTop: 10,
+    marginBottom: 4,
+    backgroundColor: "#FFF8F0",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#F5EDE5",
+    paddingVertical: 8,
+    shadowColor: "#BB6B3F",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+  },
   searchWrap: {
     flexDirection: "row",
     alignItems: "center",
@@ -2278,6 +2722,22 @@ const s = StyleSheet.create({
     paddingVertical: 10,
   },
   retryText: { fontSize: 13, fontWeight: "700", color: "#fff" },
+  fab: {
+    position: "absolute",
+    bottom: 30,
+    right: 20,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: "#BB6B3F",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#BB6B3F",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 10,
+  },
 });
 
 const c = StyleSheet.create({
@@ -2325,6 +2785,7 @@ const c = StyleSheet.create({
     alignItems: "center",
     gap: 4,
     flexShrink: 1,
+    flexWrap: "wrap",
   },
   tag: { fontSize: 12, color: "#9ca3af", fontWeight: "500" },
   miniDaysBadge: {
@@ -2388,23 +2849,7 @@ const c = StyleSheet.create({
   },
   detailLabel: { fontSize: 11, color: "#C4A882", fontWeight: "500" },
   detailValue: { fontSize: 11, color: "#5C3D2E", fontWeight: "600" },
-  pillRow: {
-    flexDirection: "row",
-    gap: 8,
-    flexWrap: "wrap",
-    marginBottom: 14,
-  },
-  pill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-  pillText: { fontSize: 11, fontWeight: "600" },
-  actionRow: { flexDirection: "row", gap: 8 },
+  actionRow: { flexDirection: "row", gap: 8, marginTop: 12 },
   actionBtn: {
     flex: 1,
     flexDirection: "row",
@@ -2419,56 +2864,17 @@ const c = StyleSheet.create({
   deleteBtn: { backgroundColor: "#FFF5F2", borderColor: "#FFD4C4" },
   qrBtn: { backgroundColor: "#F5EFEA", borderColor: "#D4B8A8" },
   actionText: { fontSize: 13, fontWeight: "700" },
-  // ── NEW: expiry banner shown in expanded card ──
-  expiryBanner: {
+  infoBanner: {
     flexDirection: "row",
     alignItems: "flex-start",
-    backgroundColor: "#fff1f2",
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#fecdd3",
     paddingHorizontal: 12,
     paddingVertical: 10,
     marginBottom: 12,
   },
-  expiryBannerTitle: { fontSize: 12, fontWeight: "700", color: "#dc2626" },
-  expiryBannerSub: {
-    fontSize: 11,
-    color: "#dc2626",
-    opacity: 0.8,
-    marginTop: 2,
-  },
-});
-
-const ad = StyleSheet.create({
-  wrap: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 12,
-  },
-  iconBox: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  title: {
-    fontSize: 10,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: 1,
-  },
-  count: { fontSize: 28, fontWeight: "800", letterSpacing: -1 },
-  unit: { fontSize: 13, fontWeight: "600" },
-  milestone: { fontSize: 10, fontWeight: "600", marginTop: 1 },
-  since: { fontSize: 10, fontWeight: "500", marginTop: 4 },
+  infoBannerTitle: { fontSize: 12, fontWeight: "700" },
+  infoBannerSub: { fontSize: 11, opacity: 0.85, marginTop: 2 },
 });
 
 const f = StyleSheet.create({
@@ -2637,7 +3043,6 @@ const m = StyleSheet.create({
     minHeight: 160,
     justifyContent: "space-between",
   },
-  typeEmoji: { fontSize: 36, marginBottom: 10 },
   typeTitle: {
     fontSize: 15,
     fontWeight: "800",
@@ -2701,7 +3106,7 @@ const m = StyleSheet.create({
     gap: 8,
     marginTop: 16,
   },
-  submitBtnTerra: { backgroundColor: "#f3dbbc" },
+  submitBtnTerra: { backgroundColor: "#C4A882" },
   submitText: {
     fontSize: 15,
     fontWeight: "800",
@@ -2894,7 +3299,78 @@ const bd = StyleSheet.create({
   },
 });
 
-// ── NEW: Expiry section styles ──
+const tr = StyleSheet.create({
+  wrap: {
+    backgroundColor: "#fdf4ff",
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: "#e9d5ff",
+    overflow: "hidden",
+    marginBottom: 4,
+    marginTop: 8,
+  },
+  toggleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  toggleLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
+  iconWrap: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    backgroundColor: "#e9d5ff",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  toggleLabel: { fontSize: 14, fontWeight: "700", color: "#7c3aed" },
+  toggleSub: { fontSize: 11, fontWeight: "500", marginTop: 2 },
+  fields: {
+    paddingHorizontal: 14,
+    paddingBottom: 14,
+    backgroundColor: "#faf5ff",
+  },
+  divider: { height: 1, backgroundColor: "#e9d5ff", marginBottom: 14 },
+});
+
+const sd = StyleSheet.create({
+  wrap: {
+    backgroundColor: "#fff7ed",
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: "#fed7aa",
+    overflow: "hidden",
+    marginBottom: 4,
+    marginTop: 8,
+  },
+  toggleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  toggleLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
+  iconWrap: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    backgroundColor: "#fed7aa",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  toggleLabel: { fontSize: 14, fontWeight: "700", color: "#ea580c" },
+  toggleSub: { fontSize: 11, fontWeight: "500", marginTop: 2 },
+  fields: {
+    paddingHorizontal: 14,
+    paddingBottom: 14,
+    backgroundColor: "#fffbf5",
+  },
+  divider: { height: 1, backgroundColor: "#fed7aa", marginBottom: 14 },
+});
+
 const ex = StyleSheet.create({
   wrap: {
     backgroundColor: "#fff1f2",
@@ -2912,11 +3388,7 @@ const ex = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
   },
-  toggleLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
+  toggleLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
   iconWrap: {
     width: 30,
     height: 30,
@@ -2932,9 +3404,173 @@ const ex = StyleSheet.create({
     paddingBottom: 14,
     backgroundColor: "#fff5f5",
   },
-  divider: {
-    height: 1,
-    backgroundColor: "#fecdd3",
-    marginBottom: 14,
+  divider: { height: 1, backgroundColor: "#fecdd3", marginBottom: 14 },
+});
+
+// ── Insurance Styles 
+const ins = StyleSheet.create({
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+    marginTop: 4,
+  },
+  sectionTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  sectionTitle: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#8B6854",
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+  },
+  loadingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+    marginBottom: 12,
+  },
+  loadingText: {
+    fontSize: 12,
+    color: "#9ca3af",
+    fontWeight: "500",
+  },
+  // ── Insured banner ──
+  infoBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    borderRadius: 14,
+    borderWidth: 1.5,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    marginBottom: 12,
+  },
+  shieldIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  insCompany: {
+    fontSize: 13,
+    fontWeight: "800",
+    letterSpacing: -0.2,
+  },
+  statusPill: {
+    borderRadius: 20,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  statusPillText: {
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  policyNo: {
+    fontSize: 11,
+    color: "#6b7280",
+    fontWeight: "500",
+    marginTop: 2,
+    marginBottom: 8,
+  },
+  insDetailsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginBottom: 6,
+  },
+  insDetailItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  insDetailText: {
+    fontSize: 11,
+    color: "#374151",
+    fontWeight: "600",
+  },
+  claimRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginBottom: 10,
+  },
+  claimText: {
+    fontSize: 11,
+    color: "#7c3aed",
+    fontWeight: "600",
+  },
+  editInsBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    alignSelf: "flex-start",
+    backgroundColor: "#16a34a",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginTop: 4,
+  },
+  editInsBtnText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#fff",
+  },
+  // ── Uninsured / Add button ──
+  addInsuranceBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#f0fdf4",
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: "#bbf7d0",
+    borderStyle: "dashed",
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    marginBottom: 12,
+  },
+  addInsuranceBtnLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    flex: 1,
+  },
+  addInsuranceIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: "#dcfce7",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#bbf7d0",
+  },
+  addInsuranceBtnTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#15803d",
+    letterSpacing: -0.2,
+  },
+  addInsuranceBtnSub: {
+    fontSize: 11,
+    color: "#4ade80",
+    fontWeight: "500",
+    marginTop: 1,
+  },
+  addInsuranceArrow: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: "#dcfce7",
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

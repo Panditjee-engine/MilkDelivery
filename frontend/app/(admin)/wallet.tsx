@@ -686,8 +686,8 @@ export default function AdminWalletScreen() {
 
           <Text style={s.heroAmount}>₹{balance.toFixed(2)}</Text>
 
-          {/* Action buttons */}
-          <View style={s.actionRow}>
+          {/* Action buttons Withdraw and edit bank modal Enable for admin now commented */}
+          {/* <View style={s.actionRow}>
             <TouchableOpacity
               style={s.actionBtn}
               onPress={handleWithdrawClick}
@@ -711,7 +711,7 @@ export default function AdminWalletScreen() {
                 {bankAccount ? "Edit Bank" : "Add Bank"}
               </Text>
             </TouchableOpacity>
-          </View>
+          </View> */}
 
           <View style={s.heroStatsRow}>
             <View style={s.heroStat}>
@@ -741,8 +741,8 @@ export default function AdminWalletScreen() {
           </View>
         </View>
 
-        {/* ── Bank Account Card ── */}
-        <View style={s.bankCard}>
+        {/* ── Bank Account Card Add bank Modal Commented now Enable for access── */}
+        {/* <View style={s.bankCard}>
           <View style={s.bankLeft}>
             <View style={s.bankIcon}>
               <Ionicons name="card-outline" size={20} color={C.dark} />
@@ -764,7 +764,7 @@ export default function AdminWalletScreen() {
           >
             <Text style={s.bankEditTxt}>{bankAccount ? "Edit" : "Add"}</Text>
           </TouchableOpacity>
-        </View>
+        </View> */}
 
         {/* ── Quick Stats ── */}
         <View style={s.quickStats}>
