@@ -2395,7 +2395,7 @@ export default function CowsScreen() {
             onPress={() => setAddVisible(true)}
             activeOpacity={0.85}
           >
-            <Ionicons name="add" size={27} color="#184d20" />
+            <Ionicons name="add" size={27} color="#ffffff" />
           </TouchableOpacity>
         </View>
       </View>
@@ -2437,48 +2437,49 @@ export default function CowsScreen() {
       </View>
 
       {/* Filter chips */}
-      <View style={s.filterCard}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{
-            paddingHorizontal: 12,
-            gap: 8,
-            paddingVertical: 2,
-          }}
-        >
-          {(["all", "mature", "newborn", "bull"] as const).map((t) => (
-            <TouchableOpacity
-              key={t}
-              onPress={() => setFilterType(t)}
-              style={[s.filterChip, filterType === t && s.filterChipActive]}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={s.filterRow}
+        contentContainerStyle={{
+          paddingHorizontal: 16,
+          gap: 8,
+          paddingBottom: 4,
+        }}
+      >
+        {(["all", "mature", "newborn", "bull"] as const).map((t) => (
+          <TouchableOpacity
+            key={t}
+            onPress={() => setFilterType(t)}
+            style={[s.filterChip, filterType === t && s.filterChipActive]}
+          >
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
             >
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                <Image
-                  source={
-                    t === "bull" ? bullImg : t === "newborn" ? calfImg : cowImg
-                  }
-                  style={{ width: 20, height: 20, resizeMode: "contain" }}
-                />
-                <Text
-                  style={[
-                    s.filterChipText,
-                    filterType === t && s.filterChipTextActive,
-                  ]}
-                >
-                  {t === "all"
-                    ? "All"
-                    : t === "mature"
-                      ? "Cows"
-                      : t === "newborn"
-                        ? "Calves"
-                        : "Bulls"}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
+              <Image
+                source={
+                  t === "bull" ? bullImg : t === "newborn" ? calfImg : cowImg
+                }
+                style={{ width: 20, height: 20, resizeMode: "contain" }}
+              />
+              <Text
+                style={[
+                  s.filterChipText,
+                  filterType === t && s.filterChipTextActive,
+                ]}
+              >
+                {t === "all"
+                  ? "All"
+                  : t === "mature"
+                    ? "Cows"
+                    : t === "newborn"
+                      ? "Calves"
+                      : "Bulls"}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
 
       {/* List */}
       {loading && cows.length === 0 ? (
@@ -2607,7 +2608,7 @@ const s = StyleSheet.create({
     borderColor: "#f0ba9b",
   },
   headerAddBtn: {
-    width: 40,
+   width: 40,
     height: 40,
     borderRadius: 18,
     backgroundColor: "#81df8f",
@@ -2660,22 +2661,6 @@ const s = StyleSheet.create({
   filterChipActive: { backgroundColor: "#8B6854", borderColor: "#8B6854" },
   filterChipText: { fontSize: 12, color: "#8B6854", fontWeight: "600" },
   filterChipTextActive: { color: "#fff" },
-
-  filterCard: {
-    marginHorizontal: 16,
-    marginTop: 10,
-    marginBottom: 4,
-    backgroundColor: "#FFF8F0",
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#F5EDE5",
-    paddingVertical: 8,
-    shadowColor: "#BB6B3F",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
-  },
   searchWrap: {
     flexDirection: "row",
     alignItems: "center",
