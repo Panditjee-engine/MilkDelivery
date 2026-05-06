@@ -480,6 +480,16 @@ class ApiService {
     return this.request<any[]>(`/gausevak/cows${query}`);
   }
 
+  async getGausevakNotifications() {
+    return this.request<any[]>("/gausevak/notifications");
+  }
+
+  async markGausevakNotifRead(id: string) {
+    return this.request<any>(`/gausevak/notifications/${id}/read`, {
+      method: "PATCH",
+    });
+  }
+
   async updateCow(id: string, data: Partial<{
     tag: string;
     name: string;
