@@ -1,4 +1,3 @@
-// index.tsx — GauSevak Worker Dashboard (Hindi + Extra Work modal v2) — No Emojis
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   View,
@@ -493,7 +492,7 @@ function SingleCowMilk({ cow, onDone }: { cow: Cow; onDone: () => void }) {
           setSavedQty(entry.quantity);
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   const commit = () => {
@@ -672,7 +671,7 @@ function SingleCowFeed({ cow, onDone }: { cow: Cow; onDone: () => void }) {
             ]);
         }
       })
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => setLoading(false));
   }, []);
 
@@ -829,7 +828,7 @@ function SingleCowHealth({ cow, onDone }: { cow: Cow; onDone: () => void }) {
         );
         if (log) setStatus(log.status as HealthKey);
       })
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => setLoading(false));
   }, []);
 
@@ -965,8 +964,8 @@ function ScannedCowScreen({
     iconName: string;
     iconLib: "MaterialCommunity" | "FontAwesome5" | "Ionicons";
   }[] = [
-    ...(cow.milkActive
-      ? [
+      ...(cow.milkActive
+        ? [
           {
             key: "milk" as CowTab,
             label: t("tabMilk"),
@@ -975,22 +974,22 @@ function ScannedCowScreen({
             iconLib: "MaterialCommunity" as const,
           },
         ]
-      : []),
-    {
-      key: "feed" as CowTab,
-      label: t("tabFeed"),
-      doneKey: "feedDone" as keyof CowStatus,
-      iconName: "seedling",
-      iconLib: "FontAwesome5" as const,
-    },
-    {
-      key: "health" as CowTab,
-      label: t("tabHealth"),
-      doneKey: "healthDone" as keyof CowStatus,
-      iconName: "heart-pulse",
-      iconLib: "MaterialCommunity" as const,
-    },
-  ];
+        : []),
+      {
+        key: "feed" as CowTab,
+        label: t("tabFeed"),
+        doneKey: "feedDone" as keyof CowStatus,
+        iconName: "seedling",
+        iconLib: "FontAwesome5" as const,
+      },
+      {
+        key: "health" as CowTab,
+        label: t("tabHealth"),
+        doneKey: "healthDone" as keyof CowStatus,
+        iconName: "heart-pulse",
+        iconLib: "MaterialCommunity" as const,
+      },
+    ];
 
   const [tab, setTab] = useState<CowTab>(cow.milkActive ? "milk" : "feed");
   const [status, setStatus] = useState<CowStatus>(initialStatus);
@@ -1791,6 +1790,7 @@ function ExtraWorkModal({
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 
 function DashboardContent() {
+  const [logoutAlert, setLogoutAlert] = useState(false);
   const { worker, workerToken, workerLogout } = useAuth();
   const { lang, toggleLang, t } = useLang();
   const router = useRouter();
@@ -1905,6 +1905,11 @@ function DashboardContent() {
   };
 
   const handleLogout = async () => {
+    setLogoutAlert(true);
+  };
+
+  const confirmLogout = async () => {
+    setLogoutAlert(false);
     await workerLogout();
     router.replace("/(auth)/login");
   };
@@ -1925,6 +1930,17 @@ function DashboardContent() {
       showsVerticalScrollIndicator={false}
     >
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
+
+      <ModernAlert
+        visible={logoutAlert}
+        title="Logout"
+        message="Do you want to logout?"
+        type="confirm"
+        confirmText="Logout"
+        cancelText="Go Back"
+        onConfirm={confirmLogout}
+        onCancel={() => setLogoutAlert(false)}
+      />
 
       {/* ── Top Bar ── */}
       <Animated.View style={[s.topBar, { opacity: headerAnim }]}>
@@ -2017,11 +2033,10 @@ function DashboardContent() {
           <MaterialCommunityIcons name="water" size={20} color="#3b82f6" />
           <Text style={[s.statValue, { color: "#3b82f6" }]}>
             {milkTotal > 0
-              ? `${
-                  Number.isInteger(milkTotal)
-                    ? milkTotal
-                    : milkTotal.toFixed(1)
-                }L`
+              ? `${Number.isInteger(milkTotal)
+                ? milkTotal
+                : milkTotal.toFixed(1)
+              }L`
               : "--"}
           </Text>
           <Text style={s.statLabel}>{t("milkToday")}</Text>

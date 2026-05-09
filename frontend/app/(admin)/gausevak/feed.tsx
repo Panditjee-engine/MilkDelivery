@@ -427,28 +427,28 @@ function FeedDetailModal({
 
               {feedRows.filter((f) => f.feed_type && f.quantity_kg > 0).length >
                 0 && (
-                <View style={md.summaryBox}>
-                  <Text style={md.summaryTitle}>📋 Feed Summary</Text>
-                  {feedRows
-                    .filter((f) => f.feed_type && f.quantity_kg > 0)
-                    .map((f, i) => (
-                      <View key={i} style={md.summaryRow}>
-                        <Text style={md.summaryRowText}>• {f.feed_type}</Text>
-                        <Text style={md.summaryRowQty}>{f.quantity_kg} kg</Text>
-                      </View>
-                    ))}
-                  <View style={[md.summaryRow, md.summaryTotal]}>
-                    <Text style={md.summaryTotalText}>Total</Text>
-                    <Text style={md.summaryTotalQty}>
-                      {feedRows
-                        .filter((f) => f.feed_type && f.quantity_kg > 0)
-                        .reduce((s, f) => s + f.quantity_kg, 0)
-                        .toFixed(1)}{" "}
-                      kg
-                    </Text>
+                  <View style={md.summaryBox}>
+                    <Text style={md.summaryTitle}>📋 Feed Summary</Text>
+                    {feedRows
+                      .filter((f) => f.feed_type && f.quantity_kg > 0)
+                      .map((f, i) => (
+                        <View key={i} style={md.summaryRow}>
+                          <Text style={md.summaryRowText}>• {f.feed_type}</Text>
+                          <Text style={md.summaryRowQty}>{f.quantity_kg} kg</Text>
+                        </View>
+                      ))}
+                    <View style={[md.summaryRow, md.summaryTotal]}>
+                      <Text style={md.summaryTotalText}>Total</Text>
+                      <Text style={md.summaryTotalQty}>
+                        {feedRows
+                          .filter((f) => f.feed_type && f.quantity_kg > 0)
+                          .reduce((s, f) => s + f.quantity_kg, 0)
+                          .toFixed(1)}{" "}
+                        kg
+                      </Text>
+                    </View>
                   </View>
-                </View>
-              )}
+                )}
 
               <TouchableOpacity
                 style={[
@@ -1048,7 +1048,7 @@ export default function AdminFeedScreen() {
       }
 
       const [data, typeMap] = await Promise.all([
-        api.getAdminFeedLogs(authToken, todayStr(), shift),
+        api.getAdminFeedLogs(todayStr(), shift),
         buildTypeMap(),
       ]);
 
