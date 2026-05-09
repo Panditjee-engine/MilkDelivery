@@ -480,16 +480,6 @@ class ApiService {
     return this.request<any[]>(`/gausevak/cows${query}`);
   }
 
-  async getGausevakNotifications() {
-    return this.request<any[]>("/gausevak/notifications");
-  }
-
-  async markGausevakNotifRead(id: string) {
-    return this.request<any>(`/gausevak/notifications/${id}/read`, {
-      method: "PATCH",
-    });
-  }
-
   async updateCow(id: string, data: Partial<{
     tag: string;
     name: string;
@@ -1402,6 +1392,209 @@ async registerFcmToken(token: string): Promise<{ success: boolean; message: stri
 async sendTestInsuranceNotification(): Promise<{ success: boolean; tokens_count: number }> {
   return this.request('/admin/insurance/send-test-notification', { method: 'POST' });
 }
+// ── Veterinary APIs ──────────────────────────────────────────────────────────
+
+async getAdminVeterinarians() {
+  return this.request<any[]>("/admin/veterinarians");
+}
+
+async createVeterinarian(data: {
+  name: string;
+  email: string;
+  password: string;
+  phone?: string;
+  specialization?: string;
+  license_number?: string;
+}) {
+  return this.request<any>("/admin/veterinarians", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+async updateVeterinarian(id: string, data: Partial<{
+  name: string;
+  phone: string;
+  specialization: string;
+  license_number: string;
+  is_active: boolean;
+}>) {
+  return this.request<any>(`/admin/veterinarians/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+async vetLogin(email: string, password: string) {
+  const response = await fetch(`${API_BASE}/api/vet/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.detail || 'Vet login failed');
+  await AsyncStorage.setItem('vet_token', data.access_token);
+  await AsyncStorage.setItem('vet_data', JSON.stringify(data.vet));
+  return data;
+}
+
+async vetLogout() {
+  await AsyncStorage.removeItem('vet_token');
+  await AsyncStorage.removeItem('vet_data');
+}
+
+async getVetMedicineRecords() {
+  const token = await AsyncStorage.getItem('vet_token');
+  const response = await fetch(`${API_BASE}/api/vet/medicine-records`, {
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.detail || 'Failed to fetch medicine records');
+  return data;
+}
+
+async getVetMilkRecords() {
+  const token = await AsyncStorage.getItem('vet_token');
+  const response = await fetch(`${API_BASE}/api/vet/milk-records`, {
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.detail || 'Failed to fetch milk records');
+  return data;
+}
+
+async getVetFeedRecords() {
+  const token = await AsyncStorage.getItem('vet_token');
+  const response = await fetch(`${API_BASE}/api/vet/feed-records`, {
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.detail || 'Failed to fetch feed records');
+  return data;
+}
+
+async getVetHealthRecords() {
+  const token = await AsyncStorage.getItem('vet_token');
+  const response = await fetch(`${API_BASE}/api/vet/health-records`, {
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.detail || 'Failed to fetch health records');
+  return data;
+}
+
+async getVetInseminationRecords() {
+  const token = await AsyncStorage.getItem('vet_token');
+  const response = await fetch(`${API_BASE}/api/vet/insemination-records`, {
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.detail || 'Failed to fetch insemination records');
+  return data;
+}
+
+async getVetSemenRecords() {
+  const token = await AsyncStorage.getItem('vet_token');
+  const response = await fetch(`${API_BASE}/api/vet/semen-records`, {
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.detail || 'Failed to fetch semen records');
+  return data;
+}
+
+async vetGetCows() {
+  const token = await AsyncStorage.getItem('vet_token');
+  const response = await fetch(`${API_BASE}/api/vet/cows`, {
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.detail || 'Failed to fetch cows');
+  return data;
+}
+
+async getAnimalMedicineRecords(animalId: string) {
+  const token = await AsyncStorage.getItem('vet_token');
+  const response = await fetch(`${API_BASE}/api/vet/animals/${animalId}/medicine-records`, {
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.detail || 'Failed to fetch medicine records');
+  return data;
+}
+ 
+async getAnimalHealthRecords(animalId: string) {
+  const token = await AsyncStorage.getItem('vet_token');
+  const response = await fetch(`${API_BASE}/api/vet/animals/${animalId}/health-records`, {
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.detail || 'Failed to fetch health records');
+  return data;
+}
+ 
+async getAnimalMilkRecords(animalId: string) {
+  const token = await AsyncStorage.getItem('vet_token');
+  const response = await fetch(`${API_BASE}/api/vet/animals/${animalId}/milk-records`, {
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.detail || 'Failed to fetch milk records');
+  return data;
+}
+ 
+async getAnimalFeedRecords(animalId: string) {
+  const token = await AsyncStorage.getItem('vet_token');
+  const response = await fetch(`${API_BASE}/api/vet/animals/${animalId}/feed-records`, {
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.detail || 'Failed to fetch feed records');
+  return data;
+}
+ 
+async updateMedicineRecord(recordId: string, data: Partial<{
+  medicine_name: string;
+  dosage: string;
+  administered_by: string;
+  notes: string;
+  next_due: string;
+}>) {
+  const token = await AsyncStorage.getItem('vet_token');
+  const response = await fetch(`${API_BASE}/api/vet/medicine-records/${recordId}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.detail || 'Failed to update medicine record');
+  return result;
+}
+
+async getGausevakNotifications() {
+  return this.request<any[]>("/gausevak/notifications");
+}
+
+async markGausevakNotifRead(id: string) {
+  return this.request<any>(`/gausevak/notifications/${id}/read`, {
+    method: "PATCH",
+  });
+}
+async vetGetHealthLogs(date?: string) {
+  const token = await AsyncStorage.getItem('vet_token');
+  const today = date ?? new Date().toISOString().split('T')[0];
+  const response = await fetch(`${API_BASE}/api/worker/health?date=${today}`, {
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.detail || 'Failed to fetch health logs');
+  return data;
+}
+
+
 
 // Logout
   logout = async () => {

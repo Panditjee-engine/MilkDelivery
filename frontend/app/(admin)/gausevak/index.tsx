@@ -1,11 +1,3 @@
-// app/(admin)/gausevak/index.tsx
-// ─────────────────────────────────────────────────────────────────────────────
-// CHANGES from original:
-//   • getCows() ab sirf ek baar call hota hai (useSharedDashboard)
-//   • Notifications NotificationContext se aata hai — no duplicate API calls
-//   • NotificationModal ab context ka data use karta hai (same shape)
-// ─────────────────────────────────────────────────────────────────────────────
-
 import React, { useRef, useEffect, useState } from "react";
 import {
   View,
@@ -111,6 +103,15 @@ const MENU = [
     route: "/(admin)/gausevak/notes",
     gradient: ["#3d2b1f", "#7c4a2d"] as const,
     accent: "#FF9675",
+  },
+   {
+    id: "veterinary",
+    title: "Veterinary",
+    subtitle: "Vet staff & records",
+    icon: "medkit",
+    route: "/(admin)/gausevak/veterinary",
+    gradient: ["#0f1f3d", "#1a4a8a"] as const,
+    accent: "#7ca9d4",
   },
 ];
 // ── Types ──────────────────────────────────────────────────────────────────────
