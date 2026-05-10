@@ -22,9 +22,9 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../../../src/services/api";
 
-const bullImg = require("../../../assets/bull.png");
-const calfImg = require("../../../assets/calf.png");
-const cowImg = require("../../../assets/cow.png");
+const bullImg = require("../../../assets/images/bull-cow.png");
+const calfImg = require("../../../assets/images/calf-cow.png");
+const cowImg = require("../../../assets/images/icon-cow.png");
 
 // INTERFACES
 interface MedicalRecord {

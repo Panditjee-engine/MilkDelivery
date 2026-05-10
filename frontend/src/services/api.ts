@@ -1628,7 +1628,7 @@ async registerFcmToken(token: string): Promise<{ success: boolean; message: stri
 async sendTestInsuranceNotification(): Promise<{ success: boolean; tokens_count: number }> {
   return this.request('/admin/insurance/send-test-notification', { method: 'POST' });
 }
-// ── Veterinary APIs ──────────────────────────────────────────────────────────
+// ── Veterinary APIs 
 
 async getAdminVeterinarians() {
   return this.request<any[]>("/admin/veterinarians");
