@@ -145,9 +145,13 @@ class ApiService {
       if (response.status === 401) {
         throw new Error("UNAUTHORIZED");
       }
-      throw new Error(text || "Request failed");
-    }
-
+       try {
+    const errJson = JSON.parse(text);
+    throw new Error(errJson.detail || text || "Request failed");
+  } catch {
+    throw new Error(text || "Request failed");
+  }
+}
     return response.json();
   }
 

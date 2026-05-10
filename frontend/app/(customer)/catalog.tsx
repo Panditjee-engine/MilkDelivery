@@ -828,7 +828,7 @@ function ModernProductCard({
             <Ionicons name={theme.icon as any} size={24} color={theme.accent} />
           </View>
         )}
-        {!product.is_available && (
+        {(!product.is_available || (product.stock ?? 0) === 0) && (
           <View style={styles.outOfStockBadge}>
             <Text style={styles.outOfStockText}>Out of stock</Text>
           </View>
@@ -1104,7 +1104,14 @@ function CartSheet({
                           cartStyles.qtyBtn,
                           { backgroundColor: theme.accent },
                         ]}
-                        onPress={() => onUpdateQty(item.id, item.quantity + 1)}
+                        onPress={() => {
+                          const maxStock = item.product.stock ?? 0;
+                          if (item.quantity >= maxStock) {
+                            alert(`Only ${maxStock} item available!`);
+                            return;
+                          }
+                          onUpdateQty(item.id, item.quantity + 1);
+                        }}
                       >
                         <Ionicons name="add" size={12} color="#fff" />
                       </TouchableOpacity>
@@ -1559,6 +1566,10 @@ export default function CatalogScreen() {
   };
 
   const openModal = (product: any) => {
+    if ((product.stock ?? 0) === 0) {
+      alert("product out of stock!");
+      return;
+    }
     const dairy = isDairyProduct(product);
     setSelectedProduct(product);
     setQuantity(1);
@@ -1609,7 +1620,7 @@ export default function CatalogScreen() {
 
         // ✅ Fix: re-fetch subscriptions immediately so the badge updates
         await fetchSubscriptions();
-        api.getWallet().then((w) => setWalletBalance(w.balance ?? 0)).catch(() => {});
+        api.getWallet().then((w) => setWalletBalance(w.balance ?? 0)).catch(() => { });
 
         setSuccessIsSubscription(true);
         setSuccessVisible(true);
@@ -1621,10 +1632,18 @@ export default function CatalogScreen() {
         toastTimer.current = setTimeout(() => setToastVisible(false), 3000);
       } catch (e: any) {
         console.error("Subscription error:", e);
+        const msg = e?.message || "Something went wrong!";
+        alert(msg);
       } finally {
         setSubmitting(false);
       }
     } else {
+
+      const availableStock = selectedProduct?.stock ?? 0;
+      if (quantity > availableStock) {
+        alert(`Only ${availableStock} item available!`);
+        return;
+      }
       // buy_once (dairy or non-dairy) → add to cart
       const newItem: CartItem = {
         id: `${selectedProduct.id}_${Date.now()}`,
@@ -1652,7 +1671,15 @@ export default function CatalogScreen() {
 
   const handleUpdateQty = (id: string, qty: number) => {
     setCart((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, quantity: qty } : c))
+      prev.map((c) => {
+        if (c.id !== id) return c;
+        const maxStock = c.product.stock ?? Infinity;
+        if (qty > maxStock) {
+          alert(`Only ${maxStock} item available!`);
+          return c;
+        }
+        return { ...c, quantity: qty };
+      })
     );
   };
 
@@ -1685,7 +1712,8 @@ export default function CatalogScreen() {
             amount: item.product.price * item.quantity,
           })
         )
-      );
+      )
+
 
       const itemCount = cart.length;
       setCart([]);
@@ -1693,9 +1721,12 @@ export default function CatalogScreen() {
       setSuccessIsSubscription(false);
       setSuccessVisible(true);
 
-      api.getWallet().then((w) => setWalletBalance(w.balance ?? 0)).catch(() => {});
+      api.getWallet().then((w) => setWalletBalance(w.balance ?? 0)).catch(() => { });
+      await fetchData(); 
     } catch (e: any) {
       console.error("Order error:", e);
+      const msg = e?.message || "Out Of Stock  ";
+      alert(msg);
     } finally {
       setSubmitting(false);
     }
@@ -1964,7 +1995,14 @@ export default function CatalogScreen() {
                     styles.qtyBtn,
                     { backgroundColor: modalTheme.accent },
                   ]}
-                  onPress={() => setQuantity((q) => q + 1)}
+                  onPress={() => {
+                    const maxStock = selectedProduct?.stock ?? Infinity;
+                    if (quantity >= maxStock) {
+                      alert(`Only ${maxStock} item available!`);
+                      return;
+                    }
+                    setQuantity((q) => q + 1);
+                  }}
                 >
                   <Ionicons name="add" size={16} color="#fff" />
                 </TouchableOpacity>
@@ -2070,7 +2108,7 @@ export default function CatalogScreen() {
                           style={[
                             styles.dayLabel,
                             customDays.includes(day.value) &&
-                              styles.dayLabelActive,
+                            styles.dayLabelActive,
                           ]}
                         >
                           {day.label}
@@ -2097,8 +2135,8 @@ export default function CatalogScreen() {
                       ? "Subscribing..."
                       : "Adding..."
                     : isSub
-                    ? `Subscribe — ${selectedPatternObj?.label ?? "Daily"}`
-                    : "Add to Cart"
+                      ? `Subscribe — ${selectedPatternObj?.label ?? "Daily"}`
+                      : "Add to Cart"
                 }
                 onPress={handlePrimaryAction}
                 loading={submitting}
