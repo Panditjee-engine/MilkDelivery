@@ -94,6 +94,242 @@ export interface InsuranceNotificationSettings {
   updated_at?: string;
 }
 
+export type MedicineCategory =
+  | "Antibiotic"
+  | "Vaccine"
+  | "Antiparasitic"
+  | "Vitamin"
+  | "Homeopathic"
+  | "Ethnovetary"
+  | "Supplement"
+  | "Other";
+ 
+export type MedicineUnit =
+  | "ml"
+  | "L"
+  | "mg"
+  | "g"
+  | "kg"
+  | "tablet"
+  | "vial"
+  | "dose"
+  | "sachet";
+ 
+export type StockTransactionType =
+  | "purchase"   // stock added
+  | "used"       // dispensed for a cow
+  | "adjusted"   // manual correction
+  | "expired";   // written off
+ 
+export interface Medicine {
+  id: string;
+  admin_id: string;
+  name: string;
+  category: MedicineCategory;
+  unit: MedicineUnit;
+  description?: string;
+  manufacturer?: string;
+  batch_number?: string;
+  expiry_date?: string;          // DD/MM/YYYY
+  purchase_date?: string;        // DD/MM/YYYY
+  cost_per_unit?: number;        // ₹
+  current_stock: number;
+  min_stock_alert?: number;
+  storage_instructions?: string;
+  notes?: string;
+  created_at: string;
+  updated_at?: string;
+}
+ 
+export interface MedicineCreate {
+  name: string;
+  category: MedicineCategory;
+  unit: MedicineUnit;
+  description?: string;
+  manufacturer?: string;
+  batch_number?: string;
+  expiry_date?: string;
+  purchase_date?: string;
+  cost_per_unit?: number;
+  current_stock?: number;
+  min_stock_alert?: number;
+  storage_instructions?: string;
+  notes?: string;
+}
+ 
+export type MedicineUpdate = Partial<MedicineCreate>;
+ 
+export interface StockTransaction {
+  id: string;
+  admin_id: string;
+  medicine_id: string;
+  medicine_name: string;
+  transaction_type: StockTransactionType;
+  quantity: number;
+  unit: string;
+  stock_before: number;
+  stock_after: number;
+  cow_id?: string;
+  cow_name?: string;
+  cow_tag?: string;
+  reason?: string;
+  performed_by?: string;
+  date: string;                  // YYYY-MM-DD
+  created_at: string;
+}
+ 
+export interface MedicineUsageCreate {
+  medicine_id: string;
+  cow_id: string;
+  cow_name: string;
+  cow_tag: string;
+  quantity_used: number;
+  date: string;                  // YYYY-MM-DD
+  notes?: string;
+  performed_by?: string;
+}
+ 
+export interface StockAdjustmentCreate {
+  medicine_id: string;
+  new_quantity: number;
+  reason?: string;
+}
+ 
+export interface StockPurchaseCreate {
+  medicine_id: string;
+  quantity_added: number;
+  cost_per_unit?: number;
+  batch_number?: string;
+  expiry_date?: string;          // DD/MM/YYYY
+  purchase_date?: string;        // DD/MM/YYYY
+  notes?: string;
+}
+ 
+export interface MedicineStockSummary {
+  total_medicines: number;
+  low_stock_count: number;
+  expired_count: number;
+  expiring_soon_count: number;
+  total_stock_value: number;
+}
+ 
+export interface StockOperationResult {
+  success: boolean;
+  stock_before: number;
+  stock_after: number;
+  transaction: StockTransaction;
+}
+
+export type FeedStockCategory =
+  | "Dry Fodder"
+  | "Green Fodder"
+  | "Concentrate"
+  | "Silage"
+  | "Mixed Feed"
+  | "Mineral Mix"
+  | "Wheat Bran"
+  | "Rice Straw"
+  | "Cotton Seed"
+  | "Mustard Cake"
+  | "Other";
+ 
+export type FeedStockUnit = "kg" | "quintal" | "ton" | "bag" | "bundle" | "litre";
+ 
+export type FeedTransactionType = "purchase" | "used" | "adjusted" | "expired";
+ 
+export interface FeedStock {
+  id: string;
+  admin_id: string;
+  name: string;
+  category: FeedStockCategory;
+  unit: FeedStockUnit;
+  description?: string;
+  supplier?: string;
+  batch_number?: string;
+  expiry_date?: string;        // DD/MM/YYYY
+  purchase_date?: string;      // DD/MM/YYYY
+  cost_per_unit?: number;
+  current_stock: number;
+  min_stock_alert?: number;
+  storage_location?: string;
+  notes?: string;
+  created_at: string;
+  updated_at?: string;
+}
+ 
+export interface FeedStockCreate {
+  name: string;
+  category: FeedStockCategory;
+  unit: FeedStockUnit;
+  description?: string;
+  supplier?: string;
+  batch_number?: string;
+  expiry_date?: string;
+  purchase_date?: string;
+  cost_per_unit?: number;
+  current_stock?: number;
+  min_stock_alert?: number;
+  storage_location?: string;
+  notes?: string;
+}
+ 
+export type FeedStockUpdate = Partial<FeedStockCreate>;
+ 
+export interface FeedStockSummary {
+  total_items: number;
+  low_stock_count: number;
+  expired_count: number;
+  expiring_soon_count: number;
+  total_stock_value: number;
+}
+ 
+export interface FeedStockTransaction {
+  id: string;
+  admin_id: string;
+  feed_stock_id: string;
+  feed_name: string;
+  transaction_type: FeedTransactionType;
+  quantity: number;
+  unit: string;
+  stock_before: number;
+  stock_after: number;
+  reason?: string;
+  performed_by?: string;
+  date: string;         // YYYY-MM-DD
+  created_at: string;
+}
+ 
+export interface FeedStockPurchaseCreate {
+  feed_stock_id: string;
+  quantity_added: number;
+  cost_per_unit?: number;
+  batch_number?: string;
+  expiry_date?: string;    // DD/MM/YYYY
+  purchase_date?: string;  // DD/MM/YYYY
+  notes?: string;
+}
+ 
+export interface FeedStockUsageCreate {
+  feed_stock_id: string;
+  quantity_used: number;
+  date: string;            // YYYY-MM-DD
+  notes?: string;
+  performed_by?: string;
+}
+ 
+export interface FeedStockAdjustmentCreate {
+  feed_stock_id: string;
+  new_quantity: number;
+  reason?: string;
+}
+ 
+export interface FeedStockOperationResult {
+  success: boolean;
+  stock_before: number;
+  stock_after: number;
+  transaction: FeedStockTransaction;
+}
+
 class ApiService {
   private token: string | null = null;
 
@@ -1405,6 +1641,229 @@ async registerFcmToken(token: string): Promise<{ success: boolean; message: stri
 async sendTestInsuranceNotification(): Promise<{ success: boolean; tokens_count: number }> {
   return this.request('/admin/insurance/send-test-notification', { method: 'POST' });
 }
+
+async createMedicine(data: MedicineCreate): Promise<Medicine> {
+    return this.request<Medicine>("/gausevak/medicines", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+ 
+  async getMedicines(params?: {
+    search?: string;
+    category?: string;
+    low_stock?: boolean;
+    expired?: boolean;
+  }): Promise<Medicine[]> {
+    const p = new URLSearchParams();
+    if (params?.search)    p.append("search",    params.search);
+    if (params?.category)  p.append("category",  params.category);
+    if (params?.low_stock) p.append("low_stock",  "true");
+    if (params?.expired)   p.append("expired",    "true");
+    const q = p.toString() ? `?${p.toString()}` : "";
+    return this.request<Medicine[]>(`/gausevak/medicines${q}`);
+  }
+ 
+  async getMedicine(id: string): Promise<Medicine> {
+    return this.request<Medicine>(`/gausevak/medicines/${id}`);
+  }
+ 
+  async getMedicineStockSummary(): Promise<MedicineStockSummary> {
+    return this.request<MedicineStockSummary>("/gausevak/medicines/summary");
+  }
+ 
+  async updateMedicine(id: string, data: MedicineUpdate): Promise<Medicine> {
+    return this.request<Medicine>(`/gausevak/medicines/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
+ 
+  async deleteMedicine(id: string): Promise<{ message: string; id: string }> {
+    return this.request(`/gausevak/medicines/${id}`, { method: "DELETE" });
+  }
+ 
+  // ── Stock operations
+ 
+  async restockMedicine(
+    medicineId: string,
+    data: StockPurchaseCreate
+  ): Promise<StockOperationResult> {
+    return this.request<StockOperationResult>(
+      `/gausevak/medicines/${medicineId}/purchase`,
+      { method: "POST", body: JSON.stringify(data) }
+    );
+  }
+ 
+  async useMedicine(data: MedicineUsageCreate): Promise<StockOperationResult> {
+    return this.request<StockOperationResult>("/gausevak/medicines/use", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+ 
+  async adjustMedicineStock(
+    medicineId: string,
+    data: StockAdjustmentCreate
+  ): Promise<StockOperationResult> {
+    return this.request<StockOperationResult>(
+      `/gausevak/medicines/${medicineId}/adjust`,
+      { method: "POST", body: JSON.stringify(data) }
+    );
+  }
+ 
+  // ── Transaction history 
+ 
+  async getMedicineTransactions(
+    medicineId: string,
+    params?: { limit?: number; transaction_type?: StockTransactionType }
+  ): Promise<StockTransaction[]> {
+    const p = new URLSearchParams();
+    if (params?.limit)            p.append("limit",            String(params.limit));
+    if (params?.transaction_type) p.append("transaction_type", params.transaction_type);
+    const q = p.toString() ? `?${p.toString()}` : "";
+    return this.request<StockTransaction[]>(
+      `/gausevak/medicines/${medicineId}/transactions${q}`
+    );
+  }
+ 
+  async getAllMedicineTransactions(params?: {
+    limit?: number;
+    cow_id?: string;
+    transaction_type?: StockTransactionType;
+    date?: string;              // YYYY-MM-DD
+  }): Promise<StockTransaction[]> {
+    const p = new URLSearchParams();
+    if (params?.limit)            p.append("limit",            String(params.limit));
+    if (params?.cow_id)           p.append("cow_id",           params.cow_id);
+    if (params?.transaction_type) p.append("transaction_type", params.transaction_type);
+    if (params?.date)             p.append("date",             params.date);
+    const q = p.toString() ? `?${p.toString()}` : "";
+    return this.request<StockTransaction[]>(`/gausevak/medicine-transactions${q}`);
+  }
+ 
+  // ── medicine stock Alerts 
+ 
+  async getLowStockMedicines(): Promise<Medicine[]> {
+    return this.request<Medicine[]>("/gausevak/medicines/alerts/low-stock");
+  }
+ 
+  async getExpiringMedicines(days = 30): Promise<Medicine[]> {
+    return this.request<Medicine[]>(
+      `/gausevak/medicines/alerts/expiring?days=${days}`
+    );
+  }
+ 
+async createFeedStock(data: FeedStockCreate): Promise<FeedStock> {
+    return this.request<FeedStock>("/gausevak/feed-stocks", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+ 
+  async getFeedStocks(params?: {
+    search?: string;
+    category?: string;
+    low_stock?: boolean;
+    expired?: boolean;
+  }): Promise<FeedStock[]> {
+    const p = new URLSearchParams();
+    if (params?.search)    p.append("search",    params.search);
+    if (params?.category)  p.append("category",  params.category);
+    if (params?.low_stock) p.append("low_stock",  "true");
+    if (params?.expired)   p.append("expired",    "true");
+    const q = p.toString() ? `?${p.toString()}` : "";
+    return this.request<FeedStock[]>(`/gausevak/feed-stocks${q}`);
+  }
+ 
+  async getFeedStock(id: string): Promise<FeedStock> {
+    return this.request<FeedStock>(`/gausevak/feed-stocks/${id}`);
+  }
+ 
+  async getFeedStockSummary(): Promise<FeedStockSummary> {
+    return this.request<FeedStockSummary>("/gausevak/feed-stocks/summary");
+  }
+ 
+  async updateFeedStock(id: string, data: FeedStockUpdate): Promise<FeedStock> {
+    return this.request<FeedStock>(`/gausevak/feed-stocks/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
+ 
+  async deleteFeedStock(id: string): Promise<{ message: string; id: string }> {
+    return this.request(`/gausevak/feed-stocks/${id}`, { method: "DELETE" });
+  }
+ 
+  // ── Stock operations
+ 
+  async restockFeedStock(
+    feedStockId: string,
+    data: FeedStockPurchaseCreate
+  ): Promise<FeedStockOperationResult> {
+    return this.request<FeedStockOperationResult>(
+      `/gausevak/feed-stocks/${feedStockId}/purchase`,
+      { method: "POST", body: JSON.stringify(data) }
+    );
+  }
+ 
+  async useFeedStock(data: FeedStockUsageCreate): Promise<FeedStockOperationResult> {
+    return this.request<FeedStockOperationResult>("/gausevak/feed-stocks/use", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+ 
+  async adjustFeedStock(
+    feedStockId: string,
+    data: FeedStockAdjustmentCreate
+  ): Promise<FeedStockOperationResult> {
+    return this.request<FeedStockOperationResult>(
+      `/gausevak/feed-stocks/${feedStockId}/adjust`,
+      { method: "POST", body: JSON.stringify(data) }
+    );
+  }
+ 
+  // ── Transaction history
+ 
+  async getFeedStockTransactions(
+    feedStockId: string,
+    params?: { limit?: number; transaction_type?: FeedTransactionType }
+  ): Promise<FeedStockTransaction[]> {
+    const p = new URLSearchParams();
+    if (params?.limit)            p.append("limit",            String(params.limit));
+    if (params?.transaction_type) p.append("transaction_type", params.transaction_type);
+    const q = p.toString() ? `?${p.toString()}` : "";
+    return this.request<FeedStockTransaction[]>(
+      `/gausevak/feed-stocks/${feedStockId}/transactions${q}`
+    );
+  }
+ 
+  async getAllFeedStockTransactions(params?: {
+    limit?: number;
+    transaction_type?: FeedTransactionType;
+    date?: string;   // YYYY-MM-DD
+  }): Promise<FeedStockTransaction[]> {
+    const p = new URLSearchParams();
+    if (params?.limit)            p.append("limit",            String(params.limit));
+    if (params?.transaction_type) p.append("transaction_type", params.transaction_type);
+    if (params?.date)             p.append("date",             params.date);
+    const q = p.toString() ? `?${p.toString()}` : "";
+    return this.request<FeedStockTransaction[]>(`/gausevak/feed-stock-transactions${q}`);
+  }
+ 
+  // ── Alerts
+ 
+  async getLowStockFeeds(): Promise<FeedStock[]> {
+    return this.request<FeedStock[]>("/gausevak/feed-stocks/alerts/low-stock");
+  }
+ 
+  async getExpiringFeeds(days = 30): Promise<FeedStock[]> {
+    return this.request<FeedStock[]>(
+      `/gausevak/feed-stocks/alerts/expiring?days=${days}`
+    );
+  }
+ 
 
 // Logout
   logout = async () => {
