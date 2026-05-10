@@ -750,6 +750,108 @@ class ApiService {
     });
   }
 
+  async getAdminCustomers(params?: {
+    zone?: string;
+    is_active?: boolean;
+    search?: string;
+    linked?: boolean;
+    skip?: number;
+    limit?: number;
+  }) {
+    const searchParams = new URLSearchParams();
+    if (params?.zone) searchParams.append("zone", params.zone);
+    if (typeof params?.is_active === "boolean") {
+      searchParams.append("is_active", String(params.is_active));
+    }
+    if (params?.search) searchParams.append("search", params.search);
+    if (typeof params?.linked === "boolean") {
+      searchParams.append("linked", String(params.linked));
+    }
+    if (typeof params?.skip === "number") {
+      searchParams.append("skip", String(params.skip));
+    }
+    if (typeof params?.limit === "number") {
+      searchParams.append("limit", String(params.limit));
+    }
+    const query = searchParams.toString() ? `?${searchParams.toString()}` : "";
+    return this.request<any[]>(`/admin/customers${query}`);
+  }
+
+  async getAdminCustomer(customerId: string) {
+    return this.request<any>(`/admin/customers/${customerId}`);
+  }
+
+  async createAdminCustomer(data: {
+    name: string;
+    phone?: string;
+    email?: string;
+    address?: {
+      line1?: string;
+      line2?: string;
+      city?: string;
+      state?: string;
+      pincode?: string;
+      landmark?: string;
+      lat?: number;
+      lng?: number;
+    };
+    zone?: string;
+    notes?: string;
+    delivery_partner_id?: string;
+  }) {
+    return this.request<any>("/admin/customers", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateAdminCustomer(
+    customerId: string,
+    data: Partial<{
+      name: string;
+      phone: string;
+      email: string;
+      address: {
+        line1?: string;
+        line2?: string;
+        city?: string;
+        state?: string;
+        pincode?: string;
+        landmark?: string;
+        lat?: number;
+        lng?: number;
+      };
+      zone: string;
+      notes: string;
+      delivery_partner_id: string;
+      is_active: boolean;
+    }>,
+  ) {
+    return this.request<any>(`/admin/customers/${customerId}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteAdminCustomer(customerId: string, hard = false) {
+    const suffix = hard ? "?hard=true" : "";
+    return this.request<any>(`/admin/customers/${customerId}${suffix}`, {
+      method: "DELETE",
+    });
+  }
+
+  async approveCustomerClaim(customerId: string) {
+    return this.request<any>(`/admin/customers/${customerId}/approve-claim`, {
+      method: "POST",
+    });
+  }
+
+  async rejectCustomerClaim(customerId: string) {
+    return this.request<any>(`/admin/customers/${customerId}/reject-claim`, {
+      method: "POST",
+    });
+  }
+
   async updateAdminFeedDetails(
     cowId: string,
     date: string,

@@ -29,6 +29,8 @@ import { api } from "../../../src/services/api";
 
 type CowType = "mature" | "newborn" | "bull";
 type PregnancyStatus = "pregnant" | "not_pregnant" | "unknown";
+type SortOption = "newest" | "oldest" | "name_asc" | "name_desc";
+type DateRangeOption = "all_time" | "last_week" | "last_month" | "last_year";
 
 interface Cow {
   id: string;
@@ -2450,6 +2452,9 @@ export default function CowsScreen() {
   const [filterType, setFilterType] = useState<
     "all" | "mature" | "newborn" | "bull"
   >("all");
+  const [sortBy, setSortBy] = useState<SortOption>("newest");
+  const [dateRange, setDateRange] = useState<DateRangeOption>("all_time");
+  const [sortVisible, setSortVisible] = useState(false);
   const [addVisible, setAddVisible] = useState(false);
   const [editCow, setEditCow] = useState<Cow | null>(null);
   const [loading, setLoading] = useState(false);
@@ -2533,14 +2538,56 @@ export default function CowsScreen() {
     sold: cows.filter((c) => c.isSold).length,
   };
 
+  const isWithinRange = (createdAt: string, range: DateRangeOption) => {
+    if (range === "all_time") return true;
+    const created = new Date(createdAt);
+    if (Number.isNaN(created.getTime())) return true;
+
+    const now = new Date();
+    const diffMs = now.getTime() - created.getTime();
+    const diffDays = diffMs / (1000 * 60 * 60 * 24);
+
+    if (range === "last_week") return diffDays <= 7;
+    if (range === "last_month") return diffDays <= 30;
+    return diffDays <= 365;
+  };
+
   const filteredCows = cows
     .filter((c) => filterType === "all" || c.type === filterType)
+    .filter((c) => isWithinRange(c.created_at, dateRange))
     .filter(
       (c) =>
         c.name.toLowerCase().includes(search.toLowerCase()) ||
         c.tag.toLowerCase().includes(search.toLowerCase()) ||
         c.breed.toLowerCase().includes(search.toLowerCase()),
-    );
+    )
+    .sort((a, b) => {
+      if (sortBy === "name_asc") return a.name.localeCompare(b.name);
+      if (sortBy === "name_desc") return b.name.localeCompare(a.name);
+      if (sortBy === "oldest") {
+        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      }
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+
+  const sortMeta: Record<
+    SortOption,
+    { label: string; icon: keyof typeof Ionicons.glyphMap }
+  > = {
+    newest: { label: "Newest", icon: "time-outline" },
+    oldest: { label: "Oldest", icon: "hourglass-outline" },
+    name_asc: { label: "Name A-Z", icon: "text-outline" },
+    name_desc: { label: "Name Z-A", icon: "text-outline" },
+  };
+  const dateRangeMeta: Record<
+    DateRangeOption,
+    { label: string; icon: keyof typeof Ionicons.glyphMap }
+  > = {
+    all_time: { label: "All Time", icon: "calendar-outline" },
+    last_week: { label: "Last Week", icon: "today-outline" },
+    last_month: { label: "Last Month", icon: "calendar-clear-outline" },
+    last_year: { label: "Last Year", icon: "calendar-number-outline" },
+  };
 
   return (
     <View style={[s.screen, { paddingTop: insets.top }]}>
@@ -2556,6 +2603,17 @@ export default function CowsScreen() {
           <Text style={s.headerSub}>{cows.length} animals registered</Text>
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+          <TouchableOpacity
+            style={s.sortBtn}
+            onPress={() => setSortVisible(true)}
+            activeOpacity={0.85}
+          >
+            <Ionicons
+              name={sortMeta[sortBy].icon}
+              size={16}
+              color="#8B6854"
+            />
+          </TouchableOpacity>
           <View style={s.countBadge}>
             <Text style={s.countText}>{filteredCows.length}</Text>
           </View>
@@ -2568,6 +2626,115 @@ export default function CowsScreen() {
           </TouchableOpacity>
         </View>
       </View>
+
+      <Modal
+        visible={sortVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSortVisible(false)}
+      >
+        <TouchableOpacity
+          activeOpacity={1}
+          style={s.sortOverlay}
+          onPress={() => setSortVisible(false)}
+        >
+          <View style={s.sortSheet}>
+            <View style={s.sortSheetHeader}>
+              <Text style={s.sortSheetTitle}>Sort Cattle</Text>
+              <Text style={s.sortSheetSub}>Choose data ordering and range</Text>
+            </View>
+            <Text style={s.sortSectionTitle}>Date Filter</Text>
+            {(
+              [
+                "all_time",
+                "last_week",
+                "last_month",
+                "last_year",
+              ] as const
+            ).map((option) => (
+              <TouchableOpacity
+                key={option}
+                activeOpacity={0.85}
+                onPress={() => setDateRange(option)}
+                style={[
+                  s.sortOption,
+                  dateRange === option && s.sortOptionActive,
+                ]}
+              >
+                <View
+                  style={[
+                    s.sortOptionIcon,
+                    dateRange === option && s.sortOptionIconActive,
+                  ]}
+                >
+                  <Ionicons
+                    name={dateRangeMeta[option].icon}
+                    size={16}
+                    color={dateRange === option ? "#fff" : "#8B6854"}
+                  />
+                </View>
+                <Text
+                  style={[
+                    s.sortOptionText,
+                    dateRange === option && s.sortOptionTextActive,
+                  ]}
+                >
+                  {dateRangeMeta[option].label}
+                </Text>
+                {dateRange === option && (
+                  <Ionicons name="checkmark-circle" size={18} color="#8B6854" />
+                )}
+              </TouchableOpacity>
+            ))}
+            <Text style={s.sortSectionTitle}>Order By</Text>
+            {(
+              [
+                "newest",
+                "oldest",
+                "name_asc",
+                "name_desc",
+              ] as const
+            ).map((option) => (
+              <TouchableOpacity
+                key={option}
+                activeOpacity={0.85}
+                onPress={() => {
+                  setSortBy(option);
+                  setSortVisible(false);
+                }}
+                style={[
+                  s.sortOption,
+                  sortBy === option && s.sortOptionActive,
+                ]}
+              >
+                <View
+                  style={[
+                    s.sortOptionIcon,
+                    sortBy === option && s.sortOptionIconActive,
+                  ]}
+                >
+                  <Ionicons
+                    name={sortMeta[option].icon}
+                    size={16}
+                    color={sortBy === option ? "#fff" : "#8B6854"}
+                  />
+                </View>
+                <Text
+                  style={[
+                    s.sortOptionText,
+                    sortBy === option && s.sortOptionTextActive,
+                  ]}
+                >
+                  {sortMeta[option].label}
+                </Text>
+                {sortBy === option && (
+                  <Ionicons name="checkmark-circle" size={18} color="#8B6854" />
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       {/* Stats */}
       <View style={s.statsRow}>
@@ -2776,6 +2943,16 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#f0ba9b",
   },
+  sortBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "#FFF8F0",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#f0ba9b",
+  },
   headerAddBtn: {
    width: 40,
     height: 40,
@@ -2807,6 +2984,88 @@ const s = StyleSheet.create({
     borderColor: "#f0ba9b",
   },
   countText: { fontSize: 12, fontWeight: "700", color: "#BB6B3F" },
+  sortOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(17, 24, 39, 0.28)",
+    justifyContent: "flex-start",
+    paddingTop: 96,
+    paddingHorizontal: 16,
+  },
+  sortSheet: {
+    alignSelf: "flex-end",
+    width: 220,
+    backgroundColor: "#fff",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#F5EDE5",
+    padding: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.08,
+    shadowRadius: 18,
+    elevation: 8,
+  },
+  sortSheetHeader: {
+    paddingBottom: 8,
+    marginBottom: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F5EDE5",
+  },
+  sortSheetTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#020201",
+  },
+  sortSheetSub: {
+    fontSize: 12,
+    color: "#C4A882",
+    fontWeight: "500",
+    marginTop: 2,
+  },
+  sortSectionTitle: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#C4A882",
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+    marginTop: 8,
+    marginBottom: 4,
+    paddingHorizontal: 4,
+  },
+  sortOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 11,
+    borderRadius: 14,
+  },
+  sortOptionActive: {
+    backgroundColor: "#FFF8F0",
+  },
+  sortOptionIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    backgroundColor: "#FFF8F0",
+    borderWidth: 1,
+    borderColor: "#F5EDE5",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sortOptionIconActive: {
+    backgroundColor: "#8B6854",
+    borderColor: "#8B6854",
+  },
+  sortOptionText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#8B6854",
+  },
+  sortOptionTextActive: {
+    color: "#020201",
+  },
   statsRow: {
     flexDirection: "row",
     backgroundColor: "#fff",

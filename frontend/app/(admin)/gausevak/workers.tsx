@@ -40,6 +40,13 @@ interface ExtraTask {
   date: string;
 }
 
+type SortOption =
+  | "name_asc"
+  | "name_desc"
+  | "active_first"
+  | "inactive_first"
+  | "verified_first";
+
 const DESIGNATIONS = [
   "Farm Manager",
   "Milking Operator",
@@ -957,6 +964,8 @@ function WorkerCard({
 export default function WorkersScreen() {
   const router = useRouter();
   const [workers, setWorkers] = useState<Worker[]>([]);
+  const [sortBy, setSortBy] = useState<SortOption>("name_asc");
+  const [sortVisible, setSortVisible] = useState(false);
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -1061,6 +1070,39 @@ export default function WorkersScreen() {
   };
 
   const totalActive = workers.filter((w) => w.is_active).length;
+  const visibleWorkers = [...workers].sort((a, b) => {
+    if (sortBy === "name_asc") return a.name.localeCompare(b.name);
+    if (sortBy === "name_desc") return b.name.localeCompare(a.name);
+    if (sortBy === "active_first") {
+      return a.is_active === b.is_active
+        ? a.name.localeCompare(b.name)
+        : a.is_active
+          ? -1
+          : 1;
+    }
+    if (sortBy === "inactive_first") {
+      return a.is_active === b.is_active
+        ? a.name.localeCompare(b.name)
+        : a.is_active
+          ? 1
+          : -1;
+    }
+    return a.is_verified === b.is_verified
+      ? a.name.localeCompare(b.name)
+      : a.is_verified
+        ? -1
+        : 1;
+  });
+  const sortMeta: Record<
+    SortOption,
+    { label: string; icon: keyof typeof Ionicons.glyphMap }
+  > = {
+    name_asc: { label: "Name A-Z", icon: "text-outline" },
+    name_desc: { label: "Name Z-A", icon: "text-outline" },
+    active_first: { label: "Active First", icon: "checkmark-circle-outline" },
+    inactive_first: { label: "Inactive First", icon: "close-circle-outline" },
+    verified_first: { label: "Verified First", icon: "shield-checkmark-outline" },
+  };
 
   return (
     <View style={styles.screen}>
@@ -1087,9 +1129,15 @@ export default function WorkersScreen() {
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>Farm Workers</Text>
           <Text style={styles.headerSub}>
-            {workers.length} total · {totalActive} active
+            {visibleWorkers.length} total · {totalActive} active
           </Text>
         </View>
+        <TouchableOpacity
+          style={styles.sortBtn}
+          onPress={() => setSortVisible(true)}
+        >
+          <Ionicons name={sortMeta[sortBy].icon} size={18} color="#7ca9d4" />
+        </TouchableOpacity>
         <TouchableOpacity
           style={styles.addBtn}
           onPress={() => setModalVisible(true)}
@@ -1102,12 +1150,64 @@ export default function WorkersScreen() {
           </LinearGradient>
         </TouchableOpacity>
       </LinearGradient>
+      <Modal
+        visible={sortVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSortVisible(false)}
+      >
+        <TouchableOpacity
+          activeOpacity={1}
+          style={styles.sortOverlay}
+          onPress={() => setSortVisible(false)}
+        >
+          <View style={styles.sortSheet}>
+            <Text style={styles.sortSheetTitle}>Sort Workers</Text>
+            <Text style={styles.sortSheetSub}>Choose data ordering</Text>
+            {(
+              [
+                "name_asc",
+                "name_desc",
+                "active_first",
+                "inactive_first",
+                "verified_first",
+              ] as const
+            ).map((option) => (
+              <TouchableOpacity
+                key={option}
+                style={[
+                  styles.sortOption,
+                  sortBy === option && styles.sortOptionActive,
+                ]}
+                onPress={() => {
+                  setSortBy(option);
+                  setSortVisible(false);
+                }}
+              >
+                <Ionicons
+                  name={sortMeta[option].icon}
+                  size={15}
+                  color={sortBy === option ? "#2d6a4f" : "#9ca3af"}
+                />
+                <Text
+                  style={[
+                    styles.sortOptionText,
+                    sortBy === option && styles.sortOptionTextActive,
+                  ]}
+                >
+                  {sortMeta[option].label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       {!loading && workers.length > 0 && (
         <View style={styles.statsBar}>
           <View style={styles.statChip}>
             <Ionicons name="people" size={13} color="#2d6a4f" />
-            <Text style={styles.statChipText}>{workers.length} Workers</Text>
+            <Text style={styles.statChipText}>{visibleWorkers.length} Workers</Text>
           </View>
           <View style={[styles.statChip, { backgroundColor: "#dcfce7" }]}>
             <View style={[styles.statusDot, { backgroundColor: "#16a34a" }]} />
@@ -1129,7 +1229,7 @@ export default function WorkersScreen() {
           <ActivityIndicator size="large" color="#2d6a4f" />
           <Text style={styles.loadingText}>Loading workers...</Text>
         </View>
-      ) : workers.length === 0 ? (
+      ) : visibleWorkers.length === 0 ? (
         <View style={styles.centered}>
           <LinearGradient
             colors={["#1b4332", "#2d6a4f"]}
@@ -1150,7 +1250,7 @@ export default function WorkersScreen() {
         </View>
       ) : (
         <FlatList
-          data={workers}
+          data={visibleWorkers}
           keyExtractor={(w) => w.id}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
@@ -1381,6 +1481,17 @@ const styles = StyleSheet.create({
     marginTop: 2,
     fontWeight: "500",
   },
+  sortBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: "#0d2137",
+    borderWidth: 1,
+    borderColor: "#1e3a5f",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 8,
+  },
   addBtn: { borderRadius: 14, overflow: "hidden" },
   addBtnGradient: {
     width: 42,
@@ -1389,6 +1500,41 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderRadius: 14,
   },
+  sortOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(3,8,18,0.45)",
+    justifyContent: "flex-start",
+    paddingTop: 92,
+    paddingHorizontal: 16,
+  },
+  sortSheet: {
+    alignSelf: "flex-end",
+    width: 228,
+    backgroundColor: "#fff",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#d9e7ef",
+    padding: 12,
+  },
+  sortSheetTitle: { fontSize: 15, fontWeight: "800", color: "#111827" },
+  sortSheetSub: {
+    fontSize: 12,
+    color: "#6b7280",
+    fontWeight: "500",
+    marginTop: 2,
+    marginBottom: 8,
+  },
+  sortOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  sortOptionActive: { backgroundColor: "#f0fdf4" },
+  sortOptionText: { fontSize: 13, fontWeight: "700", color: "#4b5563" },
+  sortOptionTextActive: { color: "#2d6a4f" },
   statsBar: {
     flexDirection: "row",
     gap: 8,

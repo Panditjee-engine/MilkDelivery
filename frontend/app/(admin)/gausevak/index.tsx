@@ -104,6 +104,15 @@ const MENU = [
     accent: "#a3d977",
   },
   {
+    id: "customers",
+    title: "Customers",
+    subtitle: "Offline customer records",
+    icon: "people-circle",
+    route: "/(admin)/gausevak/customers",
+    gradient: ["#13293d", "#1f4e5f"] as const,
+    accent: "#7dd3fc",
+  },
+  {
     id: "notes",
     title: "Notes",
     subtitle: "Quick reminders",

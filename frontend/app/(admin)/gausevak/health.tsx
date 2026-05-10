@@ -13,6 +13,7 @@ import {
   Alert,
   Platform,
   Image,
+  Modal,
 } from "react-native";
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from "expo-router";
@@ -40,6 +41,13 @@ interface Summary {
   unhealthy: number;
   not_reported: number;
 }
+
+type SortOption =
+  | "name_asc"
+  | "name_desc"
+  | "healthy_first"
+  | "unhealthy_first"
+  | "reported_first";
 
 const cowImg = require("../../../assets/images/gir-cow.png");
 const bullImg = require("../../../assets/images/bull-cow.png");
@@ -255,6 +263,8 @@ export default function CowHealthScreen() {
   const [filter, setFilter] = useState<
     "all" | "healthy" | "unhealthy" | "not_reported"
   >("all");
+  const [sortBy, setSortBy] = useState<SortOption>("name_asc");
+  const [sortVisible, setSortVisible] = useState(false);
 
   const fetchAll = useCallback(async () => {
     try {
@@ -323,7 +333,31 @@ useEffect(() => {
       }),
     );
 
-  const filtered = rows.filter((r) => {
+  const groupedRows = rows.reduce<CowRow[]>((groups, row) => {
+    const existing = groups.find((item) => item.cow_id === row.cow_id);
+    if (!existing) {
+      groups.push(row);
+      return groups;
+    }
+
+    const existingScore =
+      (existing.reported ? 2 : 0) +
+      (existing.worker_name ? 1 : 0) +
+      (isHealthy(existing.status) ? 1 : 0);
+    const nextScore =
+      (row.reported ? 2 : 0) +
+      (row.worker_name ? 1 : 0) +
+      (isHealthy(row.status) ? 1 : 0);
+
+    if (nextScore >= existingScore) {
+      const index = groups.findIndex((item) => item.cow_id === row.cow_id);
+      groups[index] = row;
+    }
+
+    return groups;
+  }, []);
+
+  const filtered = groupedRows.filter((r) => {
     const q = search.toLowerCase();
     const matchSearch =
       r.cow_name.toLowerCase().includes(q) ||
@@ -339,7 +373,39 @@ useEffect(() => {
             ? isUnhealthy(r.status)
             : isNotReported(r.status);
     return matchSearch && matchFilter;
+  }).sort((a, b) => {
+    if (sortBy === "name_asc") return a.cow_name.localeCompare(b.cow_name);
+    if (sortBy === "name_desc") return b.cow_name.localeCompare(a.cow_name);
+    if (sortBy === "healthy_first") {
+      return isHealthy(a.status) === isHealthy(b.status)
+        ? a.cow_name.localeCompare(b.cow_name)
+        : isHealthy(a.status)
+          ? -1
+          : 1;
+    }
+    if (sortBy === "unhealthy_first") {
+      return isUnhealthy(a.status) === isUnhealthy(b.status)
+        ? a.cow_name.localeCompare(b.cow_name)
+        : isUnhealthy(a.status)
+          ? -1
+          : 1;
+    }
+    return a.reported === b.reported
+      ? a.cow_name.localeCompare(b.cow_name)
+      : a.reported
+        ? -1
+        : 1;
   });
+  const sortMeta: Record<
+    SortOption,
+    { label: string; icon: keyof typeof Ionicons.glyphMap }
+  > = {
+    name_asc: { label: "Name A-Z", icon: "text-outline" },
+    name_desc: { label: "Name Z-A", icon: "text-outline" },
+    healthy_first: { label: "Healthy First", icon: "heart-outline" },
+    unhealthy_first: { label: "Unhealthy First", icon: "alert-circle-outline" },
+    reported_first: { label: "Reported First", icon: "checkmark-done-outline" },
+  };
 
   const FILTERS = [
     {
@@ -383,13 +449,65 @@ useEffect(() => {
         <View style={{ flex: 1, marginLeft: 12 }}>
           <Text style={s.headerTitle}>Cow Health</Text>
           <Text style={s.headerSub}>
-            {rows.length} cows · {fmtDate(TODAY)}
+            {groupedRows.length} cows · {fmtDate(TODAY)}
           </Text>
         </View>
+        <TouchableOpacity style={s.sortBtn} onPress={() => setSortVisible(true)}>
+          <Ionicons name={sortMeta[sortBy].icon} size={16} color="#16a34a" />
+        </TouchableOpacity>
         <TouchableOpacity style={s.refreshBtn} onPress={onRefresh}>
           <Ionicons name="refresh-outline" size={18} color="#16a34a" />
         </TouchableOpacity>
       </View>
+      <Modal
+        visible={sortVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSortVisible(false)}
+      >
+        <TouchableOpacity
+          activeOpacity={1}
+          style={s.sortOverlay}
+          onPress={() => setSortVisible(false)}
+        >
+          <View style={s.sortSheet}>
+            <Text style={s.sortSheetTitle}>Sort Health Data</Text>
+            <Text style={s.sortSheetSub}>Choose data ordering</Text>
+            {(
+              [
+                "name_asc",
+                "name_desc",
+                "healthy_first",
+                "unhealthy_first",
+                "reported_first",
+              ] as const
+            ).map((option) => (
+              <TouchableOpacity
+                key={option}
+                style={[s.sortOption, sortBy === option && s.sortOptionActive]}
+                onPress={() => {
+                  setSortBy(option);
+                  setSortVisible(false);
+                }}
+              >
+                <Ionicons
+                  name={sortMeta[option].icon}
+                  size={15}
+                  color={sortBy === option ? "#16a34a" : "#9ca3af"}
+                />
+                <Text
+                  style={[
+                    s.sortOptionText,
+                    sortBy === option && s.sortOptionTextActive,
+                  ]}
+                >
+                  {sortMeta[option].label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       <View style={s.statsRow}>
         {[
@@ -551,6 +669,17 @@ const s = StyleSheet.create({
     fontWeight: "500",
     marginTop: 1,
   },
+  sortBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#f0fdf4",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#86efac",
+    marginRight: 8,
+  },
   refreshBtn: {
     width: 36,
     height: 36,
@@ -561,6 +690,41 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#86efac",
   },
+  sortOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(17,24,39,0.28)",
+    justifyContent: "flex-start",
+    paddingTop: 96,
+    paddingHorizontal: 16,
+  },
+  sortSheet: {
+    alignSelf: "flex-end",
+    width: 220,
+    backgroundColor: "#fff",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#86efac",
+    padding: 12,
+  },
+  sortSheetTitle: { fontSize: 15, fontWeight: "800", color: "#111827" },
+  sortSheetSub: {
+    fontSize: 12,
+    color: "#9ca3af",
+    fontWeight: "500",
+    marginTop: 2,
+    marginBottom: 8,
+  },
+  sortOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  sortOptionActive: { backgroundColor: "#f0fdf4" },
+  sortOptionText: { fontSize: 13, fontWeight: "700", color: "#6b7280" },
+  sortOptionTextActive: { color: "#16a34a" },
   statsRow: {
     flexDirection: "row",
     backgroundColor: "#fff",

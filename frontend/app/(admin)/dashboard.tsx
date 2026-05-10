@@ -15,6 +15,7 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { api } from "../../src/services/api";
 import LoadingScreen from "../../src/components/LoadingScreen";
@@ -278,6 +279,7 @@ function DetailModal({
 // ── Main Dashboard
 export default function AdminDashboard() {
   const { user } = useAuth();
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [stats, setStats] = useState<any>(null);
@@ -461,6 +463,25 @@ export default function AdminDashboard() {
             </View>
           </TouchableOpacity>
         </View>
+
+        <TouchableOpacity
+          style={styles.customerManagerCard}
+          activeOpacity={0.8}
+          onPress={() => router.push("/(admin)/gausevak/customers")}
+        >
+          <View style={styles.customerManagerLeft}>
+            <View style={styles.customerManagerIcon}>
+              <Ionicons name="people-circle" size={22} color={C.dark} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.customerManagerTitle}>Customer Manager</Text>
+              <Text style={styles.customerManagerSub}>
+                Create, edit and manage offline customer records
+              </Text>
+            </View>
+          </View>
+          <Ionicons name="arrow-forward" size={18} color={C.dark} />
+        </TouchableOpacity>
 
         {/* ── Delivery Progress ── */}
         <View style={styles.card}>
@@ -819,6 +840,41 @@ const styles = StyleSheet.create({
   statValue: { fontSize: 28, fontWeight: "800", letterSpacing: -0.5 },
   statLabel: { fontSize: 12, color: C.textMuted, fontWeight: "600" },
   tapHint: { position: "absolute", bottom: 10, right: 10 },
+  customerManagerCard: {
+    marginHorizontal: 16,
+    marginBottom: 14,
+    backgroundColor: "#FFF3DC",
+    borderRadius: 18,
+    padding: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  customerManagerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    flex: 1,
+  },
+  customerManagerIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: C.primary + "30",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  customerManagerTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: C.text,
+  },
+  customerManagerSub: {
+    fontSize: 12,
+    color: C.textMuted,
+    fontWeight: "500",
+    marginTop: 2,
+  },
 
   card: {
     backgroundColor: C.card,

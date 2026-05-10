@@ -38,6 +38,16 @@ interface SemenRecord {
   created_at: string;
 }
 
+interface SemenGroup {
+  bullSrNo: string;
+  bullName?: string;
+  breed?: string;
+  records: SemenRecord[];
+}
+
+type SortOption = "newest" | "oldest" | "name_asc" | "name_desc";
+type DateRangeOption = "all_time" | "last_week" | "last_month" | "last_year";
+
 interface SemenForm {
   bullSrNo: string;
   bullName: string;
@@ -87,6 +97,21 @@ function rateColor(record: SemenRecord): string {
   if (rate >= 70) return "#16a34a";
   if (rate >= 40) return "#d97706";
   return "#dc2626";
+}
+
+function formatRecordStamp(dateString: string): string {
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return "Recent entry";
+
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year = String(date.getFullYear()).slice(-2);
+  const hours = date.getHours();
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const period = hours >= 12 ? "PM" : "AM";
+  const formattedHours = String(hours % 12 || 12).padStart(2, "0");
+
+  return `${day}/${month}/${year} ${formattedHours}:${minutes} ${period}`;
 }
 
 function Counter({
@@ -771,12 +796,12 @@ function SemenFormModal({
 // ── Semen Card ────────────────────────────────────────────────────────────────
 
 function SemenCard({
-  item,
+  group,
   index,
   onEdit,
   onDelete,
 }: {
-  item: SemenRecord;
+  group: SemenGroup;
   index: number;
   onEdit: (r: SemenRecord) => void;
   onDelete: (r: SemenRecord) => void;
@@ -784,9 +809,12 @@ function SemenCard({
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(20)).current;
   const [expanded, setExpanded] = useState(false);
+  const [recordIndex, setRecordIndex] = useState(0);
+  const item = group.records[recordIndex];
   const rate = conceptionRate(item);
   const rColor = rateColor(item);
   const totalCalves = item.femalCalves + item.maleCalves;
+  const hasMultipleRecords = group.records.length > 1;
 
   useEffect(() => {
     Animated.parallel([
@@ -794,6 +822,10 @@ function SemenCard({
       Animated.spring(translateY, { toValue: 0, delay: index * 70, tension: 65, friction: 11, useNativeDriver: true }),
     ]).start();
   }, []);
+
+  useEffect(() => {
+    setRecordIndex(0);
+  }, [group.bullSrNo]);
 
   return (
     <Animated.View style={[c.card, { opacity, transform: [{ translateY }] }]}>
@@ -815,6 +847,11 @@ function SemenCard({
               {item.bullName && <Text style={c.bullName}>{item.bullName}</Text>}
             </View>
             <Text style={c.breed}>{item.breed ?? "Unknown breed"}</Text>
+            {hasMultipleRecords && (
+              <Text style={c.historyHint}>
+                Record {recordIndex + 1} of {group.records.length}
+              </Text>
+            )}
           </View>
           <View style={[c.rateBadge, { backgroundColor: rColor + "15", borderColor: rColor + "40" }]}>
             <Text style={[c.rateText, { color: rColor }]}>{rate}</Text>
@@ -841,6 +878,140 @@ function SemenCard({
             </React.Fragment>
           ))}
         </View>
+
+        {hasMultipleRecords && (
+          <View style={c.historyWrap}>
+            <View style={c.historyNav}>
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={() => setRecordIndex((prev) => Math.max(0, prev - 1))}
+                disabled={recordIndex === 0}
+                style={[c.historyBtn, recordIndex === 0 && c.historyBtnDisabled]}
+              >
+                <Ionicons
+                  name="chevron-back"
+                  size={14}
+                  color={recordIndex === 0 ? "#cbd5e1" : "#0891b2"}
+                />
+                <Text
+                  style={[
+                    c.historyBtnText,
+                    recordIndex === 0 && c.historyBtnTextDisabled,
+                  ]}
+                >
+                  Previous
+                </Text>
+              </TouchableOpacity>
+
+              <View style={c.historyBadge}>
+                <Ionicons name="albums-outline" size={12} color="#0891b2" />
+                <Text style={c.historyBadgeText}>
+                  {recordIndex + 1}/{group.records.length}
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={() =>
+                  setRecordIndex((prev) =>
+                    Math.min(group.records.length - 1, prev + 1),
+                  )
+                }
+                disabled={recordIndex === group.records.length - 1}
+                style={[
+                  c.historyBtn,
+                  recordIndex === group.records.length - 1 &&
+                    c.historyBtnDisabled,
+                ]}
+              >
+                <Text
+                  style={[
+                    c.historyBtnText,
+                    recordIndex === group.records.length - 1 &&
+                      c.historyBtnTextDisabled,
+                  ]}
+                >
+                  Next
+                </Text>
+                <Ionicons
+                  name="chevron-forward"
+                  size={14}
+                  color={
+                    recordIndex === group.records.length - 1
+                      ? "#cbd5e1"
+                      : "#0891b2"
+                  }
+                />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={c.timelineStrip}
+            >
+              {group.records.map((record, idx) => {
+                const active = idx === recordIndex;
+                const badgeColor =
+                  record.conceptionCount > 0
+                    ? "#16a34a"
+                    : record.damaged > 0
+                      ? "#dc2626"
+                      : "#0891b2";
+                const badgeLabel =
+                  record.conceptionCount > 0
+                    ? `${record.conceptionCount} conceptions`
+                    : record.damaged > 0
+                      ? `${record.damaged} damaged`
+                      : `${record.totalDoses} doses`;
+                return (
+                  <TouchableOpacity
+                    key={record.id}
+                    activeOpacity={0.85}
+                    onPress={() => setRecordIndex(idx)}
+                    style={[c.timelineChip, active && c.timelineChipActive]}
+                  >
+                    <Text
+                      style={[
+                        c.timelineChipTitle,
+                        active && c.timelineChipTitleActive,
+                      ]}
+                    >
+                      {formatRecordStamp(record.created_at)}
+                    </Text>
+                    <View
+                      style={[
+                        c.timelineBadge,
+                        {
+                          backgroundColor: active ? badgeColor + "18" : "#ffffff",
+                          borderColor: active ? badgeColor + "55" : "#e5e7eb",
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          c.timelineBadgeText,
+                          { color: active ? badgeColor : "#475569" },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {badgeLabel}
+                      </Text>
+                    </View>
+                    <Text
+                      style={[
+                        c.timelineChipSub,
+                        active && c.timelineChipSubActive,
+                      ]}
+                    >
+                      {record.femalCalves + record.maleCalves} calves · {record.breed ?? "Breed"}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        )}
       </TouchableOpacity>
 
       {expanded && (
@@ -927,6 +1098,9 @@ export default function SemenRecordScreen() {
   const [records, setRecords] = useState<SemenRecord[]>([]);
   const [screen, setScreen] = useState<"home" | "list">("home");
   const [search, setSearch] = useState("");
+  const [sortBy, setSortBy] = useState<SortOption>("newest");
+  const [dateRange, setDateRange] = useState<DateRangeOption>("all_time");
+  const [sortVisible, setSortVisible] = useState(false);
   const [modalVisible, setModal] = useState(false);
   const [editRecord, setEditRecord] = useState<SemenRecord | null>(null);
   const [loading, setLoading] = useState(false);
@@ -1022,6 +1196,68 @@ export default function SemenRecordScreen() {
   const overallRate = totalDoses > 0
     ? `${((totalConceptions / totalDoses) * 100).toFixed(1)}%`
     : "—";
+  const isWithinRange = (createdAt: string, range: DateRangeOption) => {
+    if (range === "all_time") return true;
+    const created = new Date(createdAt);
+    if (Number.isNaN(created.getTime())) return true;
+    const diffDays =
+      (Date.now() - created.getTime()) / (1000 * 60 * 60 * 24);
+    if (range === "last_week") return diffDays <= 7;
+    if (range === "last_month") return diffDays <= 30;
+    return diffDays <= 365;
+  };
+  const groupedRecords = records.reduce<SemenGroup[]>((groups, record) => {
+    const existing = groups.find((group) => group.bullSrNo === record.bullSrNo);
+    if (existing) {
+      existing.records.push(record);
+      existing.records.sort(
+        (a, b) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+      );
+    } else {
+      groups.push({
+        bullSrNo: record.bullSrNo,
+        bullName: record.bullName,
+        breed: record.breed,
+        records: [record],
+      });
+    }
+    return groups;
+  }, []);
+  const visibleGroupedRecords = groupedRecords
+    .filter((group) =>
+      isWithinRange(group.records[0]?.created_at ?? "", dateRange),
+    )
+    .sort((a, b) => {
+      if (sortBy === "name_asc") {
+        return (a.bullName ?? a.bullSrNo).localeCompare(b.bullName ?? b.bullSrNo);
+      }
+      if (sortBy === "name_desc") {
+        return (b.bullName ?? b.bullSrNo).localeCompare(a.bullName ?? a.bullSrNo);
+      }
+      const aTime = new Date(a.records[0]?.created_at ?? 0).getTime();
+      const bTime = new Date(b.records[0]?.created_at ?? 0).getTime();
+      if (sortBy === "oldest") return aTime - bTime;
+      return bTime - aTime;
+    });
+  const sortMeta: Record<
+    SortOption,
+    { label: string; icon: keyof typeof Ionicons.glyphMap }
+  > = {
+    newest: { label: "Newest", icon: "time-outline" },
+    oldest: { label: "Oldest", icon: "hourglass-outline" },
+    name_asc: { label: "Name A-Z", icon: "text-outline" },
+    name_desc: { label: "Name Z-A", icon: "text-outline" },
+  };
+  const dateRangeMeta: Record<
+    DateRangeOption,
+    { label: string; icon: keyof typeof Ionicons.glyphMap }
+  > = {
+    all_time: { label: "All Time", icon: "calendar-outline" },
+    last_week: { label: "Last Week", icon: "today-outline" },
+    last_month: { label: "Last Month", icon: "calendar-clear-outline" },
+    last_year: { label: "Last Year", icon: "calendar-number-outline" },
+  };
 
   return (
     <View style={[s.screen, { paddingTop: insets.top }]}>
@@ -1036,18 +1272,97 @@ export default function SemenRecordScreen() {
         </TouchableOpacity>
         <View style={{ flex: 1, marginLeft: 12 }}>
           <Text style={s.headerTitle}>Semen Records</Text>
-          <Text style={s.headerSub}>{records.length} bulls tracked</Text>
+          <Text style={s.headerSub}>
+            {visibleGroupedRecords.length} bulls, {records.length} records
+          </Text>
         </View>
         {screen === "list" && (
-          <View style={s.countBadge}>
-            <Text style={s.countText}>{records.length}</Text>
-          </View>
+          <>
+            <TouchableOpacity
+              style={s.sortBtn}
+              onPress={() => setSortVisible(true)}
+              activeOpacity={0.85}
+            >
+              <Ionicons name={sortMeta[sortBy].icon} size={16} color="#0891b2" />
+            </TouchableOpacity>
+            <View style={s.countBadge}>
+              <Text style={s.countText}>{visibleGroupedRecords.length}</Text>
+            </View>
+          </>
         )}
       </View>
+      <Modal
+        visible={sortVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSortVisible(false)}
+      >
+        <TouchableOpacity
+          activeOpacity={1}
+          style={s.sortOverlay}
+          onPress={() => setSortVisible(false)}
+        >
+          <View style={s.sortSheet}>
+            <Text style={s.sortSheetTitle}>Sort Records</Text>
+            <Text style={s.sortSheetSub}>Choose date filter and ordering</Text>
+            <Text style={s.sortSectionTitle}>Date Filter</Text>
+            {(["all_time", "last_week", "last_month", "last_year"] as const).map(
+              (option) => (
+                <TouchableOpacity
+                  key={option}
+                  style={[s.sortOption, dateRange === option && s.sortOptionActive]}
+                  onPress={() => setDateRange(option)}
+                >
+                  <Ionicons
+                    name={dateRangeMeta[option].icon}
+                    size={15}
+                    color={dateRange === option ? "#0891b2" : "#9ca3af"}
+                  />
+                  <Text
+                    style={[
+                      s.sortOptionText,
+                      dateRange === option && s.sortOptionTextActive,
+                    ]}
+                  >
+                    {dateRangeMeta[option].label}
+                  </Text>
+                </TouchableOpacity>
+              ),
+            )}
+            <Text style={s.sortSectionTitle}>Order By</Text>
+            {(["newest", "oldest", "name_asc", "name_desc"] as const).map(
+              (option) => (
+                <TouchableOpacity
+                  key={option}
+                  style={[s.sortOption, sortBy === option && s.sortOptionActive]}
+                  onPress={() => {
+                    setSortBy(option);
+                    setSortVisible(false);
+                  }}
+                >
+                  <Ionicons
+                    name={sortMeta[option].icon}
+                    size={15}
+                    color={sortBy === option ? "#0891b2" : "#9ca3af"}
+                  />
+                  <Text
+                    style={[
+                      s.sortOptionText,
+                      sortBy === option && s.sortOptionTextActive,
+                    ]}
+                  >
+                    {sortMeta[option].label}
+                  </Text>
+                </TouchableOpacity>
+              ),
+            )}
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       <View style={s.statsRow}>
         {[
-          { label: "Bulls", value: records.length, color: "#0891b2" },
+          { label: "Bulls", value: groupedRecords.length, color: "#0891b2" },
           { label: "Female", value: totalFemalCalves, color: "#e11d48" },
           { label: "Male", value: totalMaleCalves, color: "#2563eb" },
           { label: "Rate", value: overallRate, color: rateColor({ totalDoses, conceptionCount: totalConceptions } as SemenRecord) },
@@ -1086,7 +1401,7 @@ export default function SemenRecordScreen() {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={s.bigBtnTitle}>View All Records</Text>
-                <Text style={s.bigBtnSub}>Browse {records.length} bull records</Text>
+                <Text style={s.bigBtnSub}>Browse {visibleGroupedRecords.length} bull records</Text>
               </View>
               <View style={[s.bigBtnArrow, { backgroundColor: "#2563eb" }]}>
                 <Ionicons name="arrow-forward" size={18} color="#fff" />
@@ -1144,20 +1459,20 @@ export default function SemenRecordScreen() {
             </View>
           ) : (
             <FlatList
-              data={records}
-              keyExtractor={(item) => item.id}
+              data={visibleGroupedRecords}
+              keyExtractor={(item) => item.bullSrNo}
               contentContainerStyle={{ paddingHorizontal: 14, paddingTop: 8, paddingBottom: 100 }}
               showsVerticalScrollIndicator={false}
               refreshControl={
                 <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#0891b2" />
               }
               renderItem={({ item, index }) => (
-                <SemenCard item={item} index={index} onEdit={openEdit} onDelete={handleDelete} />
+                <SemenCard group={item} index={index} onEdit={openEdit} onDelete={handleDelete} />
               )}
               ListEmptyComponent={
                 <View style={s.empty}>
                   <Image source={bullImg} style={{ width: 50, height: 50, resizeMode: "contain" }} />
-                  <Text style={s.emptyText}>No records found</Text>
+                  <Text style={s.emptyText}>No bull records found</Text>
                   <TouchableOpacity onPress={openAdd} style={s.emptyAddBtn}>
                     <Ionicons name="add" size={14} color="#fff" />
                     <Text style={s.emptyAddText}>Add First Record</Text>
@@ -1203,8 +1518,18 @@ const s = StyleSheet.create({
   backBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: "#FFF8F0", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#f7cd98" },
   headerTitle: { fontSize: 18, fontWeight: "800", color: "#0f172a", letterSpacing: -0.4 },
   headerSub: { fontSize: 12, color: "#94a3b8", fontWeight: "500", marginTop: 1 },
+  sortBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: "#ecfeff", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#a5f3fc", marginRight: 8 },
   countBadge: { backgroundColor: "#ecfeff", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: "#a5f3fc" },
   countText: { fontSize: 12, fontWeight: "700", color: "#0891b2" },
+  sortOverlay: { flex: 1, backgroundColor: "rgba(17,24,39,0.28)", justifyContent: "flex-start", paddingTop: 96, paddingHorizontal: 16 },
+  sortSheet: { alignSelf: "flex-end", width: 220, backgroundColor: "#fff", borderRadius: 18, borderWidth: 1, borderColor: "#a5f3fc", padding: 12 },
+  sortSheetTitle: { fontSize: 15, fontWeight: "800", color: "#111827" },
+  sortSheetSub: { fontSize: 12, color: "#94a3b8", fontWeight: "500", marginTop: 2, marginBottom: 8 },
+  sortSectionTitle: { fontSize: 11, fontWeight: "800", color: "#94a3b8", textTransform: "uppercase", marginTop: 8, marginBottom: 4 },
+  sortOption: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 10, paddingVertical: 10, borderRadius: 12 },
+  sortOptionActive: { backgroundColor: "#ecfeff" },
+  sortOptionText: { fontSize: 13, fontWeight: "700", color: "#64748b" },
+  sortOptionTextActive: { color: "#0891b2" },
   statsRow: { flexDirection: "row", backgroundColor: "#FFF8F0", borderBottomWidth: 1, borderBottomColor: "#f7cd98" },
   statItem: { flex: 1, alignItems: "center", paddingVertical: 11 },
   statBorder: { borderRightWidth: 1, borderRightColor: "#f7cd98" },
@@ -1247,6 +1572,7 @@ const c = StyleSheet.create({
   bullSr: { fontSize: 14, fontWeight: "800", color: "#0f172a" },
   bullName: { fontSize: 12, color: "#64748b", fontWeight: "500", backgroundColor: "#f1f5f9", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
   breed: { fontSize: 12, color: "#94a3b8", fontWeight: "500", marginTop: 2 },
+  historyHint: { fontSize: 11, color: "#0891b2", fontWeight: "700", marginTop: 3 },
   rateBadge: { borderRadius: 12, borderWidth: 1.5, paddingHorizontal: 10, paddingVertical: 6, alignItems: "center", minWidth: 52 },
   rateText: { fontSize: 14, fontWeight: "800" },
   rateSubText: { fontSize: 9, fontWeight: "700", textTransform: "uppercase", marginTop: 1 },
@@ -1256,6 +1582,73 @@ const c = StyleSheet.create({
   stripEmoji: { fontSize: 14 },
   stripCount: { fontSize: 14, fontWeight: "800", color: "#0f172a" },
   stripLabel: { fontSize: 8, color: "#94a3b8", fontWeight: "600", textTransform: "uppercase" },
+  historyWrap: { marginTop: 10, gap: 10 },
+  historyNav: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  historyBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#ecfeff",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#a5f3fc",
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  historyBtnDisabled: {
+    backgroundColor: "#f8fafc",
+    borderColor: "#e5e7eb",
+  },
+  historyBtnText: { fontSize: 12, color: "#0891b2", fontWeight: "700" },
+  historyBtnTextDisabled: { color: "#cbd5e1" },
+  historyBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "#fff",
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#a5f3fc",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  historyBadgeText: { fontSize: 11, color: "#0891b2", fontWeight: "700" },
+  timelineStrip: { gap: 8, paddingRight: 2 },
+  timelineChip: {
+    minWidth: 100,
+    borderRadius: 14,
+    backgroundColor: "#fff7ed",
+    borderWidth: 1,
+    borderColor: "#f7cd98",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  timelineChipActive: {
+    backgroundColor: "#ecfeff",
+    borderColor: "#a5f3fc",
+  },
+  timelineChipTitle: { fontSize: 12, color: "#9a3412", fontWeight: "700" },
+  timelineChipTitleActive: { color: "#0891b2" },
+  timelineChipSub: {
+    fontSize: 10,
+    color: "#c2410c",
+    fontWeight: "600",
+    marginTop: 2,
+  },
+  timelineChipSubActive: { color: "#0891b2" },
+  timelineBadge: {
+    alignSelf: "flex-start",
+    marginTop: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    maxWidth: "100%",
+  },
+  timelineBadgeText: {
+    fontSize: 10,
+    fontWeight: "700",
+  },
   divider: { height: 1, backgroundColor: "#f1f5f9", marginVertical: 14 },
   detailGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 14 },
   detailCell: { width: "30%", flex: 1, borderRadius: 12, borderWidth: 1.5, padding: 12, alignItems: "center", gap: 4, minWidth: 90 },

@@ -46,8 +46,7 @@
       ],
       "expo-font",
       "expo-web-browser",
-      "react-native-vision-camera",
-      "@react-native-community/datetimepicker"
+      "react-native-vision-camera"
     ],
     "experiments": {
       "typedRoutes": true

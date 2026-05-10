@@ -46,6 +46,17 @@ interface MedicalRecord {
   created_at: string;
 }
 
+interface MedicalGroup {
+  cowSrNo: string;
+  cowName?: string;
+  cowType?: string;
+  cowAge?: string;
+  records: MedicalRecord[];
+}
+
+type SortOption = "newest" | "oldest" | "name_asc" | "name_desc";
+type DateRangeOption = "all_time" | "last_week" | "last_month" | "last_year";
+
 interface CowOption {
   id: string;
   tag: string;
@@ -137,6 +148,21 @@ function getCalfVaccineDates(bornDate: string) {
     const yyyy = d.getFullYear();
     return { label: s.label, date: `${dd}/${mm}/${yyyy}`, days: s.days };
   });
+}
+
+function formatRecordStamp(dateString: string): string {
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return "Recent entry";
+
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year = String(date.getFullYear()).slice(-2);
+  const hours = date.getHours();
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const period = hours >= 12 ? "PM" : "AM";
+  const formattedHours = String(hours % 12 || 12).padStart(2, "0");
+
+  return `${day}/${month}/${year} ${formattedHours}:${minutes} ${period}`;
 }
 
 // VACCINE NAME PICKER
@@ -1406,12 +1432,12 @@ function DRow({
 // MEDICAL CARD
 
 function MedicalCard({
-  item,
+  group,
   index,
   onEdit,
   onDelete,
 }: {
-  item: MedicalRecord;
+  group: MedicalGroup;
   index: number;
   onEdit: (r: MedicalRecord) => void;
   onDelete: (r: MedicalRecord) => void;
@@ -1419,6 +1445,9 @@ function MedicalCard({
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(18)).current;
   const [expanded, setExpanded] = useState(false);
+  const [recordIndex, setRecordIndex] = useState(0);
+  const item = group.records[recordIndex];
+  const hasMultipleRecords = group.records.length > 1;
 
   const isHealthy = item.currentStatus === "healthy";
   const statusColor = isHealthy ? "#16a34a" : "#dc2626";
@@ -1445,6 +1474,10 @@ function MedicalCard({
       }),
     ]).start();
   }, []);
+
+  useEffect(() => {
+    setRecordIndex(0);
+  }, [group.cowSrNo]);
 
   // Treatment chip color
   const treatmentColor =
@@ -1507,6 +1540,11 @@ function MedicalCard({
                   <Text style={c.cowName}>{item.cowName}</Text>
                 ) : null}
               </View>
+              {hasMultipleRecords && (
+                <Text style={c.historyHint}>
+                  Record {recordIndex + 1} of {group.records.length}
+                </Text>
+              )}
               <View
                 style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
               >
@@ -1625,6 +1663,143 @@ function MedicalCard({
               </View>
             )}
           </View>
+
+          {hasMultipleRecords && (
+            <View style={c.historyWrap}>
+              <View style={c.historyNav}>
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  onPress={() => setRecordIndex((prev) => Math.max(0, prev - 1))}
+                  disabled={recordIndex === 0}
+                  style={[c.historyBtn, recordIndex === 0 && c.historyBtnDisabled]}
+                >
+                  <Ionicons
+                    name="chevron-back"
+                    size={14}
+                    color={recordIndex === 0 ? "#cbd5e1" : "#16a34a"}
+                  />
+                  <Text
+                    style={[
+                      c.historyBtnText,
+                      recordIndex === 0 && c.historyBtnTextDisabled,
+                    ]}
+                  >
+                    Previous
+                  </Text>
+                </TouchableOpacity>
+
+                <View style={c.historyBadge}>
+                  <Ionicons name="albums-outline" size={12} color="#16a34a" />
+                  <Text style={c.historyBadgeText}>
+                    {recordIndex + 1}/{group.records.length}
+                  </Text>
+                </View>
+
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  onPress={() =>
+                    setRecordIndex((prev) =>
+                      Math.min(group.records.length - 1, prev + 1),
+                    )
+                  }
+                  disabled={recordIndex === group.records.length - 1}
+                  style={[
+                    c.historyBtn,
+                    recordIndex === group.records.length - 1 &&
+                      c.historyBtnDisabled,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      c.historyBtnText,
+                      recordIndex === group.records.length - 1 &&
+                        c.historyBtnTextDisabled,
+                    ]}
+                  >
+                    Next
+                  </Text>
+                  <Ionicons
+                    name="chevron-forward"
+                    size={14}
+                    color={
+                      recordIndex === group.records.length - 1
+                        ? "#cbd5e1"
+                        : "#16a34a"
+                    }
+                  />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={c.timelineStrip}
+              >
+                {group.records.map((record, idx) => {
+                  const active = idx === recordIndex;
+                  const chipAccentColor =
+                    record.currentIssueName
+                      ? "#dc2626"
+                      : record.vaccinationName
+                        ? "#7c3aed"
+                        : "#16a34a";
+                  const chipBadgeLabel =
+                    record.currentIssueName ??
+                    record.vaccinationName ??
+                    (record.currentStatus === "healthy" ? "Healthy" : "Unhealthy");
+                  return (
+                    <TouchableOpacity
+                      key={record.id}
+                      activeOpacity={0.85}
+                      onPress={() => setRecordIndex(idx)}
+                      style={[c.timelineChip, active && c.timelineChipActive]}
+                    >
+                      <Text
+                        style={[
+                          c.timelineChipTitle,
+                          active && c.timelineChipTitleActive,
+                        ]}
+                      >
+                        {formatRecordStamp(record.created_at)}
+                      </Text>
+                      <View
+                        style={[
+                          c.timelineBadge,
+                          {
+                            backgroundColor: active
+                              ? chipAccentColor + "18"
+                              : "#ffffff",
+                            borderColor: active
+                              ? chipAccentColor + "55"
+                              : "#e5e7eb",
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            c.timelineBadgeText,
+                            { color: active ? chipAccentColor : "#475569" },
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {chipBadgeLabel}
+                        </Text>
+                      </View>
+                      <Text
+                        style={[
+                          c.timelineChipSub,
+                          active && c.timelineChipSubActive,
+                        ]}
+                      >
+                        {record.currentStatus === "healthy" ? "Healthy" : "Unhealthy"}
+                        {record.treatmentGiven ? ` · ${record.treatmentGiven}` : ""}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          )}
         </TouchableOpacity>
 
         {expanded && (
@@ -1732,6 +1907,9 @@ export default function MedicalScreen() {
   const [records, setRecords] = useState<MedicalRecord[]>([]);
   const [screen, setScreen] = useState<"home" | "list">("home");
   const [search, setSearch] = useState("");
+  const [sortBy, setSortBy] = useState<SortOption>("newest");
+  const [dateRange, setDateRange] = useState<DateRangeOption>("all_time");
+  const [sortVisible, setSortVisible] = useState(false);
   const [filterStatus, setFilter] = useState<"all" | "healthy" | "unhealthy">(
     "all",
   );
@@ -1835,6 +2013,69 @@ export default function MedicalScreen() {
   const calfRecords = records.filter(
     (r) => r.cowAge && getCalfVaccineDates(r.cowAge) !== null,
   );
+  const isWithinRange = (createdAt: string, range: DateRangeOption) => {
+    if (range === "all_time") return true;
+    const created = new Date(createdAt);
+    if (Number.isNaN(created.getTime())) return true;
+    const diffDays =
+      (Date.now() - created.getTime()) / (1000 * 60 * 60 * 24);
+    if (range === "last_week") return diffDays <= 7;
+    if (range === "last_month") return diffDays <= 30;
+    return diffDays <= 365;
+  };
+  const groupedRecords = records.reduce<MedicalGroup[]>((groups, record) => {
+    const existing = groups.find((group) => group.cowSrNo === record.cowSrNo);
+    if (existing) {
+      existing.records.push(record);
+      existing.records.sort(
+        (a, b) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+      );
+    } else {
+      groups.push({
+        cowSrNo: record.cowSrNo,
+        cowName: record.cowName,
+        cowType: record.cowType,
+        cowAge: record.cowAge,
+        records: [record],
+      });
+    }
+    return groups;
+  }, []);
+  const visibleGroupedRecords = groupedRecords
+    .filter((group) =>
+      isWithinRange(group.records[0]?.created_at ?? "", dateRange),
+    )
+    .sort((a, b) => {
+      if (sortBy === "name_asc") {
+        return (a.cowName ?? a.cowSrNo).localeCompare(b.cowName ?? b.cowSrNo);
+      }
+      if (sortBy === "name_desc") {
+        return (b.cowName ?? b.cowSrNo).localeCompare(a.cowName ?? a.cowSrNo);
+      }
+      const aTime = new Date(a.records[0]?.created_at ?? 0).getTime();
+      const bTime = new Date(b.records[0]?.created_at ?? 0).getTime();
+      if (sortBy === "oldest") return aTime - bTime;
+      return bTime - aTime;
+    });
+  const sortMeta: Record<
+    SortOption,
+    { label: string; icon: keyof typeof Ionicons.glyphMap }
+  > = {
+    newest: { label: "Newest", icon: "time-outline" },
+    oldest: { label: "Oldest", icon: "hourglass-outline" },
+    name_asc: { label: "Name A-Z", icon: "text-outline" },
+    name_desc: { label: "Name Z-A", icon: "text-outline" },
+  };
+  const dateRangeMeta: Record<
+    DateRangeOption,
+    { label: string; icon: keyof typeof Ionicons.glyphMap }
+  > = {
+    all_time: { label: "All Time", icon: "calendar-outline" },
+    last_week: { label: "Last Week", icon: "today-outline" },
+    last_month: { label: "Last Month", icon: "calendar-clear-outline" },
+    last_year: { label: "Last Year", icon: "calendar-number-outline" },
+  };
 
   return (
     <View style={[s.screen, { paddingTop: insets.top }]}>
@@ -1862,14 +2103,92 @@ export default function MedicalScreen() {
             <Ionicons name="medkit" size={18} color="#16a34a" />
             <Text style={s.headerTitle}>Medical Records</Text>
           </View>
-          <Text style={s.headerSub}>{records.length} records</Text>
+          <Text style={s.headerSub}>
+            {visibleGroupedRecords.length} cows, {records.length} records
+          </Text>
         </View>
         {screen === "list" && (
-          <View style={s.countBadge}>
-            <Text style={s.countText}>{records.length}</Text>
-          </View>
+          <>
+            <TouchableOpacity
+              onPress={() => setSortVisible(true)}
+              style={s.sortBtn}
+            >
+              <Ionicons name={sortMeta[sortBy].icon} size={16} color="#16a34a" />
+            </TouchableOpacity>
+            <View style={s.countBadge}>
+              <Text style={s.countText}>{visibleGroupedRecords.length}</Text>
+            </View>
+          </>
         )}
       </View>
+      <Modal
+        visible={sortVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSortVisible(false)}
+      >
+        <TouchableOpacity
+          activeOpacity={1}
+          style={s.sortOverlay}
+          onPress={() => setSortVisible(false)}
+        >
+          <View style={s.sortSheet}>
+            <Text style={s.sortSheetTitle}>Sort Records</Text>
+            <Text style={s.sortSheetSub}>Choose date filter and ordering</Text>
+            <Text style={s.sortSectionTitle}>Date Filter</Text>
+            {(["all_time", "last_week", "last_month", "last_year"] as const).map(
+              (option) => (
+                <TouchableOpacity
+                  key={option}
+                  style={[s.sortOption, dateRange === option && s.sortOptionActive]}
+                  onPress={() => setDateRange(option)}
+                >
+                  <Ionicons
+                    name={dateRangeMeta[option].icon}
+                    size={15}
+                    color={dateRange === option ? "#16a34a" : "#9ca3af"}
+                  />
+                  <Text
+                    style={[
+                      s.sortOptionText,
+                      dateRange === option && s.sortOptionTextActive,
+                    ]}
+                  >
+                    {dateRangeMeta[option].label}
+                  </Text>
+                </TouchableOpacity>
+              ),
+            )}
+            <Text style={s.sortSectionTitle}>Order By</Text>
+            {(["newest", "oldest", "name_asc", "name_desc"] as const).map(
+              (option) => (
+                <TouchableOpacity
+                  key={option}
+                  style={[s.sortOption, sortBy === option && s.sortOptionActive]}
+                  onPress={() => {
+                    setSortBy(option);
+                    setSortVisible(false);
+                  }}
+                >
+                  <Ionicons
+                    name={sortMeta[option].icon}
+                    size={15}
+                    color={sortBy === option ? "#16a34a" : "#9ca3af"}
+                  />
+                  <Text
+                    style={[
+                      s.sortOptionText,
+                      sortBy === option && s.sortOptionTextActive,
+                    ]}
+                  >
+                    {sortMeta[option].label}
+                  </Text>
+                </TouchableOpacity>
+              ),
+            )}
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       {/* ── Stats bar ── */}
       <View style={s.statsRow}>
@@ -1926,7 +2245,9 @@ export default function MedicalScreen() {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={s.bigBtnTitle}>View All Records</Text>
-              <Text style={s.bigBtnSub}>Browse {records.length} medical records</Text>
+              <Text style={s.bigBtnSub}>
+                Browse {visibleGroupedRecords.length} cow medical records
+              </Text>
             </View>
           </TouchableOpacity>
 
@@ -2072,8 +2393,8 @@ export default function MedicalScreen() {
             </View>
           ) : (
             <FlatList
-              data={records}
-              keyExtractor={(item) => item.id}
+              data={visibleGroupedRecords}
+              keyExtractor={(item) => item.cowSrNo}
               contentContainerStyle={{
                 paddingHorizontal: 14,
                 paddingTop: 6,
@@ -2089,7 +2410,7 @@ export default function MedicalScreen() {
               }
               renderItem={({ item, index }) => (
                 <MedicalCard
-                  item={item}
+                  group={item}
                   index={index}
                   onEdit={openEdit}
                   onDelete={handleDelete}
@@ -2098,7 +2419,7 @@ export default function MedicalScreen() {
               ListEmptyComponent={
                 <View style={s.empty}>
                   <Text style={{ fontSize: 44 }}>🏥</Text>
-                  <Text style={s.emptyText}>No records found</Text>
+                  <Text style={s.emptyText}>No cow medical records found</Text>
                   <TouchableOpacity onPress={openAdd} style={s.emptyBtn}>
                     <Ionicons name="add" size={14} color="#fff" />
                     <Text style={s.emptyBtnText}>Add First Record</Text>
@@ -2209,6 +2530,17 @@ const s = StyleSheet.create({
     fontWeight: "500",
     marginTop: 1,
   },
+  sortBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#f0fdf4",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#bbf7d0",
+    marginRight: 8,
+  },
   countBadge: {
     backgroundColor: "#FFF8F0",
     borderRadius: 20,
@@ -2218,6 +2550,49 @@ const s = StyleSheet.create({
     borderColor: "#bbd0f7",
   },
   countText: { fontSize: 12, fontWeight: "700", color: "#16a34a" },
+  sortOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(17,24,39,0.28)",
+    justifyContent: "flex-start",
+    paddingTop: 96,
+    paddingHorizontal: 16,
+  },
+  sortSheet: {
+    alignSelf: "flex-end",
+    width: 220,
+    backgroundColor: "#fff",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#bbf7d0",
+    padding: 12,
+  },
+  sortSheetTitle: { fontSize: 15, fontWeight: "800", color: "#111827" },
+  sortSheetSub: {
+    fontSize: 12,
+    color: "#94a3b8",
+    fontWeight: "500",
+    marginTop: 2,
+    marginBottom: 8,
+  },
+  sortSectionTitle: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#94a3b8",
+    textTransform: "uppercase",
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  sortOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  sortOptionActive: { backgroundColor: "#f0fdf4" },
+  sortOptionText: { fontSize: 13, fontWeight: "700", color: "#64748b" },
+  sortOptionTextActive: { color: "#16a34a" },
   statsRow: {
     flexDirection: "row",
     backgroundColor: "#fff",
@@ -2459,6 +2834,7 @@ const c = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 6,
   },
+  historyHint: { fontSize: 11, color: "#16a34a", fontWeight: "700", marginBottom: 6 },
   agePill: {
     flexDirection: "row",
     alignItems: "center",
@@ -2494,6 +2870,78 @@ const c = StyleSheet.create({
   },
   chipText: { fontSize: 10, fontWeight: "700" },
   chipSubText: { fontSize: 9, fontWeight: "500", opacity: 0.8 },
+  historyWrap: { marginTop: 10, gap: 10 },
+  historyNav: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  historyBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#f0fdf4",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#bbf7d0",
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  historyBtnDisabled: {
+    backgroundColor: "#f8fafc",
+    borderColor: "#e5e7eb",
+  },
+  historyBtnText: { fontSize: 12, color: "#16a34a", fontWeight: "700" },
+  historyBtnTextDisabled: { color: "#cbd5e1" },
+  historyBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "#fff",
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#bbf7d0",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  historyBadgeText: { fontSize: 11, color: "#16a34a", fontWeight: "700" },
+  timelineStrip: { gap: 8, paddingRight: 2 },
+  timelineChip: {
+    minWidth: 118,
+    borderRadius: 14,
+    backgroundColor: "#fff7ed",
+    borderWidth: 1,
+    borderColor: "#fed7aa",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  timelineChipActive: {
+    backgroundColor: "#f0fdf4",
+    borderColor: "#bbf7d0",
+  },
+  timelineChipTitle: { fontSize: 12, color: "#9a3412", fontWeight: "700" },
+  timelineChipTitleActive: { color: "#16a34a" },
+  timelineChipSub: {
+    fontSize: 10,
+    color: "#c2410c",
+    fontWeight: "600",
+    marginTop: 2,
+  },
+  timelineChipSubActive: { color: "#16a34a" },
+  timelineBadge: {
+    alignSelf: "flex-start",
+    marginTop: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    maxWidth: "100%",
+  },
+  timelineBadgeText: {
+    fontSize: 10,
+    fontWeight: "700",
+  },
   divider: { height: 1, backgroundColor: "#f1f5f9", marginVertical: 12 },
   secLabel: {
     fontSize: 11,

@@ -25,6 +25,7 @@ import { api } from "../../../src/services/api";
 
 type FeedStatus = "fed" | "pending";
 type Shift = "morning" | "evening";
+type SortOption = "name_asc" | "name_desc" | "fed_first" | "pending_first";
 
 const cowImg = require("../../../assets/images/gir-cow.png");
 const bullImg = require("../../../assets/images/bull-cow.png");
@@ -1010,6 +1011,8 @@ export default function AdminFeedScreen() {
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] =
     useState<(typeof FILTERS)[number]>("All");
+  const [sortBy, setSortBy] = useState<SortOption>("name_asc");
+  const [sortVisible, setSortVisible] = useState(false);
 
   const [modalVisible, setModalVisible] = useState(false);
   const [editingCow, setEditingCow] = useState<CowFeedRow | null>(null);
@@ -1150,7 +1153,8 @@ export default function AdminFeedScreen() {
     }));
   };
 
-  const filtered = cowRows.filter((d) => {
+  const filtered = cowRows
+    .filter((d) => {
     const matchSearch =
       d.name.toLowerCase().includes(search.toLowerCase()) ||
       d.srNo.toLowerCase().includes(search.toLowerCase());
@@ -1169,7 +1173,40 @@ export default function AdminFeedScreen() {
         d.evening === "fed") ||
       (activeFilter === "Pending" && shiftStatus === "pending");
     return matchSearch && matchFilter;
-  });
+    })
+    .sort((a, b) => {
+      const statusFor = (row: CowFeedRow) =>
+        activeShift === "morning"
+          ? row.morning
+          : activeShift === "evening"
+            ? row.evening
+            : row.morning === "fed" && row.evening === "fed"
+              ? "fed"
+              : "pending";
+      if (sortBy === "name_asc") return a.name.localeCompare(b.name);
+      if (sortBy === "name_desc") return b.name.localeCompare(a.name);
+      if (sortBy === "fed_first") {
+        return statusFor(a) === statusFor(b)
+          ? a.name.localeCompare(b.name)
+          : statusFor(a) === "fed"
+            ? -1
+            : 1;
+      }
+      return statusFor(a) === statusFor(b)
+        ? a.name.localeCompare(b.name)
+        : statusFor(a) === "pending"
+          ? -1
+          : 1;
+    });
+  const sortMeta: Record<
+    SortOption,
+    { label: string; icon: keyof typeof Ionicons.glyphMap }
+  > = {
+    name_asc: { label: "Name A-Z", icon: "text-outline" },
+    name_desc: { label: "Name Z-A", icon: "text-outline" },
+    fed_first: { label: "Fed First", icon: "checkmark-circle-outline" },
+    pending_first: { label: "Pending First", icon: "time-outline" },
+  };
 
   return (
     <View style={[sc.screen, { paddingTop: insets.top }]}>
@@ -1189,10 +1226,59 @@ export default function AdminFeedScreen() {
         >
           <AutoRefreshDot active={autoRefreshActive} />
         </TouchableOpacity>
+        <TouchableOpacity
+          style={sc.sortBtn}
+          onPress={() => setSortVisible(true)}
+        >
+          <Ionicons name={sortMeta[sortBy].icon} size={16} color="#BB6B3F" />
+        </TouchableOpacity>
         <TouchableOpacity style={sc.refreshBtn} onPress={onRefresh}>
           <Ionicons name="refresh-outline" size={18} color="#BB6B3F" />
         </TouchableOpacity>
       </View>
+      <Modal
+        visible={sortVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSortVisible(false)}
+      >
+        <TouchableOpacity
+          activeOpacity={1}
+          style={sc.sortOverlay}
+          onPress={() => setSortVisible(false)}
+        >
+          <View style={sc.sortSheet}>
+            <Text style={sc.sortSheetTitle}>Sort Feed Data</Text>
+            <Text style={sc.sortSheetSub}>Choose data ordering</Text>
+            {(["name_asc", "name_desc", "fed_first", "pending_first"] as const).map(
+              (option) => (
+                <TouchableOpacity
+                  key={option}
+                  style={[sc.sortOption, sortBy === option && sc.sortOptionActive]}
+                  onPress={() => {
+                    setSortBy(option);
+                    setSortVisible(false);
+                  }}
+                >
+                  <Ionicons
+                    name={sortMeta[option].icon}
+                    size={15}
+                    color={sortBy === option ? "#BB6B3F" : "#9ca3af"}
+                  />
+                  <Text
+                    style={[
+                      sc.sortOptionText,
+                      sortBy === option && sc.sortOptionTextActive,
+                    ]}
+                  >
+                    {sortMeta[option].label}
+                  </Text>
+                </TouchableOpacity>
+              ),
+            )}
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       {loading ? (
         <View style={sc.loadingWrap}>
@@ -1770,6 +1856,17 @@ const sc = StyleSheet.create({
     fontWeight: "500",
     marginTop: 1,
   },
+  sortBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#FFF5EA",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#FFE8CC",
+    marginRight: 8,
+  },
   liveBtn: {
     height: 36,
     paddingHorizontal: 10,
@@ -1791,6 +1888,41 @@ const sc = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#FFE8CC",
   },
+  sortOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(17,24,39,0.28)",
+    justifyContent: "flex-start",
+    paddingTop: 96,
+    paddingHorizontal: 16,
+  },
+  sortSheet: {
+    alignSelf: "flex-end",
+    width: 220,
+    backgroundColor: "#fff",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#FFE8CC",
+    padding: 12,
+  },
+  sortSheetTitle: { fontSize: 15, fontWeight: "800", color: "#3D2B1F" },
+  sortSheetSub: {
+    fontSize: 12,
+    color: "#8B6854",
+    fontWeight: "500",
+    marginTop: 2,
+    marginBottom: 8,
+  },
+  sortOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  sortOptionActive: { backgroundColor: "#FFF5EA" },
+  sortOptionText: { fontSize: 13, fontWeight: "700", color: "#8B6854" },
+  sortOptionTextActive: { color: "#BB6B3F" },
   controlsRow: { paddingHorizontal: 14, paddingTop: 10, paddingBottom: 4 },
   searchWrap: {
     flexDirection: "row",
