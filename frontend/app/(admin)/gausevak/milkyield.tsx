@@ -13,6 +13,7 @@ import {
   RefreshControl,
   Modal,
   KeyboardAvoidingView,
+  Image,
   Linking,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -50,6 +51,16 @@ function dateStr(offset = 0) {
   return d.toISOString().split("T")[0];
 }
 
+const cowImg = require("../../../assets/images/gir-cow.png");
+const bullImg = require("../../../assets/images/bull-cow.png");
+const calfImg = require("../../../assets/images/calf-cow.png");
+
+const todayLabel = new Date().toLocaleDateString("en-IN", {
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+  year: "numeric",
+});
 function formatDateLabel(isoStr: string) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -593,7 +604,10 @@ function MilkCard({
         style={s.cardHeader}
       >
         <View style={s.avatarWrap}>
-          <Ionicons name="ellipse-outline" size={22} color="#9ca3af" />
+          <Image
+            source={cowImg}
+            style={{ width: 32, height: 32, resizeMode: "contain" }}
+          />
         </View>
         <View style={{ flex: 1, marginLeft: 10 }}>
           <Text style={s.cowName} numberOfLines={1}>
@@ -802,6 +816,7 @@ export default function MilkYieldScreen() {
   const [autoRefreshActive, setAutoRefreshActive] = useState(true);
   const autoRefreshRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isMountedRef = useRef(true);
+  const silentRef = useRef(false);
 
   const fetchAll = useCallback(
     async (silent = false, date?: string) => {

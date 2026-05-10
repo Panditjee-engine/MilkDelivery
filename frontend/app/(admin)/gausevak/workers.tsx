@@ -1348,7 +1348,8 @@ const IS_IOS = Platform.OS === "ios";
 const STATUS_BAR_HEIGHT = IS_IOS ? 0 : (StatusBar.currentHeight ?? 0);
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#F0F4F8" },
+  screen: { flex: 1, backgroundColor: "#FFF8F0" },
+
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -1411,7 +1412,7 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#fff",
+    backgroundColor: "#FFF8F0",
     borderRadius: 18,
     padding: 14,
     shadowColor: "#000",
@@ -1445,7 +1446,7 @@ const styles = StyleSheet.create({
   workerEmail: { fontSize: 12, color: "#888", fontWeight: "500" },
   cardTags: { flexDirection: "row", flexWrap: "wrap", gap: 5, marginTop: 4 },
   tag: {
-    backgroundColor: "#f0fdf4",
+    backgroundColor: "#FFF8F0",
     borderRadius: 8,
     paddingHorizontal: 8,
     paddingVertical: 3,
@@ -1507,7 +1508,7 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   modalBox: {
-    backgroundColor: "#fff",
+    backgroundColor: "#f7f1ea",
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     paddingHorizontal: 20,

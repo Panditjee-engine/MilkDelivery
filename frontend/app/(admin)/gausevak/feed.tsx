@@ -3032,8 +3032,9 @@ export default function AdminFeedHubScreen() {
         if (!silent) setLogLoading(false);
         return;
       }
+      api.setToken(token);
       const [data, typeMap] = await Promise.all([
-        api.getAdminFeedLogs(token, todayStr(), shift),
+        api.getAdminFeedLogs(todayStr(), shift),
         buildTypeMap(),
       ]);
       if (!isMounted.current) return;

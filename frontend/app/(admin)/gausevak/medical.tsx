@@ -15,11 +15,16 @@ import {
   ActivityIndicator,
   RefreshControl,
   Alert,
+  Image
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../../../src/services/api";
+
+const bullImg = require("../../../assets/bull.png");
+const calfImg = require("../../../assets/calf.png");
+const cowImg = require("../../../assets/cow.png");
 
 // INTERFACES
 interface MedicalRecord {
@@ -28,6 +33,7 @@ interface MedicalRecord {
   cowSrNo: string;
   cowName?: string;
   cowAge?: string;
+  cowType?: string;
   currentStatus: "healthy" | "unhealthy";
   lastVaccinationDate?: string;
   nextVaccinationDate?: string;
@@ -580,7 +586,7 @@ function CowSelector({
             <TouchableOpacity
               activeOpacity={1}
               style={cs.sheet}
-              onPress={() => {}}
+              onPress={() => { }}
             >
               <View style={cs.sheetHeader}>
                 <Text style={cs.sheetTitle}>Select Cow</Text>
@@ -1415,13 +1421,15 @@ function MedicalCard({
           activeOpacity={0.85}
         >
           <View style={c.topRow}>
-            <View
-              style={[
-                c.avatar,
-                { borderColor: statusBorder, backgroundColor: statusBg },
-              ]}
-            >
-              <Text style={{ fontSize: 24 }}>🐄</Text>
+            <View style={[c.avatar, { borderColor: statusBorder, backgroundColor: statusBg }]}>
+              <Image
+                source={
+                  item.cowType === "bull" ? bullImg :
+                    item.cowType === "newborn" ? calfImg :
+                      cowImg
+                }
+                style={{ width: 32, height: 32, resizeMode: "contain" }}
+              />
             </View>
             <View style={{ flex: 1, marginLeft: 12 }}>
               <View
@@ -2539,11 +2547,22 @@ export default function MedicalScreen() {
     setRecLoading(true);
     setRecError(null);
     try {
-      const data = await api.getMedicalRecords(
-        q,
-        status === "all" ? undefined : status,
-      );
-      setRecords(data);
+      const [data, cowsData] = await Promise.all([
+        api.getMedicalRecords(q, status === "all" ? undefined : status),
+        api.getCows().catch(() => []),
+      ]);
+
+      const cowTypeMap: Record<string, string> = {};
+      for (const cow of cowsData) {
+        cowTypeMap[cow.tag] = cow.type;
+      }
+
+      const enriched = data.map((r: MedicalRecord) => ({
+        ...r,
+        cowType: cowTypeMap[r.cowSrNo] ?? "mature",
+      }));
+
+      setRecords(enriched);
     } catch (err: any) {
       setRecError(err.message ?? "Failed to load.");
     } finally {
@@ -3491,13 +3510,13 @@ export default function MedicalScreen() {
 
 // STYLES
 const s = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#f8fafc" },
+  screen: { flex: 1, backgroundColor: "#FFF8F0" },
   header: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 16,
     paddingVertical: 14,
-    backgroundColor: "#fff",
+    backgroundColor: "#FFF8F0",
     borderBottomWidth: 1,
     borderBottomColor: "#f1f5f9",
   },
@@ -3505,11 +3524,11 @@ const s = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: "#f8fafc",
+    backgroundColor: "#FFF8F0",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#e2e8f0",
+    borderColor: "#9cc1f1",
   },
   headerTitle: {
     fontSize: 18,
@@ -3524,7 +3543,7 @@ const s = StyleSheet.create({
     marginTop: 1,
   },
   countBadge: {
-    backgroundColor: "#f0fdf4",
+    backgroundColor: "#FFF8F0",
     borderRadius: 20,
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -3596,13 +3615,14 @@ const s = StyleSheet.create({
   },
   btnGroup: { gap: 12, marginBottom: 20 },
   bigBtn: {
-    backgroundColor: "#fff",
+    backgroundColor: "#fdf6e5",
     borderRadius: 18,
     padding: 16,
     borderWidth: 1.5,
-    borderColor: "#f1f5f9",
+    borderColor: "#ecd657",
     flexDirection: "row",
     alignItems: "center",
+    marginBottom: 16,
     gap: 12,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
@@ -4125,7 +4145,7 @@ const mo = StyleSheet.create({
     justifyContent: "flex-end",
   },
   sheet: {
-    backgroundColor: "#fff",
+    backgroundColor: "#FFF8F0",
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     padding: 20,
