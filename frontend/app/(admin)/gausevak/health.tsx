@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   View,
   Text,
+  Image,
   StyleSheet,
   TouchableOpacity,
   FlatList,
@@ -11,10 +12,8 @@ import {
   ActivityIndicator,
   RefreshControl,
   Alert,
-  Platform,
-  Image,
 } from "react-native";
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../../../src/services/api";
@@ -203,7 +202,7 @@ function CowCard({
               color="#7c3aed"
             />
             <Text style={[cc.actionText, { color: "#7c3aed" }]}>
-              {item.checkupDone ? "Checkup Done " : "Mark Checkup"}
+              {item.checkupDone ? "Checkup Done" : "Mark Checkup"}
             </Text>
           </TouchableOpacity>
         )}
@@ -240,7 +239,7 @@ const fmtDate = (iso: string) =>
 export default function CowHealthScreen() {
   const router = useRouter();
   const isFocused = useIsFocused();
-    const insets = useSafeAreaInsets();
+  const insets = useSafeAreaInsets();
 
   const [rows, setRows] = useState<CowRow[]>([]);
   const [summary, setSummary] = useState<Summary>({
@@ -286,16 +285,12 @@ export default function CowHealthScreen() {
     }
   }, []);
 
-useEffect(() => {
-  if (!isFocused) return;
-
-  fetchAll();
-  const interval = setInterval(() => {
+  useEffect(() => {
+    if (!isFocused) return;
     fetchAll();
-  }, 2000);
-
-  return () => clearInterval(interval);
-}, [isFocused]);
+    const interval = setInterval(() => fetchAll(), 2000);
+    return () => clearInterval(interval);
+  }, [isFocused]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -372,31 +367,36 @@ useEffect(() => {
     },
   ];
 
-  return (
-     <View style={[s.screen, { paddingTop: insets.top }]}>
-      <StatusBar barStyle="dark-content" backgroundColor="#fff" />
-
-      <View style={s.header}>
-        <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
-          <Ionicons name="arrow-back" size={20} color="#111827" />
-        </TouchableOpacity>
-        <View style={{ flex: 1, marginLeft: 12 }}>
-          <Text style={s.headerTitle}>Cow Health</Text>
-          <Text style={s.headerSub}>
-            {rows.length} cows · {fmtDate(TODAY)}
-          </Text>
-        </View>
-        <TouchableOpacity style={s.refreshBtn} onPress={onRefresh}>
-          <Ionicons name="refresh-outline" size={18} color="#16a34a" />
-        </TouchableOpacity>
-      </View>
-
+  // ── Collapsible header: rendered as FlatList ListHeaderComponent
+  const ListHeader = () => (
+    <View>
+      {/* Stats */}
       <View style={s.statsRow}>
         {[
-          { label: "Total", value: summary.total, color: "#6b7280", icon: "list" },
-          { label: "Healthy", value: summary.healthy, color: "#16a34a", icon: "heart" },
-          { label: "Sick", value: summary.unhealthy, color: "#dc2626", icon: "alert-circle" },
-          { label: "No Report", value: summary.not_reported, color: "#9ca3af", icon: "ellipse" },
+          {
+            label: "Total",
+            value: summary.total,
+            color: "#6b7280",
+            icon: "list",
+          },
+          {
+            label: "Healthy",
+            value: summary.healthy,
+            color: "#16a34a",
+            icon: "heart",
+          },
+          {
+            label: "Sick",
+            value: summary.unhealthy,
+            color: "#dc2626",
+            icon: "alert-circle",
+          },
+          {
+            label: "No Report",
+            value: summary.not_reported,
+            color: "#9ca3af",
+            icon: "ellipse",
+          },
         ].map((st, i, arr) => (
           <View
             key={i}
@@ -414,117 +414,154 @@ useEffect(() => {
         ))}
       </View>
 
+      {/* Search */}
+      <View style={s.searchWrap}>
+        <Ionicons name="search-outline" size={15} color="#9ca3af" />
+        <TextInput
+          style={s.searchInput}
+          placeholder="Search cow, tag or status..."
+          placeholderTextColor="#d1d5db"
+          value={search}
+          onChangeText={setSearch}
+        />
+        {search.length > 0 && (
+          <TouchableOpacity onPress={() => setSearch("")}>
+            <Ionicons name="close-circle" size={15} color="#9ca3af" />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Filters */}
+      <View style={s.filterRow}>
+        {FILTERS.map((fl) => {
+          const active = filter === fl.key;
+          return (
+            <TouchableOpacity
+              key={fl.key}
+              onPress={() => setFilter(fl.key)}
+              style={[
+                s.chip,
+                active && { backgroundColor: fl.color, borderColor: fl.color },
+              ]}
+            >
+              <Ionicons
+                name={fl.icon as any}
+                size={11}
+                color={active ? "#fff" : fl.color}
+              />
+              <Text
+                style={[s.chipText, { color: active ? "#fff" : "#374151" }]}
+              >
+                {fl.label}
+              </Text>
+              <View
+                style={[
+                  s.chipBadge,
+                  active && { backgroundColor: "rgba(255,255,255,0.25)" },
+                ]}
+              >
+                <Text
+                  style={[
+                    s.chipBadgeText,
+                    { color: active ? "#fff" : "#6b7280" },
+                  ]}
+                >
+                  {fl.count}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </View>
+  );
+
+  return (
+    <View style={[s.screen, { paddingTop: insets.top }]}>
+      <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+
+      {/* Fixed top header — always visible */}
+      <View style={s.header}>
+        <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
+          <Ionicons name="arrow-back" size={20} color="#111827" />
+        </TouchableOpacity>
+        <View style={{ flex: 1, marginLeft: 12 }}>
+          <Text style={s.headerTitle}>Cow Health</Text>
+          <Text style={s.headerSub}>
+            {rows.length} cows · {fmtDate(TODAY)}
+          </Text>
+        </View>
+        <TouchableOpacity style={s.refreshBtn} onPress={onRefresh}>
+          <Ionicons name="refresh-outline" size={18} color="#16a34a" />
+        </TouchableOpacity>
+      </View>
+
       {loading ? (
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 12 }}>
+        <View
+          style={{
+            flex: 1,
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 12,
+          }}
+        >
           <ActivityIndicator size="large" color="#16a34a" />
           <Text style={{ color: "#6b7280", fontSize: 14, fontWeight: "600" }}>
             Loading...
           </Text>
         </View>
       ) : (
-        <>
-          <View style={s.searchWrap}>
-            <Ionicons name="search-outline" size={15} color="#9ca3af" />
-            <TextInput
-              style={s.searchInput}
-              placeholder="Search cow, tag or status..."
-              placeholderTextColor="#d1d5db"
-              value={search}
-              onChangeText={setSearch}
+        <FlatList
+          data={filtered}
+          keyExtractor={(item) => item.cow_id}
+          // Stats + search + filter scroll away with the list
+          ListHeaderComponent={<ListHeader />}
+          contentContainerStyle={{
+            paddingHorizontal: 14,
+            paddingBottom: 40,
+          }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor="#16a34a"
             />
-            {search.length > 0 && (
-              <TouchableOpacity onPress={() => setSearch("")}>
-                <Ionicons name="close-circle" size={15} color="#9ca3af" />
-              </TouchableOpacity>
-            )}
-          </View>
-
-          <View style={s.filterRow}>
-            {FILTERS.map((fl) => {
-              const active = filter === fl.key;
-              return (
-                <TouchableOpacity
-                  key={fl.key}
-                  onPress={() => setFilter(fl.key)}
-                  style={[
-                    s.chip,
-                    active && { backgroundColor: fl.color, borderColor: fl.color },
-                  ]}
-                >
-                  <Ionicons
-                    name={fl.icon as any}
-                    size={11}
-                    color={active ? "#fff" : fl.color}
-                  />
-                  <Text style={[s.chipText, { color: active ? "#fff" : "#374151" }]}>
-                    {fl.label}
-                  </Text>
-                  <View
-                    style={[
-                      s.chipBadge,
-                      active && { backgroundColor: "rgba(255,255,255,0.25)" },
-                    ]}
-                  >
-                    <Text style={[s.chipBadgeText, { color: active ? "#fff" : "#6b7280" }]}>
-                      {fl.count}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          <FlatList
-            data={filtered}
-            keyExtractor={(item) => item.cow_id}
-            contentContainerStyle={{
-              paddingHorizontal: 14,
-              paddingTop: 6,
-              paddingBottom: 40,
-            }}
-            showsVerticalScrollIndicator={false}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                tintColor="#16a34a"
-              />
-            }
-            renderItem={({ item, index }) => (
-              <CowCard
-                item={item}
-                index={index}
-                onCheckup={handleCheckup}
-                onToggleHealth={handleToggleHealth}
-              />
-            )}
-            ListEmptyComponent={
-              <View style={s.empty}>
-                <Image
-                  source={cowImg}
-                  style={{ width: 80, height: 80, resizeMode: "contain" }}
-                />
-                <Text style={s.emptyTitle}>No cows found</Text>
-                <Text style={s.emptyText}>
-                  {search ? "No results for your search" : "No data for today"}
-                </Text>
-              </View>
-            }
-          />
-        </>
+          }
+          renderItem={({ item, index }) => (
+            <CowCard
+              item={item}
+              index={index}
+              onCheckup={handleCheckup}
+              onToggleHealth={handleToggleHealth}
+            />
+          )}
+          ListEmptyComponent={
+            <View style={s.empty}>
+              <Text style={{ fontSize: 44 }}>🐄</Text>
+              <Text style={s.emptyTitle}>No cows found</Text>
+              <Text style={s.emptyText}>
+                {search ? "No results for your search" : "No data for today"}
+              </Text>
+            </View>
+          }
+        />
       )}
     </View>
   );
 }
 
 const s = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#FFF8F0" },
+  screen: { flex: 1, backgroundColor: "#f9fafb" },
+
+  // Fixed header
   header: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 16,
     paddingVertical: 14,
-    paddingTop: 14,
     backgroundColor: "#fff",
     borderBottomWidth: 1,
     borderBottomColor: "#e6a681",
@@ -561,20 +598,25 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#86efac",
   },
+
+  // Stats — inside ListHeader (scrolls away)
   statsRow: {
     flexDirection: "row",
     backgroundColor: "#fff",
     borderBottomWidth: 1,
-    borderBottomColor: "#e6a681",
+    borderBottomColor: "#f3f4f6",
+    marginHorizontal: -14, // bleed to full width despite FlatList padding
   },
   statItem: { flex: 1, alignItems: "center", paddingVertical: 9 },
   statBorder: { borderRightWidth: 1, borderRightColor: "#f3f4f6" },
   statValue: { fontSize: 16, fontWeight: "800", letterSpacing: -0.3 },
   statLabel: { fontSize: 9, color: "#9ca3af", marginTop: 1, fontWeight: "500" },
+
+  // Search — inside ListHeader (scrolls away)
   searchWrap: {
     flexDirection: "row",
     alignItems: "center",
-    margin: 14,
+    marginTop: 14,
     marginBottom: 8,
     backgroundColor: "#fff",
     borderRadius: 12,
@@ -585,9 +627,10 @@ const s = StyleSheet.create({
     gap: 8,
   },
   searchInput: { flex: 1, color: "#111827", fontSize: 14 },
+
+  // Filters — inside ListHeader (scrolls away)
   filterRow: {
     flexDirection: "row",
-    paddingHorizontal: 14,
     paddingBottom: 10,
     gap: 6,
   },
@@ -610,6 +653,7 @@ const s = StyleSheet.create({
     paddingVertical: 1,
   },
   chipBadgeText: { fontSize: 9, fontWeight: "700" },
+
   empty: { alignItems: "center", paddingTop: 60, gap: 8 },
   emptyTitle: { fontSize: 16, fontWeight: "800", color: "#374151" },
   emptyText: {
