@@ -17,13 +17,16 @@ import {
   Alert,
   Image
 } from "react-native";
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../../../src/services/api";
 
-// INTERFACES
+const bullImg = require("../../../assets/images/bull-cow.png");
+const calfImg = require("../../../assets/images/calf-cow.png");
+const cowImg = require("../../../assets/images/icon-cow.png");
 
+// INTERFACES
 interface MedicalRecord {
   id: string;
   admin_id: string;
@@ -84,12 +87,72 @@ interface MedicalForm {
   notes: string;
 }
 
+type MedicineCategory =
+  | "Antibiotic"
+  | "Vaccine"
+  | "Antiparasitic"
+  | "Vitamin"
+  | "Homeopathic"
+  | "Ethnovetary"
+  | "Supplement"
+  | "Other";
+
+type MedicineUnit =
+  | "ml"
+  | "L"
+  | "mg"
+  | "g"
+  | "kg"
+  | "tablet"
+  | "vial"
+  | "dose"
+  | "sachet";
+
+interface Medicine {
+  id: string;
+  admin_id: string;
+  name: string;
+  category: MedicineCategory;
+  unit: MedicineUnit;
+  description?: string;
+  manufacturer?: string;
+  batch_number?: string;
+  expiry_date?: string;
+  purchase_date?: string;
+  cost_per_unit?: number;
+  current_stock: number;
+  min_stock_alert?: number;
+  storage_instructions?: string;
+  notes?: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+interface MedicineCreate {
+  name: string;
+  category: MedicineCategory;
+  unit: MedicineUnit;
+  description?: string;
+  manufacturer?: string;
+  batch_number?: string;
+  expiry_date?: string;
+  purchase_date?: string;
+  cost_per_unit?: number;
+  current_stock?: number;
+  min_stock_alert?: number;
+  storage_instructions?: string;
+  notes?: string;
+}
+
+interface MedicineStockSummary {
+  total_medicines: number;
+  low_stock_count: number;
+  expired_count: number;
+  expiring_soon_count: number;
+  total_stock_value: number;
+}
+
 // CONSTANTS
-
-const cowImg = require("../../../assets/images/gir-cow.png");
-const bullImg = require("../../../assets/images/bull-cow.png");
-const calfImg = require("../../../assets/images/calf-cow.png");
-
 const EMPTY_FORM: MedicalForm = {
   cowSrNo: "",
   cowName: "",
@@ -106,6 +169,18 @@ const EMPTY_FORM: MedicalForm = {
   doctorName: "",
   medicineName: "",
   notes: "",
+};
+
+const EMPTY_MED_FORM: MedicineCreate = {
+  name: "",
+  category: "Other",
+  unit: "ml",
+  description: "",
+  manufacturer: "",
+  batch_number: "",
+  expiry_date: "",
+  purchase_date: "",
+  current_stock: 0,
 };
 
 const PAGE_SIZE = 4;
@@ -130,24 +205,190 @@ const CALF_VACCINE_SCHEDULE = [
   { label: "6 Months", days: 180 },
 ];
 
-// HELPERS
+const MED_CATEGORIES: {
+  label: string;
+  value: MedicineCategory;
+  color: string;
+  icon: string;
+}[] = [
+  {
+    label: "Antibiotic",
+    value: "Antibiotic",
+    color: "#0891b2",
+    icon: "medical-outline",
+  },
+  {
+    label: "Vaccine",
+    value: "Vaccine",
+    color: "#7c3aed",
+    icon: "shield-checkmark-outline",
+  },
+  {
+    label: "Antiparasitic",
+    value: "Antiparasitic",
+    color: "#ea580c",
+    icon: "bug-outline",
+  },
+  {
+    label: "Vitamin",
+    value: "Vitamin",
+    color: "#16a34a",
+    icon: "leaf-outline",
+  },
+  {
+    label: "Homeopathic",
+    value: "Homeopathic",
+    color: "#059669",
+    icon: "flower-outline",
+  },
+  {
+    label: "Ethnovetary",
+    value: "Ethnovetary",
+    color: "#8b5cf6",
+    icon: "flask-outline",
+  },
+  {
+    label: "Supplement",
+    value: "Supplement",
+    color: "#d97706",
+    icon: "nutrition-outline",
+  },
+  {
+    label: "Other",
+    value: "Other",
+    color: "#6b7280",
+    icon: "ellipsis-horizontal-outline",
+  },
+];
 
+const MED_UNITS: MedicineUnit[] = [
+  "ml",
+  "L",
+  "mg",
+  "g",
+  "kg",
+  "tablet",
+  "vial",
+  "dose",
+  "sachet",
+];
+
+// HELPERS
 function getCalfVaccineDates(bornDate: string) {
   const parts = bornDate.split("/");
   let base: Date | null = null;
-  if (parts.length === 3) {
-    base = new Date(+parts[2], +parts[1] - 1, +parts[0]);
-  }
+  if (parts.length === 3) base = new Date(+parts[2], +parts[1] - 1, +parts[0]);
   if (!base || isNaN(base.getTime())) return null;
-
   return CALF_VACCINE_SCHEDULE.map((s) => {
     const d = new Date(base!);
     d.setDate(d.getDate() + s.days);
     const dd = String(d.getDate()).padStart(2, "0");
     const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const yyyy = d.getFullYear();
-    return { label: s.label, date: `${dd}/${mm}/${yyyy}`, days: s.days };
+    return {
+      label: s.label,
+      date: `${dd}/${mm}/${d.getFullYear()}`,
+      days: s.days,
+    };
   });
+}
+
+function getCatMeta(cat: string) {
+  return (
+    MED_CATEGORIES.find((c) => c.value === cat) ??
+    MED_CATEGORIES[MED_CATEGORIES.length - 1]
+  );
+}
+
+function parseExpiry(ddmmyyyy?: string): Date | null {
+  if (!ddmmyyyy) return null;
+  const p = ddmmyyyy.split("/");
+  if (p.length !== 3) return null;
+  const d = new Date(+p[2], +p[1] - 1, +p[0]);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function expiryStatus(ddmmyyyy?: string): "ok" | "soon" | "expired" {
+  const d = parseExpiry(ddmmyyyy);
+  if (!d) return "ok";
+  const now = new Date();
+  if (d < now) return "expired";
+  const diff = (d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
+  return diff <= 30 ? "soon" : "ok";
+}
+
+function stockStatus(med: Medicine): "ok" | "low" | "out" {
+  if (med.current_stock === 0) return "out";
+  if (med.min_stock_alert != null && med.current_stock <= med.min_stock_alert)
+    return "low";
+  return "ok";
+}
+
+function todayYMD() {
+  return new Date().toISOString().split("T")[0];
+}
+
+// SHARED FIELD COMPONENTS
+function Sec({
+  title,
+  icon,
+  color,
+}: {
+  title: string;
+  icon: string;
+  color: string;
+}) {
+  return (
+    <View style={[f.secRow, { borderLeftColor: color }]}>
+      <Ionicons name={icon as any} size={13} color={color} />
+      <Text style={[f.secTitle, { color }]}>{title}</Text>
+    </View>
+  );
+}
+
+function Field({
+  label,
+  value,
+  onChange,
+  placeholder,
+  icon,
+  color = "#16a34a",
+  keyboardType = "default",
+  multiline = false,
+}: any) {
+  const [focused, setFocused] = useState(false);
+  return (
+    <View style={f.wrap}>
+      <Text style={f.label}>{label}</Text>
+      <View
+        style={[
+          f.row,
+          focused && { borderColor: color, backgroundColor: "#fff" },
+          multiline && { alignItems: "flex-start", paddingVertical: 10 },
+        ]}
+      >
+        <Ionicons
+          name={icon}
+          size={14}
+          color={focused ? color : "#9ca3af"}
+          style={{ marginRight: 8, marginTop: multiline ? 2 : 0 }}
+        />
+        <TextInput
+          style={[
+            f.input,
+            multiline && { minHeight: 54, textAlignVertical: "top" },
+          ]}
+          value={value}
+          onChangeText={onChange}
+          placeholder={placeholder ?? label}
+          placeholderTextColor="#d1d5db"
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          keyboardType={keyboardType}
+          multiline={multiline}
+        />
+      </View>
+    </View>
+  );
 }
 
 function formatRecordStamp(dateString: string): string {
@@ -175,7 +416,6 @@ function VaccinePicker({
   onChange: (v: string) => void;
 }) {
   const [focused, setFocused] = useState(false);
-
   return (
     <View style={vp.wrap}>
       <Text style={f.label}>VACCINE NAME</Text>
@@ -208,13 +448,11 @@ function VaccinePicker({
           );
         })}
       </View>
-
       {VACCINE_OPTIONS.find((o) => o.label === value) && (
         <Text style={vp.descHint}>
           {VACCINE_OPTIONS.find((o) => o.label === value)?.desc}
         </Text>
       )}
-
       <View style={[vp.inputRow, focused && vp.inputFocused]}>
         <Ionicons
           name="medkit-outline"
@@ -240,8 +478,6 @@ function VaccinePicker({
     </View>
   );
 }
-
-// COW SELECTOR
 
 function CowSelector({
   value,
@@ -274,7 +510,7 @@ function CowSelector({
       const first = data.slice(0, PAGE_SIZE);
       setVisibleCows(first);
       setHasMore(data.length > PAGE_SIZE);
-    } catch (e) {
+    } catch {
       setAllCows([]);
       setVisibleCows([]);
       setHasMore(false);
@@ -360,7 +596,6 @@ function CowSelector({
           </View>
         )}
       </View>
-
       <Modal
         visible={modalOpen}
         transparent
@@ -397,7 +632,6 @@ function CowSelector({
                   onChangeText={(text) => {
                     if (initialLoadDone.current) setSearch(text);
                   }}
-                  autoFocus={false}
                 />
                 {search.length > 0 && (
                   <TouchableOpacity onPress={() => setSearch("")}>
@@ -441,7 +675,7 @@ function CowSelector({
                   data={visibleCows}
                   keyExtractor={(i) => i.id}
                   style={cs.list}
-                  showsVerticalScrollIndicator={true}
+                  showsVerticalScrollIndicator
                   keyboardShouldPersistTaps="handled"
                   contentContainerStyle={{ paddingBottom: 8 }}
                   onEndReached={loadMore}
@@ -456,9 +690,7 @@ function CowSelector({
                       activeOpacity={0.75}
                     >
                       <View style={cs.cowIcon}>
-                        <Text style={{ fontSize: 20 }}>
-                          {item.type === "newborn" ? "" : ""}
-                        </Text>
+                        <Text style={{ fontSize: 20 }}>🐄</Text>
                       </View>
                       <View style={{ flex: 1 }}>
                         <Text style={cs.cowTag}>{item.tag}</Text>
@@ -516,8 +748,6 @@ function CowSelector({
   );
 }
 
-// STATUS TOGGLE
-
 function StatusToggle({
   value,
   onChange,
@@ -559,269 +789,412 @@ function StatusToggle({
   );
 }
 
-// DATE FIELD WITH CALENDAR PICKER
-
-function DateField({
-  label,
-  value,
-  onChange,
-  color = "#7c3aed",
+function MedicalFormBody({
+  form,
+  setF,
+  onCowSelect,
+  onCowClear,
+  onCowManual,
 }: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  color?: string;
+  form: MedicalForm;
+  setF: (k: keyof MedicalForm) => (v: any) => void;
+  onCowSelect: (c: CowOption) => void;
+  onCowClear: () => void;
+  onCowManual: (tag: string) => void;
 }) {
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [customInput, setCustomInput] = useState("");
-  const [customFocused, setCustomFocused] = useState(false);
-
-  // Parse DD/MM/YYYY
-  const parseDate = (s: string): Date | null => {
-    const parts = s.split("/");
-    if (parts.length !== 3) return null;
-    const d = new Date(+parts[2], +parts[1] - 1, +parts[0]);
-    return isNaN(d.getTime()) ? null : d;
-  };
-
-  const formatDate = (d: Date) => {
-    const dd = String(d.getDate()).padStart(2, "0");
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const yyyy = d.getFullYear();
-    return `${dd}/${mm}/${yyyy}`;
-  };
-
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const [viewYear, setViewYear] = useState(today.getFullYear());
-  const [viewMonth, setViewMonth] = useState(today.getMonth());
-
-  const selectedDate = parseDate(value);
-
-  const openPicker = () => {
-    if (selectedDate) {
-      setViewYear(selectedDate.getFullYear());
-      setViewMonth(selectedDate.getMonth());
-    } else {
-      setViewYear(today.getFullYear());
-      setViewMonth(today.getMonth());
-    }
-    setCustomInput(value);
-    setPickerOpen(true);
-  };
-
-  const prevMonth = () => {
-    if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); }
-    else setViewMonth(m => m - 1);
-  };
-
-  const nextMonth = () => {
-    if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1); }
-    else setViewMonth(m => m + 1);
-  };
-
-  const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-  const DAY_NAMES = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
-
-  // Build calendar grid
-  const firstDay = new Date(viewYear, viewMonth, 1).getDay();
-  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
-  const cells: (number | null)[] = [];
-  for (let i = 0; i < firstDay; i++) cells.push(null);
-  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
-  while (cells.length % 7 !== 0) cells.push(null);
-
-  const selectDay = (day: number) => {
-    const d = new Date(viewYear, viewMonth, day);
-    onChange(formatDate(d));
-    setPickerOpen(false);
-  };
-
-  const applyCustom = () => {
-    const parts = customInput.split("/");
-    if (parts.length === 3 && parts[2].length === 4) {
-      const d = new Date(+parts[2], +parts[1] - 1, +parts[0]);
-      if (!isNaN(d.getTime())) {
-        onChange(formatDate(d));
-        setPickerOpen(false);
-        return;
-      }
-    }
-    Alert.alert("Invalid Date", "Please enter date in DD/MM/YYYY format");
-  };
-
-  const isSelected = (day: number) => {
-    if (!selectedDate) return false;
-    return selectedDate.getFullYear() === viewYear &&
-      selectedDate.getMonth() === viewMonth &&
-      selectedDate.getDate() === day;
-  };
-
-  const isToday = (day: number) =>
-    today.getFullYear() === viewYear &&
-    today.getMonth() === viewMonth &&
-    today.getDate() === day;
-
+  const selectedCow = form.cowSrNo
+    ? { tag: form.cowSrNo, name: form.cowName, age: form.cowAge }
+    : null;
   return (
     <>
-      <View style={f.wrap}>
-        <Text style={f.label}>{label}</Text>
-        <TouchableOpacity
-          style={[f.row, value ? { borderColor: color, backgroundColor: "#fff" } : {}]}
-          onPress={openPicker}
-          activeOpacity={0.8}
-        >
-          <Ionicons
-            name="calendar-outline"
-            size={14}
-            color={value ? color : "#9ca3af"}
-            style={{ marginRight: 8 }}
-          />
-          <Text style={[f.input, { color: value ? "#0f172a" : "#d1d5db" }]}>
-            {value || "DD/MM/YYYY"}
-          </Text>
-          {value ? (
-            <TouchableOpacity onPress={() => onChange("")} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Ionicons name="close-circle" size={15} color="#9ca3af" />
-            </TouchableOpacity>
-          ) : (
-            <Ionicons name="chevron-down" size={13} color="#9ca3af" />
+      <Sec title="Cow Identity" icon="paw-outline" color="#16a34a" />
+      <CowSelector
+        value={selectedCow}
+        onSelect={onCowSelect}
+        onClear={onCowClear}
+        onManual={onCowManual}
+      />
+      {form.cowName || form.cowAge ? (
+        <View style={f.autoRow}>
+          {form.cowName && (
+            <View
+              style={[
+                f.autoChip,
+                { backgroundColor: "#f0fdf4", borderColor: "#bbf7d0" },
+              ]}
+            >
+              <Ionicons name="text-outline" size={11} color="#16a34a" />
+              <Text style={[f.autoChipText, { color: "#16a34a" }]}>
+                {form.cowName}
+              </Text>
+            </View>
           )}
-        </TouchableOpacity>
+          {form.cowAge && (
+            <View
+              style={[
+                f.autoChip,
+                { backgroundColor: "#eff6ff", borderColor: "#bfdbfe" },
+              ]}
+            >
+              <Ionicons name="time-outline" size={11} color="#2563eb" />
+              <Text style={[f.autoChipText, { color: "#2563eb" }]}>
+                {form.cowAge}
+              </Text>
+            </View>
+          )}
+          <View
+            style={[
+              f.autoChip,
+              { backgroundColor: "#f9fafb", borderColor: "#e5e7eb" },
+            ]}
+          >
+            <Ionicons name="flash-outline" size={11} color="#9ca3af" />
+            <Text style={[f.autoChipText, { color: "#9ca3af" }]}>
+              Auto-filled
+            </Text>
+          </View>
+        </View>
+      ) : null}
+      <Sec
+        title="Current Health Status"
+        icon="heart-outline"
+        color={form.currentStatus === "healthy" ? "#16a34a" : "#dc2626"}
+      />
+      <StatusToggle
+        value={form.currentStatus}
+        onChange={setF("currentStatus")}
+      />
+      <Sec
+        title="Vaccination"
+        icon="shield-checkmark-outline"
+        color="#7c3aed"
+      />
+      <VaccinePicker
+        value={form.vaccinationName}
+        onChange={setF("vaccinationName")}
+      />
+      <View style={f.twoCol}>
+        <View style={{ flex: 1 }}>
+          <Field
+            label="Last Vaccination"
+            value={form.lastVaccinationDate}
+            onChange={setF("lastVaccinationDate")}
+            placeholder="DD/MM/YYYY"
+            icon="calendar-outline"
+            color="#7c3aed"
+          />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Field
+            label="Next Vaccination"
+            value={form.nextVaccinationDate}
+            onChange={setF("nextVaccinationDate")}
+            placeholder="DD/MM/YYYY"
+            icon="calendar-outline"
+            color="#7c3aed"
+          />
+        </View>
       </View>
-
-      <Modal visible={pickerOpen} transparent animationType="fade" onRequestClose={() => setPickerOpen(false)}>
-        <TouchableOpacity style={dp.overlay} activeOpacity={1} onPress={() => setPickerOpen(false)}>
-          <TouchableOpacity activeOpacity={1} style={dp.sheet} onPress={() => { }}>
-            {/* Header */}
-            <View style={dp.header}>
-              <Ionicons name="calendar" size={16} color={color} />
-              <Text style={[dp.headerTitle, { color }]}>{label}</Text>
-              <TouchableOpacity onPress={() => setPickerOpen(false)} style={dp.closeBtn}>
-                <Ionicons name="close" size={16} color="#6b7280" />
-              </TouchableOpacity>
-            </View>
-
-            {/* Month nav */}
-            <View style={dp.monthNav}>
-              <TouchableOpacity onPress={prevMonth} style={dp.navBtn}>
-                <Ionicons name="chevron-back" size={18} color="#374151" />
-              </TouchableOpacity>
-              <Text style={dp.monthLabel}>{MONTH_NAMES[viewMonth]} {viewYear}</Text>
-              <TouchableOpacity onPress={nextMonth} style={dp.navBtn}>
-                <Ionicons name="chevron-forward" size={18} color="#374151" />
-              </TouchableOpacity>
-            </View>
-
-            {/* Day headers */}
-            <View style={dp.dayHeaderRow}>
-              {DAY_NAMES.map(d => (
-                <Text key={d} style={dp.dayHeader}>{d}</Text>
-              ))}
-            </View>
-
-            {/* Calendar grid */}
-            <View style={dp.grid}>
-              {cells.map((day, i) => {
-                if (!day) return <View key={i} style={dp.cell} />;
-                const sel = isSelected(day);
-                const tod = isToday(day);
-                return (
-                  <TouchableOpacity
-                    key={i}
-                    style={[dp.cell, sel && [dp.cellSelected, { backgroundColor: color }], tod && !sel && dp.cellToday]}
-                    onPress={() => selectDay(day)}
-                    activeOpacity={0.75}
-                  >
-                    <Text style={[dp.cellText, sel && dp.cellTextSelected, tod && !sel && { color, fontWeight: "700" }]}>
-                      {day}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            {/* Custom input */}
-            <View style={dp.customRow}>
-              <Text style={dp.customLabel}>Or type date:</Text>
-              <View style={[dp.customInput, customFocused && { borderColor: color }]}>
-                <TextInput
-                  style={dp.customText}
-                  value={customInput}
-                  onChangeText={setCustomInput}
-                  placeholder="DD/MM/YYYY"
-                  placeholderTextColor="#d1d5db"
-                  keyboardType="numeric"
-                  maxLength={10}
-                  onFocus={() => setCustomFocused(true)}
-                  onBlur={() => setCustomFocused(false)}
+      <Sec title="Health Issues" icon="alert-circle-outline" color="#ea580c" />
+      <View style={f.twoCol}>
+        <View style={{ flex: 1 }}>
+          <Field
+            label="Last Issue"
+            value={form.lastIssueName}
+            onChange={setF("lastIssueName")}
+            placeholder="e.g. Fever"
+            icon="bandage-outline"
+            color="#ea580c"
+          />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Field
+            label="Last Issue Date"
+            value={form.lastIssueDate}
+            onChange={setF("lastIssueDate")}
+            placeholder="DD/MM/YYYY"
+            icon="calendar-outline"
+            color="#ea580c"
+          />
+        </View>
+      </View>
+      <View style={f.twoCol}>
+        <View style={{ flex: 1 }}>
+          <Field
+            label="Current Issue"
+            value={form.currentIssueName}
+            onChange={setF("currentIssueName")}
+            placeholder="e.g. Mastitis"
+            icon="bandage-outline"
+            color="#dc2626"
+          />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Field
+            label="Issue Date"
+            value={form.currentIssueDate}
+            onChange={setF("currentIssueDate")}
+            placeholder="DD/MM/YYYY"
+            icon="calendar-outline"
+            color="#dc2626"
+          />
+        </View>
+      </View>
+      <Sec title="Treatment" icon="flask-outline" color="#0891b2" />
+      <View style={{ marginBottom: 12 }}>
+        <Text style={f.label}>TREATMENT GIVEN</Text>
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          {TREATMENT_OPTIONS.map((opt) => {
+            const isSel = form.treatmentGiven === opt.value;
+            return (
+              <TouchableOpacity
+                key={opt.value}
+                onPress={() => setF("treatmentGiven")(isSel ? "" : opt.value)}
+                style={{
+                  flex: 1,
+                  paddingVertical: 11,
+                  paddingHorizontal: 6,
+                  borderRadius: 12,
+                  borderWidth: 1.5,
+                  borderColor: isSel ? "#0891b2" : "#e2e8f0",
+                  backgroundColor: isSel ? "#ecfeff" : "#f8fafc",
+                  alignItems: "center",
+                }}
+                activeOpacity={0.8}
+              >
+                <Ionicons
+                  name={
+                    (opt.value === "Homeopathic"
+                      ? "leaf-outline"
+                      : opt.value === "Ethnovetary"
+                        ? "flask-outline"
+                        : "medical-outline") as any
+                  }
+                  size={14}
+                  color={isSel ? "#0891b2" : "#9ca3af"}
+                  style={{ marginBottom: 3 }}
                 />
-              </View>
-              <TouchableOpacity style={[dp.applyBtn, { backgroundColor: color }]} onPress={applyCustom}>
-                <Text style={dp.applyText}>Set</Text>
+                <Text
+                  style={{
+                    fontSize: 11,
+                    fontWeight: "700",
+                    color: isSel ? "#0891b2" : "#6b7280",
+                    textAlign: "center",
+                  }}
+                >
+                  {opt.label}
+                </Text>
               </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
+            );
+          })}
+        </View>
+      </View>
+      <Field
+        label="Medicine Name"
+        value={form.medicineName}
+        onChange={setF("medicineName")}
+        placeholder="e.g. Oxytetracycline"
+        icon="flask-outline"
+        color="#0891b2"
+      />
+      <Field
+        label="Doctor / Vet Name"
+        value={form.doctorName}
+        onChange={setF("doctorName")}
+        placeholder="e.g. Dr. Sharma"
+        icon="person-outline"
+        color="#0891b2"
+      />
+      <Sec title="Notes" icon="document-text-outline" color="#6b7280" />
+      <Field
+        label="Additional Notes"
+        value={form.notes}
+        onChange={setF("notes")}
+        placeholder="Any extra remarks..."
+        icon="chatbubble-outline"
+        multiline
+      />
+      <View style={{ height: 16 }} />
     </>
   );
 }
 
-// FIELD
-
-function Field({
-  label,
-  value,
-  onChange,
-  placeholder,
-  icon,
-  color = "#16a34a",
-}: any) {
-  const [focused, setFocused] = useState(false);
-  return (
-    <View style={f.wrap}>
-      <Text style={f.label}>{label}</Text>
-      <View style={[f.row, focused && { ...f.focused, borderColor: color }]}>
-        <Ionicons
-          name={icon}
-          size={14}
-          color={focused ? color : "#9ca3af"}
-          style={{ marginRight: 8 }}
-        />
-        <TextInput
-          style={f.input}
-          value={value}
-          onChangeText={onChange}
-          placeholder={placeholder ?? label}
-          placeholderTextColor="#d1d5db"
-          onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
-        />
-      </View>
-    </View>
-  );
-}
-
-function Sec({
-  title,
-  icon,
-  color,
+function MedicalFormModal({
+  visible,
+  onClose,
+  onSave,
+  editRecord,
 }: {
-  title: string;
-  icon: string;
-  color: string;
+  visible: boolean;
+  onClose: () => void;
+  onSave: (r: MedicalRecord) => void;
+  editRecord: MedicalRecord | null;
 }) {
+  const isEdit = !!editRecord;
+  const [form, setForm] = useState<MedicalForm>(EMPTY_FORM);
+  const [submitting, setSub] = useState(false);
+
+  useEffect(() => {
+    if (editRecord) {
+      setForm({
+        cowSrNo: editRecord.cowSrNo,
+        cowName: editRecord.cowName ?? "",
+        cowAge: editRecord.cowAge ?? "",
+        currentStatus: editRecord.currentStatus as "healthy" | "unhealthy",
+        lastVaccinationDate: editRecord.lastVaccinationDate ?? "",
+        nextVaccinationDate: editRecord.nextVaccinationDate ?? "",
+        vaccinationName: editRecord.vaccinationName ?? "",
+        lastIssueName: editRecord.lastIssueName ?? "",
+        lastIssueDate: editRecord.lastIssueDate ?? "",
+        currentIssueName: editRecord.currentIssueName ?? "",
+        currentIssueDate: editRecord.currentIssueDate ?? "",
+        treatmentGiven: editRecord.treatmentGiven ?? "",
+        doctorName: editRecord.doctorName ?? "",
+        medicineName: editRecord.medicineName ?? "",
+        notes: editRecord.notes ?? "",
+      });
+    } else {
+      setForm(EMPTY_FORM);
+    }
+  }, [editRecord, visible]);
+
+  const setF = (k: keyof MedicalForm) => (v: any) =>
+    setForm((p) => ({ ...p, [k]: v }));
+  const handleCowSelect = (c: CowOption) =>
+    setForm((p) => ({
+      ...p,
+      cowSrNo: c.tag,
+      cowName: c.name,
+      cowAge: c.age || "",
+    }));
+  const handleCowClear = () =>
+    setForm((p) => ({ ...p, cowSrNo: "", cowName: "", cowAge: "" }));
+  const handleCowManual = (tag: string) =>
+    setForm((p) => ({ ...p, cowSrNo: tag, cowName: "", cowAge: "" }));
+  const reset = () => {
+    setForm(EMPTY_FORM);
+    onClose();
+  };
+
+  const submit = async () => {
+    if (!form.cowSrNo.trim()) {
+      Alert.alert("Missing Field", "Please select or enter a Cow Sr. No.");
+      return;
+    }
+    setSub(true);
+    try {
+      const n = (s: string) => s.trim() || undefined;
+      const payload = {
+        cowSrNo: form.cowSrNo.trim(),
+        cowName: n(form.cowName),
+        cowAge: n(form.cowAge),
+        currentStatus: form.currentStatus,
+        lastVaccinationDate: n(form.lastVaccinationDate),
+        nextVaccinationDate: n(form.nextVaccinationDate),
+        vaccinationName: n(form.vaccinationName),
+        lastIssueName: n(form.lastIssueName),
+        lastIssueDate: n(form.lastIssueDate),
+        currentIssueName: n(form.currentIssueName),
+        currentIssueDate: n(form.currentIssueDate),
+        treatmentGiven: n(form.treatmentGiven),
+        doctorName: n(form.doctorName),
+        medicineName: n(form.medicineName),
+        notes: n(form.notes),
+      };
+      const result: MedicalRecord =
+        isEdit && editRecord
+          ? await api.updateMedicalRecord(editRecord.id, payload)
+          : await api.createMedicalRecord(payload);
+      onSave(result);
+      reset();
+    } catch (err: any) {
+      Alert.alert("Error", err.message ?? "Failed to save.");
+    } finally {
+      setSub(false);
+    }
+  };
+
+  const accent = isEdit ? "#ea580c" : "#16a34a";
   return (
-    <View style={[f.secRow, { borderLeftColor: color }]}>
-      <Ionicons name={icon as any} size={13} color={color} />
-      <Text style={[f.secTitle, { color }]}>{title}</Text>
-    </View>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={reset}
+    >
+      <View style={mo.overlay}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={{ width: "100%" }}
+        >
+          <View style={mo.sheet}>
+            <View style={mo.handle} />
+            <View style={mo.header}>
+              <View style={[mo.iconWrap, { backgroundColor: accent + "18" }]}>
+                <Ionicons
+                  name={isEdit ? "create" : "add-circle"}
+                  size={18}
+                  color={accent}
+                />
+              </View>
+              <View style={{ flex: 1, marginLeft: 10 }}>
+                <Text style={mo.title}>
+                  {isEdit ? "Edit Medical Record" : "Add Medical Record"}
+                </Text>
+                {isEdit && editRecord && (
+                  <Text style={mo.subTitle}>
+                    {editRecord.cowSrNo}
+                    {editRecord.cowName ? ` · ${editRecord.cowName}` : ""}
+                  </Text>
+                )}
+              </View>
+              <TouchableOpacity onPress={reset} style={mo.closeBtn}>
+                <Ionicons name="close" size={18} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              style={{ maxHeight: 520 }}
+              keyboardShouldPersistTaps="handled"
+            >
+              <MedicalFormBody
+                form={form}
+                setF={setF}
+                onCowSelect={handleCowSelect}
+                onCowClear={handleCowClear}
+                onCowManual={handleCowManual}
+              />
+            </ScrollView>
+            <TouchableOpacity
+              onPress={submit}
+              style={[
+                mo.submitBtn,
+                { backgroundColor: accent },
+                submitting && { opacity: 0.6 },
+              ]}
+              disabled={submitting}
+            >
+              {submitting ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <>
+                  <Ionicons
+                    name={isEdit ? "save-outline" : "checkmark-circle-outline"}
+                    size={18}
+                    color="#fff"
+                  />
+                  <Text style={mo.submitText}>
+                    {isEdit ? "Save Changes" : "Save Record"}
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </View>
+    </Modal>
   );
 }
-
-// CALF VACCINE CARD (Home screen)
 
 function CalfVaccineCard({ record }: { record: MedicalRecord }) {
   const [expanded, setExpanded] = useState(false);
@@ -829,16 +1202,13 @@ function CalfVaccineCard({ record }: { record: MedicalRecord }) {
     ? getCalfVaccineDates(record.cowAge)
     : null;
   if (!vaccineDates) return null;
-
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-
   const nextDue = vaccineDates.find((v) => {
-    const parts = v.date.split("/");
-    const d = new Date(+parts[2], +parts[1] - 1, +parts[0]);
+    const p = v.date.split("/");
+    const d = new Date(+p[2], +p[1] - 1, +p[0]);
     return d >= today;
   });
-
   return (
     <View style={cv.card}>
       <View style={cv.accentBar} />
@@ -880,17 +1250,15 @@ function CalfVaccineCard({ record }: { record: MedicalRecord }) {
           color="#cbd5e1"
         />
       </TouchableOpacity>
-
       {expanded && (
         <View style={cv.scheduleWrap}>
           <View style={cv.divider} />
-          <Text style={cv.scheduleTitle}> Vaccination Schedule</Text>
+          <Text style={cv.scheduleTitle}>Vaccination Schedule</Text>
           {vaccineDates.map((v, i) => {
-            const parts = v.date.split("/");
-            const vDate = new Date(+parts[2], +parts[1] - 1, +parts[0]);
+            const p = v.date.split("/");
+            const vDate = new Date(+p[2], +p[1] - 1, +p[0]);
             const isPast = vDate < today;
             const isNext = nextDue?.label === v.label;
-
             return (
               <View key={i} style={cv.scheduleRow}>
                 <View style={cv.lineCol}>
@@ -983,427 +1351,6 @@ function CalfVaccineCard({ record }: { record: MedicalRecord }) {
   );
 }
 
-// MEDICAL FORM BODY
-
-function MedicalFormBody({
-  form,
-  setF,
-  onCowSelect,
-  onCowClear,
-  onCowManual,
-}: {
-  form: MedicalForm;
-  setF: (k: keyof MedicalForm) => (v: any) => void;
-  onCowSelect: (c: CowOption) => void;
-  onCowClear: () => void;
-  onCowManual: (tag: string) => void;
-}) {
-  const selectedCow = form.cowSrNo
-    ? { tag: form.cowSrNo, name: form.cowName, age: form.cowAge }
-    : null;
-
-  return (
-    <>
-      <Sec title="Cow Identity" icon="paw-outline" color="#16a34a" />
-      <CowSelector
-        value={selectedCow}
-        onSelect={onCowSelect}
-        onClear={onCowClear}
-        onManual={onCowManual}
-      />
-
-      {form.cowName || form.cowAge ? (
-        <View style={f.autoRow}>
-          {form.cowName ? (
-            <View
-              style={[
-                f.autoChip,
-                { backgroundColor: "#f0fdf4", borderColor: "#bbf7d0" },
-              ]}
-            >
-              <Ionicons name="text-outline" size={11} color="#16a34a" />
-              <Text style={[f.autoChipText, { color: "#16a34a" }]}>
-                {form.cowName}
-              </Text>
-            </View>
-          ) : null}
-          {form.cowAge ? (
-            <View
-              style={[
-                f.autoChip,
-                { backgroundColor: "#eff6ff", borderColor: "#bfdbfe" },
-              ]}
-            >
-              <Ionicons name="time-outline" size={11} color="#2563eb" />
-              <Text style={[f.autoChipText, { color: "#2563eb" }]}>
-                {form.cowAge}
-              </Text>
-            </View>
-          ) : null}
-          <View
-            style={[
-              f.autoChip,
-              { backgroundColor: "#f9fafb", borderColor: "#e5e7eb" },
-            ]}
-          >
-            <Ionicons name="flash-outline" size={11} color="#9ca3af" />
-            <Text style={[f.autoChipText, { color: "#9ca3af" }]}>
-              Auto-filled
-            </Text>
-          </View>
-        </View>
-      ) : null}
-
-      <Sec
-        title="Current Health Status"
-        icon="heart-outline"
-        color={form.currentStatus === "healthy" ? "#16a34a" : "#dc2626"}
-      />
-      <StatusToggle
-        value={form.currentStatus}
-        onChange={setF("currentStatus")}
-      />
-
-      <Sec
-        title="Vaccination"
-        icon="shield-checkmark-outline"
-        color="#7c3aed"
-      />
-      <VaccinePicker
-        value={form.vaccinationName}
-        onChange={setF("vaccinationName")}
-      />
-
-      <View style={f.twoCol}>
-        <View style={{ flex: 1 }}>
-          <DateField
-            label="Last Vaccination"
-            value={form.lastVaccinationDate}
-            onChange={setF("lastVaccinationDate")}
-            color="#7c3aed"
-          />
-        </View>
-        <View style={{ flex: 1 }}>
-          <DateField
-            label="Next Vaccination"
-            value={form.nextVaccinationDate}
-            onChange={setF("nextVaccinationDate")}
-            color="#7c3aed"
-          />
-        </View>
-      </View>
-
-      <Sec title="Health Issues" icon="alert-circle-outline" color="#ea580c" />
-      <View style={f.twoCol}>
-        <View style={{ flex: 1 }}>
-          <Field
-            label="Last Issue"
-            value={form.lastIssueName}
-            onChange={setF("lastIssueName")}
-            placeholder="e.g. Fever"
-            icon="bandage-outline"
-            color="#ea580c"
-          />
-        </View>
-        <View style={{ flex: 1 }}>
-          <DateField
-            label="Last Issue Date"
-            value={form.lastIssueDate}
-            onChange={setF("lastIssueDate")}
-            color="#ea580c"
-          />
-        </View>
-      </View>
-      <View style={f.twoCol}>
-        <View style={{ flex: 1 }}>
-          <Field
-            label="Current Issue"
-            value={form.currentIssueName}
-            onChange={setF("currentIssueName")}
-            placeholder="e.g. Mastitis"
-            icon="bandage-outline"
-            color="#dc2626"
-          />
-        </View>
-        <View style={{ flex: 1 }}>
-          <DateField
-            label="Issue Date"
-            value={form.currentIssueDate}
-            onChange={setF("currentIssueDate")}
-            color="#dc2626"
-          />
-        </View>
-      </View>
-
-      <Sec title="Treatment" icon="flask-outline" color="#0891b2" />
-
-      {/* Treatment Given Chips */}
-      <View style={{ marginBottom: 12 }}>
-        <Text style={f.label}>TREATMENT GIVEN</Text>
-        <View style={{ flexDirection: "row", gap: 8 }}>
-          {TREATMENT_OPTIONS.map((opt) => {
-            const isSelected = form.treatmentGiven === opt.value;
-            return (
-              <TouchableOpacity
-                key={opt.value}
-                onPress={() =>
-                  setF("treatmentGiven")(isSelected ? "" : opt.value)
-                }
-                style={{
-                  flex: 1,
-                  paddingVertical: 11,
-                  paddingHorizontal: 6,
-                  borderRadius: 12,
-                  borderWidth: 1.5,
-                  borderColor: isSelected ? "#0891b2" : "#e2e8f0",
-                  backgroundColor: isSelected ? "#ecfeff" : "#f8fafc",
-                  alignItems: "center",
-                }}
-                activeOpacity={0.8}
-              >
-                <Ionicons
-                  name={
-                    opt.value === "Homeopathic"
-                      ? "leaf-outline"
-                      : opt.value === "Ethnovetary"
-                        ? "flask-outline"
-                        : "medical-outline"
-                  }
-                  size={14}
-                  color={isSelected ? "#0891b2" : "#9ca3af"}
-                  style={{ marginBottom: 3 }}
-                />
-                <Text
-                  style={{
-                    fontSize: 11,
-                    fontWeight: "700",
-                    color: isSelected ? "#0891b2" : "#6b7280",
-                    textAlign: "center",
-                  }}
-                >
-                  {opt.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </View>
-
-      <Field
-        label="Medicine Name"
-        value={form.medicineName}
-        onChange={setF("medicineName")}
-        placeholder="e.g. Oxytetracycline"
-        icon="flask-outline"
-        color="#0891b2"
-      />
-      <Field
-        label="Doctor / Vet Name"
-        value={form.doctorName}
-        onChange={setF("doctorName")}
-        placeholder="e.g. Dr. Sharma"
-        icon="person-outline"
-        color="#0891b2"
-      />
-
-      <Sec title="Notes" icon="document-text-outline" color="#6b7280" />
-      <Field
-        label="Additional Notes"
-        value={form.notes}
-        onChange={setF("notes")}
-        placeholder="Any extra remarks..."
-        icon="chatbubble-outline"
-        color="#6b7280"
-      />
-      <View style={{ height: 16 }} />
-    </>
-  );
-}
-
-// MEDICAL FORM MODAL
-
-function MedicalFormModal({
-  visible,
-  onClose,
-  onSave,
-  editRecord,
-}: {
-  visible: boolean;
-  onClose: () => void;
-  onSave: (r: MedicalRecord) => void;
-  editRecord: MedicalRecord | null;
-}) {
-  const isEdit = !!editRecord;
-  const [form, setForm] = useState<MedicalForm>(EMPTY_FORM);
-  const [submitting, setSub] = useState(false);
-
-  useEffect(() => {
-    if (editRecord) {
-      setForm({
-        cowSrNo: editRecord.cowSrNo,
-        cowName: editRecord.cowName ?? "",
-        cowAge: editRecord.cowAge ?? "",
-        currentStatus: editRecord.currentStatus as "healthy" | "unhealthy",
-        lastVaccinationDate: editRecord.lastVaccinationDate ?? "",
-        nextVaccinationDate: editRecord.nextVaccinationDate ?? "",
-        vaccinationName: editRecord.vaccinationName ?? "",
-        lastIssueName: editRecord.lastIssueName ?? "",
-        lastIssueDate: editRecord.lastIssueDate ?? "",
-        currentIssueName: editRecord.currentIssueName ?? "",
-        currentIssueDate: editRecord.currentIssueDate ?? "",
-        treatmentGiven: editRecord.treatmentGiven ?? "",
-        doctorName: editRecord.doctorName ?? "",
-        medicineName: editRecord.medicineName ?? "",
-        notes: editRecord.notes ?? "",
-      });
-    } else {
-      setForm(EMPTY_FORM);
-    }
-  }, [editRecord, visible]);
-
-  const setF = (k: keyof MedicalForm) => (v: any) =>
-    setForm((p) => ({ ...p, [k]: v }));
-
-  const handleCowSelect = (c: CowOption) =>
-    setForm((p) => ({
-      ...p,
-      cowSrNo: c.tag,
-      cowName: c.name,
-      cowAge: c.age || "",
-    }));
-  const handleCowClear = () =>
-    setForm((p) => ({ ...p, cowSrNo: "", cowName: "", cowAge: "" }));
-  const handleCowManual = (tag: string) =>
-    setForm((p) => ({ ...p, cowSrNo: tag, cowName: "", cowAge: "" }));
-
-  const reset = () => {
-    setForm(EMPTY_FORM);
-    onClose();
-  };
-
-  const submit = async () => {
-    if (!form.cowSrNo.trim()) {
-      Alert.alert("Missing Field", "Please select or enter a Cow Sr. No.");
-      return;
-    }
-    setSub(true);
-    try {
-      const n = (s: string) => s.trim() || undefined;
-      const payload = {
-        cowSrNo: form.cowSrNo.trim(),
-        cowName: n(form.cowName),
-        cowAge: n(form.cowAge),
-        currentStatus: form.currentStatus,
-        lastVaccinationDate: n(form.lastVaccinationDate),
-        nextVaccinationDate: n(form.nextVaccinationDate),
-        vaccinationName: n(form.vaccinationName),
-        lastIssueName: n(form.lastIssueName),
-        lastIssueDate: n(form.lastIssueDate),
-        currentIssueName: n(form.currentIssueName),
-        currentIssueDate: n(form.currentIssueDate),
-        treatmentGiven: n(form.treatmentGiven),
-        doctorName: n(form.doctorName),
-        medicineName: n(form.medicineName),
-        notes: n(form.notes),
-      };
-      const result: MedicalRecord =
-        isEdit && editRecord
-          ? await api.updateMedicalRecord(editRecord.id, payload)
-          : await api.createMedicalRecord(payload);
-      onSave(result);
-      reset();
-    } catch (err: any) {
-      Alert.alert("Error", err.message ?? "Failed to save.");
-    } finally {
-      setSub(false);
-    }
-  };
-
-  const accent = isEdit ? "#ea580c" : "#16a34a";
-
-  return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={reset}
-    >
-      <View style={m.overlay}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          style={{ width: "100%" }}
-        >
-          <View style={m.sheet}>
-            <View style={m.handle} />
-            <View style={m.header}>
-              <View style={[m.iconWrap, { backgroundColor: accent + "18" }]}>
-                <Ionicons
-                  name={isEdit ? "create" : "add-circle"}
-                  size={18}
-                  color={accent}
-                />
-              </View>
-              <View style={{ flex: 1, marginLeft: 10 }}>
-                <Text style={m.title}>
-                  {isEdit ? "Edit Medical Record" : "Add Medical Record"}
-                </Text>
-                {isEdit && editRecord && (
-                  <Text style={m.subTitle}>
-                    {editRecord.cowSrNo}
-                    {editRecord.cowName ? ` · ${editRecord.cowName}` : ""}
-                  </Text>
-                )}
-              </View>
-              <TouchableOpacity onPress={reset} style={m.closeBtn}>
-                <Ionicons name="close" size={18} color="#6b7280" />
-              </TouchableOpacity>
-            </View>
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              style={{ maxHeight: 520 }}
-              keyboardShouldPersistTaps="handled"
-            >
-              <MedicalFormBody
-                form={form}
-                setF={setF}
-                onCowSelect={handleCowSelect}
-                onCowClear={handleCowClear}
-                onCowManual={handleCowManual}
-              />
-            </ScrollView>
-            <TouchableOpacity
-              onPress={submit}
-              style={[
-                m.submitBtn,
-                { backgroundColor: accent },
-                submitting && { opacity: 0.6 },
-              ]}
-              disabled={submitting}
-            >
-              {submitting ? (
-                <ActivityIndicator color="#fff" size="small" />
-              ) : (
-                <>
-                  <Ionicons
-                    name={isEdit ? "save-outline" : "checkmark-circle-outline"}
-                    size={18}
-                    color="#fff"
-                  />
-                  <Text style={m.submitText}>
-                    {isEdit ? "Save Changes" : "Save Record"}
-                  </Text>
-                </>
-              )}
-            </TouchableOpacity>
-          </View>
-        </KeyboardAvoidingView>
-      </View>
-    </Modal>
-  );
-}
-
-// DETAIL ROW
-
 function DRow({
   icon,
   label,
@@ -1417,19 +1364,17 @@ function DRow({
 }) {
   if (!value) return null;
   return (
-    <View style={d.row}>
+    <View style={dr.row}>
       <View
-        style={[d.iconBox, { backgroundColor: (color ?? "#9ca3af") + "18" }]}
+        style={[dr.iconBox, { backgroundColor: (color ?? "#9ca3af") + "18" }]}
       >
         <Ionicons name={icon as any} size={12} color={color ?? "#9ca3af"} />
       </View>
-      <Text style={d.label}>{label}</Text>
-      <Text style={[d.value, color ? { color } : {}]}>{value}</Text>
+      <Text style={dr.label}>{label}</Text>
+      <Text style={[dr.value, color ? { color } : {}]}>{value}</Text>
     </View>
   );
 }
-
-// MEDICAL CARD
 
 function MedicalCard({
   group,
@@ -1448,7 +1393,6 @@ function MedicalCard({
   const [recordIndex, setRecordIndex] = useState(0);
   const item = group.records[recordIndex];
   const hasMultipleRecords = group.records.length > 1;
-
   const isHealthy = item.currentStatus === "healthy";
   const statusColor = isHealthy ? "#16a34a" : "#dc2626";
   const statusBg = isHealthy ? "#f0fdf4" : "#fff1f2";
@@ -1488,8 +1432,7 @@ function MedicalCard({
         : item.treatmentGiven === "Antibiotic"
           ? "#0891b2"
           : "#6b7280";
-
-  const treatmentBg =
+  const treatBg =
     item.treatmentGiven === "Homeopathic"
       ? "#f0fdf4"
       : item.treatmentGiven === "Ethnovetary"
@@ -1497,8 +1440,7 @@ function MedicalCard({
         : item.treatmentGiven === "Antibiotic"
           ? "#ecfeff"
           : "#f8fafc";
-
-  const treatmentBorder =
+  const treatBorder =
     item.treatmentGiven === "Homeopathic"
       ? "#bbf7d0"
       : item.treatmentGiven === "Ethnovetary"
@@ -1536,9 +1478,7 @@ function MedicalCard({
                 }}
               >
                 <Text style={c.cowSr}>{item.cowSrNo}</Text>
-                {item.cowName ? (
-                  <Text style={c.cowName}>{item.cowName}</Text>
-                ) : null}
+                {item.cowName && <Text style={c.cowName}>{item.cowName}</Text>}
               </View>
               {hasMultipleRecords && (
                 <Text style={c.historyHint}>
@@ -1548,12 +1488,12 @@ function MedicalCard({
               <View
                 style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
               >
-                {item.cowAge ? (
+                {item.cowAge && (
                   <View style={c.agePill}>
                     <Ionicons name="time-outline" size={10} color="#64748b" />
                     <Text style={c.agePillText}>{item.cowAge}</Text>
                   </View>
-                ) : null}
+                )}
                 <View
                   style={[
                     c.statusPill,
@@ -1576,7 +1516,6 @@ function MedicalCard({
               style={{ marginLeft: 6 }}
             />
           </View>
-
           <View style={c.chips}>
             {item.vaccinationName && (
               <View
@@ -1605,11 +1544,6 @@ function MedicalCard({
                 >
                   {item.vaccinationName}
                 </Text>
-                {vaccinePreset && (
-                  <Text style={[c.chipSubText, { color: vaccinePreset.color }]}>
-                    · {vaccinePreset.desc}
-                  </Text>
-                )}
               </View>
             )}
             {item.currentIssueName && (
@@ -1633,17 +1567,10 @@ function MedicalCard({
               <View
                 style={[
                   c.chip,
-                  {
-                    backgroundColor: treatmentBg,
-                    borderColor: treatmentBorder,
-                  },
+                  { backgroundColor: treatBg, borderColor: treatBorder },
                 ]}
               >
-                <Ionicons
-                  name="medical-outline"
-                  size={10}
-                  color={treatmentColor}
-                />
+                <Ionicons name="medical-outline" size={10} color={treatmentColor} />
                 <Text style={[c.chipText, { color: treatmentColor }]}>
                   {item.treatmentGiven}
                 </Text>
@@ -1663,143 +1590,6 @@ function MedicalCard({
               </View>
             )}
           </View>
-
-          {hasMultipleRecords && (
-            <View style={c.historyWrap}>
-              <View style={c.historyNav}>
-                <TouchableOpacity
-                  activeOpacity={0.85}
-                  onPress={() => setRecordIndex((prev) => Math.max(0, prev - 1))}
-                  disabled={recordIndex === 0}
-                  style={[c.historyBtn, recordIndex === 0 && c.historyBtnDisabled]}
-                >
-                  <Ionicons
-                    name="chevron-back"
-                    size={14}
-                    color={recordIndex === 0 ? "#cbd5e1" : "#16a34a"}
-                  />
-                  <Text
-                    style={[
-                      c.historyBtnText,
-                      recordIndex === 0 && c.historyBtnTextDisabled,
-                    ]}
-                  >
-                    Previous
-                  </Text>
-                </TouchableOpacity>
-
-                <View style={c.historyBadge}>
-                  <Ionicons name="albums-outline" size={12} color="#16a34a" />
-                  <Text style={c.historyBadgeText}>
-                    {recordIndex + 1}/{group.records.length}
-                  </Text>
-                </View>
-
-                <TouchableOpacity
-                  activeOpacity={0.85}
-                  onPress={() =>
-                    setRecordIndex((prev) =>
-                      Math.min(group.records.length - 1, prev + 1),
-                    )
-                  }
-                  disabled={recordIndex === group.records.length - 1}
-                  style={[
-                    c.historyBtn,
-                    recordIndex === group.records.length - 1 &&
-                      c.historyBtnDisabled,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      c.historyBtnText,
-                      recordIndex === group.records.length - 1 &&
-                        c.historyBtnTextDisabled,
-                    ]}
-                  >
-                    Next
-                  </Text>
-                  <Ionicons
-                    name="chevron-forward"
-                    size={14}
-                    color={
-                      recordIndex === group.records.length - 1
-                        ? "#cbd5e1"
-                        : "#16a34a"
-                    }
-                  />
-                </TouchableOpacity>
-              </View>
-
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={c.timelineStrip}
-              >
-                {group.records.map((record, idx) => {
-                  const active = idx === recordIndex;
-                  const chipAccentColor =
-                    record.currentIssueName
-                      ? "#dc2626"
-                      : record.vaccinationName
-                        ? "#7c3aed"
-                        : "#16a34a";
-                  const chipBadgeLabel =
-                    record.currentIssueName ??
-                    record.vaccinationName ??
-                    (record.currentStatus === "healthy" ? "Healthy" : "Unhealthy");
-                  return (
-                    <TouchableOpacity
-                      key={record.id}
-                      activeOpacity={0.85}
-                      onPress={() => setRecordIndex(idx)}
-                      style={[c.timelineChip, active && c.timelineChipActive]}
-                    >
-                      <Text
-                        style={[
-                          c.timelineChipTitle,
-                          active && c.timelineChipTitleActive,
-                        ]}
-                      >
-                        {formatRecordStamp(record.created_at)}
-                      </Text>
-                      <View
-                        style={[
-                          c.timelineBadge,
-                          {
-                            backgroundColor: active
-                              ? chipAccentColor + "18"
-                              : "#ffffff",
-                            borderColor: active
-                              ? chipAccentColor + "55"
-                              : "#e5e7eb",
-                          },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            c.timelineBadgeText,
-                            { color: active ? chipAccentColor : "#475569" },
-                          ]}
-                          numberOfLines={1}
-                        >
-                          {chipBadgeLabel}
-                        </Text>
-                      </View>
-                      <Text
-                        style={[
-                          c.timelineChipSub,
-                          active && c.timelineChipSubActive,
-                        ]}
-                      >
-                        {record.currentStatus === "healthy" ? "Healthy" : "Unhealthy"}
-                        {record.treatmentGiven ? ` · ${record.treatmentGiven}` : ""}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-            </View>
-          )}
         </TouchableOpacity>
 
         {expanded && (
@@ -1824,7 +1614,7 @@ function MedicalCard({
               value={item.nextVaccinationDate}
               color="#16a34a"
             />
-            <Text style={c.secLabel}> Health Issues</Text>
+            <Text style={c.secLabel}>Health Issues</Text>
             <DRow
               icon="bandage-outline"
               label="Last Issue"
@@ -1899,29 +1689,909 @@ function MedicalCard({
   );
 }
 
+function CategoryPicker({
+  value,
+  onChange,
+}: {
+  value: MedicineCategory;
+  onChange: (v: MedicineCategory) => void;
+}) {
+  return (
+    <View style={{ marginBottom: 12 }}>
+      <Text style={f.label}>CATEGORY</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        {MED_CATEGORIES.map((cat) => {
+          const active = value === cat.value;
+          return (
+            <TouchableOpacity
+              key={cat.value}
+              onPress={() => onChange(cat.value)}
+              style={[
+                mcp.chip,
+                active && {
+                  backgroundColor: cat.color,
+                  borderColor: cat.color,
+                },
+              ]}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name={cat.icon as any}
+                size={12}
+                color={active ? "#fff" : cat.color}
+              />
+              <Text style={[mcp.label, active && { color: "#fff" }]}>
+                {cat.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
+}
+
+function UnitPicker({
+  value,
+  onChange,
+}: {
+  value: MedicineUnit;
+  onChange: (v: MedicineUnit) => void;
+}) {
+  return (
+    <View style={{ marginBottom: 12 }}>
+      <Text style={f.label}>UNIT</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        {MED_UNITS.map((u) => {
+          const active = value === u;
+          return (
+            <TouchableOpacity
+              key={u}
+              onPress={() => onChange(u)}
+              style={[mup.chip, active && mup.active]}
+              activeOpacity={0.8}
+            >
+              <Text style={[mup.label, active && { color: "#fff" }]}>{u}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
+}
+
+function MedicineFormModal({
+  visible,
+  onClose,
+  onSave,
+  editMedicine,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  onSave: (m: Medicine) => void;
+  editMedicine: Medicine | null;
+}) {
+  const isEdit = !!editMedicine;
+  const [form, setForm] = useState<MedicineCreate>(EMPTY_MED_FORM);
+  const [submitting, setSub] = useState(false);
+
+  useEffect(() => {
+    if (editMedicine) {
+      setForm({
+        name: editMedicine.name,
+        category: editMedicine.category,
+        unit: editMedicine.unit,
+        description: editMedicine.description ?? "",
+        manufacturer: editMedicine.manufacturer ?? "",
+        batch_number: editMedicine.batch_number ?? "",
+        expiry_date: editMedicine.expiry_date ?? "",
+        purchase_date: editMedicine.purchase_date ?? "",
+        cost_per_unit: editMedicine.cost_per_unit,
+        current_stock: editMedicine.current_stock,
+        min_stock_alert: editMedicine.min_stock_alert,
+        storage_instructions: editMedicine.storage_instructions ?? "",
+        notes: editMedicine.notes ?? "",
+      });
+    } else {
+      setForm(EMPTY_MED_FORM);
+    }
+  }, [editMedicine, visible]);
+
+  const setF = (k: keyof MedicineCreate) => (v: any) =>
+    setForm((p) => ({ ...p, [k]: v }));
+
+  const submit = async () => {
+    if (!form.name.trim()) {
+      Alert.alert("Missing Field", "Please enter a medicine name.");
+      return;
+    }
+    setSub(true);
+    try {
+      const payload: any = { ...form };
+      Object.keys(payload).forEach((k) => {
+        if (payload[k] === "") payload[k] = undefined;
+      });
+      const result: Medicine =
+        isEdit && editMedicine
+          ? await (api as any).updateMedicine(editMedicine.id, payload)
+          : await (api as any).createMedicine(payload);
+      onSave(result);
+      onClose();
+    } catch (err: any) {
+      Alert.alert("Error", err.message ?? "Failed to save.");
+    } finally {
+      setSub(false);
+    }
+  };
+
+  const accent = isEdit ? "#ea580c" : "#16a34a";
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <View style={mo.overlay}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={{ width: "100%" }}
+        >
+          <View style={mo.sheet}>
+            <View style={mo.handle} />
+            <View style={mo.header}>
+              <View style={[mo.iconWrap, { backgroundColor: accent + "18" }]}>
+                <Ionicons
+                  name={isEdit ? "create" : "add-circle"}
+                  size={18}
+                  color={accent}
+                />
+              </View>
+              <View style={{ flex: 1, marginLeft: 10 }}>
+                <Text style={mo.title}>
+                  {isEdit ? "Edit Medicine" : "Add Medicine"}
+                </Text>
+                {isEdit && editMedicine && (
+                  <Text style={mo.subTitle}>{editMedicine.name}</Text>
+                )}
+              </View>
+              <TouchableOpacity onPress={onClose} style={mo.closeBtn}>
+                <Ionicons name="close" size={18} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              style={{ maxHeight: 530 }}
+              keyboardShouldPersistTaps="handled"
+            >
+              <Sec
+                title="Medicine Details"
+                icon="medkit-outline"
+                color="#16a34a"
+              />
+              <Field
+                label="MEDICINE NAME"
+                value={form.name}
+                onChange={setF("name")}
+                placeholder="e.g. Oxytetracycline"
+                icon="text-outline"
+                color="#16a34a"
+              />
+              <CategoryPicker
+                value={form.category}
+                onChange={setF("category")}
+              />
+              <UnitPicker value={form.unit} onChange={setF("unit")} />
+              <Field
+                label="MANUFACTURER"
+                value={form.manufacturer}
+                onChange={setF("manufacturer")}
+                placeholder="e.g. Pfizer"
+                icon="business-outline"
+              />
+              <Field
+                label="DESCRIPTION"
+                value={form.description}
+                onChange={setF("description")}
+                placeholder="Short description..."
+                icon="document-text-outline"
+                multiline
+              />
+              <Sec
+                title="Stock & Pricing"
+                icon="cube-outline"
+                color="#0891b2"
+              />
+              <View style={f.twoCol}>
+                <View style={{ flex: 1 }}>
+                  <Field
+                    label={`STOCK (${form.unit})`}
+                    value={
+                      form.current_stock != null
+                        ? String(form.current_stock)
+                        : ""
+                    }
+                    onChange={(v: string) =>
+                      setF("current_stock")(parseFloat(v) || 0)
+                    }
+                    placeholder="0"
+                    icon="layers-outline"
+                    keyboardType="numeric"
+                    color="#0891b2"
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Field
+                    label="ALERT BELOW"
+                    value={
+                      form.min_stock_alert != null
+                        ? String(form.min_stock_alert)
+                        : ""
+                    }
+                    onChange={(v: string) =>
+                      setF("min_stock_alert")(v ? parseFloat(v) : undefined)
+                    }
+                    placeholder="e.g. 5"
+                    icon="notifications-outline"
+                    keyboardType="numeric"
+                    color="#ea580c"
+                  />
+                </View>
+              </View>
+              <Field
+                label="COST PER UNIT (₹)"
+                value={
+                  form.cost_per_unit != null ? String(form.cost_per_unit) : ""
+                }
+                onChange={(v: string) =>
+                  setF("cost_per_unit")(v ? parseFloat(v) : undefined)
+                }
+                placeholder="e.g. 12.5"
+                icon="cash-outline"
+                keyboardType="numeric"
+                color="#16a34a"
+              />
+              <Sec
+                title="Batch & Expiry"
+                icon="calendar-outline"
+                color="#7c3aed"
+              />
+              <Field
+                label="BATCH NUMBER"
+                value={form.batch_number}
+                onChange={setF("batch_number")}
+                placeholder="e.g. BN2024-01"
+                icon="barcode-outline"
+                color="#7c3aed"
+              />
+              <View style={f.twoCol}>
+                <View style={{ flex: 1 }}>
+                  <Field
+                    label="PURCHASE DATE"
+                    value={form.purchase_date}
+                    onChange={setF("purchase_date")}
+                    placeholder="DD/MM/YYYY"
+                    icon="calendar-outline"
+                    color="#7c3aed"
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Field
+                    label="EXPIRY DATE"
+                    value={form.expiry_date}
+                    onChange={setF("expiry_date")}
+                    placeholder="DD/MM/YYYY"
+                    icon="calendar-outline"
+                    color="#dc2626"
+                  />
+                </View>
+              </View>
+              <Sec
+                title="Notes"
+                icon="information-circle-outline"
+                color="#6b7280"
+              />
+              <Field
+                label="STORAGE"
+                value={form.storage_instructions}
+                onChange={setF("storage_instructions")}
+                placeholder="e.g. Store below 25°C"
+                icon="thermometer-outline"
+                multiline
+              />
+              <Field
+                label="NOTES"
+                value={form.notes}
+                onChange={setF("notes")}
+                placeholder="Any additional notes..."
+                icon="chatbubble-outline"
+                multiline
+              />
+              <View style={{ height: 16 }} />
+            </ScrollView>
+            <TouchableOpacity
+              onPress={submit}
+              style={[
+                mo.submitBtn,
+                { backgroundColor: accent },
+                submitting && { opacity: 0.6 },
+              ]}
+              disabled={submitting}
+            >
+              {submitting ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <>
+                  <Ionicons
+                    name={isEdit ? "save-outline" : "checkmark-circle-outline"}
+                    size={18}
+                    color="#fff"
+                  />
+                  <Text style={mo.submitText}>
+                    {isEdit ? "Save Changes" : "Add Medicine"}
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </View>
+    </Modal>
+  );
+}
+
+function QuickActionModal({
+  visible,
+  onClose,
+  medicine,
+  action,
+  onDone,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  medicine: Medicine | null;
+  action: "use" | "restock" | "adjust";
+  onDone: (updated: Medicine) => void;
+}) {
+  const [qty, setQty] = useState("");
+  const [note, setNote] = useState("");
+  const [submitting, setSub] = useState(false);
+  useEffect(() => {
+    setQty("");
+    setNote("");
+  }, [visible]);
+  if (!medicine) return null;
+
+  const colors = { use: "#dc2626", restock: "#16a34a", adjust: "#0891b2" };
+  const titles = {
+    use: "Use Medicine",
+    restock: "Restock",
+    adjust: "Adjust Stock",
+  };
+  const icons = {
+    use: "medical-outline",
+    restock: "arrow-up-circle-outline",
+    adjust: "settings-outline",
+  };
+  const accent = colors[action];
+
+  const submit = async () => {
+    const amount = parseFloat(qty);
+    if (!amount || amount <= 0) {
+      Alert.alert("Invalid", "Enter a valid quantity.");
+      return;
+    }
+    setSub(true);
+    try {
+      if (action === "use") {
+        await (api as any).useMedicine({
+          medicine_id: medicine.id,
+          cow_id: "manual",
+          cow_name: "Manual",
+          cow_tag: "—",
+          quantity_used: amount,
+          date: todayYMD(),
+          notes: note || undefined,
+        });
+      } else if (action === "restock") {
+        await (api as any).restockMedicine(medicine.id, {
+          medicine_id: medicine.id,
+          quantity_added: amount,
+          notes: note || undefined,
+          purchase_date: todayYMD().split("-").reverse().join("/"),
+        });
+      } else {
+        await (api as any).adjustMedicineStock(medicine.id, {
+          medicine_id: medicine.id,
+          new_quantity: amount,
+          reason: note || undefined,
+        });
+      }
+      const updated = await (api as any).getMedicine(medicine.id);
+      onDone(updated);
+      onClose();
+    } catch (err: any) {
+      Alert.alert("Error", err.message ?? "Operation failed.");
+    } finally {
+      setSub(false);
+    }
+  };
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
+        <TouchableOpacity
+          style={qa.overlay}
+          activeOpacity={1}
+          onPress={onClose}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            style={qa.sheet}
+            onPress={() => {}}
+          >
+            <View style={[qa.headerBar, { backgroundColor: accent + "12" }]}>
+              <Ionicons name={icons[action] as any} size={22} color={accent} />
+              <View style={{ flex: 1, marginLeft: 10 }}>
+                <Text style={[qa.title, { color: accent }]}>
+                  {titles[action]}
+                </Text>
+                <Text style={qa.subTitle}>{medicine.name}</Text>
+              </View>
+              <TouchableOpacity onPress={onClose} style={qa.closeBtn}>
+                <Ionicons name="close" size={16} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+            <View style={qa.stockRow}>
+              <Ionicons name="cube-outline" size={13} color="#64748b" />
+              <Text style={qa.stockLabel}>Current Stock:</Text>
+              <Text style={[qa.stockVal, { color: accent }]}>
+                {medicine.current_stock} {medicine.unit}
+              </Text>
+            </View>
+            <Text style={f.label}>
+              {action === "adjust" ? "NEW STOCK LEVEL" : "QUANTITY"} (
+              {medicine.unit})
+            </Text>
+            <View
+              style={[
+                f.row,
+                {
+                  marginBottom: 10,
+                  borderColor: accent,
+                  backgroundColor: "#fff",
+                },
+              ]}
+            >
+              <Ionicons
+                name="calculator-outline"
+                size={14}
+                color={accent}
+                style={{ marginRight: 8 }}
+              />
+              <TextInput
+                style={f.input}
+                value={qty}
+                onChangeText={setQty}
+                placeholder="0"
+                placeholderTextColor="#d1d5db"
+                keyboardType="numeric"
+                autoFocus
+              />
+              <Text style={{ color: "#94a3b8", fontWeight: "600" }}>
+                {medicine.unit}
+              </Text>
+            </View>
+            <Text style={f.label}>NOTE (OPTIONAL)</Text>
+            <View style={[f.row, { marginBottom: 16 }]}>
+              <Ionicons
+                name="chatbubble-outline"
+                size={14}
+                color="#9ca3af"
+                style={{ marginRight: 8 }}
+              />
+              <TextInput
+                style={f.input}
+                value={note}
+                onChangeText={setNote}
+                placeholder="Add a note..."
+                placeholderTextColor="#d1d5db"
+              />
+            </View>
+            <TouchableOpacity
+              onPress={submit}
+              style={[
+                mo.submitBtn,
+                { backgroundColor: accent },
+                submitting && { opacity: 0.6 },
+              ]}
+              disabled={submitting}
+            >
+              {submitting ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <>
+                  <Ionicons
+                    name="checkmark-circle-outline"
+                    size={18}
+                    color="#fff"
+                  />
+                  <Text style={mo.submitText}>{titles[action]}</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+function MedicineCard({
+  item,
+  index,
+  onEdit,
+  onDelete,
+  onUse,
+  onRestock,
+  onAdjust,
+}: {
+  item: Medicine;
+  index: number;
+  onEdit: (m: Medicine) => void;
+  onDelete: (m: Medicine) => void;
+  onUse: (m: Medicine) => void;
+  onRestock: (m: Medicine) => void;
+  onAdjust: (m: Medicine) => void;
+}) {
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(18)).current;
+  const [expanded, setExpanded] = useState(false);
+  const catMeta = getCatMeta(item.category);
+  const sStock = stockStatus(item);
+  const sExpiry = expiryStatus(item.expiry_date);
+  const stockColor =
+    sStock === "out" ? "#dc2626" : sStock === "low" ? "#ea580c" : "#16a34a";
+  const expiryColor =
+    sExpiry === "expired"
+      ? "#dc2626"
+      : sExpiry === "soon"
+        ? "#ea580c"
+        : "#16a34a";
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: 300,
+        delay: index * 55,
+        useNativeDriver: true,
+      }),
+      Animated.spring(translateY, {
+        toValue: 0,
+        delay: index * 55,
+        tension: 68,
+        friction: 12,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
+  return (
+    <Animated.View style={[mc.card, { opacity, transform: [{ translateY }] }]}>
+      <View style={[mc.accent, { backgroundColor: catMeta.color }]} />
+      <View style={{ padding: 14 }}>
+        <TouchableOpacity
+          onPress={() => setExpanded((e) => !e)}
+          activeOpacity={0.85}
+        >
+          <View style={mc.topRow}>
+            <View
+              style={[
+                mc.avatar,
+                {
+                  backgroundColor: catMeta.color + "18",
+                  borderColor: catMeta.color + "44",
+                },
+              ]}
+            >
+              <Ionicons
+                name={catMeta.icon as any}
+                size={22}
+                color={catMeta.color}
+              />
+            </View>
+            <View style={{ flex: 1, marginLeft: 12 }}>
+              <Text style={mc.name} numberOfLines={1}>
+                {item.name}
+              </Text>
+              <View
+                style={{
+                  flexDirection: "row",
+                  gap: 6,
+                  marginTop: 3,
+                  flexWrap: "wrap",
+                }}
+              >
+                <View
+                  style={[
+                    mc.pill,
+                    {
+                      backgroundColor: catMeta.color + "15",
+                      borderColor: catMeta.color + "44",
+                    },
+                  ]}
+                >
+                  <Text style={[mc.pillText, { color: catMeta.color }]}>
+                    {item.category}
+                  </Text>
+                </View>
+                <View
+                  style={[
+                    mc.pill,
+                    {
+                      backgroundColor: stockColor + "15",
+                      borderColor: stockColor + "44",
+                    },
+                  ]}
+                >
+                  <View style={[mc.dot, { backgroundColor: stockColor }]} />
+                  <Text style={[mc.pillText, { color: stockColor }]}>
+                    {item.current_stock} {item.unit}
+                  </Text>
+                </View>
+              </View>
+            </View>
+            <Ionicons
+              name={expanded ? "chevron-up" : "chevron-down"}
+              size={15}
+              color="#cbd5e1"
+              style={{ marginLeft: 6 }}
+            />
+          </View>
+          <View
+            style={{
+              flexDirection: "row",
+              gap: 6,
+              marginTop: 10,
+              flexWrap: "wrap",
+            }}
+          >
+            {sStock !== "ok" && (
+              <View
+                style={[
+                  mc.alertChip,
+                  {
+                    backgroundColor: stockColor + "12",
+                    borderColor: stockColor + "44",
+                  },
+                ]}
+              >
+                <Ionicons name="warning-outline" size={10} color={stockColor} />
+                <Text style={[mc.alertText, { color: stockColor }]}>
+                  {sStock === "out" ? "Out of Stock" : "Low Stock"}
+                </Text>
+              </View>
+            )}
+            {sExpiry !== "ok" && item.expiry_date && (
+              <View
+                style={[
+                  mc.alertChip,
+                  {
+                    backgroundColor: expiryColor + "12",
+                    borderColor: expiryColor + "44",
+                  },
+                ]}
+              >
+                <Ionicons name="time-outline" size={10} color={expiryColor} />
+                <Text style={[mc.alertText, { color: expiryColor }]}>
+                  {sExpiry === "expired"
+                    ? `Expired ${item.expiry_date}`
+                    : `Expires ${item.expiry_date}`}
+                </Text>
+              </View>
+            )}
+            {item.manufacturer && (
+              <View style={mc.alertChip}>
+                <Ionicons name="business-outline" size={10} color="#64748b" />
+                <Text style={[mc.alertText, { color: "#64748b" }]}>
+                  {item.manufacturer}
+                </Text>
+              </View>
+            )}
+          </View>
+        </TouchableOpacity>
+        {expanded && (
+          <>
+            <View style={mc.divider} />
+            {item.batch_number && (
+              <DRow
+                icon="barcode-outline"
+                label="Batch"
+                value={item.batch_number}
+                color={catMeta.color}
+              />
+            )}
+            {item.purchase_date && (
+              <DRow
+                icon="calendar-outline"
+                label="Purchased"
+                value={item.purchase_date}
+                color="#7c3aed"
+              />
+            )}
+            {item.expiry_date && (
+              <DRow
+                icon="calendar-outline"
+                label="Expiry"
+                value={item.expiry_date}
+                color={expiryColor}
+              />
+            )}
+            {item.cost_per_unit != null && (
+              <DRow
+                icon="cash-outline"
+                label="Cost/Unit"
+                value={`₹ ${item.cost_per_unit}`}
+                color="#16a34a"
+              />
+            )}
+            {item.min_stock_alert != null && (
+              <DRow
+                icon="notifications-outline"
+                label="Alert Below"
+                value={`${item.min_stock_alert} ${item.unit}`}
+                color="#ea580c"
+              />
+            )}
+            {item.storage_instructions && (
+              <DRow
+                icon="thermometer-outline"
+                label="Storage"
+                value={item.storage_instructions}
+              />
+            )}
+            {(item.description || item.notes) && (
+              <View style={mc.notesBox}>
+                <Ionicons name="chatbubble-outline" size={13} color="#64748b" />
+                <Text style={mc.notesText}>
+                  {item.description || item.notes}
+                </Text>
+              </View>
+            )}
+            <View style={mc.actionRow}>
+              <TouchableOpacity
+                style={[
+                  mc.actionBtn,
+                  { backgroundColor: "#fef2f2", borderColor: "#fecaca" },
+                ]}
+                onPress={() => onUse(item)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="medical-outline" size={13} color="#dc2626" />
+                <Text style={[mc.actionText, { color: "#dc2626" }]}>Use</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  mc.actionBtn,
+                  { backgroundColor: "#f0fdf4", borderColor: "#bbf7d0" },
+                ]}
+                onPress={() => onRestock(item)}
+                activeOpacity={0.8}
+              >
+                <Ionicons
+                  name="arrow-up-circle-outline"
+                  size={13}
+                  color="#16a34a"
+                />
+                <Text style={[mc.actionText, { color: "#16a34a" }]}>
+                  Restock
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  mc.actionBtn,
+                  { backgroundColor: "#ecfeff", borderColor: "#a5f3fc" },
+                ]}
+                onPress={() => onAdjust(item)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="settings-outline" size={13} color="#0891b2" />
+                <Text style={[mc.actionText, { color: "#0891b2" }]}>
+                  Adjust
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  mc.actionBtn,
+                  { backgroundColor: "#fff7ed", borderColor: "#fed7aa" },
+                ]}
+                onPress={() => onEdit(item)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="create-outline" size={13} color="#ea580c" />
+                <Text style={[mc.actionText, { color: "#ea580c" }]}>Edit</Text>
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity
+              style={[
+                mc.actionBtn,
+                {
+                  backgroundColor: "#fff1f2",
+                  borderColor: "#fecdd3",
+                  marginTop: 6,
+                  flex: 0,
+                  justifyContent: "center",
+                  paddingHorizontal: 16,
+                },
+              ]}
+              onPress={() => onDelete(item)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="trash-outline" size={13} color="#dc2626" />
+              <Text style={[mc.actionText, { color: "#dc2626" }]}>Delete</Text>
+            </TouchableOpacity>
+          </>
+        )}
+      </View>
+    </Animated.View>
+  );
+}
+
 // MAIN SCREEN
+type ActiveTab = "records" | "stock";
+type ActiveScreen = "home" | "list";
 
 export default function MedicalScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+
+  const [activeTab, setActiveTab] = useState<ActiveTab>("records");
+
   const [records, setRecords] = useState<MedicalRecord[]>([]);
-  const [screen, setScreen] = useState<"home" | "list">("home");
-  const [search, setSearch] = useState("");
+  const [recScreen, setRecScreen] = useState<ActiveScreen>("home");
+  const [recSearch, setRecSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>("newest");
   const [dateRange, setDateRange] = useState<DateRangeOption>("all_time");
   const [sortVisible, setSortVisible] = useState(false);
   const [filterStatus, setFilter] = useState<"all" | "healthy" | "unhealthy">(
     "all",
   );
-  const [modalVisible, setModal] = useState(false);
+  const [medFormVisible, setMedFormVisible] = useState(false);
   const [editRecord, setEditRecord] = useState<MedicalRecord | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [recLoading, setRecLoading] = useState(false);
+  const [recRefreshing, setRecRefreshing] = useState(false);
+  const [recError, setRecError] = useState<string | null>(null);
+
+  const [medicines, setMedicines] = useState<Medicine[]>([]);
+  const [medSummary, setMedSummary] = useState<MedicineStockSummary | null>(
+    null,
+  );
+  const [stockScreen, setStockScreen] = useState<ActiveScreen>("home");
+  const [stockSearch, setStockSearch] = useState("");
+  const [filterCat, setFilterCat] = useState("all");
+  const [stockLoading, setStockLoading] = useState(false);
+  const [stockRefreshing, setStockRefreshing] = useState(false);
+  const [stockError, setStockError] = useState<string | null>(null);
+  const [stockFormVisible, setStockFormVisible] = useState(false);
+  const [editMedicine, setEditMedicine] = useState<Medicine | null>(null);
+  const [actionMed, setActionMed] = useState<Medicine | null>(null);
+  const [actionType, setActionType] = useState<"use" | "restock" | "adjust">(
+    "use",
+  );
+  const [actionVisible, setActionVisible] = useState(false);
 
   const fetchRecords = useCallback(async (q?: string, status?: string) => {
-    setLoading(true);
-    setError(null);
+    setRecLoading(true);
+    setRecError(null);
     try {
       const [data, cowsData] = await Promise.all([
         api.getMedicalRecords(q, status === "all" ? undefined : status),
@@ -1940,38 +2610,56 @@ export default function MedicalScreen() {
 
       setRecords(enriched);
     } catch (err: any) {
-      setError(err.message ?? "Failed to load.");
+      setRecError(err.message ?? "Failed to load.");
     } finally {
-      setLoading(false);
+      setRecLoading(false);
+    }
+  }, []);
+
+  const fetchMedicines = useCallback(async (q?: string, cat?: string) => {
+    setStockLoading(true);
+    setStockError(null);
+    try {
+      const [meds, sum] = await Promise.all([
+        (api as any).getMedicines({
+          search: q,
+          category: cat === "all" ? undefined : cat,
+        }),
+        (api as any).getMedicineStockSummary(),
+      ]);
+      setMedicines(meds);
+      setMedSummary(sum);
+    } catch (err: any) {
+      setStockError(err.message ?? "Failed to load.");
+    } finally {
+      setStockLoading(false);
     }
   }, []);
 
   useEffect(() => {
     fetchRecords();
-  }, [fetchRecords]);
-
+    fetchMedicines();
+  }, []);
   useEffect(() => {
     const t = setTimeout(
       () =>
         fetchRecords(
-          search || undefined,
+          recSearch || undefined,
           filterStatus === "all" ? undefined : filterStatus,
         ),
       400,
     );
     return () => clearTimeout(t);
-  }, [search, filterStatus]);
-
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await fetchRecords(
-      search || undefined,
-      filterStatus === "all" ? undefined : filterStatus,
+  }, [recSearch, filterStatus]);
+  useEffect(() => {
+    const t = setTimeout(
+      () => fetchMedicines(stockSearch || undefined, filterCat),
+      400,
     );
-    setRefreshing(false);
-  };
+    return () => clearTimeout(t);
+  }, [stockSearch, filterCat]);
 
-  const handleDelete = (r: MedicalRecord) => {
+  const handleDeleteRecord = (r: MedicalRecord) => {
     Alert.alert(
       "Delete Record",
       `Delete medical record for ${r.cowSrNo}${r.cowName ? ` (${r.cowName})` : ""}?`,
@@ -1983,9 +2671,9 @@ export default function MedicalScreen() {
           onPress: async () => {
             try {
               await api.deleteMedicalRecord(r.id);
-              setRecords((prev) => prev.filter((x) => x.id !== r.id));
+              setRecords((p) => p.filter((x) => x.id !== r.id));
             } catch (err: any) {
-              Alert.alert("Error", err.message ?? "Failed to delete.");
+              Alert.alert("Error", err.message);
             }
           },
         },
@@ -1993,23 +2681,52 @@ export default function MedicalScreen() {
     );
   };
 
-  const openAdd = () => {
-    setEditRecord(null);
-    setModal(true);
+  const handleDeleteMedicine = (m: Medicine) => {
+    Alert.alert("Delete Medicine", `Delete "${m.name}" from stock?`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await (api as any).deleteMedicine(m.id);
+            setMedicines((p) => p.filter((x) => x.id !== m.id));
+            fetchMedicines();
+          } catch (err: any) {
+            Alert.alert("Error", err.message);
+          }
+        },
+      },
+    ]);
   };
-  const openEdit = (r: MedicalRecord) => {
-    setEditRecord(r);
-    setModal(true);
+
+  const openStockAction = (m: Medicine, type: "use" | "restock" | "adjust") => {
+    setActionMed(m);
+    setActionType(type);
+    setActionVisible(true);
+  };
+  const handleActionDone = (updated: Medicine) => {
+    setMedicines((p) => p.map((x) => (x.id === updated.id ? updated : x)));
+    fetchMedicines();
+  };
+  const handleMedicineSave = (m: Medicine) => {
+    setMedicines((p) => {
+      const i = p.findIndex((x) => x.id === m.id);
+      if (i >= 0) {
+        const n = [...p];
+        n[i] = m;
+        return n;
+      }
+      return [m, ...p];
+    });
+    fetchMedicines();
+    setStockScreen("list");
   };
 
   const healthy = records.filter((r) => r.currentStatus === "healthy").length;
   const unhealthy = records.filter(
     (r) => r.currentStatus === "unhealthy",
   ).length;
-  const ANDROID_STATUS_BAR =
-    Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0;
-
-  // Calves with valid born dates for schedule
   const calfRecords = records.filter(
     (r) => r.cowAge && getCalfVaccineDates(r.cowAge) !== null,
   );
@@ -2076,38 +2793,210 @@ export default function MedicalScreen() {
     last_month: { label: "Last Month", icon: "calendar-clear-outline" },
     last_year: { label: "Last Year", icon: "calendar-number-outline" },
   };
+  const lowStockCount = medicines.filter((m) => stockStatus(m) !== "ok").length;
+  const catOptions = ["all", ...MED_CATEGORIES.map((c) => c.value)];
+
+  const backAction = () => {
+    if (activeTab === "records") {
+      if (recScreen === "list") {
+        setRecScreen("home");
+        return;
+      }
+    } else {
+      if (stockScreen === "list") {
+        setStockScreen("home");
+        return;
+      }
+    }
+    router.back();
+  };
+
+  // ── Stats data per tab
+  const statsData =
+    activeTab === "records"
+      ? [
+          { label: "Total", value: records.length, color: "#0f172a" },
+          { label: "Healthy", value: healthy, color: "#16a34a" },
+          { label: "Unhealthy", value: unhealthy, color: "#dc2626" },
+          {
+            label: "Vaccinated",
+            value: records.filter((r) => !!r.vaccinationName).length,
+            color: "#7c3aed",
+          },
+        ]
+      : [
+          {
+            label: "Total",
+            value: medSummary?.total_medicines ?? 0,
+            color: "#0f172a",
+          },
+          {
+            label: "Low Stock",
+            value: medSummary?.low_stock_count ?? 0,
+            color: "#ea580c",
+          },
+          {
+            label: "Expiring",
+            value: medSummary?.expiring_soon_count ?? 0,
+            color: "#d97706",
+          },
+          {
+            label: "Expired",
+            value: medSummary?.expired_count ?? 0,
+            color: "#dc2626",
+          },
+        ];
+
+  // ── Records list header (scrolls away)
+  const RecordsListHeader = () => (
+    <View>
+      {/* Stats */}
+      <View style={[s.statsRow, { marginHorizontal: -14 }]}>
+        {statsData.map((st, i, arr) => (
+          <View
+            key={i}
+            style={[s.statItem, i < arr.length - 1 && s.statBorder]}
+          >
+            <Text style={[s.statValue, { color: st.color }]}>{st.value}</Text>
+            <Text style={s.statLabel}>{st.label}</Text>
+          </View>
+        ))}
+      </View>
+      {/* Search */}
+      <View style={[s.searchWrap, { marginHorizontal: 0, marginTop: 12 }]}>
+        <Ionicons name="search-outline" size={15} color="#9ca3af" />
+        <TextInput
+          style={s.searchInput}
+          placeholder="Search cow name or Sr. No..."
+          placeholderTextColor="#d1d5db"
+          value={recSearch}
+          onChangeText={setRecSearch}
+        />
+        {recSearch.length > 0 && (
+          <TouchableOpacity onPress={() => setRecSearch("")}>
+            <Ionicons name="close-circle" size={15} color="#9ca3af" />
+          </TouchableOpacity>
+        )}
+      </View>
+      {/* Filters */}
+      <View style={[s.filterRow, { paddingHorizontal: 0 }]}>
+        {(["all", "healthy", "unhealthy"] as const).map((fil) => (
+          <TouchableOpacity
+            key={fil}
+            style={[s.filterTab, filterStatus === fil && s.filterTabActive]}
+            onPress={() => setFilter(fil)}
+            activeOpacity={0.8}
+          >
+            <Text
+              style={[
+                s.filterTabText,
+                filterStatus === fil && s.filterTabTextActive,
+              ]}
+            >
+              {fil === "all"
+                ? "All"
+                : fil === "healthy"
+                  ? "✅ Healthy"
+                  : "🤒 Unhealthy"}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  );
+
+  // ── Stock list header (scrolls away)
+  const StockListHeader = () => (
+    <View>
+      {/* Stats */}
+      <View style={[s.statsRow, { marginHorizontal: -14 }]}>
+        {statsData.map((st, i, arr) => (
+          <View
+            key={i}
+            style={[s.statItem, i < arr.length - 1 && s.statBorder]}
+          >
+            <Text style={[s.statValue, { color: st.color }]}>{st.value}</Text>
+            <Text style={s.statLabel}>{st.label}</Text>
+          </View>
+        ))}
+      </View>
+      {/* Search */}
+      <View style={[s.searchWrap, { marginHorizontal: 0, marginTop: 12 }]}>
+        <Ionicons name="search-outline" size={15} color="#9ca3af" />
+        <TextInput
+          style={s.searchInput}
+          placeholder="Search medicines..."
+          placeholderTextColor="#d1d5db"
+          value={stockSearch}
+          onChangeText={setStockSearch}
+        />
+        {stockSearch.length > 0 && (
+          <TouchableOpacity onPress={() => setStockSearch("")}>
+            <Ionicons name="close-circle" size={15} color="#9ca3af" />
+          </TouchableOpacity>
+        )}
+      </View>
+      {/* Category filter */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={{ marginBottom: 8 }}
+        contentContainerStyle={{ gap: 8 }}
+      >
+        {catOptions.map((cat) => (
+          <TouchableOpacity
+            key={cat}
+            style={[s.filterTab, filterCat === cat && s.filterTabActive]}
+            onPress={() => setFilterCat(cat)}
+            activeOpacity={0.8}
+          >
+            <Text
+              style={[
+                s.filterTabText,
+                filterCat === cat && s.filterTabTextActive,
+              ]}
+            >
+              {cat === "all" ? "All" : cat}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+    </View>
+  );
 
   return (
     <View style={[s.screen, { paddingTop: insets.top }]}>
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
 
-      {/* ── Header ── */}
-      <View
-        style={[
-          s.header,
-          {
-
-          },
-        ]}
-      >
-        <TouchableOpacity
-          onPress={
-            screen === "home" ? () => router.back() : () => setScreen("home")
-          }
-          style={s.backBtn}
-        >
+      {/* ── Fixed Header ── */}
+      <View style={s.header}>
+        <TouchableOpacity onPress={backAction} style={s.backBtn}>
           <Ionicons name="arrow-back" size={20} color="#111827" />
         </TouchableOpacity>
         <View style={{ flex: 1, marginLeft: 12 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-            <Ionicons name="medkit" size={18} color="#16a34a" />
-            <Text style={s.headerTitle}>Medical Records</Text>
-          </View>
+          <Text style={s.headerTitle}>
+            {activeTab === "records" ? "Medical Records" : "Medicine Stock"}
+          </Text>
           <Text style={s.headerSub}>
-            {visibleGroupedRecords.length} cows, {records.length} records
+            {activeTab === "records"
+              ? `${records.length} records`
+              : `${medicines.length} medicines`}
           </Text>
         </View>
-        {screen === "list" && (
+        {activeTab === "stock" && lowStockCount > 0 && (
+          <View
+            style={[
+              s.countBadge,
+              { backgroundColor: "#fff7ed", borderColor: "#fed7aa" },
+            ]}
+          >
+            <Ionicons name="warning-outline" size={11} color="#ea580c" />
+            <Text style={[s.countText, { color: "#ea580c" }]}>
+              {lowStockCount} alerts
+            </Text>
+          </View>
+        )}
+        {activeTab === "records" && (
           <>
             <TouchableOpacity
               onPress={() => setSortVisible(true)}
@@ -2121,6 +3010,619 @@ export default function MedicalScreen() {
           </>
         )}
       </View>
+
+      {/* ── Fixed Tab Bar ── */}
+      <View style={s.tabBar}>
+        <TouchableOpacity
+          style={[s.tab, activeTab === "records" && s.tabActive]}
+          onPress={() => setActiveTab("records")}
+          activeOpacity={0.8}
+        >
+          <Ionicons
+            name="heart-outline"
+            size={15}
+            color={activeTab === "records" ? "#16a34a" : "#9ca3af"}
+          />
+          <Text style={[s.tabText, activeTab === "records" && s.tabTextActive]}>
+            Medical Records
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            s.tab,
+            activeTab === "stock" && [
+              s.tabActive,
+              { borderBottomColor: "#0891b2" },
+            ],
+          ]}
+          onPress={() => setActiveTab("stock")}
+          activeOpacity={0.8}
+        >
+          <Ionicons
+            name="medkit-outline"
+            size={15}
+            color={activeTab === "stock" ? "#0891b2" : "#9ca3af"}
+          />
+          <Text
+            style={[
+              s.tabText,
+              activeTab === "stock" && [s.tabTextActive, { color: "#0891b2" }],
+            ]}
+          >
+            Medicine Stock
+          </Text>
+          {lowStockCount > 0 && (
+            <View style={s.tabBadge}>
+              <Text style={s.tabBadgeText}>{lowStockCount}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      </View>
+
+      {/* ── RECORDS TAB ── */}
+      {activeTab === "records" && (
+        <>
+          {recScreen === "home" ? (
+            // Home screen keeps stats inline (not a list)
+            <ScrollView
+              style={{ flex: 1 }}
+              contentContainerStyle={s.homeBody}
+              showsVerticalScrollIndicator={false}
+            >
+              {/* Stats scroll with home content */}
+              <View
+                style={[s.statsRow, { marginHorizontal: -16, marginTop: -20 }]}
+              >
+                {statsData.map((st, i, arr) => (
+                  <View
+                    key={i}
+                    style={[s.statItem, i < arr.length - 1 && s.statBorder]}
+                  >
+                    <Text style={[s.statValue, { color: st.color }]}>
+                      {st.value}
+                    </Text>
+                    <Text style={s.statLabel}>{st.label}</Text>
+                  </View>
+                ))}
+              </View>
+              <View style={{ height: 20 }} />
+              <View style={s.heroWrap}>
+                <Text style={s.homeHeading}>Medical Records</Text>
+                <Text style={s.homeSub}>
+                  Track health, vaccination & treatment for each cow
+                </Text>
+              </View>
+              <View style={s.btnGroup}>
+                <TouchableOpacity
+                  onPress={() => {
+                    setEditRecord(null);
+                    setMedFormVisible(true);
+                  }}
+                  style={s.bigBtn}
+                  activeOpacity={0.85}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.bigBtnTitle}>Add Medical Record</Text>
+                    <Text style={s.bigBtnSub}>
+                      Register a new cow health record
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setRecScreen("list")}
+                  style={s.bigBtn}
+                  activeOpacity={0.85}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.bigBtnTitle}>View All Records</Text>
+                    <Text style={s.bigBtnSub}>
+                      Browse {visibleGroupedRecords.length} cow medical records
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
+              <View style={s.summaryRow}>
+                {[
+                  {
+                    label: "Healthy",
+                    val: healthy,
+                    color: "#16a34a",
+                    bg: "#f0fdf4",
+                    border: "#bbf7d0",
+                    emoji: "✅",
+                    filterVal: "healthy" as const,
+                  },
+                  {
+                    label: "Unhealthy",
+                    val: unhealthy,
+                    color: "#dc2626",
+                    bg: "#fff1f2",
+                    border: "#fecdd3",
+                    emoji: "🤒",
+                    filterVal: "unhealthy" as const,
+                  },
+                  {
+                    label: "Scheduled",
+                    val: records.filter((r) => !!r.nextVaccinationDate).length,
+                    color: "#7c3aed",
+                    bg: "#faf5ff",
+                    border: "#e9d5ff",
+                    emoji: "💉",
+                    filterVal: null,
+                  },
+                ].map((sc, i) => (
+                  <TouchableOpacity
+                    key={i}
+                    style={[
+                      s.summaryCard,
+                      { backgroundColor: sc.bg, borderColor: sc.border },
+                    ]}
+                    onPress={() => {
+                      if (sc.filterVal) {
+                        setFilter(sc.filterVal);
+                        setRecScreen("list");
+                      }
+                    }}
+                    activeOpacity={sc.filterVal ? 0.8 : 1}
+                  >
+                    <Text style={s.summaryEmoji}>{sc.emoji}</Text>
+                    <Text style={[s.summaryCount, { color: sc.color }]}>
+                      {sc.val}
+                    </Text>
+                    <Text style={[s.summaryLabel, { color: sc.color }]}>
+                      {sc.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              {calfRecords.length > 0 && (
+                <View style={{ marginTop: 22 }}>
+                  <View style={s.calfSectionHeader}>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 8,
+                      }}
+                    >
+                      <Text style={{ fontSize: 18 }}>🐄</Text>
+                      <Text style={s.calfSectionTitle}>
+                        Calf Vaccine Schedule
+                      </Text>
+                    </View>
+                    <View style={s.calfCountBadge}>
+                      <Text style={s.calfCountText}>{calfRecords.length}</Text>
+                    </View>
+                  </View>
+                  <Text style={s.calfSectionSub}>
+                    Auto-calculated from calf birth date
+                  </Text>
+                  {calfRecords.map((r) => (
+                    <CalfVaccineCard key={r.id} record={r} />
+                  ))}
+                </View>
+              )}
+            </ScrollView>
+          ) : (
+            // List screen: stats + search + filters scroll away with cards
+            <View style={{ flex: 1 }}>
+              {recLoading && records.length === 0 ? (
+                <View style={s.loadingWrap}>
+                  <ActivityIndicator size="large" color="#16a34a" />
+                  <Text style={s.loadingText}>Loading records...</Text>
+                </View>
+              ) : recError ? (
+                <View style={s.errorWrap}>
+                  <Text style={{ fontSize: 36 }}>⚠️</Text>
+                  <Text style={s.errorText}>{recError}</Text>
+                  <TouchableOpacity
+                    onPress={() => fetchRecords()}
+                    style={s.retryBtn}
+                  >
+                    <Ionicons name="refresh" size={14} color="#fff" />
+                    <Text style={s.retryText}>Retry</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <FlatList
+                  data={visibleGroupedRecords}
+                  keyExtractor={(item) => item.cowSrNo}
+                  ListHeaderComponent={<RecordsListHeader />}
+                  contentContainerStyle={{
+                    paddingHorizontal: 14,
+                    paddingTop: 0,
+                    paddingBottom: 100,
+                  }}
+                  showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                  keyboardDismissMode="on-drag"
+                  refreshControl={
+                    <RefreshControl
+                      refreshing={recRefreshing}
+                      onRefresh={async () => {
+                        setRecRefreshing(true);
+                        await fetchRecords(
+                          recSearch || undefined,
+                          filterStatus === "all" ? undefined : filterStatus,
+                        );
+                        setRecRefreshing(false);
+                      }}
+                      tintColor="#16a34a"
+                    />
+                  }
+                  renderItem={({ item, index }) => (
+                    <MedicalCard
+                      group={item}
+                      index={index}
+                      onEdit={(r) => {
+                        setEditRecord(r);
+                        setMedFormVisible(true);
+                      }}
+                      onDelete={handleDeleteRecord}
+                    />
+                  )}
+                  ListEmptyComponent={
+                    <View style={s.empty}>
+                      <Text style={{ fontSize: 44 }}>🏥</Text>
+                      <Text style={s.emptyText}>No cow medical records found</Text>
+                      <TouchableOpacity
+                        onPress={() => {
+                          setEditRecord(null);
+                          setMedFormVisible(true);
+                        }}
+                        style={s.emptyBtn}
+                      >
+                        <Ionicons name="add" size={14} color="#fff" />
+                        <Text style={s.emptyBtnText}>Add First Record</Text>
+                      </TouchableOpacity>
+                    </View>
+                  }
+                />
+              )}
+              <TouchableOpacity
+                onPress={() => {
+                  setEditRecord(null);
+                  setMedFormVisible(true);
+                }}
+                style={[s.fab, { backgroundColor: "#16a34a" }]}
+              >
+                <Ionicons name="add" size={24} color="#fff" />
+              </TouchableOpacity>
+            </View>
+          )}
+        </>
+      )}
+
+      {/* ── STOCK TAB ── */}
+      {activeTab === "stock" && (
+        <>
+          {stockScreen === "home" ? (
+            <ScrollView
+              style={{ flex: 1 }}
+              contentContainerStyle={s.homeBody}
+              showsVerticalScrollIndicator={false}
+            >
+              {/* Stats scroll with home content */}
+              <View
+                style={[s.statsRow, { marginHorizontal: -16, marginTop: -20 }]}
+              >
+                {statsData.map((st, i, arr) => (
+                  <View
+                    key={i}
+                    style={[s.statItem, i < arr.length - 1 && s.statBorder]}
+                  >
+                    <Text style={[s.statValue, { color: st.color }]}>
+                      {st.value}
+                    </Text>
+                    <Text style={s.statLabel}>{st.label}</Text>
+                  </View>
+                ))}
+              </View>
+              <View style={{ height: 20 }} />
+              <View style={s.heroWrap}>
+                <Text style={s.homeHeading}>Medicine Stock</Text>
+                <Text style={s.homeSub}>
+                  Track medicines, dosages & expiry dates
+                </Text>
+              </View>
+              <View style={s.btnGroup}>
+                <TouchableOpacity
+                  onPress={() => {
+                    setEditMedicine(null);
+                    setStockFormVisible(true);
+                  }}
+                  style={s.bigBtn}
+                  activeOpacity={0.85}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.bigBtnTitle}>Add Medicine</Text>
+                    <Text style={s.bigBtnSub}>
+                      Register a new medicine to stock
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setStockScreen("list")}
+                  style={s.bigBtn}
+                  activeOpacity={0.85}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.bigBtnTitle}>View All Medicines</Text>
+                    <Text style={s.bigBtnSub}>
+                      Browse {medicines.length} medicines
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
+              <View style={s.summaryRow}>
+                {[
+                  {
+                    label: "In Stock",
+                    val: medicines.filter((m) => stockStatus(m) === "ok")
+                      .length,
+                    color: "#16a34a",
+                    bg: "#f0fdf4",
+                    border: "#bbf7d0",
+                    emoji: "✅",
+                  },
+                  {
+                    label: "Low/Out",
+                    val: medicines.filter((m) => stockStatus(m) !== "ok")
+                      .length,
+                    color: "#ea580c",
+                    bg: "#fff7ed",
+                    border: "#fed7aa",
+                    emoji: "⚠️",
+                  },
+                  {
+                    label: "Expiring",
+                    val: medSummary?.expiring_soon_count ?? 0,
+                    color: "#d97706",
+                    bg: "#fffbeb",
+                    border: "#fde68a",
+                    emoji: "📅",
+                  },
+                ].map((sc, i) => (
+                  <View
+                    key={i}
+                    style={[
+                      s.summaryCard,
+                      { backgroundColor: sc.bg, borderColor: sc.border },
+                    ]}
+                  >
+                    <Text style={s.summaryEmoji}>{sc.emoji}</Text>
+                    <Text style={[s.summaryCount, { color: sc.color }]}>
+                      {sc.val}
+                    </Text>
+                    <Text style={[s.summaryLabel, { color: sc.color }]}>
+                      {sc.label}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+              {medSummary && medSummary.total_stock_value > 0 && (
+                <View style={s.valueBanner}>
+                  <Ionicons name="cash-outline" size={18} color="#16a34a" />
+                  <Text style={s.valueBannerText}>Total Stock Value</Text>
+                  <Text style={s.valueBannerAmt}>
+                    ₹{" "}
+                    {medSummary.total_stock_value.toLocaleString("en-IN", {
+                      minimumFractionDigits: 2,
+                    })}
+                  </Text>
+                </View>
+              )}
+              {medicines.filter((m) => stockStatus(m) !== "ok").length > 0 && (
+                <View style={{ marginTop: 18 }}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      marginBottom: 8,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 14,
+                        fontWeight: "800",
+                        color: "#0f172a",
+                      }}
+                    >
+                      ⚠️ Needs Attention
+                    </Text>
+                    <TouchableOpacity onPress={() => setStockScreen("list")}>
+                      <Text
+                        style={{
+                          fontSize: 12,
+                          color: "#0891b2",
+                          fontWeight: "700",
+                        }}
+                      >
+                        View All
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                  {medicines
+                    .filter((m) => stockStatus(m) !== "ok")
+                    .slice(0, 3)
+                    .map((m) => {
+                      const catMeta = getCatMeta(m.category);
+                      const sStock = stockStatus(m);
+                      const sc = sStock === "out" ? "#dc2626" : "#ea580c";
+                      return (
+                        <View
+                          key={m.id}
+                          style={[s.alertRow, { borderLeftColor: sc }]}
+                        >
+                          <Ionicons
+                            name={catMeta.icon as any}
+                            size={16}
+                            color={catMeta.color}
+                          />
+                          <View style={{ flex: 1, marginLeft: 10 }}>
+                            <Text style={s.alertName}>{m.name}</Text>
+                            <Text style={[s.alertSub, { color: sc }]}>
+                              {sStock === "out"
+                                ? "Out of stock"
+                                : `Low: ${m.current_stock} ${m.unit} left`}
+                            </Text>
+                          </View>
+                          <TouchableOpacity
+                            style={[
+                              s.alertActionBtn,
+                              {
+                                borderColor: "#bbf7d0",
+                                backgroundColor: "#f0fdf4",
+                              },
+                            ]}
+                            onPress={() => openStockAction(m, "restock")}
+                            activeOpacity={0.8}
+                          >
+                            <Text
+                              style={{
+                                fontSize: 11,
+                                fontWeight: "700",
+                                color: "#16a34a",
+                              }}
+                            >
+                              Restock
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      );
+                    })}
+                </View>
+              )}
+            </ScrollView>
+          ) : (
+            // List screen: stats + search + category filter scroll away
+            <View style={{ flex: 1 }}>
+              {stockLoading && medicines.length === 0 ? (
+                <View style={s.loadingWrap}>
+                  <ActivityIndicator size="large" color="#0891b2" />
+                  <Text style={s.loadingText}>Loading medicines...</Text>
+                </View>
+              ) : stockError ? (
+                <View style={s.errorWrap}>
+                  <Text style={{ fontSize: 36 }}>⚠️</Text>
+                  <Text style={s.errorText}>{stockError}</Text>
+                  <TouchableOpacity
+                    onPress={() => fetchMedicines()}
+                    style={[s.retryBtn, { backgroundColor: "#0891b2" }]}
+                  >
+                    <Ionicons name="refresh" size={14} color="#fff" />
+                    <Text style={s.retryText}>Retry</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <FlatList
+                  data={medicines}
+                  keyExtractor={(item) => item.id}
+                  ListHeaderComponent={<StockListHeader />}
+                  contentContainerStyle={{
+                    paddingHorizontal: 14,
+                    paddingTop: 0,
+                    paddingBottom: 100,
+                  }}
+                  showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                  keyboardDismissMode="on-drag"
+                  refreshControl={
+                    <RefreshControl
+                      refreshing={stockRefreshing}
+                      onRefresh={async () => {
+                        setStockRefreshing(true);
+                        await fetchMedicines(
+                          stockSearch || undefined,
+                          filterCat,
+                        );
+                        setStockRefreshing(false);
+                      }}
+                      tintColor="#0891b2"
+                    />
+                  }
+                  renderItem={({ item, index }) => (
+                    <MedicineCard
+                      item={item}
+                      index={index}
+                      onEdit={(m) => {
+                        setEditMedicine(m);
+                        setStockFormVisible(true);
+                      }}
+                      onDelete={handleDeleteMedicine}
+                      onUse={(m) => openStockAction(m, "use")}
+                      onRestock={(m) => openStockAction(m, "restock")}
+                      onAdjust={(m) => openStockAction(m, "adjust")}
+                    />
+                  )}
+                  ListEmptyComponent={
+                    <View style={s.empty}>
+                      <Text style={{ fontSize: 44 }}>💊</Text>
+                      <Text style={s.emptyText}>No medicines found</Text>
+                      <TouchableOpacity
+                        onPress={() => {
+                          setEditMedicine(null);
+                          setStockFormVisible(true);
+                        }}
+                        style={[s.emptyBtn, { backgroundColor: "#0891b2" }]}
+                      >
+                        <Ionicons name="add" size={14} color="#fff" />
+                        <Text style={s.emptyBtnText}>Add First Medicine</Text>
+                      </TouchableOpacity>
+                    </View>
+                  }
+                />
+              )}
+              <TouchableOpacity
+                onPress={() => {
+                  setEditMedicine(null);
+                  setStockFormVisible(true);
+                }}
+                style={[s.fab, { backgroundColor: "#0891b2" }]}
+              >
+                <Ionicons name="add" size={24} color="#fff" />
+              </TouchableOpacity>
+            </View>
+          )}
+        </>
+      )}
+
+      {/* ── Modals ── */}
+      <MedicalFormModal
+        visible={medFormVisible}
+        onClose={() => {
+          setMedFormVisible(false);
+          setEditRecord(null);
+        }}
+        editRecord={editRecord}
+        onSave={(r) => {
+          if (editRecord) {
+            setRecords((p) => p.map((x) => (x.id === r.id ? r : x)));
+          } else {
+            setRecords((p) => [r, ...p]);
+            setRecScreen("list");
+          }
+        }}
+      />
+      <MedicineFormModal
+        visible={stockFormVisible}
+        onClose={() => {
+          setStockFormVisible(false);
+          setEditMedicine(null);
+        }}
+        editMedicine={editMedicine}
+        onSave={handleMedicineSave}
+      />
+      <QuickActionModal
+        visible={actionVisible}
+        onClose={() => setActionVisible(false)}
+        medicine={actionMed}
+        action={actionType}
+        onDone={handleActionDone}
+      />
+
+      {/* ── Sort Modal ── */}
       <Modal
         visible={sortVisible}
         transparent
@@ -2128,375 +3630,67 @@ export default function MedicalScreen() {
         onRequestClose={() => setSortVisible(false)}
       >
         <TouchableOpacity
-          activeOpacity={1}
           style={s.sortOverlay}
+          activeOpacity={1}
           onPress={() => setSortVisible(false)}
         >
-          <View style={s.sortSheet}>
-            <Text style={s.sortSheetTitle}>Sort Records</Text>
-            <Text style={s.sortSheetSub}>Choose date filter and ordering</Text>
-            <Text style={s.sortSectionTitle}>Date Filter</Text>
-            {(["all_time", "last_week", "last_month", "last_year"] as const).map(
-              (option) => (
-                <TouchableOpacity
-                  key={option}
-                  style={[s.sortOption, dateRange === option && s.sortOptionActive]}
-                  onPress={() => setDateRange(option)}
-                >
-                  <Ionicons
-                    name={dateRangeMeta[option].icon}
-                    size={15}
-                    color={dateRange === option ? "#16a34a" : "#9ca3af"}
-                  />
-                  <Text
-                    style={[
-                      s.sortOptionText,
-                      dateRange === option && s.sortOptionTextActive,
-                    ]}
-                  >
-                    {dateRangeMeta[option].label}
-                  </Text>
-                </TouchableOpacity>
-              ),
-            )}
-            <Text style={s.sortSectionTitle}>Order By</Text>
-            {(["newest", "oldest", "name_asc", "name_desc"] as const).map(
-              (option) => (
-                <TouchableOpacity
-                  key={option}
-                  style={[s.sortOption, sortBy === option && s.sortOptionActive]}
-                  onPress={() => {
-                    setSortBy(option);
-                    setSortVisible(false);
-                  }}
-                >
-                  <Ionicons
-                    name={sortMeta[option].icon}
-                    size={15}
-                    color={sortBy === option ? "#16a34a" : "#9ca3af"}
-                  />
-                  <Text
-                    style={[
-                      s.sortOptionText,
-                      sortBy === option && s.sortOptionTextActive,
-                    ]}
-                  >
-                    {sortMeta[option].label}
-                  </Text>
-                </TouchableOpacity>
-              ),
-            )}
-          </View>
-        </TouchableOpacity>
-      </Modal>
-
-      {/* ── Stats bar ── */}
-      <View style={s.statsRow}>
-        {[
-          { label: "Total", value: records.length, color: "#0f172a" },
-          { label: "Healthy", value: healthy, color: "#16a34a" },
-          { label: "Unhealthy", value: unhealthy, color: "#dc2626" },
-          {
-            label: "Vaccinated",
-            value: records.filter((r) => !!r.vaccinationName).length,
-            color: "#7c3aed",
-          },
-        ].map((st, i, arr) => (
-          <View
-            key={i}
-            style={[s.statItem, i < arr.length - 1 && s.statBorder]}
+          <TouchableOpacity
+            activeOpacity={1}
+            style={s.sortSheet}
+            onPress={() => {}}
           >
-            <Text style={[s.statValue, { color: st.color }]}>{st.value}</Text>
-            <Text style={s.statLabel}>{st.label}</Text>
-          </View>
-        ))}
-      </View>
-
-      {/* ── Home screen ── */}
-      {screen === "home" ? (
-        <ScrollView
-          style={{ flex: 1 }}
-          contentContainerStyle={s.homeBody}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Hero */}
-          <View style={s.heroWrap}>
-            <Ionicons name="medkit" size={30} color="#fa3b4b" />
-            <Text style={s.homeHeading}>Medical Records</Text>
-            <Text style={s.homeSub}>
-              Track health, vaccination & treatment for each cow
-            </Text>
-          </View>
-
-          {/* Action buttons */}
-          <TouchableOpacity onPress={openAdd} style={s.bigBtn} activeOpacity={0.85}>
-            <View style={[s.bigBtnIcon, { backgroundColor: "#f0fdf4" }]}>
-              <Ionicons name="add-circle" size={28} color="#16a34a" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={s.bigBtnTitle}>Add Medical Record</Text>
-              <Text style={s.bigBtnSub}>Register a new cow health record</Text>
-            </View>
-          </TouchableOpacity>
-
-          <TouchableOpacity onPress={() => setScreen("list")} style={s.bigBtn} activeOpacity={0.85}>
-            <View style={[s.bigBtnIcon, { backgroundColor: "#eff6ff" }]}>
-              <Ionicons name="list-circle" size={28} color="#2563eb" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={s.bigBtnTitle}>View All Records</Text>
-              <Text style={s.bigBtnSub}>
-                Browse {visibleGroupedRecords.length} cow medical records
-              </Text>
-            </View>
-          </TouchableOpacity>
-
-          {/* Summary cards */}
-          <View style={s.summaryRow}>
-            <TouchableOpacity
-              style={[
-                s.summaryCard,
-                { backgroundColor: "#f0fdf4", borderColor: "#bbf7d0" },
-              ]}
-              onPress={() => {
-                setFilter("healthy");
-                setScreen("list");
-              }}
-              activeOpacity={0.8}
-            >
-              <Text style={s.summaryEmoji}></Text>
-              <Text style={[s.summaryCount, { color: "#16a34a" }]}>
-                {healthy}
-              </Text>
-              <Text style={[s.summaryLabel, { color: "#16a34a" }]}>
-                Healthy
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                s.summaryCard,
-                { backgroundColor: "#fff1f2", borderColor: "#fecdd3" },
-              ]}
-              onPress={() => {
-                setFilter("unhealthy");
-                setScreen("list");
-              }}
-              activeOpacity={0.8}
-            >
-              <Text style={s.summaryEmoji}></Text>
-              <Text style={[s.summaryCount, { color: "#dc2626" }]}>
-                {unhealthy}
-              </Text>
-              <Text style={[s.summaryLabel, { color: "#dc2626" }]}>
-                Unhealthy
-              </Text>
-            </TouchableOpacity>
-            <View
-              style={[
-                s.summaryCard,
-                { backgroundColor: "#faf5ff", borderColor: "#e9d5ff" },
-              ]}
-            >
-              <Text style={s.summaryEmoji}></Text>
-              <Text style={[s.summaryCount, { color: "#7c3aed" }]}>
-                {records.filter((r) => !!r.nextVaccinationDate).length}
-              </Text>
-              <Text style={[s.summaryLabel, { color: "#7c3aed" }]}>
-                Scheduled
-              </Text>
-            </View>
-          </View>
-
-          {/* ── Calf Vaccine Schedule Section ── */}
-          {calfRecords.length > 0 && (
-            <View style={{ marginTop: 22 }}>
-              {/* Section header */}
-              <View style={s.calfSectionHeader}>
-                <View
-                  style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
-                >
-                  <Text style={{ fontSize: 18 }}></Text>
-                  <Text style={s.calfSectionTitle}>Calf Vaccine Schedule</Text>
-                </View>
-                <View style={s.calfCountBadge}>
-                  <Text style={s.calfCountText}>{calfRecords.length}</Text>
-                </View>
-              </View>
-              <Text style={s.calfSectionSub}>
-                Auto-calculated from calf birth date
-              </Text>
-
-              {calfRecords.map((r) => (
-                <CalfVaccineCard key={r.id} record={r} />
-              ))}
-            </View>
-          )}
-        </ScrollView>
-      ) : (
-        /* ── List screen ── */
-        <View style={{ flex: 1 }}>
-          <View style={s.searchWrap}>
-            <Ionicons name="search-outline" size={15} color="#9ca3af" />
-            <TextInput
-              style={s.searchInput}
-              placeholder="Search cow name or Sr. No..."
-              placeholderTextColor="#d1d5db"
-              value={search}
-              onChangeText={setSearch}
-            />
-            {search.length > 0 && (
-              <TouchableOpacity onPress={() => setSearch("")}>
-                <Ionicons name="close-circle" size={15} color="#9ca3af" />
-              </TouchableOpacity>
-            )}
-          </View>
-          <View style={s.filterRow}>
-            {(["all", "healthy", "unhealthy"] as const).map((fil) => (
+            <Text style={s.sortSheetTitle}>Sort & Filter</Text>
+            <Text style={s.sortSheetSub}>Choose how to sort records</Text>
+            <Text style={s.sortSectionTitle}>Sort By</Text>
+            {(Object.keys(sortMeta) as SortOption[]).map((opt) => (
               <TouchableOpacity
-                key={fil}
-                style={[s.filterTab, filterStatus === fil && s.filterTabActive]}
-                onPress={() => setFilter(fil)}
+                key={opt}
+                style={[s.sortOption, sortBy === opt && s.sortOptionActive]}
+                onPress={() => { setSortBy(opt); setSortVisible(false); }}
                 activeOpacity={0.8}
               >
-                <Text
-                  style={[
-                    s.filterTabText,
-                    filterStatus === fil && s.filterTabTextActive,
-                  ]}
-                >
-                  {fil === "all"
-                    ? "All"
-                    : fil === "healthy"
-                      ? " Healthy"
-                      : " Unhealthy"}
+                <Ionicons
+                  name={sortMeta[opt].icon}
+                  size={15}
+                  color={sortBy === opt ? "#16a34a" : "#64748b"}
+                />
+                <Text style={[s.sortOptionText, sortBy === opt && s.sortOptionTextActive]}>
+                  {sortMeta[opt].label}
                 </Text>
+                {sortBy === opt && (
+                  <Ionicons name="checkmark" size={15} color="#16a34a" style={{ marginLeft: "auto" as any }} />
+                )}
               </TouchableOpacity>
             ))}
-          </View>
-
-          {loading && records.length === 0 ? (
-            <View style={s.loadingWrap}>
-              <ActivityIndicator size="large" color="#16a34a" />
-              <Text style={s.loadingText}>Loading records...</Text>
-            </View>
-          ) : error ? (
-            <View style={s.errorWrap}>
-              <Text style={{ fontSize: 36 }}>⚠️</Text>
-              <Text style={s.errorText}>{error}</Text>
+            <Text style={s.sortSectionTitle}>Date Range</Text>
+            {(Object.keys(dateRangeMeta) as DateRangeOption[]).map((opt) => (
               <TouchableOpacity
-                onPress={() => fetchRecords()}
-                style={s.retryBtn}
+                key={opt}
+                style={[s.sortOption, dateRange === opt && s.sortOptionActive]}
+                onPress={() => { setDateRange(opt); setSortVisible(false); }}
+                activeOpacity={0.8}
               >
-                <Ionicons name="refresh" size={14} color="#fff" />
-                <Text style={s.retryText}>Retry</Text>
+                <Ionicons
+                  name={dateRangeMeta[opt].icon}
+                  size={15}
+                  color={dateRange === opt ? "#16a34a" : "#64748b"}
+                />
+                <Text style={[s.sortOptionText, dateRange === opt && s.sortOptionTextActive]}>
+                  {dateRangeMeta[opt].label}
+                </Text>
+                {dateRange === opt && (
+                  <Ionicons name="checkmark" size={15} color="#16a34a" style={{ marginLeft: "auto" as any }} />
+                )}
               </TouchableOpacity>
-            </View>
-          ) : (
-            <FlatList
-              data={visibleGroupedRecords}
-              keyExtractor={(item) => item.cowSrNo}
-              contentContainerStyle={{
-                paddingHorizontal: 14,
-                paddingTop: 6,
-                paddingBottom: 100,
-              }}
-              showsVerticalScrollIndicator={false}
-              refreshControl={
-                <RefreshControl
-                  refreshing={refreshing}
-                  onRefresh={onRefresh}
-                  tintColor="#16a34a"
-                />
-              }
-              renderItem={({ item, index }) => (
-                <MedicalCard
-                  group={item}
-                  index={index}
-                  onEdit={openEdit}
-                  onDelete={handleDelete}
-                />
-              )}
-              ListEmptyComponent={
-                <View style={s.empty}>
-                  <Text style={{ fontSize: 44 }}>🏥</Text>
-                  <Text style={s.emptyText}>No cow medical records found</Text>
-                  <TouchableOpacity onPress={openAdd} style={s.emptyBtn}>
-                    <Ionicons name="add" size={14} color="#fff" />
-                    <Text style={s.emptyBtnText}>Add First Record</Text>
-                  </TouchableOpacity>
-                </View>
-              }
-            />
-          )}
-        </View>
-      )
-      }
-
-      {
-        screen === "list" && (
-          <TouchableOpacity onPress={openAdd} style={s.fab}>
-            <Ionicons name="add" size={24} color="#fff" />
+            ))}
           </TouchableOpacity>
-        )
-      }
-
-      <MedicalFormModal
-        visible={modalVisible}
-        onClose={() => {
-          setModal(false);
-          setEditRecord(null);
-        }}
-        editRecord={editRecord}
-        onSave={(r) => {
-          if (editRecord) {
-            setRecords((prev) => prev.map((x) => (x.id === r.id ? r : x)));
-          } else {
-            setRecords((prev) => [r, ...prev]);
-            setScreen("list");
-          }
-        }}
-      />
-    </View >
+        </TouchableOpacity>
+      </Modal>
+    </View>
   );
 }
 
 // STYLES
-const vp = StyleSheet.create({
-  wrap: { marginBottom: 12 },
-  chipRow: { flexDirection: "row", gap: 8, marginBottom: 8 },
-  chip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-    backgroundColor: "#FFF8F0",
-    borderWidth: 1.5,
-    borderColor: "#f1bb9c",
-  },
-  chipLabel: { fontSize: 13, fontWeight: "800", color: "#374151" },
-  descHint: {
-    fontSize: 11,
-    color: "#7c3aed",
-    fontWeight: "600",
-    marginBottom: 6,
-    paddingLeft: 2,
-  },
-  inputRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#f8fafc",
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: "#e2e8f0",
-    paddingHorizontal: 12,
-    paddingVertical: 11,
-  },
-  inputFocused: { borderColor: "#7c3aed", backgroundColor: "#fff" },
-  input: { flex: 1, color: "#0f172a", fontSize: 14, fontWeight: "500" },
-});
-
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#FFF8F0" },
   header: {
@@ -2547,9 +3741,38 @@ const s = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderWidth: 1,
-    borderColor: "#bbd0f7",
+    borderColor: "#bbf7d0",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
   },
   countText: { fontSize: 12, fontWeight: "700", color: "#16a34a" },
+  tabBar: {
+    flexDirection: "row",
+    backgroundColor: "#fff",
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f5f9",
+  },
+  tab: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 12,
+    borderBottomWidth: 2.5,
+    borderBottomColor: "transparent",
+  },
+  tabActive: { borderBottomColor: "#16a34a" },
+  tabText: { fontSize: 13, fontWeight: "600", color: "#9ca3af" },
+  tabTextActive: { color: "#16a34a", fontWeight: "800" },
+  tabBadge: {
+    backgroundColor: "#ea580c",
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  tabBadgeText: { fontSize: 10, fontWeight: "800", color: "#fff" },
   sortOverlay: {
     flex: 1,
     backgroundColor: "rgba(17,24,39,0.28)",
@@ -2611,7 +3834,6 @@ const s = StyleSheet.create({
   },
   homeBody: { paddingHorizontal: 16, paddingTop: 20, paddingBottom: 50 },
   heroWrap: { alignItems: "center", marginBottom: 24 },
-  heroEmoji: { fontSize: 52, marginBottom: 10 },
   homeHeading: {
     fontSize: 22,
     fontWeight: "800",
@@ -2644,13 +3866,6 @@ const s = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2,
   },
-  bigBtnIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-  },
   bigBtnTitle: {
     fontSize: 15,
     fontWeight: "800",
@@ -2659,14 +3874,7 @@ const s = StyleSheet.create({
     marginBottom: 2,
   },
   bigBtnSub: { fontSize: 12, color: "#94a3b8", fontWeight: "500" },
-  bigBtnArrow: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  summaryRow: { flexDirection: "row", gap: 10, marginBottom: 4 },
+  summaryRow: { flexDirection: "row", gap: 10, marginBottom: 16 },
   summaryCard: {
     flex: 1,
     borderRadius: 14,
@@ -2675,10 +3883,46 @@ const s = StyleSheet.create({
     alignItems: "center",
     gap: 4,
   },
-  summaryEmoji: { fontSize: 22 },
+  summaryEmoji: { fontSize: 20 },
   summaryCount: { fontSize: 20, fontWeight: "800", letterSpacing: -0.5 },
   summaryLabel: { fontSize: 10, fontWeight: "700", textTransform: "uppercase" },
-  // Calf section
+  valueBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "#f0fdf4",
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1.5,
+    borderColor: "#bbf7d0",
+    marginBottom: 4,
+  },
+  valueBannerText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#15803d",
+  },
+  valueBannerAmt: { fontSize: 16, fontWeight: "800", color: "#16a34a" },
+  alertRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: "#f1f5f9",
+    borderLeftWidth: 3,
+  },
+  alertName: { fontSize: 13, fontWeight: "700", color: "#0f172a" },
+  alertSub: { fontSize: 11, fontWeight: "600", marginTop: 1 },
+  alertActionBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1.5,
+  },
   calfSectionHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -2706,7 +3950,6 @@ const s = StyleSheet.create({
     borderColor: "#fed7aa",
   },
   calfCountText: { fontSize: 12, fontWeight: "700", color: "#ea580c" },
-  // List screen
   searchWrap: {
     flexDirection: "row",
     alignItems: "center",
@@ -2746,10 +3989,8 @@ const s = StyleSheet.create({
     width: 54,
     height: 54,
     borderRadius: 27,
-    backgroundColor: "#16a34a",
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#16a34a",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
     shadowRadius: 10,
@@ -2761,7 +4002,6 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "#16a34a",
     borderRadius: 10,
     paddingHorizontal: 16,
     paddingVertical: 10,
@@ -2792,10 +4032,10 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "#16a34a",
     borderRadius: 10,
     paddingHorizontal: 16,
     paddingVertical: 10,
+    backgroundColor: "#16a34a",
   },
   retryText: { fontSize: 13, fontWeight: "700", color: "#fff" },
 });
@@ -2869,7 +4109,6 @@ const c = StyleSheet.create({
     borderWidth: 1,
   },
   chipText: { fontSize: 10, fontWeight: "700" },
-  chipSubText: { fontSize: 9, fontWeight: "500", opacity: 0.8 },
   historyWrap: { marginTop: 10, gap: 10 },
   historyNav: {
     flexDirection: "row",
@@ -2980,6 +4219,86 @@ const c = StyleSheet.create({
   actionText: { fontSize: 13, fontWeight: "700" },
 });
 
+const mc = StyleSheet.create({
+  card: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: "#f1f5f9",
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  accent: { height: 3, width: "100%" },
+  topRow: { flexDirection: "row", alignItems: "center" },
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.5,
+  },
+  name: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#0f172a",
+    letterSpacing: -0.2,
+  },
+  pill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  pillText: { fontSize: 10, fontWeight: "700" },
+  dot: { width: 6, height: 6, borderRadius: 3 },
+  alertChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 20,
+    borderWidth: 1,
+    backgroundColor: "#f8fafc",
+    borderColor: "#e2e8f0",
+  },
+  alertText: { fontSize: 10, fontWeight: "700", color: "#64748b" },
+  divider: { height: 1, backgroundColor: "#f1f5f9", marginVertical: 12 },
+  notesBox: {
+    flexDirection: "row",
+    gap: 8,
+    backgroundColor: "#f8fafc",
+    borderRadius: 10,
+    padding: 10,
+    marginTop: 4,
+    marginBottom: 6,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  notesText: { flex: 1, fontSize: 12, color: "#475569", fontWeight: "500" },
+  actionRow: { flexDirection: "row", gap: 8, marginTop: 14 },
+  actionBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    paddingVertical: 9,
+    borderRadius: 10,
+    borderWidth: 1.5,
+  },
+  actionText: { fontSize: 12, fontWeight: "700" },
+});
+
 const cv = StyleSheet.create({
   card: {
     backgroundColor: "#fff",
@@ -2988,11 +4307,6 @@ const cv = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#fed7aa",
     overflow: "hidden",
-    shadowColor: "#ea580c",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 2,
   },
   accentBar: { height: 3, backgroundColor: "#ea580c", width: "100%" },
   header: { flexDirection: "row", alignItems: "center", padding: 14 },
@@ -3063,7 +4377,7 @@ const cv = StyleSheet.create({
   dateText: { fontSize: 12, fontWeight: "700" },
 });
 
-const d = StyleSheet.create({
+const dr = StyleSheet.create({
   row: {
     flexDirection: "row",
     alignItems: "center",
@@ -3108,7 +4422,6 @@ const f = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 11,
   },
-  focused: { backgroundColor: "#fff" },
   input: { flex: 1, color: "#0f172a", fontSize: 14, fontWeight: "500" },
   secRow: {
     flexDirection: "row",
@@ -3134,7 +4447,7 @@ const f = StyleSheet.create({
   autoChipText: { fontSize: 11, fontWeight: "600" },
 });
 
-const m = StyleSheet.create({
+const mo = StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.45)",
@@ -3196,6 +4509,41 @@ const m = StyleSheet.create({
   },
 });
 
+const qa = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "center",
+    paddingHorizontal: 20,
+  },
+  sheet: { backgroundColor: "#fff", borderRadius: 20, padding: 18 },
+  headerBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 14,
+  },
+  title: { fontSize: 16, fontWeight: "800" },
+  subTitle: { fontSize: 12, color: "#64748b", marginTop: 1 },
+  closeBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#f1f5f9",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  stockRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 12,
+  },
+  stockLabel: { fontSize: 13, color: "#64748b", flex: 1 },
+  stockVal: { fontSize: 14, fontWeight: "800" },
+});
+
 const st = StyleSheet.create({
   wrap: { flexDirection: "row", gap: 10, marginBottom: 12 },
   btn: {
@@ -3214,6 +4562,42 @@ const st = StyleSheet.create({
   activeUnhealthy: { backgroundColor: "#dc2626", borderColor: "#dc2626" },
   btnText: { fontSize: 14, fontWeight: "700", color: "#9ca3af" },
   activeText: { color: "#fff" },
+});
+
+const vp = StyleSheet.create({
+  wrap: { marginBottom: 12 },
+  chipRow: { flexDirection: "row", gap: 8, marginBottom: 8 },
+  chip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: "#f8fafc",
+    borderWidth: 1.5,
+    borderColor: "#e2e8f0",
+  },
+  chipLabel: { fontSize: 13, fontWeight: "800", color: "#374151" },
+  descHint: {
+    fontSize: 11,
+    color: "#7c3aed",
+    fontWeight: "600",
+    marginBottom: 6,
+    paddingLeft: 2,
+  },
+  inputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f8fafc",
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: "#e2e8f0",
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+  },
+  inputFocused: { borderColor: "#7c3aed", backgroundColor: "#fff" },
+  input: { flex: 1, color: "#0f172a", fontSize: 14, fontWeight: "500" },
 });
 
 const cs = StyleSheet.create({
@@ -3379,107 +4763,32 @@ const cs = StyleSheet.create({
   },
 });
 
-const dp = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.45)",
-    justifyContent: "center",
-    paddingHorizontal: 20,
-  },
-  sheet: {
-    backgroundColor: "#fff",
-    borderRadius: 20,
-    padding: 18,
-    shadowColor: "#000",
-    shadowOpacity: 0.15,
-    shadowRadius: 20,
-    elevation: 10,
-  },
-  header: {
+const mcp = StyleSheet.create({
+  chip: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    marginBottom: 14,
-  },
-  headerTitle: { flex: 1, fontSize: 15, fontWeight: "800", letterSpacing: -0.2 },
-  closeBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: "#f1f5f9",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  monthNav: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 12,
-  },
-  navBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    backgroundColor: "#f8fafc",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-  },
-  monthLabel: { fontSize: 15, fontWeight: "700", color: "#0f172a" },
-  dayHeaderRow: { flexDirection: "row", marginBottom: 4 },
-  dayHeader: {
-    flex: 1,
-    textAlign: "center",
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#94a3b8",
-    paddingVertical: 4,
-  },
-  grid: { flexDirection: "row", flexWrap: "wrap" },
-  cell: {
-    width: `${100 / 7}%` as any,
-    aspectRatio: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 8,
-  },
-  cellSelected: { borderRadius: 10 },
-  cellToday: {
-    borderWidth: 1.5,
-    borderColor: "#e2e8f0",
-    borderRadius: 10,
-  },
-  cellText: { fontSize: 13, color: "#374151", fontWeight: "500" },
-  cellTextSelected: { color: "#fff", fontWeight: "800" },
-  customRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginTop: 14,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: "#f1f5f9",
-  },
-  customLabel: { fontSize: 12, color: "#94a3b8", fontWeight: "600" },
-  customInput: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#f8fafc",
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: "#e2e8f0",
-    paddingHorizontal: 10,
+    gap: 5,
+    paddingHorizontal: 12,
     paddingVertical: 8,
-  },
-  customText: { flex: 1, fontSize: 13, color: "#0f172a", fontWeight: "600" },
-  applyBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 9,
     borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
+    marginRight: 8,
+    backgroundColor: "#f8fafc",
+    borderWidth: 1.5,
+    borderColor: "#e2e8f0",
   },
-  applyText: { fontSize: 13, fontWeight: "800", color: "#fff" },
+  label: { fontSize: 12, fontWeight: "700", color: "#374151" },
+});
+
+const mup = StyleSheet.create({
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+    marginRight: 8,
+    backgroundColor: "#f8fafc",
+    borderWidth: 1.5,
+    borderColor: "#e2e8f0",
+  },
+  active: { backgroundColor: "#0f172a", borderColor: "#0f172a" },
+  label: { fontSize: 12, fontWeight: "700", color: "#374151" },
 });

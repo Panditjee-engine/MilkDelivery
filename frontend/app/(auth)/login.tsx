@@ -755,11 +755,10 @@ function ForgotPasswordModal({
       icon: "keypad-outline",
       color: "#8b5cf6",
       title: "Enter Reset Code",
-      subtitle: `We sent a 6-digit code to\n${
-        looksLikePhone(fpIdentifier)
-          ? `+91 ${fpIdentifier.replace(/\D/g, "")}`
-          : fpIdentifier
-      }`,
+      subtitle: `We sent a 6-digit code to\n${looksLikePhone(fpIdentifier)
+        ? `+91 ${fpIdentifier.replace(/\D/g, "")}`
+        : fpIdentifier
+        }`,
     },
     newPassword: {
       icon: "lock-open-outline",
@@ -798,9 +797,9 @@ function ForgotPasswordModal({
                           fm.stepDot,
                           (step === s ||
                             i <
-                              ["identifier", "code", "newPassword"].indexOf(
-                                step,
-                              )) && { backgroundColor: Colors.primary },
+                            ["identifier", "code", "newPassword"].indexOf(
+                              step,
+                            )) && { backgroundColor: Colors.primary },
                         ]}
                       />
                       {i < 2 && (
@@ -808,9 +807,9 @@ function ForgotPasswordModal({
                           style={[
                             fm.stepLine,
                             i <
-                              ["identifier", "code", "newPassword"].indexOf(
-                                step,
-                              ) && { backgroundColor: Colors.primary },
+                            ["identifier", "code", "newPassword"].indexOf(
+                              step,
+                            ) && { backgroundColor: Colors.primary },
                           ]}
                         />
                       )}
@@ -1218,6 +1217,7 @@ export default function LoginScreen() {
 
     let userLoginError: any = null;
     let workerLoginError: any = null;
+    let vetLoginError: any = null;
 
     try {
       const loginId = buildLoginIdentifier(val);
@@ -1244,10 +1244,20 @@ export default function LoginScreen() {
         workerLoginError = err;
       }
 
+      // ── Step 3: Try VET login ──
+      try {
+        await api.vetLogin(loginId, password);
+        showToast("Welcome, Doctor!", "success");
+        setTimeout(() => router.replace("/(veterinary)" as any), 800);
+        return;
+      } catch (err: any) {
+        vetLoginError = err;
+      }
       // ── Step 3: Both failed
       if (
         isWrongPassword(userLoginError) ||
-        isWrongPassword(workerLoginError)
+        isWrongPassword(workerLoginError) ||
+        isWrongPassword(vetLoginError)
       ) {
         setPrefillIdentifier(val);
         setWrongPasswordModal(true);

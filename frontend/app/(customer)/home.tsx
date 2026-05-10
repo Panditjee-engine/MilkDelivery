@@ -397,55 +397,55 @@ export default function CustomerHome() {
   const headerAnim = useRef(new Animated.Value(0)).current;
 
   const fetchData = async (isInitial = false) => {
-  try {
-    const [walletData, ordersData, productsData] = await Promise.all([
-      api.getWallet(),
-      api.getOrders(),
-      api.getCatalogProducts(undefined, undefined),
-    ]);
-    setWalletBalance(walletData.balance);
-    setRecentOrder(ordersData?.[0] || null);
-    setFeaturedProducts((productsData || []).slice(0, 3));
+    try {
+      const [walletData, ordersData, productsData] = await Promise.all([
+        api.getWallet(),
+        api.getOrders(),
+        api.getCatalogProducts(undefined, undefined),
+      ]);
+      setWalletBalance(walletData.balance);
+      setRecentOrder(ordersData?.[0] || null);
+      setFeaturedProducts((productsData || []).slice(0, 3));
 
-    if (isInitial) {
-      Animated.parallel([
-        Animated.spring(walletAnim, {
-          toValue: 1,
-          tension: 55,
-          friction: 8,
-          delay: 100,
-          useNativeDriver: true,
-        }),
-        Animated.timing(headerAnim, {
-          toValue: 1,
-          duration: 400,
-          useNativeDriver: true,
-        }),
-      ]).start();
+      if (isInitial) {
+        Animated.parallel([
+          Animated.spring(walletAnim, {
+            toValue: 1,
+            tension: 55,
+            friction: 8,
+            delay: 100,
+            useNativeDriver: true,
+          }),
+          Animated.timing(headerAnim, {
+            toValue: 1,
+            duration: 400,
+            useNativeDriver: true,
+          }),
+        ]).start();
+      }
+    } catch (error) {
+      console.error("Error fetching data:", error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
-  } catch (error) {
-    console.error("Error fetching data:", error);
-  } finally {
-    setLoading(false);
-    setRefreshing(false);
-  }
-};
+  };
 
-const onRefresh = useCallback(() => {
-  setRefreshing(true);
-  fetchData();
-}, []);
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchData();
+  }, []);
 
-useEffect(() => {
-  if (!isFocused) return;
+  useEffect(() => {
+    if (!isFocused) return;
 
-  fetchData(true); // runs animation only on first load
-  const interval = setInterval(() => {
-    fetchData(false); // silent background refresh, no animation
-  }, 2000);
+    fetchData(true); // runs animation only on first load
+    const interval = setInterval(() => {
+      fetchData(false); // silent background refresh, no animation
+    }, 2000);
 
-  return () => clearInterval(interval);
-}, [isFocused]);
+    return () => clearInterval(interval);
+  }, [isFocused]);
 
   const openModal = (product: any) => {
     setSelectedProduct(product);
@@ -460,30 +460,39 @@ useEffect(() => {
       prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day],
     );
 
-const handleSubscribe = async () => {
-  if (pattern === "custom" && customDays.length === 0) return;
-  setSubmitting(true);
-  try {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const tomorrowStr = tomorrow.toISOString().split("T")[0];
+  const handleSubscribe = async () => {
+    if (pattern === "custom" && customDays.length === 0) return;
+    if (pattern === "buy_once") {
+      const stock = selectedProduct?.stock ?? 0;
+      if (quantity > stock) {
+        alert(`Only ${stock} item available!`);
+        return;
+      }
+    }
+    setSubmitting(true);
+    try {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowStr = tomorrow.toISOString().split("T")[0];
 
-    await api.createSubscription({
-      product_id: selectedProduct.id,
-      quantity,
-      pattern,
-      custom_days: pattern === "custom" ? customDays : null,
-      start_date: tomorrowStr,
-      end_date: pattern === "buy_once" ? tomorrowStr : null,
-      amount: selectedProduct.price * quantity,  // ← ADD THIS
-    });
-    setModalVisible(false);
-  } catch (e: any) {
-    // handle via toast
-  } finally {
-    setSubmitting(false);
-  }
-};
+      await api.createSubscription({
+        product_id: selectedProduct.id,
+        quantity,
+        pattern,
+        custom_days: pattern === "custom" ? customDays : null,
+        start_date: tomorrowStr,
+        end_date: pattern === "buy_once" ? tomorrowStr : null,
+        amount: selectedProduct.price * quantity,  // ← ADD THIS
+      });
+      setModalVisible(false);
+      fetchData();
+    } catch (e: any) {
+      const msg = e?.message || "Out OfStock";
+      alert(msg);
+    } finally {
+      setSubmitting(false);
+    }
+  };
   if (loading) return <LoadingScreen />;
 
   const formatDate = (d: string) =>
@@ -616,7 +625,7 @@ const handleSubscribe = async () => {
                     style={[
                       s.orderItem,
                       i < Math.min(recentOrder.items.length, 3) - 1 &&
-                        s.orderItemBorder,
+                      s.orderItemBorder,
                     ]}
                   >
                     <Text style={s.orderItemName}>{item.product_name}</Text>
@@ -759,16 +768,27 @@ const handleSubscribe = async () => {
             <ScrollView showsVerticalScrollIndicator={false}>
               <Text style={s.modalLabel}>Quantity</Text>
               <View style={s.quantityRow}>
+                {/* ── MINUS button ── */}
                 <TouchableOpacity
                   style={s.qtyBtn}
                   onPress={() => setQuantity((q) => Math.max(1, q - 1))}
                 >
                   <Ionicons name="remove" size={18} color="#333" />
                 </TouchableOpacity>
+
                 <Text style={s.qtyValue}>{quantity}</Text>
+
+                {/* ── PLUS button ── */}
                 <TouchableOpacity
                   style={[s.qtyBtn, { backgroundColor: modalTheme.accent }]}
-                  onPress={() => setQuantity((q) => q + 1)}
+                  onPress={() => {
+                    const maxStock = selectedProduct?.stock ?? 0;
+                    if (quantity >= maxStock) {
+                      alert(`Only ${maxStock} item available!`);
+                      return;
+                    }
+                    setQuantity((q) => q + 1);
+                  }}
                 >
                   <Ionicons name="add" size={18} color="#fff" />
                 </TouchableOpacity>

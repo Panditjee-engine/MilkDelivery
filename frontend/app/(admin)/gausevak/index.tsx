@@ -1,11 +1,3 @@
-// app/(admin)/gausevak/index.tsx
-// ─────────────────────────────────────────────────────────────────────────────
-// CHANGES from original:
-//   • getCows() ab sirf ek baar call hota hai (useSharedDashboard)
-//   • Notifications NotificationContext se aata hai — no duplicate API calls
-//   • NotificationModal ab context ka data use karta hai (same shape)
-// ─────────────────────────────────────────────────────────────────────────────
-
 import React, { useRef, useEffect, useState } from "react";
 import {
   View,
@@ -41,32 +33,41 @@ const MENU = [
     accent: "#52b788",
   },
   {
-    id: "feed",
-    title: "Feed",
-    subtitle: "Diet & nutrition",
-    icon: "restaurant",
-    route: "/(admin)/gausevak/feed",
-    gradient: ["#1b4332", "#40916c"] as const,
-    accent: "#74c69d",
+    id: "Farm Work",
+    title: "Farm Work",
+    subtitle: "Manage farm operations",
+    icon: "hammer",
+    route: "/(admin)/gausevak/farmwork",
+    gradient: ["#1a472a", "#2d6a4f"] as const,
+    accent: "#52b788",
   },
-  {
-    id: "milkyield",
-    title: "Milkyield",
-    subtitle: "Milk Yield Records",
-    icon: "water-outline",
-    route: "/(admin)/gausevak/milkyield",
-    gradient: ["#1c2b3a", "#4b75a5"] as const,
-    accent: "#e27f2d",
-  },
-  {
-    id: "health",
-    title: "Health",
-    subtitle: "Wellness tracker",
-    icon: "heart",
-    route: "/(admin)/gausevak/health",
-    gradient: ["#2d1b33", "#6a0572"] as const,
-    accent: "#c77dff",
-  },
+  // {
+  //   id: "feed",
+  //   title: "Feed",
+  //   subtitle: "Diet & nutrition",
+  //   icon: "restaurant",
+  //   route: "/(admin)/gausevak/feed",
+  //   gradient: ["#1b4332", "#40916c"] as const,
+  //   accent: "#74c69d",
+  // },
+  // {
+  //   id: "milkyield",
+  //   title: "Milkyield",
+  //   subtitle: "Milk Yield Records",
+  //   icon: "water-outline",
+  //   route: "/(admin)/gausevak/milkyield",
+  //   gradient: ["#1c2b3a", "#4b75a5"] as const,
+  //   accent: "#e27f2d",
+  // },
+  // {
+  //   id: "health",
+  //   title: "Health",
+  //   subtitle: "Wellness tracker",
+  //   icon: "heart",
+  //   route: "/(admin)/gausevak/health",
+  //   gradient: ["#2d1b33", "#6a0572"] as const,
+  //   accent: "#c77dff",
+  // },
   {
     id: "insemination",
     title: "Insemination",
@@ -120,6 +121,15 @@ const MENU = [
     route: "/(admin)/gausevak/notes",
     gradient: ["#3d2b1f", "#7c4a2d"] as const,
     accent: "#FF9675",
+  },
+   {
+    id: "veterinary",
+    title: "Veterinary",
+    subtitle: "Vet staff & records",
+    icon: "medkit",
+    route: "/(admin)/gausevak/veterinary",
+    gradient: ["#0f1f3d", "#1a4a8a"] as const,
+    accent: "#7ca9d4",
   },
 ];
 // ── Types ──────────────────────────────────────────────────────────────────────
