@@ -269,10 +269,12 @@ function ProductRow({
   product,
   index,
   onPress,
+  adminName,
 }: {
   product: any;
   index: number;
   onPress: () => void;
+  adminName?: string;
 }) {
   const theme = getCategoryTheme(product.category);
   const slideAnim = useRef(new Animated.Value(40)).current;
@@ -297,45 +299,33 @@ function ProductRow({
   }, []);
 
   return (
-    <Animated.View
-      style={{ opacity: opacityAnim, transform: [{ translateY: slideAnim }] }}
-    >
-      <TouchableOpacity
-        style={[productRowStyles.row, index < 2 && productRowStyles.rowBorder]}
-        onPress={onPress}
-        activeOpacity={0.82}
-      >
+    <Animated.View style={{ opacity: opacityAnim, transform: [{ translateY: slideAnim }] }}>
+      <TouchableOpacity style={productRowStyles.row} onPress={onPress} activeOpacity={0.82}>
         {/* Icon / Image */}
         <View style={[productRowStyles.imgBox, { backgroundColor: theme.bg }]}>
-          {product.image ? (
-            <Image
-              source={{ uri: product.image }}
-              style={productRowStyles.img}
-              resizeMode="cover"
-            />
+          {product?.image ? (
+            <Image source={{ uri: product.image }} style={productRowStyles.img} />
           ) : (
-            <Ionicons name={theme.icon as any} size={22} color={theme.accent} />
+            <Ionicons name={theme.icon as any} size={20} color={theme.accent} />
           )}
         </View>
 
         {/* Info */}
         <View style={productRowStyles.info}>
-          <Text style={productRowStyles.name} numberOfLines={1}>
-            {product.name}
-          </Text>
+          {adminName && (
+            <View style={productRowStyles.adminBadge}>
+              <Ionicons name="storefront-outline" size={10} color="#16a34a" />
+              <Text style={productRowStyles.adminName}>{adminName}</Text>
+            </View>
+          )}
+          <Text style={productRowStyles.name} numberOfLines={1}>{product.name}</Text>
           <Text style={productRowStyles.unit}>{product.unit}</Text>
         </View>
-
-        {/* Price + CTA */}
         <View style={productRowStyles.right}>
-          <Text style={[productRowStyles.price, { color: theme.accent }]}>
-            ₹{product.price}
-          </Text>
-          <View
-            style={[productRowStyles.addBtn, { backgroundColor: theme.accent }]}
-          >
-            <Ionicons name="add" size={14} color="#fff" />
-          </View>
+          <Text style={productRowStyles.price}>₹{product.price}</Text>
+          <TouchableOpacity style={productRowStyles.addBtn} onPress={onPress}>
+            <Ionicons name="add" size={16} color={Colors.primary} />
+          </TouchableOpacity>
         </View>
       </TouchableOpacity>
     </Animated.View>
@@ -357,6 +347,17 @@ const productRowStyles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     overflow: "hidden",
+  },
+  adminBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    marginBottom: 2,
+  },
+  adminName: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#16a34a",
   },
   img: { width: "100%", height: "100%" },
   info: { flex: 1 },
@@ -384,6 +385,7 @@ export default function CustomerHome() {
   const [walletBalance, setWalletBalance] = useState(0);
   const [recentOrder, setRecentOrder] = useState<any>(null);
   const [featuredProducts, setFeaturedProducts] = useState<any[]>([]);
+  const [adminsList, setAdminsList] = useState<any[]>([]);
 
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
@@ -398,29 +400,22 @@ export default function CustomerHome() {
 
   const fetchData = async (isInitial = false) => {
     try {
-      const [walletData, ordersData, productsData] = await Promise.all([
+      const [walletData, ordersData, productsData, adminsData] = await Promise.all([
         api.getWallet(),
         api.getOrders(),
-        api.getCatalogProducts(undefined, undefined),
+        api.getCatalogProducts((user as any)?.admin_id ?? undefined, undefined),
+        api.getAdmins(),
       ]);
+
+      setAdminsList(adminsData.map((a: any) => ({ ...a, id: a.id || a._id })));
       setWalletBalance(walletData.balance);
       setRecentOrder(ordersData?.[0] || null);
       setFeaturedProducts((productsData || []).slice(0, 3));
 
       if (isInitial) {
         Animated.parallel([
-          Animated.spring(walletAnim, {
-            toValue: 1,
-            tension: 55,
-            friction: 8,
-            delay: 100,
-            useNativeDriver: true,
-          }),
-          Animated.timing(headerAnim, {
-            toValue: 1,
-            duration: 400,
-            useNativeDriver: true,
-          }),
+          Animated.spring(walletAnim, { toValue: 1, tension: 55, friction: 8, delay: 100, useNativeDriver: true }),
+          Animated.timing(headerAnim, { toValue: 1, duration: 400, useNativeDriver: true }),
         ]).start();
       }
     } catch (error) {
@@ -668,14 +663,19 @@ export default function CustomerHome() {
           <View style={s.sectionWrap}>
             <Text style={s.sectionTitle}>Popular Items</Text>
             <View style={s.card}>
-              {featuredProducts.map((product, i) => (
-                <ProductRow
-                  key={product.id}
-                  product={product}
-                  index={i}
-                  onPress={() => openModal(product)}
-                />
-              ))}
+              {featuredProducts.map((product, i) => {
+                const admin = adminsList.find((a) => a.id === product.admin_id);
+                const adminName = admin?.shop_name || admin?.name || undefined;
+                return (
+                  <ProductRow
+                    key={product.id}
+                    product={product}
+                    index={i}
+                    adminName={adminName}
+                    onPress={() => openModal(product)}
+                  />
+                );
+              })}
 
               {/* Explore More button */}
               <TouchableOpacity
@@ -1631,6 +1631,6 @@ const s = StyleSheet.create({
     backgroundColor: "#F5F5F5",
     justifyContent: "center",
     alignItems: "center",
-  },
+  }, 
   dayLabel: { fontSize: 12, fontWeight: "700", color: "#aaa" },
 });

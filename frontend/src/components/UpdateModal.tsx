@@ -53,7 +53,7 @@ export default function UpdateModal({ versionInfo }: Props) {
           {/* Icon */}
           <View style={styles.iconCircle}>
   <Image
-    source={require('../../assets/images/GawSatva.png')}
+    source={require('../../assets/images/splash-icon.png')}
     style={styles.logoImage}
     resizeMode="contain"
   />

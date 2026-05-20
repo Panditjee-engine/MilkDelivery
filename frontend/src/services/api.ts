@@ -405,6 +405,16 @@ class ApiService {
     return data;
   }
 
+// New API to get admin details by referral code (for registration flow)
+  async getAdminByReferral(referralCode: string) {
+  return this.request<{
+    found: boolean;
+    admin_id: string | null;
+    admin_name: string | null;
+    referral_code?: string;
+  }>(`/admin/referral/${referralCode.toUpperCase().trim()}`);
+}
+
   async register(userData: any) {
     const data = await this.request<any>("/auth/register", {
       method: "POST",

@@ -20,6 +20,7 @@ import { api } from "../../src/services/api";
 import { Colors } from "../../src/constants/colors";
 import Button from "../../src/components/Button";
 import LoadingScreen from "../../src/components/LoadingScreen";
+import { useAuth } from "../../src/contexts/AuthContext";
 
 const CARD_WIDTH = 130;
 const SCREEN_WIDTH = Dimensions.get("window").width;
@@ -1469,6 +1470,8 @@ const miniCartStyles = StyleSheet.create({
 
 // ─── Main Screen 
 export default function CatalogScreen() {
+  const { user } = useAuth();
+  const [linkedAdminId, setLinkedAdminId] = useState<string | null>(null);
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [admins, setAdmins] = useState<any[]>([]);
@@ -1519,32 +1522,42 @@ export default function CatalogScreen() {
     }
   }, []);
 
+  useEffect(() => {
+    const referralAdminId = (user as any)?.admin_id ?? (user as any)?.referral_admin_id;
+    if (referralAdminId) {
+      setLinkedAdminId(referralAdminId);
+    } else {
+      setLinkedAdminId(null); // explicitly null set karo taaki fetch trigger ho
+    }
+  }, [user]);
   const fetchData = useCallback(async () => {
     try {
       const [productsData, categoriesData, adminsData, walletData] =
         await Promise.all([
-          api.getCatalogProducts(undefined, selectedCategory || undefined),
+          api.getCatalogProducts(linkedAdminId ?? undefined, selectedCategory || undefined),
           api.getCategories(),
           api.getAdmins(),
           api.getWallet(),
         ]);
+
       setProducts(productsData);
-      setCategories(categoriesData);
-      setAdmins(
+      setCategories(categoriesData);           // ← ADD
+      setAdmins(                               // ← ADD
         adminsData.map((a: any) => ({
           ...a,
           id: a.id || a._id || a.admin_id,
         }))
       );
-      setWalletBalance(walletData.balance ?? 0);
-      await fetchSubscriptions();
+      setWalletBalance(walletData.balance ?? 0); 
+      await fetchSubscriptions();              
+
     } catch (error) {
       console.error("Catalog error:", error);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [selectedCategory, fetchSubscriptions]);
+  }, [selectedCategory, fetchSubscriptions, linkedAdminId]);
 
   useEffect(() => {
     if (!isFocused) return;
@@ -1722,7 +1735,7 @@ export default function CatalogScreen() {
       setSuccessVisible(true);
 
       api.getWallet().then((w) => setWalletBalance(w.balance ?? 0)).catch(() => { });
-      await fetchData(); 
+      await fetchData();
     } catch (e: any) {
       console.error("Order error:", e);
       const msg = e?.message || "Out Of Stock  ";
@@ -1927,10 +1940,14 @@ export default function CatalogScreen() {
                 />
               </View>
               <View style={{ flex: 1 }}>
-                {shopName && (
-                  <Text style={styles.modalShopName}>{shopName}</Text>
-                )}
-                <Text style={styles.modalTitle}>{selectedProduct?.name}</Text>
+ {/* Farm / Admin name banner */}
+{shopName && (
+  <View style={styles.farmNameBanner}>
+    <Ionicons name="storefront-outline" size={11} color="#16a34a" />
+    <Text style={styles.farmNameText}>{shopName}</Text>
+  </View>
+)}
+<Text style={styles.modalTitle}>{selectedProduct?.name}</Text>
                 <View style={styles.modalMetaRow}>
                   <Text
                     style={[styles.modalPrice, { color: modalTheme.accent }]}
@@ -2586,4 +2603,23 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     fontWeight: "500",
   },
+  farmNameBanner: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 4,
+  backgroundColor: "#f0fdf4",
+  borderRadius: 8,
+  paddingHorizontal: 8,
+  paddingVertical: 4,
+  marginBottom: 5,
+  alignSelf: "flex-start",
+  borderWidth: 1,
+  borderColor: "#bbf7d0",
+},
+farmNameText: {
+  fontSize: 11,
+  fontWeight: "700",
+  color: "#15803d",
+  letterSpacing: 0.2,
+},
 });

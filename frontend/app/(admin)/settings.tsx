@@ -10,7 +10,12 @@ import {
   Pressable,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from "react-native";
+import { api } from "../../src/services/api";
+import QRCode from "react-native-qrcode-svg";
+import * as Sharing from "expo-sharing";
+import ViewShot, { captureRef } from "react-native-view-shot";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -42,6 +47,7 @@ type ModalType =
   | "contact"
   | "profile"
   | "password"
+  | "share"
   | null;
 
 type OtpStep = "input" | "verify" | "change";
@@ -260,7 +266,7 @@ function SettingModal({
         style={{ flex: 1 }}
       >
         <Pressable style={mS.overlay} onPress={onClose}>
-          <Pressable style={mS.sheet} onPress={() => {}}>
+          <Pressable style={mS.sheet} onPress={() => { }}>
             <View style={mS.drag} />
             <View style={mS.header}>
               <View style={mS.headerLeft}>
@@ -282,6 +288,213 @@ function SettingModal({
           </Pressable>
         </Pressable>
       </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+function ShareModal({
+  visible,
+  onClose,
+  adminUser,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  adminUser: any;
+}) {
+  const captureRefContainer = useRef<any>(null);
+  const [sharing, setSharing] = useState(false);
+  const [qrData, setQrData] = useState<{
+    admin_id: string;
+    admin_name: string;
+    qr_value: string;
+    referral_code: string;
+  } | null>(null);
+  const [loadingQr, setLoadingQr] = useState(false);
+
+  useEffect(() => {
+    if (visible && !qrData) {
+      fetchQrData();
+    }
+  }, [visible]);
+
+const fetchQrData = async () => {
+  setLoadingQr(true);
+  try {
+    const name = adminUser?.name || "GAU";
+    const nameClean = name.replace(/[^a-zA-Z]/g, "");
+    const namePart = nameClean.slice(0, 3).toUpperCase().padEnd(3, "X");
+
+    const adminId = adminUser?.id || "000";
+    const asciiSum = adminId
+      .split("")
+      .reduce((sum: number, c: string) => sum + c.charCodeAt(0), 0);
+    const numPart = String((asciiSum % 900) + 100);
+
+    // Universal Link with referral param (for Play Store fallback)
+    const universalLink = `https://play.google.com/store/apps/details?id=com.badal_12.frontend&referrer=admin_id%3D${adminId}`;
+
+    setQrData({
+      admin_id: adminId,
+      admin_name: name,
+      qr_value: universalLink,
+      referral_code: `${namePart}${numPart}`,
+    });
+  } catch (e) {
+    console.warn("QR setup failed", e);
+    setQrData({
+      admin_id: adminUser?.id || "000",
+      admin_name: adminUser?.name || "GAU",
+      // Fallback Play Store link
+      qr_value: "https://play.google.com/store/apps/details?id=com.badal_12.frontend",
+      referral_code: "GAU100",
+    });
+  } finally {
+    setLoadingQr(false);
+  }
+};
+  const handleShare = async () => {
+    if (sharing || !captureRefContainer.current) return;
+    try {
+      setSharing(true);
+      const uri = await captureRef(captureRefContainer.current, {
+        format: "png",
+        quality: 1,
+      });
+      if (!(await Sharing.isAvailableAsync())) return;
+      await Sharing.shareAsync(uri, {
+        mimeType: "image/png",
+        dialogTitle: "Share QR code of your Farm",
+      });
+    } catch (error) {
+      console.warn("Share failed", error);
+    } finally {
+      setSharing(false);
+    }
+  };
+
+  const qrValue = qrData?.qr_value ||
+    `gausatv://register?admin_id=${adminUser?.id || "default"}`;
+  const displayName = qrData?.admin_name || adminUser?.name || "GauSatva";
+  const shortCode = qrData?.referral_code ||
+  (qrData?.admin_id || adminUser?.id || "").slice(-6).toUpperCase();
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <View style={mS.overlay}>
+        <View style={mS.sheet}>
+          <View style={mS.drag} />
+          <View style={mS.header}>
+            <View style={mS.headerLeft}>
+              <View style={mS.headerIcon}>
+                <Ionicons name="qr-code-outline" size={16} color={C.dark} />
+              </View>
+              <Text style={mS.headerTitle}>Share Your QR</Text>
+            </View>
+            <TouchableOpacity style={mS.closeBtn} onPress={onClose}>
+              <Ionicons name="close" size={16} color={C.dark} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView showsVerticalScrollIndicator={false} style={mS.body}>
+            {loadingQr ? (
+              <View style={qrS.loadingBox}>
+                <ActivityIndicator color={C.primary} size="large" />
+                <Text style={qrS.loadingText}>
+                  Genrating your QR...
+                </Text>
+              </View>
+            ) : (
+              <>
+                {/* Info Banner */}
+                <View style={qrS.infoBanner}>
+                  <Ionicons
+                    name="information-circle-outline"
+                    size={16}
+                    color={C.dark}
+                  />
+                  <Text style={qrS.infoBannerText}>
+                    The customer who use referral code will only see our Gaushala’s products.
+                  </Text>
+                </View>
+
+                {/* QR Card — share QR image */}
+                <ViewShot
+                  ref={(ref) => { captureRefContainer.current = ref; }}
+                  style={qrS.shotWrap}
+                >
+                  <View style={qrS.card}>
+                    {/* Card Header */}
+                    <View style={qrS.cardHeader}>
+                      <View style={qrS.leafBadge}>
+                        <Ionicons name="leaf" size={14} color="#fff" />
+                      </View>
+                      <Text style={qrS.gaushaalaName}>{displayName}</Text>
+                    </View>
+
+                    <Text style={qrS.cardTitle}>Scan Our QR For Connect With Us </Text>
+                    <Text style={qrS.cardSubtitle}>
+                      Scan the QR code for download our app and use referral code to connect directly with{"\n"}
+                      farm to explore fresh products.
+                    </Text>
+
+                    {/* QR Code */}
+                    <View style={qrS.qrBox}>
+                      <QRCode
+                        value={qrValue}
+                        size={180}
+                        backgroundColor="white"
+                        color={C.dark}
+                      />
+                    </View>
+
+                    {/* Footer */}
+                    <View style={qrS.cardFooter}>
+                      <View style={qrS.footerDivider} />
+                      <View style={qrS.footerRow}>
+                        <Ionicons
+                          name="shield-checkmark"
+                          size={11}
+                          color={C.muted}
+                        />
+                        <Text style={qrS.footerText}>
+                          GauSatv · Pure & Fresh
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                </ViewShot>
+
+                {/* Referral Code Row */}
+                <View style={qrS.codeRow}>
+                  <Text style={qrS.codeLabel}>Your Referral - Code:</Text>
+                  <View style={qrS.codePill}>
+                    <Text style={qrS.codeValue}>{shortCode}</Text>
+                  </View>
+                </View>
+
+                {/* Share Button */}
+                <TouchableOpacity
+                  style={mS.saveBtn}
+                  onPress={handleShare}
+                  activeOpacity={0.8}
+                  disabled={sharing}
+                >
+                  <Ionicons name="share-social-outline" size={18} color="#fff" />
+                  <Text style={mS.saveTxt}>
+                    {sharing ? "Sharing..." : "Share QR"}
+                  </Text>
+                </TouchableOpacity>
+              </>
+            )}
+            <View style={{ height: 24 }} />
+          </ScrollView>
+        </View>
+      </View>
     </Modal>
   );
 }
@@ -527,7 +740,7 @@ export default function AdminSettingsScreen() {
       [
         {
           text: "Got it",
-          onPress: () => {},
+          onPress: () => { },
         },
       ],
       "mail-outline",
@@ -672,6 +885,9 @@ export default function AdminSettingsScreen() {
       <ScrollView showsVerticalScrollIndicator={false}>
         <View style={s.header}>
           <Text style={s.title}>Settings</Text>
+          <TouchableOpacity style={s.shareBtn} onPress={() => openModal("share")}>
+            <Ionicons name="share-social-outline" size={18} color="#BB6B3F" />
+          </TouchableOpacity>
         </View>
 
         {/* ── Profile Card ── */}
@@ -784,9 +1000,15 @@ export default function AdminSettingsScreen() {
           <Ionicons name="log-out-outline" size={19} color={C.dark} />
           <Text style={s.logoutTxt}>Logout</Text>
         </TouchableOpacity>
+        <ShareModal
+          visible={activeModal === "share"}
+          onClose={closeModal}
+          adminUser={user}
+        />
 
         <View style={{ height: 30 }} />
       </ScrollView>
+
 
       {/* ── Modal: Order Cut-off ── */}
       <SettingModal
@@ -1038,7 +1260,7 @@ export default function AdminSettingsScreen() {
         title={pwStepTitle}
         icon="lock-closed-outline"
         onClose={closeModal}
-        onSave={() => {}} // save handled per-step
+        onSave={() => { }} // save handled per-step
       >
         {/* Step indicator */}
         <View style={mS.stepRow}>
@@ -1049,13 +1271,13 @@ export default function AdminSettingsScreen() {
                   mS.stepDot,
                   otpStep === step && mS.stepDotActive,
                   (otpStep === "verify" && i === 0) ||
-                  (otpStep === "change" && i <= 1)
+                    (otpStep === "change" && i <= 1)
                     ? mS.stepDotDone
                     : null,
                 ]}
               >
                 {(otpStep === "verify" && i === 0) ||
-                (otpStep === "change" && i <= 1) ? (
+                  (otpStep === "change" && i <= 1) ? (
                   <Ionicons name="checkmark" size={10} color="#fff" />
                 ) : (
                   <Text style={mS.stepDotTxt}>{i + 1}</Text>
@@ -1066,7 +1288,7 @@ export default function AdminSettingsScreen() {
                   style={[
                     mS.stepLine,
                     (otpStep === "verify" && i === 0) ||
-                    (otpStep === "change" && i <= 1)
+                      (otpStep === "change" && i <= 1)
                       ? mS.stepLineDone
                       : null,
                   ]}
@@ -1368,6 +1590,11 @@ const mS = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#FFE8C8",
   },
+  shareBtn: {
+    width: 40, height: 40, borderRadius: 12,
+    backgroundColor: "#FFE8D6",
+    justifyContent: "center", alignItems: "center",
+  },
   headerLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
   headerIcon: {
     width: 32,
@@ -1417,6 +1644,35 @@ const mS = StyleSheet.create({
   chipTxt: { fontSize: 13, fontWeight: "600", color: "#8B6854" },
   chipTxtActive: { color: "#fff", fontWeight: "700" },
   graceGrid: { flexDirection: "row", flexWrap: "wrap", marginBottom: 4 },
+  shareCard: {
+    backgroundColor: "#fff",
+    borderRadius: 22,
+    padding: 20,
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  sharePreview: {
+    alignItems: "center",
+  },
+  shareTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#3D1F0A",
+    marginBottom: 8,
+  },
+  shareSubtitle: {
+    fontSize: 13,
+    color: "#A07850",
+    textAlign: "center",
+    lineHeight: 18,
+    marginBottom: 16,
+    maxWidth: 240,
+  },
+  qrWrap: {
+    alignItems: "center",
+    marginTop: 16,
+    marginBottom: 16,
+  },
   input: {
     backgroundColor: "#fff",
     padding: 14,
@@ -1579,6 +1835,14 @@ const s = StyleSheet.create({
     color: "#1A1A1A",
     letterSpacing: -0.5,
   },
+  shareBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: "#FFE8D6",
+    justifyContent: "center",
+    alignItems: "center",
+  },
 
   profileCard: {
     backgroundColor: "#FF9675",
@@ -1694,6 +1958,39 @@ const s = StyleSheet.create({
     paddingHorizontal: 9,
     paddingVertical: 5,
   },
+  loadingBox: {
+    alignItems: "center",
+    paddingVertical: 60,
+    gap: 16,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: C.muted,
+    fontWeight: "600",
+  },
+  infoBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    backgroundColor: C.peach,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 18,
+    borderWidth: 1,
+    borderColor: C.deepPeach,
+  },
+  infoBannerText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "500",
+    color: C.dark,
+    lineHeight: 19,
+  },
+  shotWrap: {
+    borderRadius: 22,
+    overflow: "hidden",
+    marginBottom: 14,
+  },
   editBadgeTxt: { fontSize: 11, fontWeight: "700", color: "#BB6B3F" },
 
   logoutBtn: {
@@ -1708,4 +2005,147 @@ const s = StyleSheet.create({
     gap: 8,
   },
   logoutTxt: { fontSize: 15, fontWeight: "700", color: "#BB6B3F" },
+});
+
+// ── QR Modal Styles
+const qrS = StyleSheet.create({
+  loadingBox: {
+    alignItems: "center",
+    paddingVertical: 60,
+    gap: 16,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: C.muted,
+    fontWeight: "600",
+  },
+  infoBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    backgroundColor: C.peach,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 18,
+    borderWidth: 1,
+    borderColor: C.deepPeach,
+  },
+  infoBannerText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "500",
+    color: C.dark,
+    lineHeight: 19,
+  },
+  shotWrap: {
+    borderRadius: 22,
+    overflow: "hidden",
+    marginBottom: 14,
+  },
+  card: {
+    backgroundColor: "#fff",
+    borderRadius: 22,
+    padding: 24,
+    alignItems: "center",
+    borderWidth: 1.5,
+    borderColor: C.deepPeach,
+  },
+  cardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 14,
+  },
+  leafBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 9,
+    backgroundColor: C.primary,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  gaushaalaName: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: C.dark,
+    letterSpacing: -0.3,
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: C.text,
+    marginBottom: 6,
+    letterSpacing: -0.3,
+  },
+  cardSubtitle: {
+    fontSize: 12,
+    color: C.muted,
+    textAlign: "center",
+    lineHeight: 18,
+    fontWeight: "500",
+    marginBottom: 4,
+  },
+  qrBox: {
+    padding: 16,
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: C.deepPeach,
+    marginVertical: 18,
+    shadowColor: C.dark,
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
+  cardFooter: {
+    width: "100%",
+    alignItems: "center",
+    gap: 10,
+  },
+  footerDivider: {
+    width: "80%",
+    height: 1,
+    backgroundColor: C.deepPeach,
+  },
+  footerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  footerText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: C.muted,
+    letterSpacing: 0.3,
+  },
+  codeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 0,
+    marginBottom: 14,
+  },
+  codeLabel: {
+    fontSize: 15,
+    color: C.muted,
+    fontWeight: "600",
+  },
+  codePill: {
+    backgroundColor: C.deepPeach,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+  },
+  codeValue: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: C.dark,
+    letterSpacing: 1.5,
+  },
+  refreshTxt: {
+    fontSize: 12,
+    color: C.muted,
+    fontWeight: "600",
+  },
 });

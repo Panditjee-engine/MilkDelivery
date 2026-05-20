@@ -13,6 +13,8 @@ interface User {
   address?: any;
   is_active: boolean;
   zone?: string;
+  referral_admin_id?: string;
+  admin_id?: string; 
 }
 
 interface Worker {
