@@ -483,6 +483,30 @@ export default function AdminDashboard() {
           <Ionicons name="arrow-forward" size={18} color={C.dark} />
         </TouchableOpacity>
 
+        <TouchableOpacity
+          style={[styles.customerManagerCard, styles.extraTaskManagerCard]}
+          activeOpacity={0.8}
+          onPress={() =>
+            router.push({
+              pathname: "/(admin)/extra-tasks",
+              params: { from: "dashboard" },
+            } as any)
+          }
+        >
+          <View style={styles.customerManagerLeft}>
+            <View style={[styles.customerManagerIcon, styles.extraTaskManagerIcon]}>
+              <Ionicons name="clipboard-outline" size={22} color={C.dark} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.customerManagerTitle}>Extra Task Review</Text>
+              <Text style={styles.customerManagerSub}>
+                Verify worker extra work and give bonus or penalty points
+              </Text>
+            </View>
+          </View>
+          <Ionicons name="arrow-forward" size={18} color={C.dark} />
+        </TouchableOpacity>
+
         {/* ── Delivery Progress ── */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
@@ -850,6 +874,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
+  extraTaskManagerCard: {
+    backgroundColor: "#FFEEDD",
+  },
   customerManagerLeft: {
     flexDirection: "row",
     alignItems: "center",
@@ -863,6 +890,9 @@ const styles = StyleSheet.create({
     backgroundColor: C.primary + "30",
     alignItems: "center",
     justifyContent: "center",
+  },
+  extraTaskManagerIcon: {
+    backgroundColor: C.accent + "26",
   },
   customerManagerTitle: {
     fontSize: 15,

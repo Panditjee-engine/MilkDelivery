@@ -83,6 +83,12 @@ export default function AdminLayout() {
             ),
           }}
         />
+        <Tabs.Screen
+          name="extra-tasks"
+          options={{
+            href: null,
+          }}
+        />
       </Tabs>
     </NotificationProvider>
   );
