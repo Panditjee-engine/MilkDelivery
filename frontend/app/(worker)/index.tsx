@@ -13,9 +13,11 @@ import {
   TextInput,
   Platform,
   UIManager,
+  Image,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
+import * as ImagePicker from "expo-image-picker";
 import {
   Ionicons,
   MaterialCommunityIcons,
@@ -86,6 +88,41 @@ interface ExtraTask {
   description?: string;
   date: string;
   worker_name: string;
+  image_url?: string;
+  verification_status?: string;
+  points_awarded?: boolean;
+}
+
+interface WorkerPointActivity {
+  id?: string;
+  activity_type?: string;
+  points?: number;
+  reference_id?: string;
+  reference_name?: string;
+  date?: string;
+  note?: string | null;
+  created_at?: string;
+}
+
+interface WorkerPointsSummary {
+  worker_id: string;
+  total_points: number;
+  redeemable_points: number;
+  today_points: number;
+  total_redeemed_ever: number;
+  recent: WorkerPointActivity[];
+}
+
+function formatPointTime(value?: string) {
+  if (!value) return "";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleString("en-IN", {
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 // ─── Icon helpers for actions ─────────────────────────────────────────────────
@@ -1337,9 +1374,11 @@ function FullScreenModal({
 function ExtraWorkModal({
   visible,
   onClose,
+  onTaskSaved,
 }: {
   visible: boolean;
   onClose: () => void;
+  onTaskSaved?: () => void | Promise<void>;
 }) {
   const { lang } = useLang();
   const TASK_META = useTaskMeta();
@@ -1350,6 +1389,8 @@ function ExtraWorkModal({
   const [selectedType, setSelectedType] = useState<ExtraTaskType | null>(null);
   const [customLabel, setCustomLabel] = useState("");
   const [description, setDescription] = useState("");
+  const [taskDate, setTaskDate] = useState(todayStr());
+  const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [alert, setAlert] = useState<Partial<ModernAlertProps> | null>(null);
   const [deleteAlert, setDeleteAlert] = useState<{
@@ -1372,6 +1413,14 @@ function ExtraWorkModal({
     notesPlaceholder: isHindi
       ? "आपने क्या किया वर्णन करें…"
       : "Describe what you did…",
+    dateLabel: isHindi ? "तारीख" : "Date",
+    imageLabel: isHindi ? "काम की फोटो" : "Task Photo",
+    imageHint: isHindi
+      ? "काम की तस्वीर जोड़ें ताकि वेरिफिकेशन आसान हो"
+      : "Add a work photo to help verification",
+    imageAdd: isHindi ? "फोटो जोड़ें" : "Add Photo",
+    imageChange: isHindi ? "फोटो बदलें" : "Change Photo",
+    imageRemove: isHindi ? "हटाएं" : "Remove",
     saveBtn: isHindi ? "कार्य सहेजें" : "Save Task",
     todaySection: isHindi ? "आज के अतिरिक्त कार्य" : "Today's Extra Work",
     loadingText: isHindi ? "कार्य लोड हो रहे हैं…" : "Loading tasks…",
@@ -1392,8 +1441,14 @@ function ExtraWorkModal({
     errorRequired: isHindi
       ? "कृपया कार्य का प्रकार चुनें या नाम दर्ज करें।"
       : "Please select a task type or enter a task name.",
+    errorImage: isHindi
+      ? "फोटो चुनने में समस्या हुई।"
+      : "Could not select the image.",
     errorSave: isHindi ? "कार्य सहेजा नहीं जा सका।" : "Could not save task.",
     errorDelete: isHindi ? "कार्य हटाया नहीं जा सका।" : "Could not delete task.",
+    statusPending: isHindi ? "वेरिफिकेशन बाकी" : "Pending verification",
+    statusVerified: isHindi ? "वेरिफाइड" : "Verified",
+    pointsAdded: isHindi ? "पॉइंट्स जुड़ गए" : "Points awarded",
   };
 
   const fetchTasks = async () => {
@@ -1420,13 +1475,60 @@ function ExtraWorkModal({
     setSelectedType(null);
     setCustomLabel("");
     setDescription("");
+    setTaskDate(todayStr());
+    setImageBase64(null);
     setShowForm(false);
+  };
+
+  const pickImage = async () => {
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        setAlert({
+          visible: true,
+          type: "warning",
+          title: isHindi ? "अनुमति चाहिए" : "Permission needed",
+          message: isHindi
+            ? "फोटो चुनने के लिए गैलरी एक्सेस दें।"
+            : "Please allow gallery access to attach a photo.",
+          confirmText: "OK",
+          onConfirm: () => setAlert(null),
+        });
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        quality: 0.6,
+        base64: true,
+        allowsEditing: true,
+      });
+      if (result.canceled) return;
+      const asset = result.assets?.[0];
+      if (!asset?.base64) {
+        throw new Error("Missing image data");
+      }
+      setImageBase64(asset.base64);
+    } catch {
+      setAlert({
+        visible: true,
+        type: "error",
+        title: isHindi ? "त्रुटि" : "Error",
+        message: labels.errorImage,
+        confirmText: "OK",
+        onConfirm: () => setAlert(null),
+      });
+    }
   };
 
   const handleSave = async () => {
     if (saving) return;
     const hasCustomText = customLabel.trim().length > 0;
-    const finalType: ExtraTaskType = selectedType ?? (hasCustomText ? "custom" : null as any);
+    const finalType: Exclude<ExtraTaskType, "custom"> | null =
+      selectedType && selectedType !== "custom"
+        ? selectedType
+        : hasCustomText
+          ? "maintenance"
+          : null;
 
     if (!finalType && !hasCustomText) {
       setAlert({
@@ -1440,15 +1542,25 @@ function ExtraWorkModal({
       return;
     }
 
+    const resolvedType = finalType as Exclude<ExtraTaskType, "custom">;
+
     setSaving(true);
     try {
+      const normalizedDescription = [
+        hasCustomText ? customLabel.trim() : null,
+        description.trim() || null,
+      ]
+        .filter(Boolean)
+        .join(" - ");
+
       await api.workerAddExtraTask({
-        task_type: finalType,
-        custom_label: hasCustomText ? customLabel.trim() : undefined,
-        description: description.trim() || undefined,
-        date: todayStr(),
+        task_type: resolvedType,
+        description: normalizedDescription || undefined,
+        date: taskDate,
+        image_url: imageBase64 ?? undefined,
       });
       await fetchTasks();
+      await onTaskSaved?.();
       resetForm();
     } catch (err: any) {
       setAlert({
@@ -1652,6 +1764,64 @@ function ExtraWorkModal({
                 />
               </View>
 
+              <View style={ew.metaRow}>
+                <View style={[ew.inputWrap, ew.metaField]}>
+                  <Text style={ew.inputLabel}>{labels.dateLabel}</Text>
+                  <TextInput
+                    style={ew.input}
+                    value={taskDate}
+                    onChangeText={setTaskDate}
+                    placeholder="YYYY-MM-DD"
+                    placeholderTextColor={PALETTE.mutedBrown}
+                    autoCapitalize="none"
+                  />
+                </View>
+              </View>
+
+              <View style={ew.inputWrap}>
+                <Text style={ew.inputLabel}>{labels.imageLabel}</Text>
+                <Text style={ew.imageHint}>{labels.imageHint}</Text>
+                {imageBase64 ? (
+                  <View style={ew.imageCard}>
+                    <Image
+                      source={{ uri: `data:image/jpeg;base64,${imageBase64}` }}
+                      style={ew.previewImage}
+                    />
+                    <View style={ew.imageActions}>
+                      <TouchableOpacity
+                        style={ew.imageActionBtn}
+                        onPress={pickImage}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name="images-outline" size={16} color={PALETTE.accent} />
+                        <Text style={ew.imageActionText}>{labels.imageChange}</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={ew.imageActionBtn}
+                        onPress={() => setImageBase64(null)}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name="trash-outline" size={16} color="#dc2626" />
+                        <Text style={[ew.imageActionText, { color: "#dc2626" }]}>
+                          {labels.imageRemove}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={ew.imagePickerBtn}
+                    onPress={pickImage}
+                    activeOpacity={0.85}
+                  >
+                    <View style={ew.imagePickerIcon}>
+                      <Ionicons name="camera-outline" size={20} color={PALETTE.accent} />
+                    </View>
+                    <Text style={ew.imagePickerText}>{labels.imageAdd}</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
               <TouchableOpacity
                 style={[
                   ew.saveBtn,
@@ -1759,6 +1929,48 @@ function ExtraWorkModal({
                           {task.description}
                         </Text>
                       ) : null}
+                      <View style={ew.taskMetaRow}>
+                        {task.verification_status ? (
+                          <View style={ew.taskMetaPill}>
+                            <Ionicons
+                              name={
+                                task.verification_status === "verified"
+                                  ? "checkmark-circle"
+                                  : "time-outline"
+                              }
+                              size={12}
+                              color={
+                                task.verification_status === "verified"
+                                  ? "#15803d"
+                                  : "#b45309"
+                              }
+                            />
+                            <Text
+                              style={[
+                                ew.taskMetaText,
+                                {
+                                  color:
+                                    task.verification_status === "verified"
+                                      ? "#15803d"
+                                      : "#b45309",
+                                },
+                              ]}
+                            >
+                              {task.verification_status === "verified"
+                                ? labels.statusVerified
+                                : labels.statusPending}
+                            </Text>
+                          </View>
+                        ) : null}
+                        {task.points_awarded ? (
+                          <View style={[ew.taskMetaPill, { backgroundColor: "#ecfdf5" }]}>
+                            <Ionicons name="sparkles-outline" size={12} color="#15803d" />
+                            <Text style={[ew.taskMetaText, { color: "#15803d" }]}>
+                              {labels.pointsAdded}
+                            </Text>
+                          </View>
+                        ) : null}
+                      </View>
                       <Text style={ew.taskTime}>
                         {labels.loggedToday} • {task.worker_name}
                       </Text>
@@ -1782,6 +1994,103 @@ function ExtraWorkModal({
 
           <View style={{ height: 48 }} />
         </ScrollView>
+      </View>
+    </Modal>
+  );
+}
+
+function PointsHistoryModal({
+  visible,
+  onClose,
+  points,
+  loading,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  points: WorkerPointsSummary | null;
+  loading: boolean;
+}) {
+  const { lang } = useLang();
+  const isHindi = lang === "hi";
+  const recent = points?.recent ?? [];
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <View style={pm.overlay}>
+        <View style={pm.sheet}>
+          <View style={pm.header}>
+            <View>
+              <Text style={pm.title}>{isHindi ? "पॉइंट्स हिस्ट्री" : "Points History"}</Text>
+              <Text style={pm.subtitle}>
+                {isHindi ? "हाल की गतिविधियाँ और आपके पॉइंट्स" : "Recent activities and your earned points"}
+              </Text>
+            </View>
+            <TouchableOpacity style={pm.closeBtn} onPress={onClose} activeOpacity={0.8}>
+              <Ionicons name="close" size={18} color={PALETTE.deepBrown} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={pm.summaryRow}>
+            <View style={pm.summaryCard}>
+              <Text style={pm.summaryLabel}>{isHindi ? "Redeemable" : "Redeemable"}</Text>
+              <Text style={pm.summaryValue}>{points?.redeemable_points ?? 0}</Text>
+            </View>
+            <View style={pm.summaryCard}>
+              <Text style={pm.summaryLabel}>{isHindi ? "आज" : "Today"}</Text>
+              <Text style={pm.summaryValue}>{points?.today_points ?? 0}</Text>
+            </View>
+            <View style={pm.summaryCard}>
+              <Text style={pm.summaryLabel}>{isHindi ? "कुल" : "Total"}</Text>
+              <Text style={pm.summaryValue}>{points?.total_points ?? 0}</Text>
+            </View>
+          </View>
+
+          {loading ? (
+            <View style={pm.stateWrap}>
+              <ActivityIndicator color={PALETTE.accent} />
+              <Text style={pm.stateText}>{isHindi ? "पॉइंट्स लोड हो रहे हैं…" : "Loading points…"}</Text>
+            </View>
+          ) : !points ? (
+            <View style={pm.stateWrap}>
+              <MaterialCommunityIcons name="alert-circle-outline" size={28} color={PALETTE.mutedBrown} />
+              <Text style={pm.stateTitle}>{isHindi ? "पॉइंट्स अभी उपलब्ध नहीं हैं" : "Points are not available yet"}</Text>
+              <Text style={pm.stateText}>
+                {isHindi
+                  ? "लगता है live backend पर points endpoint अभी deploy नहीं है।"
+                  : "It looks like the live backend does not expose the points endpoint yet."}
+              </Text>
+            </View>
+          ) : recent.length === 0 ? (
+            <View style={pm.stateWrap}>
+              <MaterialCommunityIcons name="star-four-points-outline" size={28} color={PALETTE.mutedBrown} />
+              <Text style={pm.stateTitle}>{isHindi ? "अभी कोई recent entry नहीं" : "No recent entries yet"}</Text>
+              <Text style={pm.stateText}>
+                {isHindi ? "जैसे ही काम वेरिफाई होंगे, यहां history दिखेगी।" : "Verified work will start appearing here."}
+              </Text>
+            </View>
+          ) : (
+            <ScrollView style={pm.list} contentContainerStyle={pm.listContent} showsVerticalScrollIndicator={false}>
+              {recent.map((item, index) => (
+                <View key={item.id ?? `${item.activity_type}-${index}`} style={pm.activityCard}>
+                  <View style={pm.activityPoints}>
+                    <Text style={pm.activityPointsValue}>+{item.points ?? 0}</Text>
+                  </View>
+                  <View style={pm.activityInfo}>
+                    <Text style={pm.activityTitle}>
+                      {item.reference_name || item.activity_type || (isHindi ? "गतिविधि" : "Activity")}
+                    </Text>
+                    <Text style={pm.activityMeta}>
+                      {[item.activity_type, formatPointTime(item.created_at || item.date)]
+                        .filter(Boolean)
+                        .join(" • ")}
+                    </Text>
+                    {item.note ? <Text style={pm.activityNote}>{item.note}</Text> : null}
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+          )}
+        </View>
       </View>
     </Modal>
   );
@@ -1811,6 +2120,9 @@ function DashboardContent() {
   const [scanError, setScanError] = useState<string | null>(null);
 
   const [extraWorkOpen, setExtraWorkOpen] = useState(false);
+  const [points, setPoints] = useState<WorkerPointsSummary | null>(null);
+  const [pointsLoading, setPointsLoading] = useState(false);
+  const [pointsOpen, setPointsOpen] = useState(false);
 
   const headerAnim = useRef(new Animated.Value(0)).current;
 
@@ -1873,6 +2185,19 @@ function DashboardContent() {
     }
   }, []);
 
+  const fetchPoints = useCallback(async () => {
+    if (!workerToken) return;
+    setPointsLoading(true);
+    try {
+      const data = await api.workerGetPoints();
+      setPoints(data);
+    } catch {
+      setPoints(null);
+    } finally {
+      setPointsLoading(false);
+    }
+  }, [workerToken]);
+
   useEffect(() => {
     Animated.timing(headerAnim, {
       toValue: 1,
@@ -1880,6 +2205,7 @@ function DashboardContent() {
       useNativeDriver: true,
     }).start();
     fetchCows();
+    fetchPoints();
   }, []);
 
   useEffect(() => {
@@ -1952,6 +2278,22 @@ function DashboardContent() {
           ) : null}
         </View>
         <View style={s.topRight}>
+          <TouchableOpacity
+            style={s.pointsPill}
+            onPress={() => setPointsOpen(true)}
+            activeOpacity={0.85}
+          >
+            <View style={s.pointsIconWrap}>
+              <Ionicons name="sparkles" size={14} color="#b45309" />
+            </View>
+            <View>
+              <Text style={s.pointsLabel}>{lang === "hi" ? "पॉइंट्स" : "Points"}</Text>
+              <Text style={s.pointsValue}>
+                {pointsLoading ? "…" : points?.redeemable_points ?? 0}
+              </Text>
+            </View>
+          </TouchableOpacity>
+
           {/* Add Task button */}
           <TouchableOpacity
             onPress={() => setExtraWorkOpen(true)}
@@ -2137,6 +2479,13 @@ function DashboardContent() {
       <ExtraWorkModal
         visible={extraWorkOpen}
         onClose={() => setExtraWorkOpen(false)}
+        onTaskSaved={fetchPoints}
+      />
+      <PointsHistoryModal
+        visible={pointsOpen}
+        onClose={() => setPointsOpen(false)}
+        points={points}
+        loading={pointsLoading}
       />
     </ScrollView>
   );
@@ -2810,6 +3159,82 @@ const ew = StyleSheet.create({
     backgroundColor: PALETTE.light,
   },
   textArea: { minHeight: 80 },
+  metaRow: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  metaField: {
+    flex: 1,
+  },
+  imageHint: {
+    fontSize: 12,
+    color: PALETTE.mutedBrown,
+    lineHeight: 18,
+  },
+  imagePickerBtn: {
+    marginTop: 4,
+    borderWidth: 1.5,
+    borderStyle: "dashed",
+    borderColor: PALETTE.mid,
+    borderRadius: 16,
+    backgroundColor: PALETTE.light,
+    paddingVertical: 16,
+    paddingHorizontal: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  imagePickerIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: PALETTE.mid,
+  },
+  imagePickerText: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: PALETTE.accent,
+  },
+  imageCard: {
+    marginTop: 4,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderColor: PALETTE.mid,
+    backgroundColor: "#fff",
+    overflow: "hidden",
+  },
+  previewImage: {
+    width: "100%",
+    height: 180,
+    backgroundColor: PALETTE.light,
+  },
+  imageActions: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 10,
+    padding: 12,
+  },
+  imageActionBtn: {
+    flex: 1,
+    minHeight: 42,
+    borderRadius: 12,
+    backgroundColor: PALETTE.light,
+    borderWidth: 1,
+    borderColor: PALETTE.mid,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  imageActionText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: PALETTE.accent,
+  },
 
   saveBtn: {
     borderRadius: 18,
@@ -2926,6 +3351,25 @@ const ew = StyleSheet.create({
     fontWeight: "600",
     marginTop: 2,
   },
+  taskMetaRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 6,
+  },
+  taskMetaPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: "#fffbeb",
+  },
+  taskMetaText: {
+    fontSize: 11,
+    fontWeight: "800",
+  },
   deleteBtn: {
     width: 32,
     height: 32,
@@ -2962,6 +3406,40 @@ const s = StyleSheet.create({
     alignItems: "center",
     gap: 8,
     marginTop: 8,
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
+  },
+  pointsPill: {
+    minHeight: 44,
+    paddingHorizontal: 10,
+    borderRadius: 14,
+    backgroundColor: "#fff7ed",
+    borderWidth: 1,
+    borderColor: "#fed7aa",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  pointsIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 10,
+    backgroundColor: "#ffedd5",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pointsLabel: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#b45309",
+    textTransform: "uppercase",
+    letterSpacing: 0.7,
+  },
+  pointsValue: {
+    fontSize: 14,
+    fontWeight: "900",
+    color: "#7c2d12",
+    marginTop: 1,
   },
   addTaskBtn: {
     borderRadius: 14,
@@ -3080,4 +3558,144 @@ const s = StyleSheet.create({
     borderColor: "#fde68a",
   },
   statusLoadingText: { fontSize: 13, color: "#92400e", fontWeight: "600" },
+});
+
+const pm = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(17,24,39,0.28)",
+    justifyContent: "flex-end",
+  },
+  sheet: {
+    backgroundColor: PALETTE.cream,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 24,
+    minHeight: "58%",
+    maxHeight: "82%",
+  },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 12,
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: "900",
+    color: PALETTE.deepBrown,
+  },
+  subtitle: {
+    marginTop: 4,
+    fontSize: 12,
+    color: PALETTE.mutedBrown,
+  },
+  closeBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: PALETTE.mid,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  summaryRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 18,
+  },
+  summaryCard: {
+    flex: 1,
+    backgroundColor: "#fff",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: PALETTE.mid,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+  },
+  summaryLabel: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: PALETTE.mutedBrown,
+    textTransform: "uppercase",
+    letterSpacing: 0.7,
+  },
+  summaryValue: {
+    marginTop: 8,
+    fontSize: 22,
+    fontWeight: "900",
+    color: PALETTE.deepBrown,
+  },
+  stateWrap: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+    paddingVertical: 42,
+    gap: 10,
+  },
+  stateTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: PALETTE.deepBrown,
+    textAlign: "center",
+  },
+  stateText: {
+    fontSize: 13,
+    color: PALETTE.mutedBrown,
+    textAlign: "center",
+    lineHeight: 19,
+  },
+  list: {
+    marginTop: 18,
+  },
+  listContent: {
+    gap: 10,
+    paddingBottom: 16,
+  },
+  activityCard: {
+    flexDirection: "row",
+    gap: 12,
+    alignItems: "center",
+    backgroundColor: "#fff",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: PALETTE.mid,
+    padding: 14,
+  },
+  activityPoints: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: "#fff7ed",
+    borderWidth: 1,
+    borderColor: "#fed7aa",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  activityPointsValue: {
+    fontSize: 18,
+    fontWeight: "900",
+    color: "#b45309",
+  },
+  activityInfo: {
+    flex: 1,
+    gap: 3,
+  },
+  activityTitle: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: PALETTE.deepBrown,
+  },
+  activityMeta: {
+    fontSize: 12,
+    color: PALETTE.mutedBrown,
+  },
+  activityNote: {
+    fontSize: 12,
+    color: "#6b7280",
+    lineHeight: 18,
+  },
 });

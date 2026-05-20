@@ -105,6 +105,15 @@ const MENU = [
     accent: "#a3d977",
   },
   {
+    id: "extra-tasks",
+    title: "Extra Tasks",
+    subtitle: "Review worker tasks",
+    icon: "clipboard",
+    route: "/(admin)/extra-tasks?from=gausevak",
+    gradient: ["#2e1f14", "#8a5a32"] as const,
+    accent: "#f7c873",
+  },
+  {
     id: "customers",
     title: "Customers",
     subtitle: "Offline customer records",

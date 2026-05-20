@@ -11,6 +11,7 @@ import {
   Animated,
   Dimensions,
   ActivityIndicator,
+  Pressable,
   Modal,
   Image,
 } from "react-native";
@@ -41,10 +42,19 @@ const C = {
 
 const { width } = Dimensions.get("window");
 type Role = "customer" | "delivery_partner" | "admin";
-type Step = "phone" | "details";
+type Step = "phone" | "otp" | "details";
 type ToastType = "error" | "success" | "warn";
 type Status = "idle" | "checking" | "ok" | "error";
+const REGISTER_PLATFORM = "fcm";
 
+const REGISTER_STEPS: Array<{ key: Step; label: string }> = [
+  { key: "phone", label: "Phone" },
+  { key: "otp", label: "OTP" },
+  { key: "details", label: "Details" },
+];
+// ── Validation helpers 
+
+/** Indian mobile: 10 digits, starts 6-9, not all same digit */
 function validateIndianMobile(num: string): { ok: boolean; reason?: string } {
   if (!num) return { ok: false, reason: "Enter your mobile number" };
   if (num.length < 10)
@@ -301,8 +311,10 @@ export default function RegisterScreen() {
   const { referral_code: qrReferralCode } = useLocalSearchParams<{ referral_code?: string }>();
 
   const [step, setStep] = useState<Step>("phone");
+  const otpInputRef = useRef<TextInput | null>(null);
 
   const [phone, setPhone] = useState("");
+  const [otp, setOtp] = useState("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -310,6 +322,10 @@ export default function RegisterScreen() {
   const [role, setRole] = useState<Role>("customer");
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [otpSending, setOtpSending] = useState(false);
+  const [otpVerifying, setOtpVerifying] = useState(false);
+  const [otpVerified, setOtpVerified] = useState(false);
+  const [resendIn, setResendIn] = useState(0);
 
   // ── Referral state — QR code se initialize
   const [scannerVisible, setScannerVisible] = useState(false);
@@ -325,6 +341,7 @@ export default function RegisterScreen() {
   const referralTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [phoneErr, setPhoneErr] = useState("");
+  const [otpErr, setOtpErr] = useState("");
   const [emailErr, setEmailErr] = useState("");
   const [nameErr, setNameErr] = useState("");
   const [passErr, setPassErr] = useState("");
@@ -343,6 +360,13 @@ export default function RegisterScreen() {
 
   const { register } = useAuth();
   const router = useRouter();
+  const fullPhone = `+91${phone}`;
+
+  useEffect(() => {
+    if (step !== "otp" || resendIn <= 0) return;
+    const timer = setTimeout(() => setResendIn((prev) => prev - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [resendIn, step]);
 
   // ── QR referral code auto-validate
   useEffect(() => {
@@ -368,6 +392,9 @@ export default function RegisterScreen() {
   const handlePhoneChange = (val: string) => {
     const cleaned = val.replace(/\D/g, "").slice(0, 10);
     setPhone(cleaned);
+    setOtp("");
+    setOtpErr("");
+    setOtpVerified(false);
     setPhoneErr("");
     setPhoneSt("idle");
     if (phoneTimer.current) clearTimeout(phoneTimer.current);
@@ -474,21 +501,43 @@ export default function RegisterScreen() {
 
   // ── Step animation
   const slideAnim = useRef(new Animated.Value(0)).current;
-  const goToDetails = () => {
-    Animated.timing(slideAnim, { toValue: -width, duration: 260, useNativeDriver: true })
-      .start(() => {
-        setStep("details");
-        slideAnim.setValue(width);
-        Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true, tension: 60, friction: 10 }).start();
-      });
+  const transitionToStep = (next: Step) => {
+    slideAnim.setValue(0);
+    setStep(next);
   };
-  const goToPhone = () => {
-    Animated.timing(slideAnim, { toValue: width, duration: 260, useNativeDriver: true })
-      .start(() => {
-        setStep("phone");
-        slideAnim.setValue(-width);
-        Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true, tension: 60, friction: 10 }).start();
+  const goToOtp = () => transitionToStep("otp");
+  const goToDetails = () => transitionToStep("details");
+  const goToPhone = () => transitionToStep("phone");
+  const goToOtpBack = () => transitionToStep("otp");
+
+  useEffect(() => {
+    if (step === "details" && !otpVerified) {
+      setStep("otp");
+    }
+  }, [otpVerified, step]);
+
+  const sendOtp = async (isResend = false) => {
+    setOtpSending(true);
+    setOtpErr("");
+    try {
+      await api.requestAuthOtp({
+        phone: fullPhone,
       });
+      setResendIn(30);
+      setOtp("");
+      showToast(
+        isResend ? "OTP sent again to your phone" : "OTP sent to your mobile number",
+        "success",
+      );
+      if (!isResend) {
+        goToOtp();
+        setTimeout(() => otpInputRef.current?.focus(), 350);
+      }
+    } catch (error: any) {
+      showToast(error?.message || "Could not send OTP", "error");
+    } finally {
+      setOtpSending(false);
+    }
   };
 
   // ── Step 1 submit
@@ -505,7 +554,7 @@ export default function RegisterScreen() {
 
     if (phoneSt === "idle") {
       setPhoneSt("checking");
-      const exists = await api.checkDuplicate("phone", `+91${phone}`);
+      const exists = await api.checkDuplicate("phone", fullPhone);
       if (exists) {
         setPhoneErr("Number already registered — try signing in instead.");
         setPhoneSt("error");
@@ -514,13 +563,49 @@ export default function RegisterScreen() {
       }
       setPhoneSt("ok");
     }
-    goToDetails();
+    await sendOtp(false);
+  };
+
+  const handleOtpChange = (val: string) => {
+    const cleaned = val.replace(/\D/g, "").slice(0, 6);
+    setOtp(cleaned);
+    if (otpErr) setOtpErr("");
+  };
+
+  const handleVerifyOtp = async () => {
+    if (otp.length !== 6) {
+      setOtpErr("Enter the 6 digit OTP");
+      showToast("Please enter the 6 digit OTP", "warn");
+      return;
+    }
+
+    setOtpVerifying(true);
+    try {
+      await api.verifyAuthOtp({
+        phone: fullPhone,
+        otp,
+      });
+      setOtpVerified(true);
+      showToast("Phone number verified successfully", "success");
+      goToDetails();
+    } catch (error: any) {
+      setOtpErr(error?.message || "Invalid OTP");
+      showToast(error?.message || "Could not verify OTP", "error");
+    } finally {
+      setOtpVerifying(false);
+    }
   };
 
   // ── Step 2 submit
   const handleRegister = async () => {
     let hasErr = false;
 
+    if (!otpVerified) {
+      setStep("otp");
+      setOtpErr("Please verify OTP first");
+      showToast("Verify OTP before entering details", "warn");
+      return;
+    }
     if (!name.trim()) { setNameErr("Full name is required"); hasErr = true; }
     if (!email.trim()) {
       setEmailErr("Email is required"); setEmailSt("error"); hasErr = true;
@@ -553,9 +638,11 @@ export default function RegisterScreen() {
       await register({
         name: name.trim(),
         email: email.trim().toLowerCase(),
-        phone: `+91${phone}`,
+        phone: fullPhone,
         password,
         role,
+        device_token: "",
+        platform: REGISTER_PLATFORM,
         referral_admin_id: referralAdminId ?? undefined,
       });
       showToast("Account created! Welcome 🎉", "success");
@@ -603,7 +690,13 @@ export default function RegisterScreen() {
           >
             <TouchableOpacity
               style={s.backBtn}
-              onPress={() => (step === "phone" ? router.back() : goToPhone())}
+              onPress={() =>
+                step === "phone"
+                  ? router.back()
+                  : step === "otp"
+                    ? goToPhone()
+                    : goToOtpBack()
+              }
             >
               <Ionicons name="arrow-back" size={20} color="#fff" />
             </TouchableOpacity>
@@ -617,18 +710,45 @@ export default function RegisterScreen() {
               <Text style={s.logoSub}>Deliver Purity</Text>
             </View>
             <View style={s.pills}>
-              {(["phone", "details"] as Step[]).map((s2, i) => (
-                <View key={s2} style={s.pillRow}>
-                  <View style={[s.pill, step === s2 && s.pillActive, step === "details" && i === 0 && s.pillDone]}>
-                    {step === "details" && i === 0
-                      ? <Ionicons name="checkmark" size={12} color="#fff" />
-                      : <Text style={s.pillNum}>{i + 1}</Text>
-                    }
+              {REGISTER_STEPS.map((item, i) => (
+                <View key={item.key} style={s.pillRow}>
+                  <View
+                    style={[
+                      s.pill,
+                      step === item.key && s.pillActive,
+                      ((step === "otp" || step === "details") && i === 0) ||
+                        (step === "details" && i === 1)
+                        ? s.pillDone
+                        : null,
+                    ]}
+                  >
+                    {(((step === "otp" || step === "details") && i === 0) ||
+                      (step === "details" && i === 1)) ? (
+                      <Ionicons name="checkmark" size={12} color="#fff" />
+                    ) : (
+                      <Text style={s.pillNum}>{i + 1}</Text>
+                    )}
                   </View>
-                  <Text style={[s.pillLabel, step === s2 && { color: "#fff", fontWeight: "700" }]}>
-                    {i === 0 ? "Phone" : "Details"}
+                  <Text
+                    style={[
+                      s.pillLabel,
+                      step === item.key && { color: "#fff", fontWeight: "700" },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {item.label}
                   </Text>
-                  {i === 0 && <View style={[s.pillLine, step === "details" && s.pillLineDone]} />}
+                  {i < 2 && (
+                    <View
+                      style={[
+                        s.pillLine,
+                        ((step === "otp" || step === "details") && i === 0) ||
+                          (step === "details" && i === 1)
+                          ? s.pillLineDone
+                          : null,
+                      ]}
+                    />
+                  )}
                 </View>
               ))}
             </View>
@@ -649,7 +769,7 @@ export default function RegisterScreen() {
                       <Ionicons name="chevron-down" size={14} color={C.textSub} />
                     </View>
                     <TextInput
-                      style={s.phoneInput}
+                    style={s.phoneInput}
                       placeholder="mobile number"
                       placeholderTextColor={C.textLight}
                       value={phone}
@@ -713,7 +833,7 @@ export default function RegisterScreen() {
                       </>
                     ) : (
                       <>
-                        <Text style={s.ctaText}>Continue</Text>
+                        <Text style={s.ctaText}>{otpSending ? "Sending OTP…" : "Continue"}</Text>
                         <Ionicons name="arrow-forward" size={20} color="#fff" />
                       </>
                     )}
@@ -723,10 +843,109 @@ export default function RegisterScreen() {
             )}
 
             {/* ══ STEP 2 ══ */}
+            {step === "otp" && (
+              <View>
+                <Text style={s.stepTitle}>Verify OTP</Text>
+                <Text style={s.stepSub}>
+                  Enter the 6 digit code sent to{" "}
+                  <Text style={s.otpPhoneText}>{fullPhone}</Text>
+                </Text>
+
+                <Pressable style={s.otpCard} onPress={() => otpInputRef.current?.focus()}>
+                  <View style={s.otpBadge}>
+                    <Ionicons name="keypad-outline" size={14} color={C.primary} />
+                    <Text style={s.otpBadgeText}>SMS Verification</Text>
+                  </View>
+
+                  <View style={s.otpBoxesRow}>
+                    {Array.from({ length: 6 }).map((_, index) => {
+                      const digit = otp[index] ?? "";
+                      const active = index === otp.length && otp.length < 6;
+                      return (
+                        <View
+                          key={index}
+                          style={[
+                            s.otpBox,
+                            active && s.otpBoxActive,
+                            otpErr && s.otpBoxError,
+                            digit && s.otpBoxFilled,
+                          ]}
+                        >
+                          <Text style={s.otpDigit}>{digit}</Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+
+                  <TextInput
+                    ref={otpInputRef}
+                    value={otp}
+                    onChangeText={handleOtpChange}
+                    keyboardType="number-pad"
+                    maxLength={6}
+                    style={s.otpHiddenInput}
+                    autoFocus
+                  />
+
+                  <FieldError msg={otpErr} />
+
+                  <View style={s.otpFooterRow}>
+                    <Text style={s.otpHint}>
+                      {resendIn > 0
+                        ? `Resend OTP in ${resendIn}s`
+                        : "Didn't get the code?"}
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => sendOtp(true)}
+                      disabled={resendIn > 0 || otpSending}
+                    >
+                      <Text
+                        style={[
+                          s.resendText,
+                          (resendIn > 0 || otpSending) && s.resendTextDisabled,
+                        ]}
+                      >
+                        {otpSending ? "Sending..." : "Resend"}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </Pressable>
+
+                <TouchableOpacity
+                  style={[s.cta, otp.length !== 6 && s.ctaDim]}
+                  onPress={handleVerifyOtp}
+                  activeOpacity={0.85}
+                  disabled={otp.length !== 6 || otpVerifying}
+                >
+                  <LinearGradient
+                    colors={otp.length === 6 ? [C.primary, C.accent] : ["#ccc", "#bbb"]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={s.ctaGrad}
+                  >
+                    {otpVerifying ? (
+                      <>
+                        <ActivityIndicator color="#fff" size="small" />
+                        <Text style={s.ctaText}>Verifying…</Text>
+                      </>
+                    ) : (
+                      <>
+                        <Text style={s.ctaText}>Verify OTP</Text>
+                        <Ionicons name="shield-checkmark" size={20} color="#fff" />
+                      </>
+                    )}
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* ══ STEP 3 ══ */}
             {step === "details" && (
               <View>
                 <Text style={s.stepTitle}>Almost there!</Text>
-                <Text style={s.stepSub}>Enter Credentials</Text>
+                <Text style={s.stepSub}>
+                  {otpVerified ? "Phone verified. Now complete your details." : "Enter Credentials"}
+                </Text>
 
                 <Text style={s.sectionLabel}></Text>
                 <View style={s.roleRow}>
@@ -966,8 +1185,20 @@ const s = StyleSheet.create({
   logoEmoji: { fontSize: 38, marginBottom: 4 },
   logoText: { fontSize: 26, fontWeight: "800", color: "#fff", letterSpacing: -0.5 },
   logoSub: { fontSize: 13, color: "rgba(255,255,255,0.8)", marginTop: 2 },
-  pills: { flexDirection: "row", justifyContent: "center", gap: 4 },
-  pillRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+
+  pills: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 4,
+  },
+  pillRow: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    minWidth: 0,
+  },
   pill: {
     width: 24, height: 24, borderRadius: 12,
     backgroundColor: "rgba(255,255,255,0.3)",
@@ -976,8 +1207,18 @@ const s = StyleSheet.create({
   pillActive: { backgroundColor: "#fff" },
   pillDone: { backgroundColor: C.green },
   pillNum: { fontSize: 11, fontWeight: "800", color: "#fff" },
-  pillLabel: { fontSize: 12, fontWeight: "500", color: "rgba(255,255,255,0.7)" },
-  pillLine: { width: 32, height: 2, backgroundColor: "rgba(255,255,255,0.3)", borderRadius: 1 },
+  pillLabel: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "rgba(255,255,255,0.7)",
+    flexShrink: 1,
+  },
+  pillLine: {
+    flex: 1,
+    height: 2,
+    backgroundColor: "rgba(255,255,255,0.3)",
+    borderRadius: 1,
+  },
   pillLineDone: { backgroundColor: "#fff" },
   body: { padding: 20, paddingTop: 24 },
   stepTitle: { fontSize: 24, fontWeight: "800", color: C.text, marginBottom: 4, letterSpacing: -0.3 },
@@ -1006,6 +1247,96 @@ const s = StyleSheet.create({
     marginTop: 14, backgroundColor: C.errorBg, borderRadius: 10, padding: 10,
   },
   phoneBannerText: { fontSize: 12.5, fontWeight: "600", flex: 1 },
+  otpPhoneText: { fontWeight: "800", color: C.primary },
+  otpCard: {
+    backgroundColor: "#fff",
+    borderRadius: 22,
+    borderWidth: 1.5,
+    borderColor: C.border,
+    padding: 18,
+    marginBottom: 20,
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
+  },
+  otpBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 6,
+    backgroundColor: "#FFF3EE",
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginBottom: 16,
+  },
+  otpBadgeText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: C.primary,
+  },
+  otpBoxesRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 8,
+    marginBottom: 14,
+  },
+  otpBox: {
+    flex: 1,
+    height: 58,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: C.border,
+    backgroundColor: C.bg,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  otpBoxActive: {
+    borderColor: C.primary,
+    backgroundColor: "#fff7f2",
+  },
+  otpBoxFilled: {
+    borderColor: C.accent,
+    backgroundColor: "#fffaf6",
+  },
+  otpBoxError: {
+    borderColor: C.error,
+  },
+  otpDigit: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: C.text,
+    letterSpacing: 0.8,
+  },
+  otpHiddenInput: {
+    position: "absolute",
+    opacity: 0,
+    width: 1,
+    height: 1,
+  },
+  otpFooterRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    marginTop: 8,
+  },
+  otpHint: {
+    flex: 1,
+    fontSize: 12.5,
+    color: C.textSub,
+    fontWeight: "500",
+  },
+  resendText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: C.primary,
+  },
+  resendTextDisabled: {
+    color: C.textLight,
+  },
   referralField: { marginBottom: 14 },
   referralInputRow: {
     flexDirection: "row", alignItems: "center",

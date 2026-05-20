@@ -424,6 +424,25 @@ class ApiService {
     return data;
   }
 
+  async requestAuthOtp(data: {
+    phone: string;
+  }) {
+    return this.request<{ message: string }>("/auth/send-register-otp", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async verifyAuthOtp(data: {
+    phone: string;
+    otp: string;
+  }) {
+    return this.request<{ verified: boolean; phone: string }>("/auth/verify-register-otp", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
   async getMe() {
     return this.request<any>("/auth/me");
   }
@@ -1092,6 +1111,57 @@ class ApiService {
     });
   }
 
+  async getAdminExtraTasks(params?: {
+    date?: string;
+    status?: "pending" | "verified" | "rejected";
+  }) {
+    const searchParams = new URLSearchParams();
+    if (params?.date) searchParams.append("date", params.date);
+    if (params?.status) searchParams.append("status", params.status);
+    const query = searchParams.toString() ? `?${searchParams.toString()}` : "";
+    return this.request<{
+      date: string;
+      total: number;
+      pending: number;
+      verified: number;
+      rejected: number;
+      tasks: any[];
+    }>(`/admin/extra-tasks${query}`);
+  }
+
+  async verifyAdminExtraTask(
+    taskId: string,
+    action: "approve" | "reject",
+    note?: string,
+  ) {
+    const searchParams = new URLSearchParams();
+    searchParams.append("action", action);
+    if (note?.trim()) searchParams.append("note", note.trim());
+    return this.request<{
+      success: boolean;
+      task_id: string;
+      new_status: "verified" | "rejected";
+      points_awarded: boolean;
+      points: number;
+    }>(`/admin/extra-tasks/${taskId}/verify?${searchParams.toString()}`, {
+      method: "POST",
+    });
+  }
+
+  async awardAdminBonusPoints(data: {
+    worker_id: string;
+    points: number;
+    note?: string;
+  }) {
+    return this.request<{
+      success: boolean;
+      points_awarded: number;
+    }>("/admin/points/bonus", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
   async updateAdminFeedDetails(
     cowId: string,
     date: string,
@@ -1283,9 +1353,9 @@ async workerGetTodayExtraTasks() {
 
 async workerAddExtraTask(data: {
   task_type: string;
-  custom_label?: string;
   description?: string;
   date: string;
+  image_url?: string;
 }) {
   const token = await AsyncStorage.getItem('worker_token');
   const response = await fetch(`${API_BASE}/api/worker/extra-tasks`, {
@@ -1299,6 +1369,49 @@ async workerAddExtraTask(data: {
   const result = await response.json();
   if (!response.ok) throw new Error(result.detail || 'Failed to save extra task');
   return result;
+}
+
+async workerGetPoints() {
+  const token = await AsyncStorage.getItem('worker_token');
+  const endpoints = [
+    `${API_BASE}/api/worker/points`,
+    `${API_BASE}/api/worker/points/`,
+    `${API_BASE}/worker/points`,
+    `${API_BASE}/worker/points/`,
+  ];
+
+  for (const endpoint of endpoints) {
+    try {
+      const response = await fetch(endpoint, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      const text = await response.text();
+      const trimmed = text.trim();
+      const data = trimmed ? (() => {
+        try {
+          return JSON.parse(trimmed);
+        } catch {
+          return null;
+        }
+      })() : null;
+
+      if (response.ok && data) return data;
+      if (response.status === 404) continue;
+
+      if (!data && trimmed.startsWith('<')) {
+        continue;
+      }
+
+      throw new Error(
+        (data && typeof data === 'object' && 'detail' in data && typeof data.detail === 'string'
+          ? data.detail
+          : trimmed) || 'Failed to fetch worker points'
+      );
+    } catch {
+      continue;
+    }
+  }
+  return null;
 }
 
 async workerDeleteExtraTask(taskId: string) {
