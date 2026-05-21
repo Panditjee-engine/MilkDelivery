@@ -754,7 +754,6 @@ export default function RegisterScreen() {
 
                 <View style={s.form}>
                   {/* ── Referral Code Field ── */}
-                  {/* ── Referral Code Field — sirf customer ke liye ── */}
                   {role === "customer" && (
                     <View style={s.referralField}>
                       <View style={[
@@ -778,13 +777,7 @@ export default function RegisterScreen() {
                         {referralStatus === "valid" && <Ionicons name="checkmark-circle" size={20} color={C.success} />}
                         {referralStatus === "invalid" && <Ionicons name="close-circle" size={20} color={C.error} />}
 
-                        {/* ── Scanner Button ── 
-                        <TouchableOpacity
-                          onPress={openScanner}
-                          style={s.scanBtn}
-                        >
-                          <Ionicons name="scan-outline" size={20} color={C.primary} />
-                        </TouchableOpacity>*/}
+                      
                       </View>
 
                       {referralStatus === "valid" && referralAdminName ? (
@@ -804,45 +797,6 @@ export default function RegisterScreen() {
                       ) : null}
                     </View>
                   )}
-
-                  {/* ── QR Scanner Modal ── */}
-                  {/* <Modal
-  visible={scannerVisible}
-  animationType="slide"
-  onRequestClose={() => setScannerVisible(false)}
->
-  <View style={{ flex: 1, backgroundColor: "#000" }}>
-    <SafeAreaView edges={["top"]}>
-      <View style={s.scannerHeader}>
-        <TouchableOpacity
-          onPress={() => setScannerVisible(false)}
-          style={s.scannerCloseBtn}
-        >
-          <Ionicons name="close" size={22} color="#fff" />
-        </TouchableOpacity>
-        <Text style={s.scannerTitle}>Scan Referral QR Code</Text>
-        <View style={{ width: 40 }} />
-      </View>
-    </SafeAreaView>
-
-    <CameraView
-      style={{ flex: 1 }}
-      facing="back"
-      onBarcodeScanned={handleBarCodeScanned}
-      barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
-    />
-
-    <View style={s.scannerOverlay} pointerEvents="none">
-      <View style={s.scannerFrame}>
-        <View style={[s.corner, s.cornerTL]} />
-        <View style={[s.corner, s.cornerTR]} />
-        <View style={[s.corner, s.cornerBL]} />
-        <View style={[s.corner, s.cornerBR]} />
-      </View>
-      <Text style={s.scannerHint}>Point at a GauSatv referral QR code</Text>
-    </View>
-  </View>
-</Modal> */}
 
                   <FloatInput label="Full Name" value={name} onChangeText={handleNameChange} error={nameErr} />
 
