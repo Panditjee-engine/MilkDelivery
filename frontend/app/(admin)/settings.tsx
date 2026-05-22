@@ -696,7 +696,7 @@ export default function AdminSettingsScreen() {
 
       await api.updateProfile(updatedData);
 
-      // ← Yeh add karo: context ka user turant update hoga, screen par naya data dikhega
+      // Update the user context immediately with new profile info
       updateUser(updatedData);
 
       setActiveModal(null);
