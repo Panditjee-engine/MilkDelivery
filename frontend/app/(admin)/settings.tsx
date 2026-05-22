@@ -317,41 +317,41 @@ function ShareModal({
     }
   }, [visible]);
 
-const fetchQrData = async () => {
-  setLoadingQr(true);
-  try {
-    const name = adminUser?.name || "GAU";
-    const nameClean = name.replace(/[^a-zA-Z]/g, "");
-    const namePart = nameClean.slice(0, 3).toUpperCase().padEnd(3, "X");
+  const fetchQrData = async () => {
+    setLoadingQr(true);
+    try {
+      const name = adminUser?.name || "GAU";
+      const nameClean = name.replace(/[^a-zA-Z]/g, "");
+      const namePart = nameClean.slice(0, 3).toUpperCase().padEnd(3, "X");
 
-    const adminId = adminUser?.id || "000";
-    const asciiSum = adminId
-      .split("")
-      .reduce((sum: number, c: string) => sum + c.charCodeAt(0), 0);
-    const numPart = String((asciiSum % 900) + 100);
+      const adminId = adminUser?.id || "000";
+      const asciiSum = adminId
+        .split("")
+        .reduce((sum: number, c: string) => sum + c.charCodeAt(0), 0);
+      const numPart = String((asciiSum % 900) + 100);
 
-    // Universal Link with referral param (for Play Store fallback)
-    const universalLink = `https://play.google.com/store/apps/details?id=com.badal_12.frontend&referrer=admin_id%3D${adminId}`;
+      // Universal Link with referral param (for Play Store fallback)
+      const universalLink = `https://play.google.com/store/apps/details?id=com.badal_12.frontend&referrer=admin_id%3D${adminId}`;
 
-    setQrData({
-      admin_id: adminId,
-      admin_name: name,
-      qr_value: universalLink,
-      referral_code: `${namePart}${numPart}`,
-    });
-  } catch (e) {
-    console.warn("QR setup failed", e);
-    setQrData({
-      admin_id: adminUser?.id || "000",
-      admin_name: adminUser?.name || "GAU",
-      // Fallback Play Store link
-      qr_value: "https://play.google.com/store/apps/details?id=com.badal_12.frontend",
-      referral_code: "GAU100",
-    });
-  } finally {
-    setLoadingQr(false);
-  }
-};
+      setQrData({
+        admin_id: adminId,
+        admin_name: name,
+        qr_value: universalLink,
+        referral_code: `${namePart}${numPart}`,
+      });
+    } catch (e) {
+      console.warn("QR setup failed", e);
+      setQrData({
+        admin_id: adminUser?.id || "000",
+        admin_name: adminUser?.name || "GAU",
+        // Fallback Play Store link
+        qr_value: "https://play.google.com/store/apps/details?id=com.badal_12.frontend",
+        referral_code: "GAU100",
+      });
+    } finally {
+      setLoadingQr(false);
+    }
+  };
   const handleShare = async () => {
     if (sharing || !captureRefContainer.current) return;
     try {
@@ -376,7 +376,7 @@ const fetchQrData = async () => {
     `gausatv://register?admin_id=${adminUser?.id || "default"}`;
   const displayName = qrData?.admin_name || adminUser?.name || "GauSatva";
   const shortCode = qrData?.referral_code ||
-  (qrData?.admin_id || adminUser?.id || "").slice(-6).toUpperCase();
+    (qrData?.admin_id || adminUser?.id || "").slice(-6).toUpperCase();
 
   return (
     <Modal
@@ -590,7 +590,7 @@ function OtpInput({
 
 // ── Main Screen
 export default function AdminSettingsScreen() {
-  const { user, logout } = useAuth();
+  const { user, logout, updateUser } = useAuth();
   const router = useRouter();
   const { cfg: alertCfg, show: showAlert, dismiss: dismissAlert } = useAlert();
 
@@ -686,16 +686,38 @@ export default function AdminSettingsScreen() {
       );
       return;
     }
-    // TODO: call api.updateProfile(profileDraft)
-    setActiveModal(null);
-    showAlert(
-      "Profile Updated",
-      "Your profile info has been updated.",
-      undefined,
-      "person-circle",
-      C.deepPeach,
-      C.dark,
-    );
+
+    try {
+      const updatedData = {
+        name: profileDraft.name.trim(),
+        email: profileDraft.email.trim(),
+        phone: profileDraft.phone.trim(),
+      };
+
+      await api.updateProfile(updatedData);
+
+      // ← Yeh add karo: context ka user turant update hoga, screen par naya data dikhega
+      updateUser(updatedData);
+
+      setActiveModal(null);
+      showAlert(
+        "Profile Updated",
+        "Your profile info has been updated.",
+        undefined,
+        "person-circle",
+        C.deepPeach,
+        C.dark,
+      );
+    } catch (err: any) {
+      showAlert(
+        "Update Failed",
+        err?.message ?? "Could not update profile. Please try again.",
+        undefined,
+        "alert-circle-outline",
+        "#FFE8D6",
+        "#E53935",
+      );
+    }
   };
 
   // ── OTP: Step 1 — Request OTP

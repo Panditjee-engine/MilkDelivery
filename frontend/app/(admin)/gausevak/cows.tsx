@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import * as Print from 'expo-print';
-import * as Sharing from 'expo-sharing';
-import ViewShot from 'react-native-view-shot';
+import * as Print from "expo-print";
+import * as Sharing from "expo-sharing";
+import { CameraView, useCameraPermissions } from "expo-camera";
 import {
   View,
   Text,
@@ -19,14 +19,17 @@ import {
   Switch,
   ActivityIndicator,
   RefreshControl,
-  Alert,
   Image,
+  Dimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../../../src/services/api";
 
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+
+// ── Types
 type CowType = "mature" | "newborn" | "bull";
 type PregnancyStatus = "pregnant" | "not_pregnant" | "unknown";
 type SortOption = "newest" | "oldest" | "name_asc" | "name_desc";
@@ -70,6 +73,8 @@ interface Cow {
   soldDate?: string;
   soldPrice?: string;
   soldReason?: string;
+  qrLinkedData?: string;
+  isBarcodeLinked?: boolean;
 }
 
 interface Insurance {
@@ -117,8 +122,11 @@ interface CowForm {
   soldDate: string;
   soldPrice: string;
   soldReason: string;
+  scannedQrData: string;
+  isBarcodeLinked: boolean;
 }
 
+// ── Assets
 const cowImg = require("../../../assets/images/gir-cow.png");
 const bullImg = require("../../../assets/images/bull-cow.png");
 const calfImg = require("../../../assets/images/calf-cow.png");
@@ -129,6 +137,7 @@ const getAnimalImage = (type: string) => {
   return cowImg;
 };
 
+// ── Constants
 const EMPTY_FORM: CowForm = {
   tag: "",
   name: "",
@@ -161,6 +170,8 @@ const EMPTY_FORM: CowForm = {
   soldDate: "",
   soldPrice: "",
   soldReason: "",
+  scannedQrData: "",
+  isBarcodeLinked: false,
 };
 
 const STATUS = {
@@ -189,11 +200,25 @@ function derivedStatus(cow: Cow): keyof typeof STATUS {
   return "healthy";
 }
 
+function isBarcode(format: string): boolean {
+  const barcodeFormats = [
+    "ean13",
+    "ean8",
+    "upc_a",
+    "upc_e",
+    "code39",
+    "code93",
+    "code128",
+    "itf14",
+    "codabar",
+    "interleaved2of5",
+  ];
+  return barcodeFormats.includes(format.toLowerCase());
+}
+
 function getTodayStr(): string {
   const today = new Date();
-  const dd = String(today.getDate()).padStart(2, "0");
-  const mm = String(today.getMonth() + 1).padStart(2, "0");
-  return `${dd}/${mm}/${today.getFullYear()}`;
+  return `${String(today.getDate()).padStart(2, "0")}/${String(today.getMonth() + 1).padStart(2, "0")}/${today.getFullYear()}`;
 }
 
 function strToDate(str: string): Date {
@@ -206,9 +231,7 @@ function strToDate(str: string): Date {
 }
 
 function dateToStr(date: Date): string {
-  const dd = String(date.getDate()).padStart(2, "0");
-  const mm = String(date.getMonth() + 1).padStart(2, "0");
-  return `${dd}/${mm}/${date.getFullYear()}`;
+  return `${String(date.getDate()).padStart(2, "0")}/${String(date.getMonth() + 1).padStart(2, "0")}/${date.getFullYear()}`;
 }
 
 function getActiveDays(activeSince?: string): number | null {
@@ -225,7 +248,525 @@ function getActiveDays(activeSince?: string): number | null {
   return diff >= 0 ? diff : null;
 }
 
-// ── DateField 
+// ── Scanner Modal
+function ScannerModal({
+  visible,
+  onClose,
+  onScanned,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  onScanned: (data: string, format: string) => void;
+}) {
+  const [permission, requestPermission] = useCameraPermissions();
+  const [scanned, setScanned] = useState(false);
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (visible) {
+      setScanned(false);
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.04,
+            duration: 900,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 900,
+            useNativeDriver: true,
+          }),
+        ]),
+      ).start();
+    } else {
+      pulseAnim.stopAnimation();
+    }
+  }, [visible]);
+
+  const handleBarCodeScanned = ({
+    data,
+    type,
+  }: {
+    data: string;
+    type: string;
+  }) => {
+    if (scanned) return;
+    setScanned(true);
+    onScanned(data, type);
+  };
+
+  if (!visible) return null;
+
+  const frameWidth = 300;
+  const frameHeight = 140;
+
+  return (
+    <Modal
+      visible={visible}
+      transparent={false}
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <View style={{ flex: 1, backgroundColor: "#000" }}>
+        <StatusBar barStyle="light-content" backgroundColor="#000" />
+
+        {!permission ? (
+          <View style={scan.permWrap}>
+            <ActivityIndicator size="large" color="#FFBF55" />
+          </View>
+        ) : !permission.granted ? (
+          <View style={scan.permWrap}>
+            <Ionicons name="camera-outline" size={60} color="#FFBF55" />
+            <Text style={scan.permTitle}>Camera Permission Required</Text>
+            <Text style={scan.permSub}>
+              We need camera access to scan barcodes on your animals.
+            </Text>
+            <TouchableOpacity style={scan.permBtn} onPress={requestPermission}>
+              <Text style={scan.permBtnText}>Allow Camera</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <>
+            <CameraView
+              style={StyleSheet.absoluteFillObject}
+              facing="back"
+              onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+              barcodeScannerSettings={{
+                barcodeTypes: [
+                  "qr",
+                  "ean13",
+                  "ean8",
+                  "upc_a",
+                  "upc_e",
+                  "code39",
+                  "code93",
+                  "code128",
+                  "itf14",
+                  "codabar",
+                ],
+              }}
+            />
+
+            {/* Dark overlays */}
+            <View style={scan.overlayTop} pointerEvents="none" />
+            <View
+              style={{ flexDirection: "row", height: frameHeight }}
+              pointerEvents="none"
+            >
+              <View style={scan.overlaySide} />
+              <View style={{ width: frameWidth, height: frameHeight }} />
+              <View style={scan.overlaySide} />
+            </View>
+            <View style={scan.overlayBottom} pointerEvents="none" />
+
+            {/* Animated scan frame */}
+            <View style={scan.frameWrap} pointerEvents="none">
+              <Animated.View
+                style={[
+                  scan.frame,
+                  { width: frameWidth, height: frameHeight },
+                  { transform: [{ scale: pulseAnim }] },
+                ]}
+              >
+                <View style={[scan.corner, scan.cornerTL]} />
+                <View style={[scan.corner, scan.cornerTR]} />
+                <View style={[scan.corner, scan.cornerBL]} />
+                <View style={[scan.corner, scan.cornerBR]} />
+                <BarScanLine frameHeight={frameHeight} />
+              </Animated.View>
+            </View>
+
+            <View style={scan.hintWrap} pointerEvents="none">
+              <View style={scan.hintPill}>
+                <Ionicons name="barcode-outline" size={14} color="#FFBF55" />
+                <Text style={scan.hintText}>
+                  {scanned
+                    ? "Detected! Opening..."
+                    : "Point camera at the animal's barcode or QR tag"}
+                </Text>
+              </View>
+              <Text style={scan.hintSub}>
+                Supports: Barcode (EAN/Code128/UPC) & QR Code
+              </Text>
+            </View>
+
+            {scanned && (
+              <TouchableOpacity
+                style={scan.rescanBtn}
+                onPress={() => setScanned(false)}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="refresh" size={16} color="#fff" />
+                <Text style={scan.rescanText}>Scan Again</Text>
+              </TouchableOpacity>
+            )}
+          </>
+        )}
+
+        <TouchableOpacity
+          style={scan.closeOverlayBtn}
+          onPress={onClose}
+          activeOpacity={0.85}
+        >
+          <Ionicons name="close" size={20} color="#fff" />
+        </TouchableOpacity>
+      </View>
+    </Modal>
+  );
+}
+
+function BarScanLine({ frameHeight }: { frameHeight: number }) {
+  const anim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(anim, {
+          toValue: 1,
+          duration: 1600,
+          useNativeDriver: true,
+        }),
+        Animated.timing(anim, {
+          toValue: 0,
+          duration: 1600,
+          useNativeDriver: true,
+        }),
+      ]),
+    ).start();
+  }, []);
+  const translateY = anim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, frameHeight - 4],
+  });
+  return (
+    <Animated.View style={[scan.scanLine, { transform: [{ translateY }] }]} />
+  );
+}
+
+// ── Modern Alert Modal
+interface AlertConfig {
+  title: string;
+  message: string;
+  type?: "error" | "success" | "warning" | "confirm";
+  confirmText?: string;
+  cancelText?: string;
+  onConfirm?: () => void;
+  onCancel?: () => void;
+}
+
+function ModernAlert({
+  config,
+  onDismiss,
+}: {
+  config: AlertConfig | null;
+  onDismiss: () => void;
+}) {
+  const scaleAnim = useRef(new Animated.Value(0.85)).current;
+  const opacityAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (config) {
+      Animated.parallel([
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          tension: 120,
+          friction: 10,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacityAnim, {
+          toValue: 1,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      scaleAnim.setValue(0.85);
+      opacityAnim.setValue(0);
+    }
+  }, [config]);
+
+  if (!config) return null;
+
+  const iconMap = {
+    error: {
+      name: "close-circle" as const,
+      color: "#dc2626",
+      bg: "#fff1f2",
+      border: "#fecdd3",
+    },
+    success: {
+      name: "checkmark-circle" as const,
+      color: "#16a34a",
+      bg: "#f0fdf4",
+      border: "#bbf7d0",
+    },
+    warning: {
+      name: "warning" as const,
+      color: "#d97706",
+      bg: "#fffbeb",
+      border: "#fde68a",
+    },
+    confirm: {
+      name: "help-circle" as const,
+      color: "#7c3aed",
+      bg: "#faf5ff",
+      border: "#e9d5ff",
+    },
+  };
+
+  const style = iconMap[config.type ?? "error"];
+  const isConfirm = config.type === "confirm";
+  const handleConfirm = () => {
+    config.onConfirm?.();
+    onDismiss();
+  };
+  const handleCancel = () => {
+    config.onCancel?.();
+    onDismiss();
+  };
+
+  return (
+    <Modal visible transparent animationType="none" onRequestClose={onDismiss}>
+      <Animated.View style={[al.overlay, { opacity: opacityAnim }]}>
+        <Animated.View style={[al.card, { transform: [{ scale: scaleAnim }] }]}>
+          <View
+            style={[
+              al.iconWrap,
+              { backgroundColor: style.bg, borderColor: style.border },
+            ]}
+          >
+            <Ionicons name={style.name} size={32} color={style.color} />
+          </View>
+          <Text style={al.title}>{config.title}</Text>
+          <Text style={al.message}>{config.message}</Text>
+          {isConfirm ? (
+            <View style={al.btnRow}>
+              <TouchableOpacity
+                style={al.cancelBtn}
+                onPress={handleCancel}
+                activeOpacity={0.8}
+              >
+                <Text style={al.cancelText}>
+                  {config.cancelText ?? "Cancel"}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[al.confirmBtn, { backgroundColor: style.color }]}
+                onPress={handleConfirm}
+                activeOpacity={0.8}
+              >
+                <Text style={al.confirmText}>
+                  {config.confirmText ?? "Confirm"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={[al.singleBtn, { backgroundColor: style.color }]}
+              onPress={onDismiss}
+              activeOpacity={0.8}
+            >
+              <Text style={al.confirmText}>Got it</Text>
+            </TouchableOpacity>
+          )}
+        </Animated.View>
+      </Animated.View>
+    </Modal>
+  );
+}
+
+function useModernAlert() {
+  const [alertConfig, setAlertConfig] = useState<AlertConfig | null>(null);
+  const showAlert = useCallback(
+    (config: AlertConfig) => setAlertConfig(config),
+    [],
+  );
+  const dismissAlert = useCallback(() => setAlertConfig(null), []);
+  return { alertConfig, showAlert, dismissAlert };
+}
+
+// ── QR / Barcode Action Sheet
+function QRActionSheet({
+  visible,
+  qrData,
+  scannedFormat,
+  onClose,
+  onAddNew,
+  onLinked,
+  cows,
+  showAlert,
+}: {
+  visible: boolean;
+  qrData: string;
+  scannedFormat: string;
+  onClose: () => void;
+  onAddNew: (qrData: string, isBarcodeLinked: boolean) => void;
+  onLinked: (updated: Cow) => void;
+  cows: Cow[];
+  showAlert: (c: AlertConfig) => void;
+}) {
+  const [linking, setLinking] = useState(false);
+  const [selectedCow, setSelectedCow] = useState<Cow | null>(null);
+  const [search, setSearch] = useState("");
+  const scannedIsBarcode = isBarcode(scannedFormat);
+  const filtered = cows.filter(
+    (c) =>
+      c.name.toLowerCase().includes(search.toLowerCase()) ||
+      c.tag.toLowerCase().includes(search.toLowerCase()),
+  );
+
+  const handleLinkExisting = async () => {
+    if (!selectedCow) return;
+    setLinking(true);
+    try {
+      const updated = await api.linkQRToCow(selectedCow.id, qrData);
+      const finalUpdated: Cow = {
+        ...updated,
+        isBarcodeLinked: scannedIsBarcode,
+      };
+      onLinked(finalUpdated);
+      onClose();
+    } catch (err: any) {
+      showAlert({
+        title: "Link Failed",
+        message: err.message ?? "Failed to link code.",
+        type: "error",
+      });
+    } finally {
+      setLinking(false);
+    }
+  };
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <View style={qa.overlay}>
+        <View style={qa.sheet}>
+          <View style={qa.handle} />
+          <View style={qa.qrPreview}>
+            <Ionicons
+              name={scannedIsBarcode ? "barcode" : "qr-code"}
+              size={20}
+              color="#7c3aed"
+            />
+            <View style={{ flex: 1, marginLeft: 10 }}>
+              <Text style={qa.qrLabel}>
+                {scannedIsBarcode ? "Barcode" : "QR Code"} Scanned
+              </Text>
+              <Text style={qa.qrData} numberOfLines={1}>
+                {qrData}
+              </Text>
+            </View>
+            <TouchableOpacity onPress={onClose} style={qa.closeBtn}>
+              <Ionicons name="close" size={16} color="#8B6854" />
+            </TouchableOpacity>
+          </View>
+          <Text style={qa.title}>What would you like to do?</Text>
+          <TouchableOpacity
+            style={qa.optionCard}
+            onPress={() => {
+              onClose();
+              onAddNew(qrData, scannedIsBarcode);
+            }}
+            activeOpacity={0.85}
+          >
+            <View style={[qa.optionIcon, { backgroundColor: "#f0fdf4" }]}>
+              <Ionicons name="add-circle-outline" size={22} color="#16a34a" />
+            </View>
+            <View style={{ flex: 1, marginLeft: 12 }}>
+              <Text style={qa.optionTitle}>Register New Animal</Text>
+              <Text style={qa.optionSub}>
+                Add a new cow/bull/calf with this{" "}
+                {scannedIsBarcode ? "barcode" : "QR"} tag
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color="#C4A882" />
+          </TouchableOpacity>
+          <View style={qa.dividerRow}>
+            <View style={qa.divLine} />
+            <Text style={qa.divText}>or link to existing</Text>
+            <View style={qa.divLine} />
+          </View>
+          <View style={qa.searchRow}>
+            <Ionicons name="search-outline" size={15} color="#C4A882" />
+            <TextInput
+              style={qa.searchInput}
+              value={search}
+              onChangeText={setSearch}
+              placeholder="Search animal name or tag..."
+              placeholderTextColor="#D4B8A8"
+            />
+          </View>
+          <ScrollView
+            style={{ maxHeight: 200 }}
+            showsVerticalScrollIndicator={false}
+          >
+            {filtered.slice(0, 20).map((cow) => (
+              <TouchableOpacity
+                key={cow.id}
+                style={[
+                  qa.cowRow,
+                  selectedCow?.id === cow.id && qa.cowRowActive,
+                ]}
+                onPress={() =>
+                  setSelectedCow(selectedCow?.id === cow.id ? null : cow)
+                }
+                activeOpacity={0.75}
+              >
+                <Image
+                  source={getAnimalImage(cow.type)}
+                  style={{ width: 28, height: 28, resizeMode: "contain" }}
+                />
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={qa.cowName}>{cow.name}</Text>
+                  <Text style={qa.cowTag}>
+                    {cow.tag} · {cow.breed}
+                  </Text>
+                </View>
+                {selectedCow?.id === cow.id && (
+                  <Ionicons name="checkmark-circle" size={20} color="#BB6B3F" />
+                )}
+              </TouchableOpacity>
+            ))}
+            {filtered.length === 0 && (
+              <Text style={qa.emptyText}>No animals found</Text>
+            )}
+          </ScrollView>
+          {selectedCow && (
+            <TouchableOpacity
+              style={[qa.linkBtn, linking && { opacity: 0.7 }]}
+              onPress={handleLinkExisting}
+              disabled={linking}
+              activeOpacity={0.85}
+            >
+              {linking ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <>
+                  <Ionicons
+                    name={scannedIsBarcode ? "barcode-outline" : "link-outline"}
+                    size={18}
+                    color="#fff"
+                  />
+                  <Text style={qa.linkBtnText}>
+                    Link {scannedIsBarcode ? "Barcode" : "QR"} to{" "}
+                    {selectedCow.name}
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+// ── DateField
 function DateField({
   label,
   value,
@@ -314,7 +855,6 @@ function DateField({
   );
 }
 
-// ── Field 
 function Field({
   label,
   value,
@@ -388,6 +928,7 @@ function BreedSelector({
   const filtered = BREEDS.filter((b) =>
     b.name.toLowerCase().includes(search.toLowerCase()),
   );
+
   const select = (name: string) => {
     onChange(name);
     setOpen(false);
@@ -690,7 +1231,6 @@ function TransferSection({
             label="Transfer Date"
             value={form.transferDate}
             onChange={setF("transferDate")}
-            placeholder="DD/MM/YYYY"
           />
         </View>
       )}
@@ -761,7 +1301,6 @@ function SoldSection({
             label="Sale Date"
             value={form.soldDate}
             onChange={setF("soldDate")}
-            placeholder="DD/MM/YYYY"
           />
           <Field
             label="Sale Price (₹)"
@@ -831,7 +1370,6 @@ function ExpirySection({
             label="Expiry Date"
             value={form.expiryDate}
             onChange={setF("expiryDate")}
-            placeholder="DD/MM/YYYY"
           />
           <Field
             label="Reason for Expiry"
@@ -852,27 +1390,77 @@ function CowFormFields({
   setF,
   showTagField,
   cows,
+  tagLocked,
 }: {
   form: CowForm;
   setF: (k: keyof CowForm) => (v: any) => void;
   showTagField?: boolean;
   cows?: Cow[];
+  tagLocked?: boolean;
 }) {
   const isBull = form.type === "bull";
-  const isNewborn = form.type === "newborn";
   const motherOptions =
     cows?.filter((c) => c.type !== "bull" && !c.isSold && c.isActive) ?? [];
 
   return (
     <>
       {showTagField && (
-        <Field
-          label="Tag"
-          value={form.tag}
-          onChange={setF("tag")}
-          placeholder="e.g. GS-009"
-          icon="barcode-outline"
-        />
+        <View style={f.wrap}>
+          <Text style={f.label}>
+            Tag{" "}
+            {tagLocked
+              ? form.isBarcodeLinked
+                ? "(from Barcode scan)"
+                : "(from QR scan)"
+              : ""}
+          </Text>
+          <View
+            style={[
+              f.row,
+              tagLocked && {
+                backgroundColor: "#f0fdf4",
+                borderColor: "#86efac",
+              },
+            ]}
+          >
+            <Ionicons
+              name={
+                tagLocked
+                  ? form.isBarcodeLinked
+                    ? "barcode-outline"
+                    : "qr-code-outline"
+                  : "barcode-outline"
+              }
+              size={15}
+              color={tagLocked ? "#16a34a" : "#C4A882"}
+              style={{ marginRight: 8 }}
+            />
+            <TextInput
+              style={[f.input, tagLocked && { color: "#15803d" }]}
+              value={form.tag}
+              onChangeText={setF("tag")}
+              placeholder="e.g. GS-009"
+              placeholderTextColor="#D4B8A8"
+              editable={!tagLocked}
+            />
+            {tagLocked && (
+              <Ionicons name="lock-closed-outline" size={13} color="#16a34a" />
+            )}
+          </View>
+          {tagLocked && (
+            <Text
+              style={{
+                fontSize: 11,
+                color: "#16a34a",
+                fontWeight: "600",
+                marginTop: 4,
+              }}
+            >
+              ✓ {form.isBarcodeLinked ? "Barcode" : "QR tag"} will be linked to
+              this animal
+            </Text>
+          )}
+        </View>
       )}
       <Field
         label="Name"
@@ -882,7 +1470,6 @@ function CowFormFields({
         icon="text-outline"
       />
       <BreedSelector value={form.breed} onChange={setF("breed")} />
-
       {isBull ? (
         <>
           <PurposeSelector value={form.purpose} onChange={setF("purpose")} />
@@ -929,13 +1516,11 @@ function CowFormFields({
             label="Last Used Date"
             value={form.lastUsedDate}
             onChange={setF("lastUsedDate")}
-            placeholder="DD/MM/YYYY"
           />
           <DateField
             label="Bought Date"
             value={form.boughtDate}
             onChange={setF("boughtDate")}
-            placeholder="DD/MM/YYYY"
           />
           <View style={m.toggleCard}>
             <Toggle
@@ -962,10 +1547,10 @@ function CowFormFields({
             placeholder="e.g. BULL-001"
             icon="male-outline"
           />
-          {isNewborn && (
+          {form.type === "newborn" && (
             <View style={f.wrap}>
               <Text style={f.label}>Mother (Dam)</Text>
-              <View style={[f.row]}>
+              <View style={f.row}>
                 <Ionicons
                   name="female-outline"
                   size={15}
@@ -1033,14 +1618,12 @@ function CowFormFields({
               label="Bought Date"
               value={form.boughtDate}
               onChange={setF("boughtDate")}
-              placeholder="DD/MM/YYYY"
             />
           ) : (
             <DateField
               label="Born Date"
               value={form.bornDate}
               onChange={setF("bornDate")}
-              placeholder="DD/MM/YYYY"
             />
           )}
           <View style={m.toggleCard}>
@@ -1060,7 +1643,6 @@ function CowFormFields({
           </View>
         </>
       )}
-
       <TransferSection form={form} setF={setF} />
       <SoldSection form={form} setF={setF} />
       <ExpirySection form={form} setF={setF} />
@@ -1069,17 +1651,23 @@ function CowFormFields({
   );
 }
 
-// ── AddCowModal 
+// ── AddCowModal
 function AddCowModal({
   visible,
   onClose,
   onAdd,
   cows,
+  prefillQrData,
+  prefillIsBarcode,
+  showAlert,
 }: {
   visible: boolean;
   onClose: () => void;
   onAdd: (c: Cow) => void;
   cows: Cow[];
+  prefillQrData?: string;
+  prefillIsBarcode?: boolean;
+  showAlert: (c: AlertConfig) => void;
 }) {
   const [step, setStep] = useState<"pick" | "form">("pick");
   const [form, setForm] = useState<CowForm>(EMPTY_FORM);
@@ -1087,6 +1675,17 @@ function AddCowModal({
   const fade = useRef(new Animated.Value(0)).current;
   const setF = (k: keyof CowForm) => (v: any) =>
     setForm((p) => ({ ...p, [k]: v }));
+
+  useEffect(() => {
+    if (visible && prefillQrData) {
+      setForm((p) => ({
+        ...p,
+        tag: prefillQrData,
+        scannedQrData: prefillQrData,
+        isBarcodeLinked: prefillIsBarcode ?? false,
+      }));
+    }
+  }, [visible, prefillQrData, prefillIsBarcode]);
 
   const pickType = (t: CowType) => {
     setForm((p) => ({ ...p, type: t }));
@@ -1107,7 +1706,11 @@ function AddCowModal({
 
   const submit = async () => {
     if (!form.name.trim() || !form.breed.trim() || !form.tag.trim()) {
-      Alert.alert("Missing Fields", "Please fill in Tag, Name, and Breed.");
+      showAlert({
+        title: "Missing Fields",
+        message: "Please fill in Tag, Name, and Breed.",
+        type: "error",
+      });
       return;
     }
     setSub(true);
@@ -1155,6 +1758,8 @@ function AddCowModal({
         soldPrice: form.isSold && form.soldPrice ? form.soldPrice : undefined,
         soldReason:
           form.isSold && form.soldReason ? form.soldReason : undefined,
+        scannedQrData: form.scannedQrData || undefined,
+        isBarcodeLinked: form.isBarcodeLinked,
         ...(isBull && {
           semenAvailable: form.semenAvailable,
           totalDoses: form.totalDoses ? parseInt(form.totalDoses) : undefined,
@@ -1177,7 +1782,11 @@ function AddCowModal({
       onAdd(created);
       reset();
     } catch (err: any) {
-      Alert.alert("Error", err.message ?? "Failed to register.");
+      showAlert({
+        title: "Registration Failed",
+        message: err.message ?? "Failed to register.",
+        type: "error",
+      });
     } finally {
       setSub(false);
     }
@@ -1206,6 +1815,8 @@ function AddCowModal({
     },
   ];
 
+  const tagLocked = !!form.scannedQrData;
+
   return (
     <Modal
       visible={visible}
@@ -1228,6 +1839,23 @@ function AddCowModal({
                     <Ionicons name="close" size={18} color="#8B6854" />
                   </TouchableOpacity>
                 </View>
+                {tagLocked && (
+                  <View style={m.qrLinkedBanner}>
+                    <Ionicons
+                      name={
+                        form.isBarcodeLinked
+                          ? "barcode-outline"
+                          : "qr-code-outline"
+                      }
+                      size={15}
+                      color="#16a34a"
+                    />
+                    <Text style={m.qrLinkedText}>
+                      {form.isBarcodeLinked ? "Barcode" : "QR"} scanned · Tag:{" "}
+                      {form.tag}
+                    </Text>
+                  </View>
+                )}
                 <Text style={m.sub}>Select the type to register</Text>
                 <View style={m.typeRow}>
                   {TYPE_OPTIONS.map((opt) => (
@@ -1351,6 +1979,7 @@ function AddCowModal({
                     setF={setF}
                     showTagField
                     cows={cows}
+                    tagLocked={tagLocked}
                   />
                 </ScrollView>
                 <TouchableOpacity
@@ -1391,19 +2020,21 @@ function AddCowModal({
   );
 }
 
-// ── EditCowModal 
+// ── EditCowModal
 function EditCowModal({
   cow,
   visible,
   onClose,
   onSaved,
   cows,
+  showAlert,
 }: {
   cow: Cow | null;
   visible: boolean;
   onClose: () => void;
-  onSaved: (updated: Cow) => void;
+  onSaved: (u: Cow) => void;
   cows: Cow[];
+  showAlert: (c: AlertConfig) => void;
 }) {
   const [form, setForm] = useState<CowForm>(EMPTY_FORM);
   const [submitting, setSub] = useState(false);
@@ -1421,7 +2052,7 @@ function EditCowModal({
         weight: cow.weight?.replace(" kg", "") ?? "",
         size: cow.size ?? "",
         father: cow.father ?? "",
-        mother: cow.mother ?? "",
+        mother: (cow as any).mother ?? "",
         boughtDate: cow.boughtDate ?? "",
         bornDate: cow.bornDate ?? "",
         isActive: cow.isActive,
@@ -1446,6 +2077,8 @@ function EditCowModal({
         soldDate: cow.soldDate ?? "",
         soldPrice: cow.soldPrice ?? "",
         soldReason: cow.soldReason ?? "",
+        scannedQrData: cow.qrLinkedData ?? "",
+        isBarcodeLinked: cow.isBarcodeLinked ?? false,
       });
     }
   }, [cow]);
@@ -1456,7 +2089,11 @@ function EditCowModal({
   const submit = async () => {
     if (!cow) return;
     if (!form.name.trim() || !form.breed.trim()) {
-      Alert.alert("Missing Fields", "Name and Breed are required.");
+      showAlert({
+        title: "Missing Fields",
+        message: "Name and Breed are required.",
+        type: "error",
+      });
       return;
     }
     setSub(true);
@@ -1531,7 +2168,11 @@ function EditCowModal({
       onSaved(updated);
       onClose();
     } catch (err: any) {
-      Alert.alert("Error", err.message ?? "Failed to update.");
+      showAlert({
+        title: "Update Failed",
+        message: err.message ?? "Failed to update.",
+        type: "error",
+      });
     } finally {
       setSub(false);
     }
@@ -1553,7 +2194,12 @@ function EditCowModal({
           <View style={m.sheet}>
             <View style={m.handle} />
             <View style={m.header}>
-              <View style={[m.editIconWrap, isBull && { backgroundColor: "#f5f3ff" }]}>
+              <View
+                style={[
+                  m.editIconWrap,
+                  isBull && { backgroundColor: "#f5f3ff" },
+                ]}
+              >
                 <Ionicons
                   name="create-outline"
                   size={16}
@@ -1568,8 +2214,17 @@ function EditCowModal({
               </TouchableOpacity>
             </View>
             <Text style={m.sub}>Update the details below</Text>
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
-              <CowFormFields form={form} setF={setF} showTagField cows={cows} />
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              style={{ maxHeight: 420 }}
+            >
+              <CowFormFields
+                form={form}
+                setF={setF}
+                showTagField
+                cows={cows}
+                tagLocked={!!cow?.qrLinkedData}
+              />
             </ScrollView>
             <TouchableOpacity
               onPress={submit}
@@ -1589,137 +2244,119 @@ function EditCowModal({
                 </>
               )}
             </TouchableOpacity>
-          </View >
-        </KeyboardAvoidingView >
-      </View >
-    </Modal >
+          </View>
+        </KeyboardAvoidingView>
+      </View>
+    </Modal>
   );
 }
 
-// ── QRModal 
+// ── Barcode Display
+function BarcodeDisplay({ value }: { value: string }) {
+  return (
+    <View style={bcd.wrap}>
+      <View style={bcd.barsRow}>
+        {Array.from({ length: 60 }).map((_, i) => {
+          const charCode = value.charCodeAt(i % value.length) || 65;
+          const isThin = (charCode + i) % 3 !== 0;
+          return (
+            <View
+              key={i}
+              style={[
+                bcd.bar,
+                {
+                  width: isThin ? 2 : 4,
+                  height: i % 7 === 0 ? 68 : 56,
+                  marginRight: (charCode + i) % 4 === 0 ? 2 : 1,
+                  backgroundColor: "#111827",
+                  opacity: (charCode + i) % 5 === 0 ? 0 : 1,
+                },
+              ]}
+            />
+          );
+        })}
+      </View>
+      <Text style={bcd.valueText}>{value}</Text>
+    </View>
+  );
+}
+
+// ── QR Modal
 function QRModal({
   visible,
   onClose,
   cow,
+  showAlert,
+  onQrGenerated,
 }: {
   visible: boolean;
   onClose: () => void;
   cow: Cow | null;
+  showAlert: (c: AlertConfig) => void;
+  onQrGenerated?: (updated: Cow) => void;
 }) {
   const [menuVisible, setMenuVisible] = useState(false);
   const [saving, setSaving] = useState(false);
-  const viewShotRef = useRef<ViewShot>(null);
+  const [generatingQR, setGeneratingQR] = useState(false);
 
   if (!cow) return null;
+
+  const showBarcodeView = !!cow.isBarcodeLinked && !!cow.qrLinkedData;
+  const showQRView = !showBarcodeView && !!cow.qrCode;
+  const showGenQR = !showBarcodeView && !cow.qrCode;
+
+  const handleGenerateQR = async () => {
+    setGeneratingQR(true);
+    try {
+      const updated: Cow = await api.generateCowQR(cow.id);
+      onQrGenerated?.(updated);
+    } catch (err: any) {
+      showAlert({
+        title: "QR Failed",
+        message: err.message ?? "Failed to generate QR.",
+        type: "error",
+      });
+    } finally {
+      setGeneratingQR(false);
+    }
+  };
 
   const handleSaveAsPDF = async () => {
     setMenuVisible(false);
     setSaving(true);
     try {
-      // Generate HTML with QR image for PDF
-      const qrSrc = cow.qrCode ?? '';
-      const html = `
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <style>
-              body {
-                font-family: Arial, sans-serif;
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                justify-content: center;
-                min-height: 100vh;
-                margin: 0;
-                background: #fff;
-              }
-              .card {
-                border: 2px solid #F5EDE5;
-                border-radius: 20px;
-                padding: 32px 40px;
-                text-align: center;
-                max-width: 400px;
-                width: 90%;
-              }
-              .animal-title {
-                font-size: 22px;
-                font-weight: 800;
-                color: #111827;
-                margin-bottom: 4px;
-              }
-              .tag {
-                font-size: 13px;
-                color: #9ca3af;
-                font-weight: 600;
-                margin-bottom: 6px;
-              }
-              .breed {
-                font-size: 13px;
-                color: #BB6B3F;
-                font-weight: 600;
-                margin-bottom: 24px;
-              }
-              .qr-wrap {
-                width: 220px;
-                height: 220px;
-                border: 1px solid #F5EDE5;
-                border-radius: 14px;
-                overflow: hidden;
-                margin: 0 auto 16px;
-                background: #FFF8F0;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-              }
-              .qr-wrap img {
-                width: 100%;
-                height: 100%;
-                object-fit: contain;
-              }
-              .hint {
-                font-size: 12px;
-                color: #9ca3af;
-                margin-top: 8px;
-              }
-              .footer {
-                margin-top: 20px;
-                font-size: 11px;
-                color: #C4A882;
-              }
-            </style>
-          </head>
-          <body>
-            <div class="card">
-              <div class="animal-title">${cow.name}</div>
-              <div class="tag">TAG: ${cow.tag}</div>
-              <div class="breed">${cow.breed} · ${cow.type === 'bull' ? 'Bull' : cow.type === 'newborn' ? 'Newborn' : 'Adult Cow'}</div>
-              <div class="qr-wrap">
-                ${qrSrc ? `<img src="${qrSrc}" />` : '<div style="color:#D4B8A8;font-size:48px;">⬛</div>'}
-              </div>
-              <div class="hint">Scan to identify this animal</div>
-              <div class="footer">Generated by GauSevak · ${new Date().toLocaleDateString('en-IN')}</div>
-            </div>
-          </body>
-        </html>
-      `;
-
+      const html = `<!DOCTYPE html><html><body style="font-family:Arial;text-align:center;padding:40px">
+        <h2>${cow.name}</h2><p>TAG: ${cow.tag} · ${cow.breed}</p>
+        ${
+          showBarcodeView
+            ? `<p style="font-size:24px;letter-spacing:4px;font-family:monospace">${cow.qrLinkedData ?? cow.tag}</p>`
+            : cow.qrCode
+              ? `<img src="${cow.qrCode}" style="width:200px;height:200px"/>`
+              : "<p>No QR code</p>"
+        }
+        <p style="color:#9ca3af">Generated by GauSevak · ${new Date().toLocaleDateString("en-IN")}</p>
+      </body></html>`;
       const { uri } = await Print.printToFileAsync({ html, base64: false });
-
-     
-      // Share / Save
       const canShare = await Sharing.isAvailableAsync();
       if (canShare) {
-       await Sharing.shareAsync(uri, {
-          mimeType: 'application/pdf',
-          dialogTitle: `Save QR for ${cow.name}`,
-          UTI: 'com.adobe.pdf',
+        await Sharing.shareAsync(uri, {
+          mimeType: "application/pdf",
+          dialogTitle: `Save for ${cow.name}`,
+          UTI: "com.adobe.pdf",
         });
       } else {
-       Alert.alert('Saved', 'PDF saved successfully.');
+        showAlert({
+          title: "Saved",
+          message: "PDF saved successfully.",
+          type: "success",
+        });
       }
     } catch (err: any) {
-      Alert.alert('Error', err.message ?? 'Failed to save PDF.');
+      showAlert({
+        title: "Save Failed",
+        message: err.message ?? "Failed to save PDF.",
+        type: "error",
+      });
     } finally {
       setSaving(false);
     }
@@ -1734,80 +2371,130 @@ function QRModal({
     >
       <TouchableOpacity style={qr.overlay} activeOpacity={1} onPress={onClose}>
         <TouchableOpacity activeOpacity={1} style={qr.card}>
-          {/* Header */}
           <View style={qr.header}>
             <Image
               source={getAnimalImage(cow.type)}
-              style={{ width: 44, height: 44, resizeMode: 'contain' }}
+              style={{ width: 44, height: 44, resizeMode: "contain" }}
             />
             <View style={{ flex: 1, marginLeft: 10 }}>
               <Text style={qr.name}>{cow.name}</Text>
               <Text style={qr.tag}>TAG: {cow.tag}</Text>
             </View>
-
-            {/* ── 3-dot menu button ── */}
-            <View style={{ position: 'relative' }}>
-              <TouchableOpacity
-                onPress={() => setMenuVisible((v) => !v)}
-                style={qr.menuBtn}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Ionicons name="ellipsis-vertical" size={18} color="#8B6854" />
-              </TouchableOpacity>
-
-              {/* Dropdown */}
-              {menuVisible && (
+            {(showBarcodeView || showQRView) && (
+              <View style={{ position: "relative" }}>
                 <TouchableOpacity
-                  activeOpacity={1}
-                  style={qr.dropdown}
-                  onPress={() => {}} // prevent close
+                  onPress={() => setMenuVisible((v) => !v)}
+                  style={qr.menuBtn}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                  <TouchableOpacity
-                    style={qr.dropdownItem}
-                    onPress={handleSaveAsPDF}
-                    disabled={saving}
-                  >
-                    {saving ? (
-                      <ActivityIndicator size="small" color="#BB6B3F" />
-                    ) : (
-                      <Ionicons name="document-outline" size={15} color="#BB6B3F" />
-                    )}
-                    <Text style={qr.dropdownText}>
-                      {saving ? 'Saving...' : 'Save as PDF'}
-                    </Text>
-                  </TouchableOpacity>
+                  <Ionicons
+                    name="ellipsis-vertical"
+                    size={18}
+                    color="#8B6854"
+                  />
                 </TouchableOpacity>
-              )}
-            </View>
-
-            {/* Close button */}
+                {menuVisible && (
+                  <TouchableOpacity
+                    activeOpacity={1}
+                    style={qr.dropdown}
+                    onPress={() => {}}
+                  >
+                    <TouchableOpacity
+                      style={qr.dropdownItem}
+                      onPress={handleSaveAsPDF}
+                      disabled={saving}
+                    >
+                      {saving ? (
+                        <ActivityIndicator size="small" color="#BB6B3F" />
+                      ) : (
+                        <Ionicons
+                          name="document-outline"
+                          size={15}
+                          color="#BB6B3F"
+                        />
+                      )}
+                      <Text style={qr.dropdownText}>
+                        {saving ? "Saving..." : "Save as PDF"}
+                      </Text>
+                    </TouchableOpacity>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
             <TouchableOpacity
-              onPress={() => { setMenuVisible(false); onClose(); }}
+              onPress={() => {
+                setMenuVisible(false);
+                onClose();
+              }}
               style={[qr.closeBtn, { marginLeft: 6 }]}
             >
               <Ionicons name="close" size={16} color="#8B6854" />
             </TouchableOpacity>
           </View>
-
-          {/* QR Image */}
-          <View style={qr.qrWrap}>
-            {cow.qrCode ? (
-              <Image
-                source={{ uri: cow.qrCode }}
-                style={qr.qrImage}
-                resizeMode="contain"
+          {cow.qrLinkedData && (
+            <View style={qr.linkedBadge}>
+              <Ionicons
+                name={showBarcodeView ? "barcode-outline" : "link-outline"}
+                size={11}
+                color="#7c3aed"
               />
-            ) : (
-              <View style={qr.qrPlaceholder}>
-                <Ionicons name="qr-code-outline" size={48} color="#D4B8A8" />
+              <Text style={qr.linkedBadgeText}>
+                Linked from physical {showBarcodeView ? "barcode" : "QR tag"}
+              </Text>
+            </View>
+          )}
+          {showBarcodeView && (
+            <>
+              <Text style={qr.modeLabelText}>Barcode Tag</Text>
+              <View style={qr.barcodeWrap}>
+                <BarcodeDisplay value={cow.qrLinkedData ?? cow.tag} />
               </View>
-            )}
-          </View>
-
+            </>
+          )}
+          {showQRView && (
+            <>
+              <Text style={qr.modeLabelText}>QR Code</Text>
+              <View style={qr.qrWrap}>
+                <Image
+                  source={{ uri: cow.qrCode }}
+                  style={qr.qrImage}
+                  resizeMode="contain"
+                />
+              </View>
+            </>
+          )}
+          {showGenQR && (
+            <View style={qr.genQrWrap}>
+              <View style={qr.genQrIconCircle}>
+                <Ionicons name="qr-code-outline" size={44} color="#D4B8A8" />
+              </View>
+              <Text style={qr.genQrTitle}>No QR Code Yet</Text>
+              <Text style={qr.genQrSub}>
+                Generate a QR code to digitally identify this animal
+              </Text>
+              <TouchableOpacity
+                style={[qr.genQrBtn, generatingQR && { opacity: 0.7 }]}
+                onPress={handleGenerateQR}
+                disabled={generatingQR}
+                activeOpacity={0.85}
+              >
+                {generatingQR ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <>
+                    <Ionicons name="qr-code-outline" size={18} color="#fff" />
+                    <Text style={qr.genQrBtnText}>Generate QR Code</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
           <Text style={qr.hint}>Scan to identify this animal</Text>
-
           <TouchableOpacity
-            onPress={() => { setMenuVisible(false); onClose(); }}
+            onPress={() => {
+              setMenuVisible(false);
+              onClose();
+            }}
             style={qr.doneBtn}
           >
             <Text style={qr.doneBtnText}>Done</Text>
@@ -1818,6 +2505,7 @@ function QRModal({
   );
 }
 
+// ── DetailItem
 function DetailItem({
   icon,
   label,
@@ -1828,15 +2516,14 @@ function DetailItem({
   value: string;
 }) {
   return (
-    <View style={c.detailItem}>
+    <View style={cv.detailItem}>
       <Ionicons name={icon as any} size={13} color="#C4A882" />
-      <Text style={c.detailLabel}>{label}</Text>
-      <Text style={c.detailValue}>{value}</Text>
+      <Text style={cv.detailLabel}>{label}</Text>
+      <Text style={cv.detailValue}>{value}</Text>
     </View>
   );
 }
 
-// ── Insurance helpers 
 function getInsuranceColors(status: string) {
   if (status === "expired")
     return {
@@ -1860,28 +2547,27 @@ function getInsuranceColors(status: string) {
   };
 }
 
-// ── CowCard 
+// ── CowCard
 function CowCard({
   item,
   index,
   onEdit,
   onDelete,
   onUpdate,
+  showAlert,
 }: {
   item: Cow;
   index: number;
-  onEdit: (cow: Cow) => void;
-  onDelete: (cow: Cow) => void;
-  onUpdate: (cow: Cow) => void;
+  onEdit: (c: Cow) => void;
+  onDelete: (c: Cow) => void;
+  onUpdate: (c: Cow) => void;
+  showAlert: (c: AlertConfig) => void;
 }) {
   const router = useRouter();
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(16)).current;
   const [expanded, setExpanded] = useState(false);
-  const [qrLoading, setQrLoading] = useState(false);
-  const [qrVisible, setQrVisible] = useState(false);
-
-  // ── Insurance state 
+  const [codeVisible, setCodeVisible] = useState(false);
   const [insurance, setInsurance] = useState<Insurance | null | undefined>(
     undefined,
   );
@@ -1891,6 +2577,18 @@ function CowCard({
   const st = STATUS[derivedStatus(item)];
   const isBull = item.type === "bull";
   const activeDays = getActiveDays(item.activeSince);
+  const hasBarcode = !!item.isBarcodeLinked && !!item.qrLinkedData;
+  const hasQR = !hasBarcode && !!item.qrCode;
+  const codeButtonLabel = hasBarcode
+    ? "View Barcode"
+    : hasQR
+      ? "View QR"
+      : "Gen QR";
+  const codeButtonIcon = hasBarcode
+    ? "barcode"
+    : hasQR
+      ? "qr-code"
+      : "qr-code-outline";
 
   useEffect(() => {
     Animated.parallel([
@@ -1910,7 +2608,6 @@ function CowCard({
     ]).start();
   }, []);
 
-  // Fetch insurance when card is first expanded
   useEffect(() => {
     if (expanded && !insuranceFetched.current) {
       insuranceFetched.current = true;
@@ -1923,95 +2620,121 @@ function CowCard({
     }
   }, [expanded]);
 
-  const handleQR = async () => {
-    if (item.qrCode) {
-      setQrVisible(true);
-      return;
-    }
-    setQrLoading(true);
-    try {
-      const updated: Cow = await api.generateCowQR(item.id);
-      onUpdate(updated);
-      setTimeout(() => setQrVisible(true), 100);
-    } catch (err: any) {
-      Alert.alert("Error", err.message ?? "Failed to generate QR.");
-    } finally {
-      setQrLoading(false);
-    }
-  };
-
   const navigateToInsurance = () => {
     router.push({
       pathname: "/(admin)/gausevak/insurance",
-      params: {
-        cowId: String(item.id),
-        cowTag: item.tag,
-        cowName: item.name,
-      },
+      params: { cowId: String(item.id), cowTag: item.tag, cowName: item.name },
     } as any);
   };
-
-  // Determine the insurance badge shown in collapsed header
-  const insuranceBadgeColor = insurance
-    ? getInsuranceColors(insurance.status).color
-    : insurance === null
-      ? "#d97706"
-      : undefined;
 
   return (
     <Animated.View
       style={[
-        c.card,
+        cv.card,
         { opacity, transform: [{ translateY }] },
-        isBull && c.bullCard,
+        isBull && cv.bullCard,
       ]}
     >
       <TouchableOpacity
         onPress={() => setExpanded((e) => !e)}
         activeOpacity={0.8}
       >
-        <View style={c.topRow}>
-          <View style={[c.avatarWrap, isBull && { backgroundColor: "#f5f3ff", borderColor: "#ddd6fe" }]}>
-            <Image source={getAnimalImage(item.type)} style={{ width: 40, height: 40, resizeMode: "contain" }} />
+        <View style={cv.topRow}>
+          <View
+            style={[
+              cv.avatarWrap,
+              isBull && { backgroundColor: "#f5f3ff", borderColor: "#ddd6fe" },
+            ]}
+          >
+            <Image
+              source={getAnimalImage(item.type)}
+              style={{ width: 40, height: 40, resizeMode: "contain" }}
+            />
           </View>
           <View style={{ flex: 1, marginLeft: 12, minWidth: 0 }}>
-            <View style={c.nameRow}>
-              <Text style={c.name} numberOfLines={1}>{item.name}</Text>
-              <View style={c.badgeGroup}>
-                <View style={[c.badge, { backgroundColor: st.bg, borderColor: st.border }]}>
-                  <View style={[c.dot, { backgroundColor: st.color }]} />
-                  <Text style={[c.badgeText, { color: st.color }]}>{st.label}</Text>
+            <View style={cv.nameRow}>
+              <Text style={cv.name} numberOfLines={1}>
+                {item.name}
+              </Text>
+              <View style={cv.badgeGroup}>
+                <View
+                  style={[
+                    cv.badge,
+                    { backgroundColor: st.bg, borderColor: st.border },
+                  ]}
+                >
+                  <View style={[cv.dot, { backgroundColor: st.color }]} />
+                  <Text style={[cv.badgeText, { color: st.color }]}>
+                    {st.label}
+                  </Text>
                 </View>
                 {item.pregnancyStatus === "pregnant" && (
-                  <View style={[c.badge, { backgroundColor: "#fdf4ff", borderColor: "#e9d5ff" }]}>
+                  <View
+                    style={[
+                      cv.badge,
+                      { backgroundColor: "#fdf4ff", borderColor: "#e9d5ff" },
+                    ]}
+                  >
                     <Text style={{ fontSize: 9 }}>🤰</Text>
-                    <Text style={[c.badgeText, { color: "#9333ea" }]}>Pregnant</Text>
+                    <Text style={[cv.badgeText, { color: "#9333ea" }]}>
+                      Pregnant
+                    </Text>
                   </View>
                 )}
                 {isBull && item.semenAvailable && (
-                  <View style={[c.badge, { backgroundColor: "#f0fdf4", borderColor: "#bbf7d0" }]}>
+                  <View
+                    style={[
+                      cv.badge,
+                      { backgroundColor: "#f0fdf4", borderColor: "#bbf7d0" },
+                    ]}
+                  >
                     <Ionicons name="flask" size={9} color="#16a34a" />
-                    <Text style={[c.badgeText, { color: "#16a34a" }]}>Semen ✓</Text>
+                    <Text style={[cv.badgeText, { color: "#16a34a" }]}>
+                      Semen ✓
+                    </Text>
                   </View>
                 )}
                 {item.isTransferred && (
                   <View
                     style={[
-                      c.badge,
+                      cv.badge,
                       { backgroundColor: "#fdf4ff", borderColor: "#e9d5ff" },
                     ]}
                   >
                     <Ionicons name="swap-horizontal" size={9} color="#7c3aed" />
-                    <Text style={[c.badgeText, { color: "#7c3aed" }]}>
+                    <Text style={[cv.badgeText, { color: "#7c3aed" }]}>
                       Transferred
                     </Text>
                   </View>
                 )}
-                {/* Insurance badge in header */}
+                {item.isBarcodeLinked && item.qrLinkedData && (
+                  <View
+                    style={[
+                      cv.badge,
+                      { backgroundColor: "#f0fdf4", borderColor: "#bbf7d0" },
+                    ]}
+                  >
+                    <Ionicons name="barcode-outline" size={9} color="#16a34a" />
+                    <Text style={[cv.badgeText, { color: "#16a34a" }]}>
+                      Barcode
+                    </Text>
+                  </View>
+                )}
+                {item.qrLinkedData && !item.isBarcodeLinked && (
+                  <View
+                    style={[
+                      cv.badge,
+                      { backgroundColor: "#f0fdf4", borderColor: "#bbf7d0" },
+                    ]}
+                  >
+                    <Ionicons name="qr-code-outline" size={9} color="#16a34a" />
+                    <Text style={[cv.badgeText, { color: "#16a34a" }]}>QR</Text>
+                  </View>
+                )}
                 {insurance !== undefined && insurance !== null && (
                   <View
                     style={[
-                      c.badge,
+                      cv.badge,
                       {
                         backgroundColor: getInsuranceColors(insurance.status)
                           .bg,
@@ -2027,7 +2750,7 @@ function CowCard({
                     />
                     <Text
                       style={[
-                        c.badgeText,
+                        cv.badgeText,
                         { color: getInsuranceColors(insurance.status).color },
                       ]}
                     >
@@ -2042,27 +2765,38 @@ function CowCard({
                 {insurance === null && (
                   <View
                     style={[
-                      c.badge,
+                      cv.badge,
                       { backgroundColor: "#fffbeb", borderColor: "#fde68a" },
                     ]}
                   >
                     <Ionicons name="shield-outline" size={9} color="#d97706" />
-                    <Text style={[c.badgeText, { color: "#d97706" }]}>
+                    <Text style={[cv.badgeText, { color: "#d97706" }]}>
                       Uninsured
                     </Text>
                   </View>
                 )}
               </View>
             </View>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-              <Text style={c.tag}>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 6,
+                flexWrap: "wrap",
+              }}
+            >
+              <Text style={cv.tag}>
                 {item.tag} · {item.breed} ·{" "}
-                {isBull ? "Bull" : item.type === "newborn" ? "Newborn" : "Adult"}
+                {isBull
+                  ? "Bull"
+                  : item.type === "newborn"
+                    ? "Newborn"
+                    : "Adult"}
               </Text>
               {item.isActive && activeDays !== null && (
-                <View style={c.miniDaysBadge}>
+                <View style={cv.miniDaysBadge}>
                   <Ionicons name="time-outline" size={9} color="#BB6B3F" />
-                  <Text style={c.miniDaysText}>{activeDays}d active</Text>
+                  <Text style={cv.miniDaysText}>{activeDays}d active</Text>
                 </View>
               )}
             </View>
@@ -2073,120 +2807,125 @@ function CowCard({
             color="#C4A882"
             style={{ marginLeft: 8 }}
           />
-        </View >
-      </TouchableOpacity >
+        </View>
+      </TouchableOpacity>
 
       {expanded && (
         <>
-          <View style={c.divider} />
-
-          {/* Transfer info banner */}
+          <View style={cv.divider} />
           {item.isTransferred && (
             <View
               style={[
-                c.infoBanner,
+                cv.infoBanner,
                 { backgroundColor: "#fdf4ff", borderColor: "#e9d5ff" },
               ]}
             >
               <Ionicons name="swap-horizontal" size={14} color="#7c3aed" />
               <View style={{ flex: 1, marginLeft: 8 }}>
-                <Text style={[c.infoBannerTitle, { color: "#7c3aed" }]}>
+                <Text style={[cv.infoBannerTitle, { color: "#7c3aed" }]}>
                   Transferred
                 </Text>
                 {item.transferGaushalaName ? (
-                  <Text style={[c.infoBannerSub, { color: "#7c3aed" }]}>
+                  <Text style={[cv.infoBannerSub, { color: "#7c3aed" }]}>
                     To: {item.transferGaushalaName}
                   </Text>
                 ) : null}
                 {item.transferAddress ? (
-                  <Text style={[c.infoBannerSub, { color: "#7c3aed" }]}>
+                  <Text style={[cv.infoBannerSub, { color: "#7c3aed" }]}>
                     Address: {item.transferAddress}
                   </Text>
                 ) : null}
                 {item.transferDate ? (
-                  <Text style={[c.infoBannerSub, { color: "#7c3aed" }]}>
+                  <Text style={[cv.infoBannerSub, { color: "#7c3aed" }]}>
                     Date: {item.transferDate}
                   </Text>
                 ) : null}
               </View>
             </View>
           )}
-
-          {/* Sold info banner */}
           {item.isSold &&
             (item.soldGaushalaName || item.soldDate || item.soldPrice) && (
               <View
                 style={[
-                  c.infoBanner,
+                  cv.infoBanner,
                   { backgroundColor: "#fff7ed", borderColor: "#fed7aa" },
                 ]}
               >
                 <Ionicons name="pricetag" size={14} color="#ea580c" />
                 <View style={{ flex: 1, marginLeft: 8 }}>
-                  <Text style={[c.infoBannerTitle, { color: "#ea580c" }]}>
+                  <Text style={[cv.infoBannerTitle, { color: "#ea580c" }]}>
                     Sold
                   </Text>
                   {item.soldGaushalaName ? (
-                    <Text style={[c.infoBannerSub, { color: "#ea580c" }]}>
+                    <Text style={[cv.infoBannerSub, { color: "#ea580c" }]}>
                       To: {item.soldGaushalaName}
                     </Text>
                   ) : null}
-                  {item.soldAddress ? (
-                    <Text style={[c.infoBannerSub, { color: "#ea580c" }]}>
-                      Address: {item.soldAddress}
-                    </Text>
-                  ) : null}
                   {item.soldDate ? (
-                    <Text style={[c.infoBannerSub, { color: "#ea580c" }]}>
+                    <Text style={[cv.infoBannerSub, { color: "#ea580c" }]}>
                       Date: {item.soldDate}
                     </Text>
                   ) : null}
                   {item.soldPrice ? (
-                    <Text style={[c.infoBannerSub, { color: "#ea580c" }]}>
+                    <Text style={[cv.infoBannerSub, { color: "#ea580c" }]}>
                       Price: ₹{item.soldPrice}
-                    </Text>
-                  ) : null}
-                  {item.soldReason ? (
-                    <Text style={[c.infoBannerSub, { color: "#ea580c" }]}>
-                      Reason: {item.soldReason}
                     </Text>
                   ) : null}
                 </View>
               </View>
             )}
-
           {isBull ? (
             <>
-              <View style={c.bullStatsRow}>
-                <View style={c.bullStat}>
-                  <Text style={c.bullStatVal}>{item.totalDoses ?? "—"}</Text>
-                  <Text style={c.bullStatLabel}>Doses</Text>
+              <View style={cv.bullStatsRow}>
+                <View style={cv.bullStat}>
+                  <Text style={cv.bullStatVal}>{item.totalDoses ?? "—"}</Text>
+                  <Text style={cv.bullStatLabel}>Doses</Text>
                 </View>
-                <View style={c.bullStatDivider} />
-                <View style={c.bullStat}>
-                  <Text style={c.bullStatVal}>
+                <View style={cv.bullStatDivider} />
+                <View style={cv.bullStat}>
+                  <Text style={cv.bullStatVal}>
                     {item.successRate != null ? `${item.successRate}%` : "—"}
                   </Text>
-                  <Text style={c.bullStatLabel}>Success Rate</Text>
+                  <Text style={cv.bullStatLabel}>Success Rate</Text>
                 </View>
-                <View style={c.bullStatDivider} />
-                <View style={c.bullStat}>
-                  <Text style={c.bullStatVal}>{item.purpose ?? "—"}</Text>
-                  <Text style={c.bullStatLabel}>Purpose</Text>
+                <View style={cv.bullStatDivider} />
+                <View style={cv.bullStat}>
+                  <Text style={cv.bullStatVal}>{item.purpose ?? "—"}</Text>
+                  <Text style={cv.bullStatLabel}>Purpose</Text>
                 </View>
               </View>
-              <View style={c.grid}>
-                <DetailItem icon="scale-outline" label="Weight" value={item.weight || "—"} />
-                <DetailItem icon="resize-outline" label="Size" value={item.size || "—"} />
-                <DetailItem icon="calendar-outline" label="Bought" value={item.boughtDate || "—"} />
-                <DetailItem icon="time-outline" label="Last Used" value={item.lastUsedDate || "—"} />
+              <View style={cv.grid}>
+                <DetailItem
+                  icon="scale-outline"
+                  label="Weight"
+                  value={item.weight || "—"}
+                />
+                <DetailItem
+                  icon="resize-outline"
+                  label="Size"
+                  value={item.size || "—"}
+                />
+                <DetailItem
+                  icon="calendar-outline"
+                  label="Bought"
+                  value={item.boughtDate || "—"}
+                />
+                <DetailItem
+                  icon="time-outline"
+                  label="Last Used"
+                  value={item.lastUsedDate || "—"}
+                />
                 {item.damYield != null && (
-                  <DetailItem icon="water-outline" label="Dam Yield" value={`${item.damYield} L/day`} />
+                  <DetailItem
+                    icon="water-outline"
+                    label="Dam Yield"
+                    value={`${item.damYield} L/day`}
+                  />
                 )}
               </View>
             </>
           ) : (
-            <View style={c.grid}>
+            <View style={cv.grid}>
               <DetailItem
                 icon="scale-outline"
                 label="Weight"
@@ -2216,26 +2955,25 @@ function CowCard({
               />
             </View>
           )}
-
           {item.isExpired && (
             <View
               style={[
-                c.infoBanner,
+                cv.infoBanner,
                 { backgroundColor: "#fff1f2", borderColor: "#fecdd3" },
               ]}
             >
               <Ionicons name="warning" size={14} color="#dc2626" />
               <View style={{ flex: 1, marginLeft: 8 }}>
-                <Text style={[c.infoBannerTitle, { color: "#dc2626" }]}>
+                <Text style={[cv.infoBannerTitle, { color: "#dc2626" }]}>
                   Expired
                 </Text>
                 {item.expiryDate ? (
-                  <Text style={[c.infoBannerSub, { color: "#dc2626" }]}>
+                  <Text style={[cv.infoBannerSub, { color: "#dc2626" }]}>
                     Date: {item.expiryDate}
                   </Text>
                 ) : null}
                 {item.expiryReason ? (
-                  <Text style={[c.infoBannerSub, { color: "#dc2626" }]}>
+                  <Text style={[cv.infoBannerSub, { color: "#dc2626" }]}>
                     Reason: {item.expiryReason}
                   </Text>
                 ) : null}
@@ -2243,21 +2981,19 @@ function CowCard({
             </View>
           )}
 
-          {/* ── Insurance Section*/}
+          {/* Insurance */}
           <View style={ins.sectionHeader}>
             <View style={ins.sectionTitleRow}>
               <Ionicons name="shield-outline" size={13} color="#8B6854" />
               <Text style={ins.sectionTitle}>Insurance</Text>
             </View>
           </View>
-
           {insuranceLoading && (
             <View style={ins.loadingRow}>
               <ActivityIndicator size="small" color="#16a34a" />
               <Text style={ins.loadingText}>Checking insurance...</Text>
             </View>
           )}
-
           {!insuranceLoading && insurance && (
             <View
               style={[
@@ -2386,7 +3122,6 @@ function CowCard({
               </View>
             </View>
           )}
-
           {!insuranceLoading && insurance === null && (
             <TouchableOpacity
               style={ins.addInsuranceBtn}
@@ -2411,43 +3146,329 @@ function CowCard({
               </View>
             </TouchableOpacity>
           )}
-          {/* ── End Insurance Section ───────────────────────── */}
 
-          <View style={c.actionRow}>
-            <TouchableOpacity style={[c.actionBtn, c.editBtn]} onPress={() => onEdit(item)} activeOpacity={0.8}>
+          <View style={cv.actionRow}>
+            <TouchableOpacity
+              style={[cv.actionBtn, cv.editBtn]}
+              onPress={() => onEdit(item)}
+              activeOpacity={0.8}
+            >
               <Ionicons name="create-outline" size={15} color="#2563eb" />
-              <Text style={[c.actionText, { color: "#2563eb" }]}>Edit</Text>
+              <Text style={[cv.actionText, { color: "#2563eb" }]}>Edit</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[c.actionBtn, c.qrBtn]} onPress={handleQR} activeOpacity={0.8} disabled={qrLoading}>
-              {qrLoading ? (
-                <ActivityIndicator size="small" color="#FFBF55" />
-              ) : (
-                <>
-                  <Ionicons name={item.qrCode ? "qr-code" : "qr-code-outline"} size={15} color="#7c3aed" />
-                  <Text style={[c.actionText, { color: "#7c3aed" }]}>
-                    {item.qrCode ? "View QR" : "Gen QR"}
-                  </Text>
-                </>
-              )
-              }
-            </TouchableOpacity >
-            <TouchableOpacity style={[c.actionBtn, c.deleteBtn]} onPress={() => onDelete(item)} activeOpacity={0.8}>
+            <TouchableOpacity
+              style={[cv.actionBtn, cv.qrBtn]}
+              onPress={() => setCodeVisible(true)}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name={codeButtonIcon as any}
+                size={15}
+                color="#7c3aed"
+              />
+              <Text style={[cv.actionText, { color: "#7c3aed" }]}>
+                {codeButtonLabel}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[cv.actionBtn, cv.deleteBtn]}
+              onPress={() => onDelete(item)}
+              activeOpacity={0.8}
+            >
               <Ionicons name="trash-outline" size={15} color="#dc2626" />
-              <Text style={[c.actionText, { color: "#dc2626" }]}>Delete</Text>
+              <Text style={[cv.actionText, { color: "#dc2626" }]}>Delete</Text>
             </TouchableOpacity>
           </View>
         </>
       )}
-      <QRModal visible={qrVisible} onClose={() => setQrVisible(false)} cow={item} />
-    </Animated.View >
+
+      <QRModal
+        visible={codeVisible}
+        onClose={() => setCodeVisible(false)}
+        cow={item}
+        showAlert={showAlert}
+        onQrGenerated={(updated) => onUpdate(updated)}
+      />
+    </Animated.View>
   );
 }
 
-// ── Main Screen 
+// ── Scrollable List Header (stats + search + sort + filter chips — scroll with list)
+function ListHeader({
+  cows,
+  search,
+  setSearch,
+  filterType,
+  setFilterType,
+  sortBy,
+  setSortBy,
+  dateRange,
+  setDateRange,
+  sortVisible,
+  setSortVisible,
+  filteredCount,
+}: {
+  cows: Cow[];
+  search: string;
+  setSearch: (v: string) => void;
+  filterType: "all" | "mature" | "newborn" | "bull";
+  setFilterType: (v: "all" | "mature" | "newborn" | "bull") => void;
+  sortBy: SortOption;
+  setSortBy: (v: SortOption) => void;
+  dateRange: DateRangeOption;
+  setDateRange: (v: DateRangeOption) => void;
+  sortVisible: boolean;
+  setSortVisible: (v: boolean) => void;
+  filteredCount: number;
+}) {
+  const stats = {
+    total: cows.length,
+    active: cows.filter((c) => c.type !== "bull" && c.isActive && !c.isSold)
+      .length,
+    bulls: cows.filter((c) => c.type === "bull").length,
+    newborns: cows.filter((c) => c.type === "newborn").length,
+    sold: cows.filter((c) => c.isSold).length,
+  };
+
+  const sortMeta: Record<
+    SortOption,
+    { label: string; icon: keyof typeof Ionicons.glyphMap }
+  > = {
+    newest: { label: "Newest", icon: "time-outline" },
+    oldest: { label: "Oldest", icon: "hourglass-outline" },
+    name_asc: { label: "Name A-Z", icon: "text-outline" },
+    name_desc: { label: "Name Z-A", icon: "text-outline" },
+  };
+
+  const dateRangeMeta: Record<
+    DateRangeOption,
+    { label: string; icon: keyof typeof Ionicons.glyphMap }
+  > = {
+    all_time: { label: "All Time", icon: "calendar-outline" },
+    last_week: { label: "Last Week", icon: "today-outline" },
+    last_month: { label: "Last Month", icon: "calendar-clear-outline" },
+    last_year: { label: "Last Year", icon: "calendar-number-outline" },
+  };
+
+  return (
+    <View>
+      {/* Stats strip */}
+      <View style={lh.statsRow}>
+        {[
+          { label: "Total", value: stats.total, color: "#8B6854" },
+          { label: "Active", value: stats.active, color: "#BB6B3F" },
+          { label: "Bulls", value: stats.bulls, color: "#FFBF55" },
+          { label: "Newborns", value: stats.newborns, color: "#8B6854" },
+          { label: "Sold", value: stats.sold, color: "#FF9675" },
+        ].map((st, i, arr) => (
+          <View
+            key={i}
+            style={[lh.statItem, i < arr.length - 1 && lh.statBorder]}
+          >
+            <Text style={[lh.statValue, { color: st.color }]}>{st.value}</Text>
+            <Text style={lh.statLabel}>{st.label}</Text>
+          </View>
+        ))}
+      </View>
+
+      {/* Search + Sort row */}
+      <View style={lh.searchSortRow}>
+        <View style={lh.searchWrap}>
+          <Ionicons name="search-outline" size={16} color="#C4A882" />
+          <TextInput
+            style={lh.searchInput}
+            placeholder="Search name, tag, breed..."
+            placeholderTextColor="#D4B8A8"
+            value={search}
+            onChangeText={setSearch}
+          />
+          {search.length > 0 && (
+            <TouchableOpacity onPress={() => setSearch("")}>
+              <Ionicons name="close-circle" size={16} color="#C4A882" />
+            </TouchableOpacity>
+          )}
+        </View>
+        <TouchableOpacity
+          style={lh.sortBtn}
+          onPress={() => setSortVisible(true)}
+          activeOpacity={0.85}
+        >
+          <Ionicons name={sortMeta[sortBy].icon} size={16} color="#8B6854" />
+        </TouchableOpacity>
+        <View style={lh.countBadge}>
+          <Text style={lh.countText}>{filteredCount}</Text>
+        </View>
+      </View>
+
+      {/* Sort Modal */}
+      <Modal
+        visible={sortVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSortVisible(false)}
+      >
+        <TouchableOpacity
+          activeOpacity={1}
+          style={lh.sortOverlay}
+          onPress={() => setSortVisible(false)}
+        >
+          <View style={lh.sortSheet}>
+            <View style={lh.sortSheetHeader}>
+              <Text style={lh.sortSheetTitle}>Sort Cattle</Text>
+              <Text style={lh.sortSheetSub}>
+                Choose data ordering and range
+              </Text>
+            </View>
+            <Text style={lh.sortSectionTitle}>Date Filter</Text>
+            {(
+              ["all_time", "last_week", "last_month", "last_year"] as const
+            ).map((option) => (
+              <TouchableOpacity
+                key={option}
+                activeOpacity={0.85}
+                onPress={() => setDateRange(option)}
+                style={[
+                  lh.sortOption,
+                  dateRange === option && lh.sortOptionActive,
+                ]}
+              >
+                <View
+                  style={[
+                    lh.sortOptionIcon,
+                    dateRange === option && lh.sortOptionIconActive,
+                  ]}
+                >
+                  <Ionicons
+                    name={dateRangeMeta[option].icon}
+                    size={16}
+                    color={dateRange === option ? "#fff" : "#8B6854"}
+                  />
+                </View>
+                <Text
+                  style={[
+                    lh.sortOptionText,
+                    dateRange === option && lh.sortOptionTextActive,
+                  ]}
+                >
+                  {dateRangeMeta[option].label}
+                </Text>
+                {dateRange === option && (
+                  <Ionicons name="checkmark-circle" size={18} color="#8B6854" />
+                )}
+              </TouchableOpacity>
+            ))}
+            <Text style={lh.sortSectionTitle}>Order By</Text>
+            {(["newest", "oldest", "name_asc", "name_desc"] as const).map(
+              (option) => (
+                <TouchableOpacity
+                  key={option}
+                  activeOpacity={0.85}
+                  onPress={() => {
+                    setSortBy(option);
+                    setSortVisible(false);
+                  }}
+                  style={[
+                    lh.sortOption,
+                    sortBy === option && lh.sortOptionActive,
+                  ]}
+                >
+                  <View
+                    style={[
+                      lh.sortOptionIcon,
+                      sortBy === option && lh.sortOptionIconActive,
+                    ]}
+                  >
+                    <Ionicons
+                      name={sortMeta[option].icon}
+                      size={16}
+                      color={sortBy === option ? "#fff" : "#8B6854"}
+                    />
+                  </View>
+                  <Text
+                    style={[
+                      lh.sortOptionText,
+                      sortBy === option && lh.sortOptionTextActive,
+                    ]}
+                  >
+                    {sortMeta[option].label}
+                  </Text>
+                  {sortBy === option && (
+                    <Ionicons
+                      name="checkmark-circle"
+                      size={18}
+                      color="#8B6854"
+                    />
+                  )}
+                </TouchableOpacity>
+              ),
+            )}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Filter chips — horizontal scroll, fixed height */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={lh.filterScroll}
+        contentContainerStyle={lh.filterContent}
+      >
+        {(["all", "mature", "newborn", "bull"] as const).map((t) => (
+          <TouchableOpacity
+            key={t}
+            onPress={() => setFilterType(t)}
+            style={[lh.filterChip, filterType === t && lh.filterChipActive]}
+            activeOpacity={0.8}
+          >
+            <Image
+              source={
+                t === "bull" ? bullImg : t === "newborn" ? calfImg : cowImg
+              }
+              style={lh.filterChipImg}
+            />
+            <Text
+              style={[
+                lh.filterChipText,
+                filterType === t && lh.filterChipTextActive,
+              ]}
+            >
+              {t === "all"
+                ? "All"
+                : t === "mature"
+                  ? "Cows"
+                  : t === "newborn"
+                    ? "Calves"
+                    : "Bulls"}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+
+      <View style={{ height: 8 }} />
+    </View>
+  );
+}
+
+// ── Main Screen
 export default function CowsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [cows, setCows] = useState<Cow[]>([]);
+  const [addVisible, setAddVisible] = useState(false);
+  const [editCow, setEditCow] = useState<Cow | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Scanner state
+  const [scannerVisible, setScannerVisible] = useState(false);
+  const [qrActionVisible, setQrActionVisible] = useState(false);
+  const [scannedData, setScannedData] = useState("");
+  const [scannedFormat, setScannedFormat] = useState("");
+  const [addWithScan, setAddWithScan] = useState(false);
+  const [addIsBarcode, setAddIsBarcode] = useState(false);
+
+  // Filter / sort state
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState<
     "all" | "mature" | "newborn" | "bull"
@@ -2455,11 +3476,8 @@ export default function CowsScreen() {
   const [sortBy, setSortBy] = useState<SortOption>("newest");
   const [dateRange, setDateRange] = useState<DateRangeOption>("all_time");
   const [sortVisible, setSortVisible] = useState(false);
-  const [addVisible, setAddVisible] = useState(false);
-  const [editCow, setEditCow] = useState<Cow | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+
+  const { alertConfig, showAlert, dismissAlert } = useModernAlert();
 
   const fetchCows = useCallback(async (searchTerm?: string) => {
     setLoading(true);
@@ -2495,58 +3513,64 @@ export default function CowsScreen() {
   useEffect(() => {
     fetchCows();
   }, [fetchCows]);
-  useEffect(() => {
-    const t = setTimeout(() => fetchCows(search || undefined), 400);
-    return () => clearTimeout(t);
-  }, [search]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchCows(search || undefined);
+    await fetchCows();
     setRefreshing(false);
   };
 
   const handleDelete = (cow: Cow) => {
-    Alert.alert(
-      `Delete ${cow.type === "bull" ? "Bull" : "Cow"}`,
-      `Are you sure you want to delete ${cow.name} (${cow.tag})?\nThis cannot be undone.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await api.deleteCow(cow.id);
-              setCows((prev) => prev.filter((c) => c.id !== cow.id));
-            } catch (err: any) {
-              Alert.alert("Error", err.message ?? "Failed to delete.");
-            }
-          },
-        },
-      ],
-    );
+    showAlert({
+      title: `Delete ${cow.type === "bull" ? "Bull" : "Cow"}`,
+      message: `Are you sure you want to delete ${cow.name} (${cow.tag})? This cannot be undone.`,
+      type: "confirm",
+      confirmText: "Delete",
+      cancelText: "Cancel",
+      onConfirm: async () => {
+        try {
+          await api.deleteCow(cow.id);
+          setCows((prev) => prev.filter((c) => c.id !== cow.id));
+        } catch (err: any) {
+          showAlert({
+            title: "Delete Failed",
+            message: err.message ?? "Failed to delete.",
+            type: "error",
+          });
+        }
+      },
+    });
   };
 
-  const bulls = cows.filter((c) => c.type === "bull");
-  const nonBulls = cows.filter((c) => c.type !== "bull");
-  const stats = {
-    total: cows.length,
-    active: nonBulls.filter((c) => c.isActive && !c.isSold).length,
-    bulls: bulls.length,
-    newborns: cows.filter((c) => c.type === "newborn").length,
-    sold: cows.filter((c) => c.isSold).length,
+  const handleCodeScanned = (data: string, format: string) => {
+    setScannedData(data);
+    setScannedFormat(format);
+    setScannerVisible(false);
+    setTimeout(() => setQrActionVisible(true), 350);
+  };
+
+  const handleAddNewFromScan = (qrData: string, isBarcodeLinked: boolean) => {
+    setAddIsBarcode(isBarcodeLinked);
+    setAddWithScan(true);
+    setAddVisible(true);
+  };
+
+  const handleLinked = (updated: Cow) => {
+    setCows((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+    showAlert({
+      title: `${updated.isBarcodeLinked ? "Barcode" : "QR"} Linked ✓`,
+      message: `Code successfully linked to ${updated.name}`,
+      type: "success",
+    });
   };
 
   const isWithinRange = (createdAt: string, range: DateRangeOption) => {
     if (range === "all_time") return true;
     const created = new Date(createdAt);
     if (Number.isNaN(created.getTime())) return true;
-
     const now = new Date();
-    const diffMs = now.getTime() - created.getTime();
-    const diffDays = diffMs / (1000 * 60 * 60 * 24);
-
+    const diffDays =
+      (now.getTime() - created.getTime()) / (1000 * 60 * 60 * 24);
     if (range === "last_week") return diffDays <= 7;
     if (range === "last_month") return diffDays <= 30;
     return diffDays <= 365;
@@ -2564,292 +3588,96 @@ export default function CowsScreen() {
     .sort((a, b) => {
       if (sortBy === "name_asc") return a.name.localeCompare(b.name);
       if (sortBy === "name_desc") return b.name.localeCompare(a.name);
-      if (sortBy === "oldest") {
-        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-      }
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      if (sortBy === "oldest")
+        return (
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        );
+      return (
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
     });
 
-  const sortMeta: Record<
-    SortOption,
-    { label: string; icon: keyof typeof Ionicons.glyphMap }
-  > = {
-    newest: { label: "Newest", icon: "time-outline" },
-    oldest: { label: "Oldest", icon: "hourglass-outline" },
-    name_asc: { label: "Name A-Z", icon: "text-outline" },
-    name_desc: { label: "Name Z-A", icon: "text-outline" },
-  };
-  const dateRangeMeta: Record<
-    DateRangeOption,
-    { label: string; icon: keyof typeof Ionicons.glyphMap }
-  > = {
-    all_time: { label: "All Time", icon: "calendar-outline" },
-    last_week: { label: "Last Week", icon: "today-outline" },
-    last_month: { label: "Last Month", icon: "calendar-clear-outline" },
-    last_year: { label: "Last Year", icon: "calendar-number-outline" },
-  };
-
   return (
-    <View style={[s.screen, { paddingTop: insets.top }]}>
+    <View style={[sc.screen, { paddingTop: insets.top }]}>
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
 
-      {/* Header */}
-      <View style={s.header}>
-        <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
+      {/* Fixed Top Header — only title + scanner + add */}
+      <View style={sc.header}>
+        <TouchableOpacity onPress={() => router.back()} style={sc.backBtn}>
           <Ionicons name="arrow-back" size={20} color="#8B6854" />
         </TouchableOpacity>
         <View style={{ flex: 1, marginLeft: 12 }}>
-          <Text style={s.headerTitle}>Cattle</Text>
-          <Text style={s.headerSub}>{cows.length} animals registered</Text>
+          <Text style={sc.headerTitle}>Animals</Text>
+          <Text style={sc.headerSub}>{cows.length} registered</Text>
         </View>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           <TouchableOpacity
-            style={s.sortBtn}
-            onPress={() => setSortVisible(true)}
+            style={sc.scanBtn}
+            onPress={() => setScannerVisible(true)}
             activeOpacity={0.85}
           >
-            <Ionicons
-              name={sortMeta[sortBy].icon}
-              size={16}
-              color="#8B6854"
-            />
+            <Ionicons name="barcode-outline" size={20} color="#7c3aed" />
           </TouchableOpacity>
-          <View style={s.countBadge}>
-            <Text style={s.countText}>{filteredCows.length}</Text>
-          </View>
           <TouchableOpacity
-            style={s.headerAddBtn}
-            onPress={() => setAddVisible(true)}
+            style={sc.addBtn}
+            onPress={() => {
+              setAddWithScan(false);
+              setAddIsBarcode(false);
+              setAddVisible(true);
+            }}
             activeOpacity={0.85}
           >
-            <Ionicons name="add" size={27} color="#ffffff" />
+            <Ionicons name="add" size={22} color="#fff" />
           </TouchableOpacity>
         </View>
       </View>
 
-      <Modal
-        visible={sortVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setSortVisible(false)}
-      >
-        <TouchableOpacity
-          activeOpacity={1}
-          style={s.sortOverlay}
-          onPress={() => setSortVisible(false)}
-        >
-          <View style={s.sortSheet}>
-            <View style={s.sortSheetHeader}>
-              <Text style={s.sortSheetTitle}>Sort Cattle</Text>
-              <Text style={s.sortSheetSub}>Choose data ordering and range</Text>
-            </View>
-            <Text style={s.sortSectionTitle}>Date Filter</Text>
-            {(
-              [
-                "all_time",
-                "last_week",
-                "last_month",
-                "last_year",
-              ] as const
-            ).map((option) => (
-              <TouchableOpacity
-                key={option}
-                activeOpacity={0.85}
-                onPress={() => setDateRange(option)}
-                style={[
-                  s.sortOption,
-                  dateRange === option && s.sortOptionActive,
-                ]}
-              >
-                <View
-                  style={[
-                    s.sortOptionIcon,
-                    dateRange === option && s.sortOptionIconActive,
-                  ]}
-                >
-                  <Ionicons
-                    name={dateRangeMeta[option].icon}
-                    size={16}
-                    color={dateRange === option ? "#fff" : "#8B6854"}
-                  />
-                </View>
-                <Text
-                  style={[
-                    s.sortOptionText,
-                    dateRange === option && s.sortOptionTextActive,
-                  ]}
-                >
-                  {dateRangeMeta[option].label}
-                </Text>
-                {dateRange === option && (
-                  <Ionicons name="checkmark-circle" size={18} color="#8B6854" />
-                )}
-              </TouchableOpacity>
-            ))}
-            <Text style={s.sortSectionTitle}>Order By</Text>
-            {(
-              [
-                "newest",
-                "oldest",
-                "name_asc",
-                "name_desc",
-              ] as const
-            ).map((option) => (
-              <TouchableOpacity
-                key={option}
-                activeOpacity={0.85}
-                onPress={() => {
-                  setSortBy(option);
-                  setSortVisible(false);
-                }}
-                style={[
-                  s.sortOption,
-                  sortBy === option && s.sortOptionActive,
-                ]}
-              >
-                <View
-                  style={[
-                    s.sortOptionIcon,
-                    sortBy === option && s.sortOptionIconActive,
-                  ]}
-                >
-                  <Ionicons
-                    name={sortMeta[option].icon}
-                    size={16}
-                    color={sortBy === option ? "#fff" : "#8B6854"}
-                  />
-                </View>
-                <Text
-                  style={[
-                    s.sortOptionText,
-                    sortBy === option && s.sortOptionTextActive,
-                  ]}
-                >
-                  {sortMeta[option].label}
-                </Text>
-                {sortBy === option && (
-                  <Ionicons name="checkmark-circle" size={18} color="#8B6854" />
-                )}
-              </TouchableOpacity>
-            ))}
-          </View>
-        </TouchableOpacity>
-      </Modal>
-
-      {/* Stats */}
-      <View style={s.statsRow}>
-        {[
-          { label: "Total", value: stats.total, color: "#8B6854" },
-          { label: "Active", value: stats.active, color: "#BB6B3F" },
-          { label: "Bulls", value: stats.bulls, color: "#FFBF55" },
-          { label: "Newborns", value: stats.newborns, color: "#8B6854" },
-          { label: "Sold", value: stats.sold, color: "#FF9675" },
-        ].map((st, i, arr) => (
-          <View
-            key={i}
-            style={[s.statItem, i < arr.length - 1 && s.statBorder]}
-          >
-            <Text style={[s.statValue, { color: st.color }]}>{st.value}</Text>
-            <Text style={s.statLabel}>{st.label}</Text>
-          </View>
-        ))}
-      </View>
-
-      {/* Search */}
-      <View style={s.searchWrap}>
-        <Ionicons name="search-outline" size={16} color="#C4A882" />
-        <TextInput
-          style={s.searchInput}
-          placeholder="Search name, tag, breed..."
-          placeholderTextColor="#D4B8A8"
-          value={search}
-          onChangeText={setSearch}
-        />
-        {search.length > 0 && (
-          <TouchableOpacity onPress={() => setSearch("")}>
-            <Ionicons name="close-circle" size={16} color="#C4A882" />
-          </TouchableOpacity>
-        )}
-      </View>
-
-      {/* Filter chips */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={s.filterRow}
-        contentContainerStyle={{
-          paddingHorizontal: 16,
-          gap: 8,
-          paddingBottom: 4,
-        }}
-      >
-        {(["all", "mature", "newborn", "bull"] as const).map((t) => (
-          <TouchableOpacity
-            key={t}
-            onPress={() => setFilterType(t)}
-            style={[s.filterChip, filterType === t && s.filterChipActive]}
-          >
-            <View
-              style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
-            >
-              <Image
-                source={
-                  t === "bull" ? bullImg : t === "newborn" ? calfImg : cowImg
-                }
-                style={{ width: 20, height: 20, resizeMode: "contain" }}
-              />
-              <Text
-                style={[
-                  s.filterChipText,
-                  filterType === t && s.filterChipTextActive,
-                ]}
-              >
-                {t === "all"
-                  ? "All"
-                  : t === "mature"
-                    ? "Cows"
-                    : t === "newborn"
-                      ? "Calves"
-                      : "Bulls"}
-              </Text>
-            </View>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-
-      {/* List */}
+      {/* Animals List with scrollable header */}
       {loading && cows.length === 0 ? (
-        <View style={s.loadingWrap}>
+        <View style={sc.loadingWrap}>
           <ActivityIndicator size="large" color="#FFBF55" />
-          <Text style={s.loadingText}>Loading animals...</Text>
+          <Text style={sc.loadingText}>Loading animals...</Text>
         </View>
       ) : error ? (
-        <View style={s.errorWrap}>
+        <View style={sc.errorWrap}>
           <Text style={{ fontSize: 40 }}>⚠️</Text>
-          <Text style={s.errorText}>{error}</Text>
-          <TouchableOpacity
-            onPress={() => fetchCows(search || undefined)}
-            style={s.retryBtn}
-          >
+          <Text style={sc.errorText}>{error}</Text>
+          <TouchableOpacity onPress={() => fetchCows()} style={sc.retryBtn}>
             <Ionicons name="refresh" size={14} color="#fff" />
-            <Text style={s.retryText}>Retry</Text>
+            <Text style={sc.retryText}>Retry</Text>
           </TouchableOpacity>
         </View>
       ) : (
         <FlatList
           data={filteredCows}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={{
-            paddingHorizontal: 16,
-            paddingTop: 8,
-            paddingBottom: 120,
-          }}
+          contentContainerStyle={[
+            sc.listContent,
+            filteredCows.length === 0 && sc.listContentEmpty,
+          ]}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
               tintColor="#BB6B3F"
+            />
+          }
+          ListHeaderComponent={
+            <ListHeader
+              cows={cows}
+              search={search}
+              setSearch={setSearch}
+              filterType={filterType}
+              setFilterType={setFilterType}
+              sortBy={sortBy}
+              setSortBy={setSortBy}
+              dateRange={dateRange}
+              setDateRange={setDateRange}
+              sortVisible={sortVisible}
+              setSortVisible={setSortVisible}
+              filteredCount={filteredCows.length}
             />
           }
           renderItem={({ item, index }) => (
@@ -2863,18 +3691,21 @@ export default function CowsScreen() {
                   prev.map((c) => (c.id === updated.id ? updated : c)),
                 )
               }
+              showAlert={showAlert}
             />
           )}
           ListEmptyComponent={
-            <View style={s.empty}>
-              <Text style={{ fontSize: 48 }}>
-                {filterType === "bull"
-                  ? "🐂"
-                  : filterType === "newborn"
-                    ? "🐮"
-                    : "🐄"}
-              </Text>
-              <Text style={s.emptyText}>
+            <View style={sc.empty}>
+              <View style={sc.emptyIconWrap}>
+                <Text style={{ fontSize: 52 }}>
+                  {filterType === "bull"
+                    ? "🐂"
+                    : filterType === "newborn"
+                      ? "🐮"
+                      : "🐄"}
+                </Text>
+              </View>
+              <Text style={sc.emptyTitle}>
                 No{" "}
                 {filterType === "all"
                   ? "animals"
@@ -2885,25 +3716,61 @@ export default function CowsScreen() {
                       : "cows"}{" "}
                 found
               </Text>
+              <Text style={sc.emptySubText}>
+                {search
+                  ? `No results for "${search}"`
+                  : "Tap + to register your first animal"}
+              </Text>
+              {!search && (
+                <TouchableOpacity
+                  style={sc.emptyAddBtn}
+                  onPress={() => {
+                    setAddWithScan(false);
+                    setAddIsBarcode(false);
+                    setAddVisible(true);
+                  }}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="add-circle-outline" size={18} color="#fff" />
+                  <Text style={sc.emptyAddBtnText}>Add Animal</Text>
+                </TouchableOpacity>
+              )}
             </View>
           }
         />
       )}
 
-      {/* Floating Add Button 
-      <TouchableOpacity
-        style={s.fab}
-        onPress={() => setAddVisible(true)}
-        activeOpacity={0.85}
-      >
-        <Ionicons name="add" size={28} color="#fff" />
-      </TouchableOpacity> */}
+      {/* Scanner Modal */}
+      <ScannerModal
+        visible={scannerVisible}
+        onClose={() => setScannerVisible(false)}
+        onScanned={handleCodeScanned}
+      />
+
+      {/* QR Action Sheet */}
+      <QRActionSheet
+        visible={qrActionVisible}
+        qrData={scannedData}
+        scannedFormat={scannedFormat}
+        onClose={() => setQrActionVisible(false)}
+        onAddNew={handleAddNewFromScan}
+        onLinked={handleLinked}
+        cows={cows}
+        showAlert={showAlert}
+      />
 
       <AddCowModal
         visible={addVisible}
-        onClose={() => setAddVisible(false)}
+        onClose={() => {
+          setAddVisible(false);
+          setAddWithScan(false);
+          setAddIsBarcode(false);
+        }}
         onAdd={(cow) => setCows((prev) => [cow, ...prev])}
         cows={cows}
+        prefillQrData={addWithScan ? scannedData : undefined}
+        prefillIsBarcode={addWithScan ? addIsBarcode : undefined}
+        showAlert={showAlert}
       />
       <EditCowModal
         cow={editCow}
@@ -2915,20 +3782,25 @@ export default function CowsScreen() {
           )
         }
         cows={cows}
+        showAlert={showAlert}
       />
+      <ModernAlert config={alertConfig} onDismiss={dismissAlert} />
     </View>
   );
 }
 
-// ── Styles 
+// ─────────────────────────────────────────────────────────────────────────────
+// Styles
+// ─────────────────────────────────────────────────────────────────────────────
 
-const s = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#fff" },
+// ── Screen
+const sc = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: "#FAFAF8" },
   header: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: 12,
     backgroundColor: "#fff",
     borderBottomWidth: 1,
     borderBottomColor: "#F5EDE5",
@@ -2943,168 +3815,40 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#f0ba9b",
   },
-  sortBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: "#FFF8F0",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "#f0ba9b",
-  },
-  headerAddBtn: {
-   width: 40,
-    height: 40,
-    borderRadius: 18,
-    backgroundColor: "#81df8f",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "#185810",
-  },
   headerTitle: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#020201",
+    color: "#111827",
     letterSpacing: -0.3,
   },
   headerSub: {
     fontSize: 12,
-    color: "#fcad80",
+    color: "#C4A882",
     fontWeight: "500",
     marginTop: 1,
   },
-  countBadge: {
-    backgroundColor: "#FFF8F0",
-    borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: "#f0ba9b",
-  },
-  countText: { fontSize: 12, fontWeight: "700", color: "#BB6B3F" },
-  sortOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(17, 24, 39, 0.28)",
-    justifyContent: "flex-start",
-    paddingTop: 96,
-    paddingHorizontal: 16,
-  },
-  sortSheet: {
-    alignSelf: "flex-end",
-    width: 220,
-    backgroundColor: "#fff",
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: "#F5EDE5",
-    padding: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.08,
-    shadowRadius: 18,
-    elevation: 8,
-  },
-  sortSheetHeader: {
-    paddingBottom: 8,
-    marginBottom: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F5EDE5",
-  },
-  sortSheetTitle: {
-    fontSize: 15,
-    fontWeight: "800",
-    color: "#020201",
-  },
-  sortSheetSub: {
-    fontSize: 12,
-    color: "#C4A882",
-    fontWeight: "500",
-    marginTop: 2,
-  },
-  sortSectionTitle: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: "#C4A882",
-    textTransform: "uppercase",
-    letterSpacing: 0.4,
-    marginTop: 8,
-    marginBottom: 4,
-    paddingHorizontal: 4,
-  },
-  sortOption: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 11,
-    borderRadius: 14,
-  },
-  sortOptionActive: {
-    backgroundColor: "#FFF8F0",
-  },
-  sortOptionIcon: {
-    width: 30,
-    height: 30,
-    borderRadius: 10,
-    backgroundColor: "#FFF8F0",
-    borderWidth: 1,
-    borderColor: "#F5EDE5",
+  scanBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: "#f5f3ff",
     alignItems: "center",
     justifyContent: "center",
+    borderWidth: 1.5,
+    borderColor: "#ddd6fe",
   },
-  sortOptionIconActive: {
-    backgroundColor: "#8B6854",
-    borderColor: "#8B6854",
-  },
-  sortOptionText: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#8B6854",
-  },
-  sortOptionTextActive: {
-    color: "#020201",
-  },
-  statsRow: {
-    flexDirection: "row",
-    backgroundColor: "#fff",
-    borderBottomWidth: 1,
-    borderBottomColor: "#F5EDE5",
-  },
-  statItem: { flex: 1, alignItems: "center", paddingVertical: 10 },
-  statBorder: { borderRightWidth: 1, borderRightColor: "#F5EDE5" },
-  statValue: { fontSize: 16, fontWeight: "800", letterSpacing: -0.3 },
-  statLabel: { fontSize: 9, color: "#C4A882", marginTop: 2, fontWeight: "500" },
-  filterRow: { maxHeight: 44, marginTop: 4 },
-  filterChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    backgroundColor: "#FFF8F0",
-    borderWidth: 1,
-    borderColor: "#F5EDE5",
-    overflow: "hidden",
-  },
-  filterChipActive: { backgroundColor: "#8B6854", borderColor: "#8B6854" },
-  filterChipText: { fontSize: 12, color: "#8B6854", fontWeight: "600" },
-  filterChipTextActive: { color: "#fff" },
-  searchWrap: {
-    flexDirection: "row",
-    alignItems: "center",
-    margin: 16,
-    marginBottom: 4,
-    backgroundColor: "#FFF8F0",
+  addBtn: {
+    width: 38,
+    height: 38,
     borderRadius: 12,
+    backgroundColor: "#16a34a",
+    alignItems: "center",
+    justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#fad9b9",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 8,
+    borderColor: "#15803d",
   },
-  searchInput: { flex: 1, color: "#8B6854", fontSize: 14 },
-  empty: { alignItems: "center", paddingTop: 60, gap: 10 },
-  emptyText: { fontSize: 15, color: "#9ca3af", fontWeight: "600" },
+  listContent: { paddingHorizontal: 14, paddingBottom: 32 },
+  listContentEmpty: { flexGrow: 1 },
   loadingWrap: {
     flex: 1,
     alignItems: "center",
@@ -3135,32 +3879,459 @@ const s = StyleSheet.create({
     paddingVertical: 10,
   },
   retryText: { fontSize: 13, fontWeight: "700", color: "#fff" },
-  fab: {
-    position: "absolute",
-    bottom: 30,
-    right: 20,
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: "#BB6B3F",
+  empty: {
+    flex: 1,
     alignItems: "center",
     justifyContent: "center",
+    paddingTop: 60,
+    paddingBottom: 60,
+    gap: 12,
+  },
+  emptyIconWrap: {
+    width: 96,
+    height: 96,
+    borderRadius: 28,
+    backgroundColor: "#FFF8F0",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.5,
+    borderColor: "#F5EDE5",
+    marginBottom: 4,
+  },
+  emptyTitle: {
+    fontSize: 17,
+    color: "#5C3D2E",
+    fontWeight: "800",
+    letterSpacing: -0.3,
+  },
+  emptySubText: {
+    fontSize: 13,
+    color: "#C4A882",
+    fontWeight: "500",
+    textAlign: "center",
+    paddingHorizontal: 32,
+  },
+  emptyAddBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#16a34a",
+    borderRadius: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    marginTop: 8,
+  },
+  emptyAddBtnText: { fontSize: 14, fontWeight: "800", color: "#fff" },
+});
+
+// ── List Header (scrolls with FlatList)
+const lh = StyleSheet.create({
+  // Stats strip — bleeds to full width via negative horizontal margin
+  statsRow: {
+    flexDirection: "row",
+    backgroundColor: "#fff",
+    borderBottomWidth: 1,
+    borderBottomColor: "#F5EDE5",
+    marginHorizontal: -14,
+  },
+  statItem: { flex: 1, alignItems: "center", paddingVertical: 10 },
+  statBorder: { borderRightWidth: 1, borderRightColor: "#F5EDE5" },
+  statValue: { fontSize: 16, fontWeight: "800", letterSpacing: -0.3 },
+  statLabel: { fontSize: 9, color: "#C4A882", marginTop: 2, fontWeight: "500" },
+
+  // Search + sort row
+  searchSortRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 12,
+    marginBottom: 8,
+    gap: 8,
+  },
+  searchWrap: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: "#F5EDE5",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 8,
     shadowColor: "#BB6B3F",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 10,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  searchInput: { flex: 1, color: "#5C3D2E", fontSize: 14, fontWeight: "500" },
+  sortBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: "#FFF8F0",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.5,
+    borderColor: "#F5EDE5",
+  },
+  countBadge: {
+    backgroundColor: "#FFF8F0",
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: "#f0ba9b",
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 36,
+  },
+  countText: { fontSize: 12, fontWeight: "700", color: "#BB6B3F" },
+
+  // Sort modal
+  sortOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(17,24,39,0.28)",
+    justifyContent: "flex-start",
+    paddingTop: 96,
+    paddingHorizontal: 16,
+  },
+  sortSheet: {
+    alignSelf: "flex-end",
+    width: 220,
+    backgroundColor: "#fff",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#F5EDE5",
+    padding: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.08,
+    shadowRadius: 18,
+    elevation: 8,
+  },
+  sortSheetHeader: {
+    paddingBottom: 8,
+    marginBottom: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F5EDE5",
+  },
+  sortSheetTitle: { fontSize: 15, fontWeight: "800", color: "#111827" },
+  sortSheetSub: {
+    fontSize: 12,
+    color: "#C4A882",
+    fontWeight: "500",
+    marginTop: 2,
+  },
+  sortSectionTitle: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#C4A882",
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+    marginTop: 8,
+    marginBottom: 4,
+    paddingHorizontal: 4,
+  },
+  sortOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 11,
+    borderRadius: 14,
+  },
+  sortOptionActive: { backgroundColor: "#FFF8F0" },
+  sortOptionIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    backgroundColor: "#FFF8F0",
+    borderWidth: 1,
+    borderColor: "#F5EDE5",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sortOptionIconActive: { backgroundColor: "#8B6854", borderColor: "#8B6854" },
+  sortOptionText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#8B6854",
+  },
+  sortOptionTextActive: { color: "#111827" },
+
+  // Filter chips — fixed height 44, horizontal scroll, bleeds full width
+  filterScroll: {
+    height: 44,
+    marginHorizontal: -14,
+  },
+  filterContent: {
+    paddingHorizontal: 14,
+    paddingVertical: 4,
+    gap: 8,
+    alignItems: "center",
+    flexDirection: "row",
+  },
+  filterChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+    backgroundColor: "#fff",
+    borderWidth: 1.5,
+    borderColor: "#E8DDD5",
+    height: 36,
+  },
+  filterChipActive: { backgroundColor: "#8B6854", borderColor: "#8B6854" },
+  filterChipImg: { width: 18, height: 18, resizeMode: "contain" },
+  filterChipText: { fontSize: 12, color: "#8B6854", fontWeight: "700" },
+  filterChipTextActive: { color: "#fff" },
+});
+
+// ── Scanner
+const scan = StyleSheet.create({
+  overlayTop: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: "35%",
+    backgroundColor: "rgba(0,0,0,0.65)",
+  },
+  overlaySide: { flex: 1, backgroundColor: "rgba(0,0,0,0.65)" },
+  overlayBottom: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: "40%",
+    backgroundColor: "rgba(0,0,0,0.65)",
+  },
+  frameWrap: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  frame: { position: "relative" },
+  corner: {
+    position: "absolute",
+    width: 24,
+    height: 24,
+    borderColor: "#FFBF55",
+    borderWidth: 3,
+  },
+  cornerTL: {
+    top: 0,
+    left: 0,
+    borderBottomWidth: 0,
+    borderRightWidth: 0,
+    borderTopLeftRadius: 6,
+  },
+  cornerTR: {
+    top: 0,
+    right: 0,
+    borderBottomWidth: 0,
+    borderLeftWidth: 0,
+    borderTopRightRadius: 6,
+  },
+  cornerBL: {
+    bottom: 0,
+    left: 0,
+    borderTopWidth: 0,
+    borderRightWidth: 0,
+    borderBottomLeftRadius: 6,
+  },
+  cornerBR: {
+    bottom: 0,
+    right: 0,
+    borderTopWidth: 0,
+    borderLeftWidth: 0,
+    borderBottomRightRadius: 6,
+  },
+  scanLine: {
+    position: "absolute",
+    left: 6,
+    right: 6,
+    height: 2,
+    backgroundColor: "#FFBF55",
+    borderRadius: 1,
+    shadowColor: "#FFBF55",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.9,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  hintWrap: {
+    position: "absolute",
+    bottom: 90,
+    left: 0,
+    right: 0,
+    alignItems: "center",
+    gap: 8,
+  },
+  hintPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "rgba(0,0,0,0.65)",
+    borderRadius: 30,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,191,85,0.35)",
+  },
+  hintText: { fontSize: 13, color: "#fff", fontWeight: "600" },
+  hintSub: {
+    fontSize: 11,
+    color: "rgba(255,255,255,0.5)",
+    textAlign: "center",
+    paddingHorizontal: 40,
+  },
+  rescanBtn: {
+    position: "absolute",
+    bottom: 150,
+    alignSelf: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#FFBF55",
+    borderRadius: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+  },
+  rescanText: { fontSize: 13, fontWeight: "800", color: "#fff" },
+  closeOverlayBtn: {
+    position: "absolute",
+    top: Platform.OS === "ios" ? 56 : 16,
+    left: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+  },
+  permWrap: {
+    flex: 1,
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 40,
+    gap: 16,
+  },
+  permTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#111827",
+    textAlign: "center",
+  },
+  permSub: {
+    fontSize: 14,
+    color: "#6b7280",
+    textAlign: "center",
+    lineHeight: 22,
+  },
+  permBtn: {
+    backgroundColor: "#7c3aed",
+    borderRadius: 14,
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    marginTop: 8,
+  },
+  permBtnText: { fontSize: 15, fontWeight: "800", color: "#fff" },
+});
+
+// ── Alert
+const al = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(17,24,39,0.55)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 32,
+  },
+  card: {
+    width: "100%",
+    backgroundColor: "#fff",
+    borderRadius: 24,
+    padding: 28,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.18,
+    shadowRadius: 32,
+    elevation: 20,
+  },
+  iconWrap: {
+    width: 68,
+    height: 68,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#111827",
+    letterSpacing: -0.3,
+    textAlign: "center",
+    marginBottom: 8,
+  },
+  message: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#6b7280",
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: 22,
+  },
+  btnRow: { flexDirection: "row", gap: 10, width: "100%" },
+  cancelBtn: {
+    flex: 1,
+    paddingVertical: 13,
+    borderRadius: 14,
+    backgroundColor: "#F5EDE5",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cancelText: { fontSize: 14, fontWeight: "700", color: "#8B6854" },
+  confirmBtn: {
+    flex: 1,
+    paddingVertical: 13,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  confirmText: { fontSize: 14, fontWeight: "800", color: "#fff" },
+  singleBtn: {
+    width: "100%",
+    paddingVertical: 13,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
   },
 });
 
-const c = StyleSheet.create({
+// ── Cow Card
+const cv = StyleSheet.create({
   card: {
     backgroundColor: "#fff",
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: "#F5EDE5",
+    borderColor: "#F0EBE5",
     shadowColor: "#BB6B3F",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
@@ -3273,9 +4444,9 @@ const c = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1.5,
   },
-  editBtn: { backgroundColor: "#FFF8F0", borderColor: "#8B6854" },
+  editBtn: { backgroundColor: "#EFF6FF", borderColor: "#BFDBFE" },
   deleteBtn: { backgroundColor: "#FFF5F2", borderColor: "#FFD4C4" },
-  qrBtn: { backgroundColor: "#F5EFEA", borderColor: "#D4B8A8" },
+  qrBtn: { backgroundColor: "#F5F3FF", borderColor: "#DDD6FE" },
   actionText: { fontSize: 13, fontWeight: "700" },
   infoBanner: {
     flexDirection: "row",
@@ -3290,6 +4461,7 @@ const c = StyleSheet.create({
   infoBannerSub: { fontSize: 11, opacity: 0.85, marginTop: 2 },
 });
 
+// ── Form fields
 const f = StyleSheet.create({
   wrap: { marginBottom: 14 },
   label: {
@@ -3388,6 +4560,7 @@ const f = StyleSheet.create({
   pickerDoneText: { fontSize: 13, fontWeight: "800", color: "#fff" },
 });
 
+// ── Modal / Sheet
 const m = StyleSheet.create({
   overlay: {
     flex: 1,
@@ -3447,6 +4620,19 @@ const m = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  qrLinkedBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#f0fdf4",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#86efac",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 12,
+  },
+  qrLinkedText: { fontSize: 12, fontWeight: "700", color: "#15803d" },
   typeRow: { flexDirection: "row", gap: 12, marginBottom: 12 },
   typeCard: { flex: 1 },
   typeInner: {
@@ -3528,6 +4714,7 @@ const m = StyleSheet.create({
   },
 });
 
+// ── QR Modal
 const qr = StyleSheet.create({
   overlay: {
     flex: 1,
@@ -3540,7 +4727,7 @@ const qr = StyleSheet.create({
     borderRadius: 24,
     padding: 24,
     alignItems: "center",
-    width: 300,
+    width: 320,
     shadowColor: "#F5EDE5",
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.18,
@@ -3568,6 +4755,38 @@ const qr = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  linkedBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "#faf5ff",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#e9d5ff",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    marginBottom: 12,
+  },
+  linkedBadgeText: { fontSize: 11, fontWeight: "700", color: "#7c3aed" },
+  modeLabelText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#8B6854",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: 10,
+  },
+  barcodeWrap: {
+    width: 280,
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#F5EDE5",
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    alignItems: "center",
+    marginBottom: 4,
+  },
   qrWrap: {
     width: 210,
     height: 210,
@@ -3578,14 +4797,52 @@ const qr = StyleSheet.create({
     justifyContent: "center",
     borderWidth: 1,
     borderColor: "#F5EDE5",
+    marginBottom: 4,
   },
   qrImage: { width: 210, height: 210 },
-  qrPlaceholder: {
+  genQrWrap: {
+    alignItems: "center",
+    paddingVertical: 8,
+    gap: 8,
+    marginBottom: 4,
+    width: "100%",
+  },
+  genQrIconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 24,
+    backgroundColor: "#FFF8F0",
     alignItems: "center",
     justifyContent: "center",
-    width: "100%",
-    height: "100%",
+    borderWidth: 1.5,
+    borderColor: "#F5EDE5",
+    borderStyle: "dashed",
+    marginBottom: 4,
   },
+  genQrTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#111827",
+    letterSpacing: -0.2,
+  },
+  genQrSub: {
+    fontSize: 12,
+    color: "#9ca3af",
+    textAlign: "center",
+    paddingHorizontal: 16,
+    lineHeight: 18,
+  },
+  genQrBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#7c3aed",
+    borderRadius: 12,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    marginTop: 4,
+  },
+  genQrBtnText: { fontSize: 14, fontWeight: "800", color: "#fff" },
   hint: {
     fontSize: 11,
     color: "#9ca3af",
@@ -3607,47 +4864,59 @@ const qr = StyleSheet.create({
     letterSpacing: 0.2,
   },
   menuBtn: {
-  width: 32,
-  height: 32,
-  borderRadius: 16,
-  backgroundColor: '#F5EDE5',
-  alignItems: 'center',
-  justifyContent: 'center',
-},
-dropdown: {
-  position: 'absolute',
-  top: 36,
-  right: 0,
-  backgroundColor: '#fff',
-  borderRadius: 12,
-  borderWidth: 1,
-  borderColor: '#F5EDE5',
-  shadowColor: '#000',
-  shadowOffset: { width: 0, height: 4 },
-  shadowOpacity: 0.12,
-  shadowRadius: 10,
-  elevation: 8,
-  minWidth: 160,
-  zIndex: 999,
-},
-dropdownItem: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  gap: 10,
-  paddingHorizontal: 16,
-  paddingVertical: 13,
-},
-dropdownText: {
-  fontSize: 13,
-  fontWeight: '700',
-  color: '#BB6B3F',
-},
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#F5EDE5",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  dropdown: {
+    position: "absolute",
+    top: 36,
+    right: 0,
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#F5EDE5",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 8,
+    minWidth: 160,
+    zIndex: 999,
+  },
+  dropdownItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 13,
+  },
+  dropdownText: { fontSize: 13, fontWeight: "700", color: "#BB6B3F" },
 });
 
+// ── Barcode display
+const bcd = StyleSheet.create({
+  wrap: { alignItems: "center", paddingVertical: 8 },
+  barsRow: { flexDirection: "row", alignItems: "flex-end", height: 72 },
+  bar: { borderRadius: 1 },
+  valueText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#111827",
+    letterSpacing: 3,
+    marginTop: 8,
+    fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
+  },
+});
+
+// ── Breed dropdown
 const bd = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: "rgba(204, 137, 92, 0.45)",
+    backgroundColor: "rgba(204,137,92,0.45)",
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 20,
@@ -3748,6 +5017,7 @@ const bd = StyleSheet.create({
   },
 });
 
+// ── Transfer / Sold / Expiry
 const tr = StyleSheet.create({
   wrap: {
     backgroundColor: "#fdf4ff",
@@ -3856,7 +5126,7 @@ const ex = StyleSheet.create({
   divider: { height: 1, backgroundColor: "#fecdd3", marginBottom: 14 },
 });
 
-// ── Insurance Styles 
+// ── Insurance
 const ins = StyleSheet.create({
   sectionHeader: {
     flexDirection: "row",
@@ -3865,11 +5135,7 @@ const ins = StyleSheet.create({
     marginBottom: 8,
     marginTop: 4,
   },
-  sectionTitleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-  },
+  sectionTitleRow: { flexDirection: "row", alignItems: "center", gap: 5 },
   sectionTitle: {
     fontSize: 11,
     fontWeight: "700",
@@ -3885,12 +5151,7 @@ const ins = StyleSheet.create({
     paddingHorizontal: 4,
     marginBottom: 12,
   },
-  loadingText: {
-    fontSize: 12,
-    color: "#9ca3af",
-    fontWeight: "500",
-  },
-  // ── Insured banner ──
+  loadingText: { fontSize: 12, color: "#9ca3af", fontWeight: "500" },
   infoBanner: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -3908,20 +5169,9 @@ const ins = StyleSheet.create({
     justifyContent: "center",
     flexShrink: 0,
   },
-  insCompany: {
-    fontSize: 13,
-    fontWeight: "800",
-    letterSpacing: -0.2,
-  },
-  statusPill: {
-    borderRadius: 20,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  statusPillText: {
-    fontSize: 10,
-    fontWeight: "700",
-  },
+  insCompany: { fontSize: 13, fontWeight: "800", letterSpacing: -0.2 },
+  statusPill: { borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3 },
+  statusPillText: { fontSize: 10, fontWeight: "700" },
   policyNo: {
     fontSize: 11,
     color: "#6b7280",
@@ -3935,27 +5185,15 @@ const ins = StyleSheet.create({
     gap: 10,
     marginBottom: 6,
   },
-  insDetailItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  insDetailText: {
-    fontSize: 11,
-    color: "#374151",
-    fontWeight: "600",
-  },
+  insDetailItem: { flexDirection: "row", alignItems: "center", gap: 4 },
+  insDetailText: { fontSize: 11, color: "#374151", fontWeight: "600" },
   claimRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
     marginBottom: 10,
   },
-  claimText: {
-    fontSize: 11,
-    color: "#7c3aed",
-    fontWeight: "600",
-  },
+  claimText: { fontSize: 11, color: "#7c3aed", fontWeight: "600" },
   editInsBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -3967,12 +5205,7 @@ const ins = StyleSheet.create({
     paddingVertical: 6,
     marginTop: 4,
   },
-  editInsBtnText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#fff",
-  },
-  // ── Uninsured / Add button ──
+  editInsBtnText: { fontSize: 11, fontWeight: "700", color: "#fff" },
   addInsuranceBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -4022,4 +5255,138 @@ const ins = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+});
+
+// ── QR Action Sheet
+const qa = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(61,43,31,0.5)",
+    justifyContent: "flex-end",
+  },
+  sheet: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: 20,
+    paddingBottom: Platform.OS === "ios" ? 40 : 24,
+  },
+  handle: {
+    width: 36,
+    height: 4,
+    backgroundColor: "#F5EDE5",
+    borderRadius: 2,
+    alignSelf: "center",
+    marginBottom: 16,
+  },
+  qrPreview: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#faf5ff",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#e9d5ff",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 16,
+  },
+  qrLabel: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#a78bfa",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  qrData: { fontSize: 13, fontWeight: "700", color: "#6d28d9", marginTop: 2 },
+  closeBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#F5EDE5",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  title: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#111827",
+    marginBottom: 12,
+  },
+  optionCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: "#F5EDE5",
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    marginBottom: 8,
+  },
+  optionIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  optionTitle: { fontSize: 14, fontWeight: "700", color: "#111827" },
+  optionSub: {
+    fontSize: 12,
+    color: "#9ca3af",
+    fontWeight: "500",
+    marginTop: 2,
+  },
+  dividerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginVertical: 12,
+  },
+  divLine: { flex: 1, height: 1, backgroundColor: "#F5EDE5" },
+  divText: { fontSize: 11, color: "#C4A882", fontWeight: "600" },
+  searchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFF8F0",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#fad9b9",
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    gap: 8,
+    marginBottom: 8,
+  },
+  searchInput: { flex: 1, color: "#8B6854", fontSize: 14 },
+  cowRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    marginBottom: 4,
+    backgroundColor: "#FFF8F0",
+    borderWidth: 1,
+    borderColor: "#F5EDE5",
+  },
+  cowRowActive: { backgroundColor: "#f0fdf4", borderColor: "#86efac" },
+  cowName: { fontSize: 13, fontWeight: "700", color: "#111827" },
+  cowTag: { fontSize: 11, color: "#9ca3af", fontWeight: "500", marginTop: 1 },
+  emptyText: {
+    fontSize: 13,
+    color: "#C4A882",
+    textAlign: "center",
+    paddingVertical: 20,
+  },
+  linkBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "#7c3aed",
+    borderRadius: 14,
+    paddingVertical: 14,
+    marginTop: 12,
+  },
+  linkBtnText: { fontSize: 15, fontWeight: "800", color: "#fff" },
 });
