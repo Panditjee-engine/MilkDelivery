@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { Colors } from '../../src/constants/colors';
+import { api } from '../../src/services/api';
 
 export default function DeliveryProfileScreen() {
   const { user, logout } = useAuth();
@@ -18,6 +19,28 @@ export default function DeliveryProfileScreen() {
         onPress: async () => { await logout(); router.replace('/'); },
       },
     ]);
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete Account',
+      'This will permanently delete your Gau Satva account and remove your personal profile data. This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Account',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await api.deleteAccount();
+              router.replace('/(auth)/login');
+            } catch (error: any) {
+              Alert.alert('Delete Failed', error?.message || 'Could not delete account. Please try again.');
+            }
+          },
+        },
+      ],
+    );
   };
 
   const HelpRow = ({ icon, iconBg, iconColor, label }: {
@@ -125,6 +148,11 @@ export default function DeliveryProfileScreen() {
         <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
           <Ionicons name="log-out-outline" size={19} color="#ef4444" />
           <Text style={styles.logoutText}>Logout</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.deleteAccountBtn} onPress={handleDeleteAccount}>
+          <Ionicons name="trash-outline" size={19} color="#dc2626" />
+          <Text style={styles.deleteAccountText}>Delete Account</Text>
         </TouchableOpacity>
 
         <View style={{ height: 30 }} />
@@ -245,4 +273,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#FEF2F2', borderRadius: 16, gap: 8,
   },
   logoutText: { fontSize: 15, fontWeight: '700', color: '#ef4444' },
+  deleteAccountBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    marginHorizontal: 20, marginTop: 10, padding: 16,
+    backgroundColor: '#FFF7F7', borderRadius: 16, gap: 8,
+    borderWidth: 1, borderColor: '#FECACA',
+  },
+  deleteAccountText: { fontSize: 15, fontWeight: '800', color: '#dc2626' },
 });

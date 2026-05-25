@@ -902,6 +902,38 @@ export default function AdminSettingsScreen() {
     );
   };
 
+  const handleDeleteAccount = () => {
+    showAlert(
+      "Delete Account",
+      "This will permanently delete your Gau Satva account and remove your personal profile data. This action cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete Account",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await api.deleteAccount();
+              router.replace("/(auth)/login");
+            } catch (err: any) {
+              showAlert(
+                "Delete Failed",
+                err?.message ?? "Could not delete account. Please try again.",
+                undefined,
+                "alert-circle-outline",
+                "#FEF2F2",
+                "#dc2626",
+              );
+            }
+          },
+        },
+      ],
+      "trash-outline",
+      "#FEF2F2",
+      "#dc2626",
+    );
+  };
+
   // Display strings
   const cutoffDisplay = `${settings.cutoffHour}:${settings.cutoffMin} ${settings.cutoffAmPm}`;
   const deliveryDisplay = `${settings.deliveryStartHour}:${settings.deliveryStartMin} ${settings.deliveryStartAmPm} – ${settings.deliveryEndHour}:${settings.deliveryEndMin} ${settings.deliveryEndAmPm}`;
@@ -1081,6 +1113,14 @@ export default function AdminSettingsScreen() {
         >
           <Ionicons name="log-out-outline" size={19} color={C.dark} />
           <Text style={s.logoutTxt}>Logout</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={s.deleteAccountBtn}
+          onPress={handleDeleteAccount}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="trash-outline" size={19} color="#dc2626" />
+          <Text style={s.deleteAccountTxt}>Delete Account</Text>
         </TouchableOpacity>
         <ShareModal
           visible={activeModal === "share"}
@@ -1443,7 +1483,7 @@ export default function AdminSettingsScreen() {
 
             {/* Resend row */}
             <View style={mS.resendRow}>
-              <Text style={mS.resendLabel}>Didn't receive it?</Text>
+              <Text style={mS.resendLabel}>Did not receive it?</Text>
               <TouchableOpacity
                 onPress={handleResendOtp}
                 disabled={otpResendTimer > 0}
@@ -2174,6 +2214,20 @@ const s = StyleSheet.create({
     gap: 8,
   },
   logoutTxt: { fontSize: 15, fontWeight: "700", color: "#BB6B3F" },
+  deleteAccountBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginHorizontal: 20,
+    marginTop: 10,
+    padding: 16,
+    backgroundColor: "#FEF2F2",
+    borderRadius: 16,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: "#FECACA",
+  },
+  deleteAccountTxt: { fontSize: 15, fontWeight: "800", color: "#dc2626" },
 });
 
 // ── QR Modal Styles

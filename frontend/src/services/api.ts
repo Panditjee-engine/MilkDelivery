@@ -454,6 +454,15 @@ class ApiService {
     });
   }
 
+  async deleteAccount() {
+    const result = await this.request<any>("/auth/account", {
+      method: "DELETE",
+    });
+    this.setToken(null);
+    await AsyncStorage.multiRemove(["access_token", "worker_token", "worker_data"]);
+    return result;
+  }
+
   async getCatalogProducts(adminId?: string, category?: string) {
     const params = new URLSearchParams();
 

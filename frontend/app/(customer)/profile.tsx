@@ -407,6 +407,32 @@ useEffect(() => {
     });
   };
 
+  const handleDeleteAccount = () => {
+    showAlert({
+      icon: "trash-outline",
+      iconColor: "#DC2626",
+      iconBg: "#FEF2F2",
+      title: "Delete Account",
+      message:
+        "This will permanently delete your Gau Satva account and remove your personal profile data. This action cannot be undone.",
+      actions: [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete Account",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await api.deleteAccount();
+              router.replace("/(auth)/login");
+            } catch (error: any) {
+              showToast(error?.message || "Could not delete account. Please try again.", "error");
+            }
+          },
+        },
+      ],
+    });
+  };
+
   const handleAddVacation = async () => {
     if (!startDate || !endDate) {
       showAlert({
@@ -799,6 +825,19 @@ useEffect(() => {
             <Ionicons name="log-out-outline" size={18} color="#ef4444" />
           </View>
           <Text style={styles.logoutText}>Log Out</Text>
+          <Ionicons
+            name="chevron-forward"
+            size={16}
+            color="#fca5a5"
+            style={{ marginLeft: "auto" }}
+          />
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.deleteAccountBtn} onPress={handleDeleteAccount}>
+          <View style={styles.logoutIcon}>
+            <Ionicons name="trash-outline" size={18} color="#dc2626" />
+          </View>
+          <Text style={styles.deleteAccountText}>Delete Account</Text>
           <Ionicons
             name="chevron-forward"
             size={16}
@@ -1207,6 +1246,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   logoutText: { fontSize: 15, fontWeight: "700", color: "#ef4444" },
+  deleteAccountBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginHorizontal: 16,
+    marginTop: 10,
+    padding: 16,
+    backgroundColor: "#FFF7F7",
+    borderRadius: 18,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: "#FECACA",
+  },
+  deleteAccountText: { fontSize: 15, fontWeight: "800", color: "#dc2626" },
 
   // Modals
   modalOverlay: {
