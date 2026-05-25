@@ -39,7 +39,7 @@ interface InseminationRecord {
   heatAfterCalvingDate?: string;
   sire?: string;
   lastCalvingDate?: string;
-  lastCalvingCalfGender?: string; // NEW — "male" | "female"
+  lastCalvingCalfGender?: string;
   created_at: string;
 }
 
@@ -74,7 +74,7 @@ interface FormData {
   heatAfterCalvingDate: string;
   sire: string;
   lastCalvingDate: string;
-  lastCalvingCalfGender: string; // NEW
+  lastCalvingCalfGender: string;
 }
 
 const cowImg = require("../../../assets/images/gir-cow.png");
@@ -95,7 +95,7 @@ const EMPTY_FORM: FormData = {
   heatAfterCalvingDate: "",
   sire: "",
   lastCalvingDate: "",
-  lastCalvingCalfGender: "", // NEW
+  lastCalvingCalfGender: "",
 };
 
 const PAGE_SIZE = 4;
@@ -150,6 +150,7 @@ function getStatus(r: InseminationRecord) {
   };
 }
 
+// ─── InseminationTypeField
 function InseminationTypeField({
   value,
   onChange,
@@ -177,9 +178,7 @@ function InseminationTypeField({
             />
           </View>
           <View style={{ flex: 1 }}>
-            <Text
-              style={[f.typeTitle, value === "ai" && { color: "#7c3aed" }]}
-            >
+            <Text style={[f.typeTitle, value === "ai" && { color: "#7c3aed" }]}>
               AI Insemination
             </Text>
             <Text style={f.typeSub}>Artificial method</Text>
@@ -213,10 +212,7 @@ function InseminationTypeField({
           </View>
           <View style={{ flex: 1 }}>
             <Text
-              style={[
-                f.typeTitle,
-                value === "natural" && { color: "#15803d" },
-              ]}
+              style={[f.typeTitle, value === "natural" && { color: "#15803d" }]}
             >
               Natural Insemination
             </Text>
@@ -350,7 +346,7 @@ function CowSelector({
             <TouchableOpacity
               activeOpacity={1}
               style={cs.sheet}
-              onPress={() => { }}
+              onPress={() => {}}
             >
               <View style={cs.sheetHeader}>
                 <Text style={cs.sheetTitle}>Select Cow</Text>
@@ -408,11 +404,17 @@ function CowSelector({
                       <View style={cs.cowEmoji}>
                         <Image
                           source={
-                            item.type === "bull" ? bullImg :
-                              item.type === "newborn" ? calfImg :
-                                cowImg
+                            item.type === "bull"
+                              ? bullImg
+                              : item.type === "newborn"
+                                ? calfImg
+                                : cowImg
                           }
-                          style={{ width: 26, height: 26, resizeMode: "contain" }}
+                          style={{
+                            width: 26,
+                            height: 26,
+                            resizeMode: "contain",
+                          }}
                         />
                       </View>
                       <View style={{ flex: 1 }}>
@@ -474,7 +476,7 @@ function CowSelector({
   );
 }
 
-// ─── Field 
+// ─── Field
 function Field({ label, value, onChange, placeholder, icon }: any) {
   const [focused, setFocused] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
@@ -533,70 +535,7 @@ function Field({ label, value, onChange, placeholder, icon }: any) {
   );
 }
 
-// ─── AiDateField 
-function AiDateField({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  const [showPicker, setShowPicker] = useState(false);
-
-  const handleDateChange = (event: any, selectedDate?: Date) => {
-    setShowPicker(false);
-    if (selectedDate) {
-      const day = String(selectedDate.getDate()).padStart(2, "0");
-      const month = String(selectedDate.getMonth() + 1).padStart(2, "0");
-      const year = selectedDate.getFullYear();
-      onChange(`${day}/${month}/${year}`);
-    }
-  };
-
-  return (
-    <View style={f.wrap}>
-      <Text style={f.label}>AI DATE (ARTIFICIAL INSEMINATION)</Text>
-      <TouchableOpacity activeOpacity={0.7} onPress={() => setShowPicker(true)}>
-        <View style={[f.row, f.aiDateRow]}>
-          <View style={f.aiIconBadge}>
-            <Text style={{ fontSize: 13 }}>🧬</Text>
-          </View>
-          <Text
-            style={[f.input, value ? f.aiDateValueText : f.aiDatePlaceholder]}
-          >
-            {value || "DD/MM/YYYY"}
-          </Text>
-          {!!value && (
-            <TouchableOpacity
-              onPress={() => onChange("")}
-              style={{ padding: 2 }}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Ionicons name="close-circle" size={16} color="#a78bfa" />
-            </TouchableOpacity>
-          )}
-          <Ionicons
-            name="calendar"
-            size={15}
-            color="#7c3aed"
-            style={{ marginLeft: 4 }}
-          />
-        </View>
-      </TouchableOpacity>
-      {!!value && <Text style={f.aiDateHint}>📅 AI performed on {value}</Text>}
-      {showPicker && (
-        <DateTimePicker
-          value={new Date()}
-          mode="date"
-          display="default"
-          onChange={handleDateChange}
-        />
-      )}
-    </View>
-  );
-}
-
-// ─── LastCalvingDateField — date + gender picker 
+// ─── LastCalvingDateField
 function LastCalvingDateField({
   dateValue,
   genderValue,
@@ -620,14 +559,8 @@ function LastCalvingDateField({
     }
   };
 
-  const clearDate = () => {
-    onDateChange("");
-    onGenderChange("");
-  };
-
   return (
     <View style={f.wrap}>
-      {/* Date picker row */}
       <Text style={f.label}>LAST CALVING DATE</Text>
       <TouchableOpacity activeOpacity={0.7} onPress={() => setShowPicker(true)}>
         <View style={[f.row, !!dateValue && f.calvingDateActive]}>
@@ -647,7 +580,10 @@ function LastCalvingDateField({
           </Text>
           {!!dateValue && (
             <TouchableOpacity
-              onPress={clearDate}
+              onPress={() => {
+                onDateChange("");
+                onGenderChange("");
+              }}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
               <Ionicons name="close-circle" size={16} color="#86efac" />
@@ -662,7 +598,6 @@ function LastCalvingDateField({
         </View>
       </TouchableOpacity>
 
-      {/* Gender selector — appears after date is selected */}
       {!!dateValue && (
         <View style={gb.container}>
           <View style={gb.headerRow}>
@@ -682,9 +617,7 @@ function LastCalvingDateField({
                 <Text
                   style={[
                     gb.selectedBadgeText,
-                    {
-                      color: genderValue === "male" ? "#1d4ed8" : "#be185d",
-                    },
+                    { color: genderValue === "male" ? "#1d4ed8" : "#be185d" },
                   ]}
                 >
                   {genderValue === "male"
@@ -694,9 +627,7 @@ function LastCalvingDateField({
               </View>
             )}
           </View>
-
           <View style={gb.btnRow}>
-            {/* Male button */}
             <TouchableOpacity
               onPress={() =>
                 onGenderChange(genderValue === "male" ? "" : "male")
@@ -742,7 +673,6 @@ function LastCalvingDateField({
               </Text>
             </TouchableOpacity>
 
-            {/* Female button */}
             <TouchableOpacity
               onPress={() =>
                 onGenderChange(genderValue === "female" ? "" : "female")
@@ -789,7 +719,6 @@ function LastCalvingDateField({
               </Text>
             </TouchableOpacity>
           </View>
-
           {!genderValue && (
             <Text style={gb.hintText}>
               👆 Tap to select the gender of the calf born
@@ -810,7 +739,7 @@ function LastCalvingDateField({
   );
 }
 
-// ─── ToggleCard 
+// ─── ToggleCard
 function ToggleCard({
   label,
   sub,
@@ -854,7 +783,7 @@ function ToggleCard({
   );
 }
 
-// ─── SectionHeader 
+// ─── SectionHeader
 function SectionHeader({
   title,
   icon,
@@ -872,7 +801,7 @@ function SectionHeader({
   );
 }
 
-// ─── RecordFormBody 
+// ─── RecordFormBody
 function RecordFormBody({
   form,
   setF,
@@ -900,13 +829,10 @@ function RecordFormBody({
         value={form.inseminationType}
         onChange={(value) => {
           setF("inseminationType")(value);
-          if (value === "ai") {
-            setF("sire")("");
-          }
+          if (value === "ai") setF("sire")("");
         }}
       />
 
-      {/* ── Cow Info ── */}
       <SectionHeader
         title="Cow Information"
         icon="paw-outline"
@@ -936,13 +862,11 @@ function RecordFormBody({
         </View>
       ) : null}
 
-      {/* ── Insemination ── */}
       <SectionHeader
         title="Insemination"
         icon="flask-outline"
         color="#7c3aed"
       />
-
       <Field
         label="Insemination Date"
         value={form.inseminationDate}
@@ -961,19 +885,17 @@ function RecordFormBody({
         />
       )}
 
-      {/* ── Last Calving Date + Gender (NEW combined field) ── */}
       <SectionHeader title="Last Calving" icon="star-outline" color="#16a34a" />
       <LastCalvingDateField
         dateValue={form.lastCalvingDate}
         genderValue={form.lastCalvingCalfGender}
         onDateChange={(v) => {
           setF("lastCalvingDate")(v);
-          if (!v) setF("lastCalvingCalfGender")(""); // clear gender when date cleared
+          if (!v) setF("lastCalvingCalfGender")("");
         }}
         onGenderChange={setF("lastCalvingCalfGender")}
       />
 
-      {/* Auto expected calving */}
       {!!expectedCalving && (
         <View style={f.expectedWrap}>
           <Text style={f.label}>EXPECTED CALVING DATE</Text>
@@ -995,7 +917,6 @@ function RecordFormBody({
         </View>
       )}
 
-      {/* ── Pregnancy ── */}
       <SectionHeader
         title="Pregnancy Status"
         icon="heart-outline"
@@ -1009,7 +930,6 @@ function RecordFormBody({
         activeColor="#e11d48"
       />
 
-      {/* ── PD ── */}
       <SectionHeader
         title="Pregnancy Determination (PD)"
         icon="medical-outline"
@@ -1041,7 +961,6 @@ function RecordFormBody({
         </View>
       )}
 
-      {/* ── Calving Details ── */}
       <SectionHeader
         title="Calving Details"
         icon="leaf-outline"
@@ -1066,7 +985,7 @@ function RecordFormBody({
   );
 }
 
-// ─── AddModal 
+// ─── AddModal
 function AddModal({
   visible,
   onClose,
@@ -1120,7 +1039,7 @@ function AddModal({
             ? form.sire || undefined
             : undefined,
         lastCalvingDate: form.lastCalvingDate || undefined,
-        lastCalvingCalfGender: form.lastCalvingCalfGender || undefined, // NEW
+        lastCalvingCalfGender: form.lastCalvingCalfGender || undefined,
       };
       const created = await api.createInsemination(payload);
       onAdd(created);
@@ -1131,8 +1050,6 @@ function AddModal({
       setSub(false);
     }
   };
-
-  const canSubmit = !!form.cowSrNo && !!form.inseminationDate;
 
   return (
     <Modal
@@ -1174,9 +1091,11 @@ function AddModal({
               onPress={submit}
               style={[
                 m.submitBtn,
-                (!canSubmit || submitting) && { opacity: 0.45 },
+                (!form.cowSrNo || !form.inseminationDate || submitting) && {
+                  opacity: 0.45,
+                },
               ]}
-              disabled={!canSubmit || submitting}
+              disabled={!form.cowSrNo || !form.inseminationDate || submitting}
             >
               {submitting ? (
                 <ActivityIndicator color="#fff" size="small" />
@@ -1198,7 +1117,7 @@ function AddModal({
   );
 }
 
-// ─── EditModal 
+// ─── EditModal
 function EditModal({
   visible,
   record,
@@ -1229,7 +1148,7 @@ function EditModal({
         heatAfterCalvingDate: record.heatAfterCalvingDate ?? "",
         sire: record.sire ?? "",
         lastCalvingDate: record.lastCalvingDate ?? "",
-        lastCalvingCalfGender: record.lastCalvingCalfGender ?? "", // NEW
+        lastCalvingCalfGender: record.lastCalvingCalfGender ?? "",
       });
     }
   }, [record]);
@@ -1266,7 +1185,7 @@ function EditModal({
             ? form.sire || undefined
             : undefined,
         lastCalvingDate: form.lastCalvingDate || undefined,
-        lastCalvingCalfGender: form.lastCalvingCalfGender || undefined, // NEW
+        lastCalvingCalfGender: form.lastCalvingCalfGender || undefined,
       };
       const updated = await api.updateInsemination(record.id, payload);
       onSave(updated);
@@ -1277,8 +1196,6 @@ function EditModal({
       setSub(false);
     }
   };
-
-  const canSave = !!form.cowSrNo && !!form.inseminationDate;
 
   return (
     <Modal
@@ -1327,9 +1244,11 @@ function EditModal({
               style={[
                 m.submitBtn,
                 { backgroundColor: "#ea580c" },
-                (!canSave || submitting) && { opacity: 0.45 },
+                (!form.cowSrNo || !form.inseminationDate || submitting) && {
+                  opacity: 0.45,
+                },
               ]}
-              disabled={!canSave || submitting}
+              disabled={!form.cowSrNo || !form.inseminationDate || submitting}
             >
               {submitting ? (
                 <ActivityIndicator color="#fff" size="small" />
@@ -1347,7 +1266,7 @@ function EditModal({
   );
 }
 
-// ─── DetailRow 
+// ─── DetailRow
 function DetailRow({
   icon,
   label,
@@ -1373,7 +1292,7 @@ function DetailRow({
   );
 }
 
-// ─── InseminationCard 
+// ─── InseminationCard
 function InseminationCard({
   group,
   index,
@@ -1413,23 +1332,22 @@ function InseminationCard({
     ]).start();
   }, []);
 
+  useEffect(() => {
+    setRecordIndex(0);
+  }, [group.cowSrNo]);
+
   const genderLabel =
     item.lastCalvingCalfGender === "male"
       ? "🐂 Male"
       : item.lastCalvingCalfGender === "female"
         ? "🐄 Female"
         : "";
-
   const genderColor =
     item.lastCalvingCalfGender === "male"
       ? "#1d4ed8"
       : item.lastCalvingCalfGender === "female"
         ? "#be185d"
         : undefined;
-
-  useEffect(() => {
-    setRecordIndex(0);
-  }, [group.cowSrNo]);
 
   return (
     <Animated.View style={[c.card, { opacity, transform: [{ translateY }] }]}>
@@ -1477,7 +1395,6 @@ function InseminationCard({
           />
         </View>
 
-        {/* Pills row */}
         <View style={c.pills}>
           <View
             style={[
@@ -1495,9 +1412,7 @@ function InseminationCard({
             <Text
               style={[
                 c.pillText,
-                {
-                  color: inseminationType === "ai" ? "#7c3aed" : "#15803d",
-                },
+                { color: inseminationType === "ai" ? "#7c3aed" : "#15803d" },
               ]}
             >
               {inseminationType === "ai" ? "AI" : "Natural"}
@@ -1507,19 +1422,6 @@ function InseminationCard({
             <Ionicons name="flask-outline" size={10} color="#7c3aed" />
             <Text style={c.pillText}>{item.inseminationDate}</Text>
           </View>
-          {!!item.aiDate && (
-            <View
-              style={[
-                c.pill,
-                { backgroundColor: "#fdf4ff", borderColor: "#e879f9" },
-              ]}
-            >
-              <Text style={{ fontSize: 9 }}>🧬</Text>
-              <Text style={[c.pillText, { color: "#a21caf" }]}>
-                AI {item.aiDate}
-              </Text>
-            </View>
-          )}
           {!!expectedCalving && !item.actualCalvingDate && (
             <View
               style={[
@@ -1567,20 +1469,6 @@ function InseminationCard({
               <Text style={[c.pillText, { color: "#0891b2" }]}>PD Done</Text>
             </View>
           )}
-          {!!item.sire && (
-            <View
-              style={[
-                c.pill,
-                { backgroundColor: "#fef3c7", borderColor: "#fcd34d" },
-              ]}
-            >
-              <Ionicons name="male-outline" size={10} color="#92400e" />
-              <Text style={[c.pillText, { color: "#92400e" }]}>
-                {item.sire}
-              </Text>
-            </View>
-          )}
-          {/* NEW — Last calf gender pill */}
           {!!item.lastCalvingCalfGender && (
             <View
               style={[
@@ -1624,9 +1512,7 @@ function InseminationCard({
             <View style={c.historyNav}>
               <TouchableOpacity
                 activeOpacity={0.85}
-                onPress={() =>
-                  setRecordIndex((prev) => Math.max(0, prev - 1))
-                }
+                onPress={() => setRecordIndex((prev) => Math.max(0, prev - 1))}
                 disabled={recordIndex === 0}
                 style={[
                   c.historyBtn,
@@ -1647,14 +1533,12 @@ function InseminationCard({
                   Previous
                 </Text>
               </TouchableOpacity>
-
               <View style={c.historyBadge}>
                 <Ionicons name="albums-outline" size={12} color="#7c3aed" />
                 <Text style={c.historyBadgeText}>
                   {recordIndex + 1}/{group.records.length}
                 </Text>
               </View>
-
               <TouchableOpacity
                 activeOpacity={0.85}
                 onPress={() =>
@@ -1689,7 +1573,6 @@ function InseminationCard({
                 />
               </TouchableOpacity>
             </View>
-
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -1712,10 +1595,7 @@ function InseminationCard({
                     key={record.id}
                     activeOpacity={0.85}
                     onPress={() => setRecordIndex(idx)}
-                    style={[
-                      c.timelineChip,
-                      active && c.timelineChipActive,
-                    ]}
+                    style={[c.timelineChip, active && c.timelineChipActive]}
                   >
                     <Text
                       style={[
@@ -1729,7 +1609,9 @@ function InseminationCard({
                       style={[
                         c.timelineBadge,
                         {
-                          backgroundColor: active ? badgeColor + "18" : "#ffffff",
+                          backgroundColor: active
+                            ? badgeColor + "18"
+                            : "#ffffff",
                           borderColor: active ? badgeColor + "55" : "#e5e7eb",
                         },
                       ]}
@@ -1749,7 +1631,9 @@ function InseminationCard({
                         active && c.timelineChipSubActive,
                       ]}
                     >
-                      {record.aiDate ? "AI Insemination" : "Natural Insemination"}
+                      {record.aiDate
+                        ? "AI Insemination"
+                        : "Natural Insemination"}
                     </Text>
                   </TouchableOpacity>
                 );
@@ -1762,7 +1646,6 @@ function InseminationCard({
       {expanded && (
         <View>
           <View style={c.divider} />
-
           <Text style={c.section}>📋 Insemination</Text>
           <DetailRow
             icon={inseminationType === "ai" ? "flask-outline" : "leaf-outline"}
@@ -1780,14 +1663,6 @@ function InseminationCard({
             value={item.inseminationDate}
             color="#7c3aed"
           />
-          {!!item.aiDate && (
-            <DetailRow
-              icon="flask"
-              label="AI Date"
-              value={item.aiDate}
-              color="#a21caf"
-            />
-          )}
           {!!item.sire && (
             <DetailRow
               icon="male-outline"
@@ -1844,7 +1719,6 @@ function InseminationCard({
             value={item.lastCalvingDate || "—"}
             color={item.lastCalvingDate ? "#7c3aed" : "#9ca3af"}
           />
-          {/* NEW — Last calf gender detail row */}
           {!!item.lastCalvingCalfGender && (
             <DetailRow
               icon="male-female-outline"
@@ -1890,12 +1764,11 @@ function InseminationCard({
   );
 }
 
-// ─── Main Screen 
+// ─── Main Screen
 export default function InseminationScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [records, setRecords] = useState<InseminationRecord[]>([]);
-  const [screen, setScreen] = useState<"home" | "list">("home");
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>("newest");
   const [dateRange, setDateRange] = useState<DateRangeOption>("all_time");
@@ -1964,37 +1837,40 @@ export default function InseminationScreen() {
     pdDone: records.filter((r) => r.pdDone).length,
     calved: records.filter((r) => !!r.actualCalvingDate).length,
   };
+
   const isWithinRange = (createdAt: string, range: DateRangeOption) => {
     if (range === "all_time") return true;
     const created = new Date(createdAt);
     if (Number.isNaN(created.getTime())) return true;
-    const diffDays =
-      (Date.now() - created.getTime()) / (1000 * 60 * 60 * 24);
+    const diffDays = (Date.now() - created.getTime()) / (1000 * 60 * 60 * 24);
     if (range === "last_week") return diffDays <= 7;
     if (range === "last_month") return diffDays <= 30;
     return diffDays <= 365;
   };
-  const groupedRecords = records.reduce<InseminationGroup[]>((groups, record) => {
-    const existing = groups.find((group) => group.cowSrNo === record.cowSrNo);
-    if (existing) {
-      existing.records.push(record);
-      existing.records.sort(
-        (a, b) =>
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-      );
-    } else {
-      groups.push({
-        cowSrNo: record.cowSrNo,
-        cowName: record.cowName,
-        records: [record],
-      });
-    }
-    return groups;
-  }, []);
+
+  const groupedRecords = records.reduce<InseminationGroup[]>(
+    (groups, record) => {
+      const existing = groups.find((g) => g.cowSrNo === record.cowSrNo);
+      if (existing) {
+        existing.records.push(record);
+        existing.records.sort(
+          (a, b) =>
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+        );
+      } else {
+        groups.push({
+          cowSrNo: record.cowSrNo,
+          cowName: record.cowName,
+          records: [record],
+        });
+      }
+      return groups;
+    },
+    [],
+  );
+
   const visibleGroupedRecords = groupedRecords
-    .filter((group) =>
-      isWithinRange(group.records[0]?.created_at ?? "", dateRange),
-    )
+    .filter((g) => isWithinRange(g.records[0]?.created_at ?? "", dateRange))
     .sort((a, b) => {
       if (sortBy === "name_asc") return a.cowName.localeCompare(b.cowName);
       if (sortBy === "name_desc") return b.cowName.localeCompare(a.cowName);
@@ -2003,6 +1879,7 @@ export default function InseminationScreen() {
       if (sortBy === "oldest") return aTime - bTime;
       return bTime - aTime;
     });
+
   const sortMeta: Record<
     SortOption,
     { label: string; icon: keyof typeof Ionicons.glyphMap }
@@ -2012,6 +1889,7 @@ export default function InseminationScreen() {
     name_asc: { label: "Name A-Z", icon: "text-outline" },
     name_desc: { label: "Name Z-A", icon: "text-outline" },
   };
+
   const dateRangeMeta: Record<
     DateRangeOption,
     { label: string; icon: keyof typeof Ionicons.glyphMap }
@@ -2024,14 +1902,12 @@ export default function InseminationScreen() {
 
   return (
     <View style={[s.screen, { paddingTop: insets.top }]}>
-      <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+      <StatusBar barStyle="dark-content" backgroundColor="#FFF8F0" />
 
       {/* ── Header ── */}
       <View style={s.header}>
         <TouchableOpacity
-          onPress={
-            screen === "home" ? () => router.back() : () => setScreen("home")
-          }
+          onPress={() => router.replace("/admin/gausevak" as any)}
           style={s.backBtn}
         >
           <Ionicons name="arrow-back" size={20} color="#111827" />
@@ -2039,17 +1915,15 @@ export default function InseminationScreen() {
         <View style={{ flex: 1, marginLeft: 12 }}>
           <Text style={s.headerTitle}>Insemination</Text>
           <Text style={s.headerSub}>
-            {visibleGroupedRecords.length} cows, {records.length} records
+            {visibleGroupedRecords.length} cows · {records.length} records
           </Text>
         </View>
-        {screen === "list" && (
-          <TouchableOpacity
-            onPress={() => setSortVisible(true)}
-            style={s.sortBtn}
-          >
-            <Ionicons name={sortMeta[sortBy].icon} size={16} color="#7c3aed" />
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity
+          onPress={() => setSortVisible(true)}
+          style={s.sortBtn}
+        >
+          <Ionicons name={sortMeta[sortBy].icon} size={16} color="#7c3aed" />
+        </TouchableOpacity>
         <TouchableOpacity
           onPress={() => setAddModal(true)}
           style={s.headerAddBtn}
@@ -2057,6 +1931,8 @@ export default function InseminationScreen() {
           <Ionicons name="add" size={20} color="#7c3aed" />
         </TouchableOpacity>
       </View>
+
+      {/* ── Sort Modal ── */}
       <Modal
         visible={sortVisible}
         transparent
@@ -2072,35 +1948,41 @@ export default function InseminationScreen() {
             <Text style={s.sortSheetTitle}>Sort Records</Text>
             <Text style={s.sortSheetSub}>Choose date filter and ordering</Text>
             <Text style={s.sortSectionTitle}>Date Filter</Text>
-            {(["all_time", "last_week", "last_month", "last_year"] as const).map(
-              (option) => (
-                <TouchableOpacity
-                  key={option}
-                  style={[s.sortOption, dateRange === option && s.sortOptionActive]}
-                  onPress={() => setDateRange(option)}
+            {(
+              ["all_time", "last_week", "last_month", "last_year"] as const
+            ).map((option) => (
+              <TouchableOpacity
+                key={option}
+                style={[
+                  s.sortOption,
+                  dateRange === option && s.sortOptionActive,
+                ]}
+                onPress={() => setDateRange(option)}
+              >
+                <Ionicons
+                  name={dateRangeMeta[option].icon}
+                  size={15}
+                  color={dateRange === option ? "#7c3aed" : "#9ca3af"}
+                />
+                <Text
+                  style={[
+                    s.sortOptionText,
+                    dateRange === option && s.sortOptionTextActive,
+                  ]}
                 >
-                  <Ionicons
-                    name={dateRangeMeta[option].icon}
-                    size={15}
-                    color={dateRange === option ? "#7c3aed" : "#9ca3af"}
-                  />
-                  <Text
-                    style={[
-                      s.sortOptionText,
-                      dateRange === option && s.sortOptionTextActive,
-                    ]}
-                  >
-                    {dateRangeMeta[option].label}
-                  </Text>
-                </TouchableOpacity>
-              ),
-            )}
+                  {dateRangeMeta[option].label}
+                </Text>
+              </TouchableOpacity>
+            ))}
             <Text style={s.sortSectionTitle}>Order By</Text>
             {(["newest", "oldest", "name_asc", "name_desc"] as const).map(
               (option) => (
                 <TouchableOpacity
                   key={option}
-                  style={[s.sortOption, sortBy === option && s.sortOptionActive]}
+                  style={[
+                    s.sortOption,
+                    sortBy === option && s.sortOptionActive,
+                  ]}
                   onPress={() => {
                     setSortBy(option);
                     setSortVisible(false);
@@ -2126,7 +2008,7 @@ export default function InseminationScreen() {
         </TouchableOpacity>
       </Modal>
 
-      {/* ── Stats bar ── */}
+      {/* ── Stats Bar ── */}
       <View style={s.statsRow}>
         {[
           { label: "Total", value: stats.total, color: "#7c3aed" },
@@ -2144,132 +2026,100 @@ export default function InseminationScreen() {
         ))}
       </View>
 
-      {/* ── Home screen ── */}
-      {screen === "home" ? (
-        <View style={s.homeBody}>
-          <Text style={s.homeHeading}>Insemination Records</Text>
-          <Text style={s.homeSub}>Track breeding cycles, PD and calving</Text>
-          <View style={s.btnGroup}>
-            <TouchableOpacity
-              onPress={() => setAddModal(true)}
-              style={s.bigBtn}
-              activeOpacity={0.85}
-            >
-              <View style={[s.bigBtnIcon, { backgroundColor: "#faf5ff" }]}>
-                <Text style={{ fontSize: 32 }}>🧬</Text>
-              </View>
-              <Text style={s.bigBtnTitle}>Add Insemination</Text>
-              <Text style={s.bigBtnSub}>Record a new insemination entry</Text>
-              <View style={[s.bigBtnArrow, { backgroundColor: "#7c3aed" }]}>
-                <Ionicons name="add" size={18} color="#fff" />
-              </View>
-            </TouchableOpacity>
+      {/* ── Search ── */}
+      <View style={s.searchWrap}>
+        <Ionicons name="search-outline" size={15} color="#9ca3af" />
+        <TextInput
+          style={s.searchInput}
+          placeholder="Search cow name or Sr. No..."
+          placeholderTextColor="#d1d5db"
+          value={search}
+          onChangeText={setSearch}
+        />
+        {search.length > 0 && (
+          <TouchableOpacity onPress={() => setSearch("")}>
+            <Ionicons name="close-circle" size={15} color="#9ca3af" />
+          </TouchableOpacity>
+        )}
+      </View>
 
-            <TouchableOpacity
-              onPress={() => setScreen("list")}
-              style={s.bigBtn}
-              activeOpacity={0.85}
-            >
-              <View style={[s.bigBtnIcon, { backgroundColor: "#eff6ff" }]}>
-                <Text style={{ fontSize: 32 }}>📋</Text>
-              </View>
-              <Text style={s.bigBtnTitle}>View Records</Text>
-              <Text style={s.bigBtnSub}>
-                Browse all {visibleGroupedRecords.length} cow records
-              </Text>
-              <View style={[s.bigBtnArrow, { backgroundColor: "#2563eb" }]}>
-                <Ionicons name="arrow-forward" size={18} color="#fff" />
-              </View>
-            </TouchableOpacity>
-          </View>
+      {/* ── List ── */}
+      {loading && records.length === 0 ? (
+        <View style={s.loadingWrap}>
+          <ActivityIndicator size="large" color="#7c3aed" />
+          <Text style={s.loadingText}>Loading records...</Text>
+        </View>
+      ) : error ? (
+        <View style={s.errorWrap}>
+          <Text style={{ fontSize: 40 }}>⚠️</Text>
+          <Text style={s.errorText}>{error}</Text>
+          <TouchableOpacity onPress={() => fetchRecords()} style={s.retryBtn}>
+            <Ionicons name="refresh" size={14} color="#fff" />
+            <Text style={s.retryText}>Retry</Text>
+          </TouchableOpacity>
         </View>
       ) : (
-        <View style={{ flex: 1 }}>
-          <View style={s.searchWrap}>
-            <Ionicons name="search-outline" size={15} color="#9ca3af" />
-            <TextInput
-              style={s.searchInput}
-              placeholder="Search cow name or Sr. No..."
-              placeholderTextColor="#d1d5db"
-              value={search}
-              onChangeText={setSearch}
+        <FlatList
+          data={visibleGroupedRecords}
+          keyExtractor={(item) => item.cowSrNo}
+          contentContainerStyle={{
+            paddingHorizontal: 14,
+            paddingTop: 10,
+            paddingBottom: 120,
+          }}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor="#7c3aed"
             />
-            {search.length > 0 && (
-              <TouchableOpacity onPress={() => setSearch("")}>
-                <Ionicons name="close-circle" size={15} color="#9ca3af" />
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {loading && records.length === 0 ? (
-            <View style={s.loadingWrap}>
-              <ActivityIndicator size="large" color="#7c3aed" />
-              <Text style={s.loadingText}>Loading records...</Text>
-            </View>
-          ) : error ? (
-            <View style={s.errorWrap}>
-              <Text style={{ fontSize: 40 }}>⚠️</Text>
-              <Text style={s.errorText}>{error}</Text>
-              <TouchableOpacity
-                onPress={() => fetchRecords()}
-                style={s.retryBtn}
-              >
-                <Ionicons name="refresh" size={14} color="#fff" />
-                <Text style={s.retryText}>Retry</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <FlatList
-              data={visibleGroupedRecords}
-              keyExtractor={(item) => item.cowSrNo}
-              contentContainerStyle={{
-                paddingHorizontal: 14,
-                paddingTop: 8,
-                paddingBottom: 100,
+          }
+          renderItem={({ item, index }) => (
+            <InseminationCard
+              group={item}
+              index={index}
+              onEdit={(r) => {
+                setEditingRecord(r);
+                setEditModal(true);
               }}
-              showsVerticalScrollIndicator={false}
-              refreshControl={
-                <RefreshControl
-                  refreshing={refreshing}
-                  onRefresh={onRefresh}
-                  tintColor="#7c3aed"
-                />
-              }
-              renderItem={({ item, index }) => (
-                <InseminationCard
-                  group={item}
-                  index={index}
-                  onEdit={(r) => {
-                    setEditingRecord(r);
-                    setEditModal(true);
-                  }}
-                  onDelete={handleDelete}
-                />
-              )}
-              ListEmptyComponent={
-                <View style={s.empty}>
-                  <Text style={{ fontSize: 40 }}>🧬</Text>
-                  <Text style={s.emptyText}>No cow records found</Text>
-                </View>
-              }
+              onDelete={handleDelete}
             />
           )}
-        </View>
+          ListEmptyComponent={
+            <View style={s.empty}>
+              <View style={s.emptyIconWrap}>
+                <Text style={{ fontSize: 48 }}>🧬</Text>
+              </View>
+              <Text style={s.emptyTitle}>No Records Yet</Text>
+              <Text style={s.emptySubtitle}>
+                Tap the + button below to add your first insemination record
+              </Text>
+              <TouchableOpacity
+                onPress={() => setAddModal(true)}
+                style={s.emptyAddBtn}
+              >
+                <Ionicons name="add-circle-outline" size={18} color="#fff" />
+                <Text style={s.emptyAddBtnText}>Add First Record</Text>
+              </TouchableOpacity>
+            </View>
+          }
+        />
       )}
 
-      {screen === "list" && (
-        <TouchableOpacity onPress={() => setAddModal(true)} style={s.fab}>
-          <Ionicons name="add" size={24} color="#fff" />
-        </TouchableOpacity>
-      )}
+      {/* ── FAB ── */}
+      <TouchableOpacity
+        onPress={() => setAddModal(true)}
+        style={s.fab}
+        activeOpacity={0.85}
+      >
+        <Ionicons name="add" size={28} color="#fff" />
+      </TouchableOpacity>
 
       <AddModal
         visible={addModal}
         onClose={() => setAddModal(false)}
-        onAdd={(r) => {
-          setRecords((p) => [r, ...p]);
-          setScreen("list");
-        }}
+        onAdd={(r) => setRecords((p) => [r, ...p])}
       />
       <EditModal
         visible={editModal}
@@ -2288,7 +2138,7 @@ export default function InseminationScreen() {
   );
 }
 
-// Styles
+// ─── Styles
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#FFF8F0" },
   header: {
@@ -2401,74 +2251,11 @@ const s = StyleSheet.create({
     marginTop: 2,
     fontWeight: "500",
   },
-  homeBody: {
-    flex: 1,
-    paddingHorizontal: 20,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  homeHeading: {
-    fontSize: 22,
-    fontWeight: "800",
-    color: "#111827",
-    letterSpacing: -0.4,
-    marginBottom: 6,
-    textAlign: "center",
-  },
-  homeSub: {
-    fontSize: 14,
-    color: "#9ca3af",
-    fontWeight: "500",
-    marginBottom: 36,
-    textAlign: "center",
-  },
-  btnGroup: { width: "100%", gap: 14 },
-  bigBtn: {
-    backgroundColor: "#fcf0ee",
-    borderRadius: 20,
-    padding: 20,
-    borderWidth: 1.5,
-    borderColor: "#fdc5bb",
-    shadowColor: "#e6914c",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  bigBtnIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 14,
-  },
-  bigBtnTitle: {
-    fontSize: 17,
-    fontWeight: "800",
-    color: "#111827",
-    letterSpacing: -0.3,
-    marginBottom: 4,
-  },
-  bigBtnSub: {
-    fontSize: 13,
-    color: "#9ca3af",
-    fontWeight: "500",
-    marginBottom: 16,
-  },
-  bigBtnArrow: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-    alignSelf: "flex-start",
-  },
   searchWrap: {
     flexDirection: "row",
     alignItems: "center",
     margin: 14,
-    marginBottom: 10,
+    marginBottom: 6,
     backgroundColor: "#faf3ef",
     borderRadius: 12,
     borderWidth: 1,
@@ -2480,22 +2267,61 @@ const s = StyleSheet.create({
   searchInput: { flex: 1, color: "#111827", fontSize: 14 },
   fab: {
     position: "absolute",
-    bottom: 24,
+    bottom: 28,
     right: 20,
-    width: 54,
-    height: 54,
-    borderRadius: 27,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     backgroundColor: "#7c3aed",
     alignItems: "center",
     justifyContent: "center",
     shadowColor: "#7c3aed",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 10,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.45,
+    shadowRadius: 12,
+    elevation: 10,
   },
-  empty: { alignItems: "center", paddingTop: 60, gap: 10 },
-  emptyText: { fontSize: 15, color: "#9ca3af", fontWeight: "600" },
+  empty: {
+    alignItems: "center",
+    paddingTop: 70,
+    paddingHorizontal: 32,
+    gap: 10,
+  },
+  emptyIconWrap: {
+    width: 96,
+    height: 96,
+    borderRadius: 28,
+    backgroundColor: "#faf5ff",
+    borderWidth: 2,
+    borderColor: "#e9d5ff",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 8,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#111827",
+    letterSpacing: -0.3,
+  },
+  emptySubtitle: {
+    fontSize: 13,
+    color: "#9ca3af",
+    textAlign: "center",
+    fontWeight: "500",
+    lineHeight: 20,
+  },
+  emptyAddBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#7c3aed",
+    borderRadius: 14,
+    paddingHorizontal: 20,
+    paddingVertical: 13,
+    marginTop: 8,
+  },
+  emptyAddBtnText: { fontSize: 14, fontWeight: "800", color: "#fff" },
   loadingWrap: {
     flex: 1,
     alignItems: "center",
@@ -2594,14 +2420,8 @@ const c = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#e9d5ff",
   },
-  typePillAi: {
-    backgroundColor: "#faf5ff",
-    borderColor: "#d8b4fe",
-  },
-  typePillNatural: {
-    backgroundColor: "#f0fdf4",
-    borderColor: "#86efac",
-  },
+  typePillAi: { backgroundColor: "#faf5ff", borderColor: "#d8b4fe" },
+  typePillNatural: { backgroundColor: "#f0fdf4", borderColor: "#86efac" },
   pillText: { fontSize: 11, color: "#7c3aed", fontWeight: "600" },
   historyNav: {
     flexDirection: "row",
@@ -2609,10 +2429,7 @@ const c = StyleSheet.create({
     justifyContent: "space-between",
     gap: 8,
   },
-  historyWrap: {
-    marginTop: 10,
-    gap: 10,
-  },
+  historyWrap: { marginTop: 10, gap: 10 },
   historyBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -2624,18 +2441,9 @@ const c = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 7,
   },
-  historyBtnDisabled: {
-    backgroundColor: "#f8fafc",
-    borderColor: "#e5e7eb",
-  },
-  historyBtnText: {
-    fontSize: 12,
-    color: "#7c3aed",
-    fontWeight: "700",
-  },
-  historyBtnTextDisabled: {
-    color: "#cbd5e1",
-  },
+  historyBtnDisabled: { backgroundColor: "#f8fafc", borderColor: "#e5e7eb" },
+  historyBtnText: { fontSize: 12, color: "#7c3aed", fontWeight: "700" },
+  historyBtnTextDisabled: { color: "#cbd5e1" },
   historyBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -2647,15 +2455,8 @@ const c = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
-  historyBadgeText: {
-    fontSize: 11,
-    color: "#7c3aed",
-    fontWeight: "700",
-  },
-  timelineStrip: {
-    gap: 8,
-    paddingRight: 2,
-  },
+  historyBadgeText: { fontSize: 11, color: "#7c3aed", fontWeight: "700" },
+  timelineStrip: { gap: 8, paddingRight: 2 },
   timelineChip: {
     minWidth: 92,
     borderRadius: 14,
@@ -2665,27 +2466,16 @@ const c = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 8,
   },
-  timelineChipActive: {
-    backgroundColor: "#faf5ff",
-    borderColor: "#d8b4fe",
-  },
-  timelineChipDate: {
-    fontSize: 12,
-    color: "#9a3412",
-    fontWeight: "700",
-  },
-  timelineChipDateActive: {
-    color: "#7c3aed",
-  },
+  timelineChipActive: { backgroundColor: "#faf5ff", borderColor: "#d8b4fe" },
+  timelineChipDate: { fontSize: 12, color: "#9a3412", fontWeight: "700" },
+  timelineChipDateActive: { color: "#7c3aed" },
   timelineChipSub: {
     fontSize: 10,
     color: "#c2410c",
     fontWeight: "600",
     marginTop: 2,
   },
-  timelineChipSubActive: {
-    color: "#7c3aed",
-  },
+  timelineChipSubActive: { color: "#7c3aed" },
   timelineBadge: {
     alignSelf: "flex-start",
     marginTop: 6,
@@ -2695,10 +2485,7 @@ const c = StyleSheet.create({
     paddingVertical: 3,
     maxWidth: "100%",
   },
-  timelineBadgeText: {
-    fontSize: 10,
-    fontWeight: "700",
-  },
+  timelineBadgeText: { fontSize: 10, fontWeight: "700" },
   divider: { height: 1, backgroundColor: "#f3f4f6", marginVertical: 12 },
   section: {
     fontSize: 12,
@@ -2774,13 +2561,8 @@ const f = StyleSheet.create({
     paddingVertical: 13,
     backgroundColor: "#f9fafb",
   },
-  typeOptionInactive: {
-    borderColor: "#e5e7eb",
-  },
-  typeOptionAiActive: {
-    borderColor: "#d8b4fe",
-    backgroundColor: "#faf5ff",
-  },
+  typeOptionInactive: { borderColor: "#e5e7eb" },
+  typeOptionAiActive: { borderColor: "#d8b4fe", backgroundColor: "#faf5ff" },
   typeOptionNaturalActive: {
     borderColor: "#86efac",
     backgroundColor: "#f0fdf4",
@@ -2795,60 +2577,12 @@ const f = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  typeIconWrapAi: {
-    backgroundColor: "#f3e8ff",
-    borderColor: "#d8b4fe",
-  },
-  typeIconWrapNatural: {
-    backgroundColor: "#dcfce7",
-    borderColor: "#86efac",
-  },
-  typeTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#111827",
-  },
-  typeSub: {
-    fontSize: 11,
-    color: "#9ca3af",
-    marginTop: 2,
-    fontWeight: "500",
-  },
-
-  // AI Date
-  aiDateRow: {
-    backgroundColor: "#fdf4ff",
-    borderColor: "#e879f9",
-    borderWidth: 1.5,
-  },
-  aiIconBadge: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    backgroundColor: "#fae8ff",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 10,
-    borderWidth: 1,
-    borderColor: "#e879f9",
-  },
-  aiDateValueText: { color: "#a21caf", fontWeight: "700" },
-  aiDatePlaceholder: { color: "#d8b4fe", fontWeight: "500" },
-  aiDateHint: {
-    fontSize: 11,
-    color: "#c026d3",
-    marginTop: 4,
-    paddingLeft: 2,
-    fontWeight: "500",
-  },
-
-  // Last calving date active state
-  calvingDateActive: {
-    backgroundColor: "#f0fdf4",
-    borderColor: "#86efac",
-  },
+  typeIconWrapAi: { backgroundColor: "#f3e8ff", borderColor: "#d8b4fe" },
+  typeIconWrapNatural: { backgroundColor: "#dcfce7", borderColor: "#86efac" },
+  typeTitle: { fontSize: 14, fontWeight: "700", color: "#111827" },
+  typeSub: { fontSize: 11, color: "#9ca3af", marginTop: 2, fontWeight: "500" },
+  calvingDateActive: { backgroundColor: "#f0fdf4", borderColor: "#86efac" },
   calvingDateText: { color: "#15803d", fontWeight: "700" },
-
   sectionHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -3156,7 +2890,6 @@ const cs = StyleSheet.create({
   },
 });
 
-// ─── Gender Button Styles (NEW)
 const gb = StyleSheet.create({
   container: {
     marginTop: 10,
@@ -3187,14 +2920,8 @@ const gb = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
   },
-  selectedBadgeText: {
-    fontSize: 10,
-    fontWeight: "700",
-  },
-  btnRow: {
-    flexDirection: "row",
-    gap: 10,
-  },
+  selectedBadgeText: { fontSize: 10, fontWeight: "700" },
+  btnRow: { flexDirection: "row", gap: 10 },
   btn: {
     flex: 1,
     alignItems: "center",
@@ -3206,22 +2933,10 @@ const gb = StyleSheet.create({
     gap: 6,
     position: "relative",
   },
-  maleInactive: {
-    backgroundColor: "#f9fafb",
-    borderColor: "#e5e7eb",
-  },
-  maleActive: {
-    backgroundColor: "#eff6ff",
-    borderColor: "#3b82f6",
-  },
-  femaleInactive: {
-    backgroundColor: "#f9fafb",
-    borderColor: "#e5e7eb",
-  },
-  femaleActive: {
-    backgroundColor: "#fdf2f8",
-    borderColor: "#ec4899",
-  },
+  maleInactive: { backgroundColor: "#f9fafb", borderColor: "#e5e7eb" },
+  maleActive: { backgroundColor: "#eff6ff", borderColor: "#3b82f6" },
+  femaleInactive: { backgroundColor: "#f9fafb", borderColor: "#e5e7eb" },
+  femaleActive: { backgroundColor: "#fdf2f8", borderColor: "#ec4899" },
   iconCircle: {
     width: 52,
     height: 52,
@@ -3231,20 +2946,9 @@ const gb = StyleSheet.create({
     borderWidth: 1.5,
     marginBottom: 2,
   },
-  btnLabel: {
-    fontSize: 14,
-    fontWeight: "800",
-    letterSpacing: -0.2,
-  },
-  btnSub: {
-    fontSize: 11,
-    fontWeight: "500",
-  },
-  checkmark: {
-    position: "absolute",
-    top: 8,
-    right: 8,
-  },
+  btnLabel: { fontSize: 14, fontWeight: "800", letterSpacing: -0.2 },
+  btnSub: { fontSize: 11, fontWeight: "500" },
+  checkmark: { position: "absolute", top: 8, right: 8 },
   hintText: {
     fontSize: 11,
     color: "#9ca3af",

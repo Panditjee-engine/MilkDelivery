@@ -1,16 +1,18 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   View, Text, StyleSheet, ScrollView, RefreshControl,
-  TouchableOpacity, TextInput, Modal, Image,
+  TouchableOpacity, TextInput, Modal, Image, Animated, Easing,
+  Dimensions, KeyboardAvoidingView, Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import SwipeToConfirm from "../../src/components/SwipeToConfirm";
 import { api } from "../../src/services/api";
-import Button from "../../src/components/Button";
 import LoadingScreen from "../../src/components/LoadingScreen";
 import { useAuth } from "../../src/contexts/AuthContext";
+
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 // ── Warm Color Palette 
 const C = {
@@ -25,6 +27,13 @@ const C = {
   text:       '#3D1F0A',
   textMuted:  '#A07850',
   textLight:  '#C9A882',
+  success:    '#22C55E',
+  successBg:  '#F0FDF4',
+  white:      '#FFFFFF',
+  border:     '#FFE8C8',
+  inputBg:    '#FFF8EF',
+  chipBg:     '#FFF3DC',
+  overlay:    'rgba(61,31,10,0.45)',
 };
 
 // ── Custom Alert
@@ -47,7 +56,6 @@ function CustomAlert({ config, onDismiss }: { config: AlertConfig; onDismiss: ()
     <Modal transparent animationType="fade" visible={config.visible} onRequestClose={onDismiss}>
       <View style={alertStyles.overlay}>
         <View style={alertStyles.box}>
-          {/* Icon */}
           <View style={alertStyles.iconWrap}>
             <Ionicons
               name={
@@ -126,26 +134,176 @@ type Product = {
   category: string;
   unit: string;
   price: number;
+  mrp?: number;
   stock: number;
   image?: string | null;
+  images?: string[];
   is_available: boolean;
+  product_type?: string;
+  dietary_preference?: string;
+  description?: string;
+  disclaimer?: string;
+  customer_care?: string;
+  seller_name?: string;
+  seller_address?: string;
+  shelf_life?: string;
+};
+
+type FormData = {
+  name: string;
+  category: string;
+  unit: string;
+  price: string;
+  mrp: string;
+  stock: string;
+  image: string;
+  image2: string;
+  image3: string;
+  product_type: string;
+  dietary_preference: string;
+  description: string;
+  disclaimer: string;
+  customer_care: string;
+  seller_name: string;
+  seller_address: string;
+  shelf_life: string;
+};
+
+const EMPTY_FORM: FormData = {
+  name: "", category: "", unit: "", price: "", mrp: "", stock: "",
+  image: "", image2: "", image3: "",
+  product_type: "", dietary_preference: "",
+  description: "", disclaimer: "", customer_care: "",
+  seller_name: "", seller_address: "", shelf_life: "",
 };
 
 const CATEGORIES = ["milk", "dairy", "bakery", "fruits", "vegetables", "essentials"];
+const DIETARY_OPTIONS = ["Veg", "Non-Veg", "Vegan", "Gluten-Free"];
+const TABS = ["Details", "Highlights", "Information"];
 
+// ── Animated Success Tick Component ──
+function SuccessTick({ visible, onDone }: { visible: boolean; onDone: () => void }) {
+  const scaleAnim = useRef(new Animated.Value(0)).current;
+  const opacityAnim = useRef(new Animated.Value(0)).current;
+  const checkScale = useRef(new Animated.Value(0)).current;
+  const textOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (visible) {
+      scaleAnim.setValue(0);
+      opacityAnim.setValue(1);
+      checkScale.setValue(0);
+      textOpacity.setValue(0);
+
+      Animated.sequence([
+        // Circle pops in
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          friction: 4,
+          tension: 100,
+          useNativeDriver: true,
+        }),
+        // Checkmark scales in
+        Animated.spring(checkScale, {
+          toValue: 1,
+          friction: 3,
+          tension: 120,
+          useNativeDriver: true,
+        }),
+        // Text fades in
+        Animated.timing(textOpacity, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        // Pause
+        Animated.delay(600),
+        // Fade everything out
+        Animated.timing(opacityAnim, {
+          toValue: 0,
+          duration: 400,
+          easing: Easing.out(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ]).start(() => onDone());
+    }
+  }, [visible]);
+
+  if (!visible) return null;
+
+  return (
+    <Animated.View style={[tickStyles.overlay, { opacity: opacityAnim }]}>
+      <Animated.View style={[tickStyles.circle, { transform: [{ scale: scaleAnim }] }]}>
+        <Animated.View style={{ transform: [{ scale: checkScale }] }}>
+          <Ionicons name="checkmark-sharp" size={56} color={C.white} />
+        </Animated.View>
+      </Animated.View>
+      <Animated.Text style={[tickStyles.text, { opacity: textOpacity }]}>
+        Product Added!
+      </Animated.Text>
+    </Animated.View>
+  );
+}
+
+const tickStyles = StyleSheet.create({
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 999,
+  },
+  circle: {
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    backgroundColor: C.success,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: C.success,
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
+    elevation: 12,
+  },
+  text: {
+    marginTop: 20,
+    fontSize: 20,
+    fontWeight: '800',
+    color: C.white,
+    letterSpacing: -0.3,
+  },
+});
+
+
+// ══════════════════════════════════════════════════
+// ══  MAIN SCREEN  ══
+// ══════════════════════════════════════════════════
 export default function InventoryScreen() {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
   const { alertConfig, showAlert, dismissAlert } = useCustomAlert();
 
+  // ── Core State
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
-  const [addModal, setAddModal] = useState(false);
-  const [newProduct, setNewProduct] = useState({
-    name: "", category: "", unit: "", price: "", stock: "", image: "",
-  });
 
+  // ── Add Modal State
+  const [addModal, setAddModal] = useState(false);
+  const [activeTab, setActiveTab] = useState(0);
+  const [formData, setFormData] = useState<FormData>({ ...EMPTY_FORM });
+  const [showSuccessTick, setShowSuccessTick] = useState(false);
+
+  // ── Detail / Edit Modal State
+  const [detailModal, setDetailModal] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState<FormData>({ ...EMPTY_FORM });
+  const [editTab, setEditTab] = useState(0);
+  const [stockUpdating, setStockUpdating] = useState(false);
+  const [showEditSuccessTick, setShowEditSuccessTick] = useState(false);
+
+  // ── Fetch Data
   const fetchData = async () => {
     try {
       const data = await api.getProducts();
@@ -157,10 +315,10 @@ export default function InventoryScreen() {
   };
 
   useEffect(() => { fetchData(); }, []);
-
   const onRefresh = useCallback(() => { setRefreshing(true); fetchData(); }, []);
 
-  const pickImageFromGallery = async () => {
+  // ── Image Picker Helper
+  const pickImage = async (onPicked: (base64Uri: string) => void) => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
       showAlert("Permission Required", "Gallery access is needed to pick a product image.");
@@ -171,48 +329,169 @@ export default function InventoryScreen() {
       quality: 0.6, base64: true,
     });
     if (!result.canceled && result.assets[0].base64) {
-      setNewProduct((p) => ({ ...p, image: `data:image/jpeg;base64,${result.assets[0].base64}` }));
+      onPicked(`data:image/jpeg;base64,${result.assets[0].base64}`);
     }
   };
 
+  // ── Form Update Helpers
+  const updateForm = (key: keyof FormData, val: string) =>
+    setFormData(p => ({ ...p, [key]: val }));
+
+  const updateEditForm = (key: keyof FormData, val: string) =>
+    setEditForm(p => ({ ...p, [key]: val }));
+
+  // ── Validation
   const isFormValid = useMemo(() => {
-    const price = parseFloat(newProduct.price);
-    const stock = parseInt(newProduct.stock, 10);
-    if (!newProduct.name.trim() || !newProduct.category.trim() || !newProduct.unit.trim()) return false;
+    const price = parseFloat(formData.price);
+    const stock = parseInt(formData.stock, 10);
+    if (!formData.name.trim() || !formData.category.trim() || !formData.unit.trim()) return false;
     if (!Number.isFinite(price) || price <= 0) return false;
     if (!Number.isInteger(stock) || stock < 0) return false;
-    if (!newProduct.image || newProduct.image.length < 10) return false;
+    if (!formData.image || formData.image.length < 10) return false;
     return true;
-  }, [newProduct]);
+  }, [formData]);
 
+  // ── Add Product
   const handleAddProduct = async () => {
     try {
+      const images: string[] = [];
+      if (formData.image2) images.push(formData.image2);
+      if (formData.image3) images.push(formData.image3);
+
       await api.createProduct({
-        name: newProduct.name,
-        category: newProduct.category.toLowerCase(),
-        unit: newProduct.unit,
-        price: Number(newProduct.price),
-        stock: Number(newProduct.stock),
-        image: newProduct.image,
+        name: formData.name,
+        category: formData.category.toLowerCase(),
+        unit: formData.unit,
+        price: Number(formData.price),
+        mrp: formData.mrp ? Number(formData.mrp) : Number(formData.price),
+        stock: Number(formData.stock),
+        image: formData.image,
+        images,
         image_type: "base64",
+        product_type: formData.product_type || undefined,
+        dietary_preference: formData.dietary_preference || undefined,
+        description: formData.description || undefined,
+        disclaimer: formData.disclaimer || undefined,
+        customer_care: formData.customer_care || undefined,
+        seller_name: formData.seller_name || undefined,
+        seller_address: formData.seller_address || undefined,
+        shelf_life: formData.shelf_life || undefined,
       });
-      setAddModal(false);
-      setNewProduct({ name: "", category: "", unit: "", price: "", stock: "", image: "" });
-      fetchData();
+
+      // Show success animation
+      setShowSuccessTick(true);
     } catch (e: any) {
       showAlert("Something went wrong", e.message);
     }
   };
 
+  const onTickDone = () => {
+    setShowSuccessTick(false);
+    setAddModal(false);
+    setFormData({ ...EMPTY_FORM });
+    setActiveTab(0);
+    fetchData();
+  };
+
+  // ── Open Product Detail
+  const openDetail = (product: Product) => {
+    setSelectedProduct(product);
+    setIsEditing(false);
+    setDetailModal(true);
+    setEditTab(0);
+    // Pre-fill edit form
+    setEditForm({
+      name: product.name || "",
+      category: product.category || "",
+      unit: product.unit || "",
+      price: String(product.price || ""),
+      mrp: String(product.mrp || ""),
+      stock: String(product.stock || ""),
+      image: product.image || "",
+      image2: product.images?.[0] || "",
+      image3: product.images?.[1] || "",
+      product_type: product.product_type || "",
+      dietary_preference: product.dietary_preference || "",
+      description: product.description || "",
+      disclaimer: product.disclaimer || "",
+      customer_care: product.customer_care || "",
+      seller_name: product.seller_name || "",
+      seller_address: product.seller_address || "",
+      shelf_life: product.shelf_life || "",
+    });
+  };
+
+  // ── Stock Increment / Decrement
+  const adjustStock = async (delta: number) => {
+    if (!selectedProduct?.id || stockUpdating) return;
+    const newStock = Math.max(0, selectedProduct.stock + delta);
+    setStockUpdating(true);
+    try {
+      await api.updateProduct(selectedProduct.id, { stock: newStock });
+      setSelectedProduct(prev => prev ? { ...prev, stock: newStock } : prev);
+      setEditForm(prev => ({ ...prev, stock: String(newStock) }));
+      fetchData();
+    } catch (e: any) {
+      showAlert("Update Failed", e.message);
+    } finally {
+      setStockUpdating(false);
+    }
+  };
+
+  // ── Save Edited Product
+  const handleSaveEdit = async () => {
+    if (!selectedProduct?.id) return;
+    try {
+      const images: string[] = [];
+      if (editForm.image2) images.push(editForm.image2);
+      if (editForm.image3) images.push(editForm.image3);
+
+      await api.updateProduct(selectedProduct.id, {
+        name: editForm.name,
+        category: editForm.category.toLowerCase(),
+        unit: editForm.unit,
+        price: Number(editForm.price),
+        mrp: editForm.mrp ? Number(editForm.mrp) : Number(editForm.price),
+        stock: Number(editForm.stock),
+        image: editForm.image,
+        images,
+        product_type: editForm.product_type || undefined,
+        dietary_preference: editForm.dietary_preference || undefined,
+        description: editForm.description || undefined,
+        disclaimer: editForm.disclaimer || undefined,
+        customer_care: editForm.customer_care || undefined,
+        seller_name: editForm.seller_name || undefined,
+        seller_address: editForm.seller_address || undefined,
+        shelf_life: editForm.shelf_life || undefined,
+      });
+      setShowEditSuccessTick(true);
+    } catch (e: any) {
+      showAlert("Update Failed", e.message);
+    }
+  };
+
+  const onEditTickDone = () => {
+    setShowEditSuccessTick(false);
+    setDetailModal(false);
+    setIsEditing(false);
+    setSelectedProduct(null);
+    fetchData();
+  };
+
+  // ── Toggle availability
   const toggleAvailability = async (product: Product) => {
     try {
       await api.updateProduct(product.id!, { is_available: !product.is_available });
+      if (selectedProduct?.id === product.id) {
+        setSelectedProduct(prev => prev ? { ...prev, is_available: !prev.is_available } : prev);
+      }
       fetchData();
     } catch (e: any) {
       showAlert("Update Failed", e.message);
     }
   };
 
+  // ── Delete Product
   const deleteProduct = (id?: string) => {
     if (!id) return;
     showAlert(
@@ -223,21 +502,547 @@ export default function InventoryScreen() {
         {
           text: "Delete",
           style: "destructive",
-          onPress: async () => { await api.deleteProduct(id); fetchData(); },
+          onPress: async () => {
+            await api.deleteProduct(id);
+            setDetailModal(false);
+            setSelectedProduct(null);
+            fetchData();
+          },
         },
       ]
     );
   };
 
-  const resetModal = () => {
+  // ── Reset Modals
+  const resetAddModal = () => {
     setAddModal(false);
-    setNewProduct({ name: "", category: "", unit: "", price: "", stock: "", image: "" });
+    setFormData({ ...EMPTY_FORM });
+    setActiveTab(0);
+  };
+
+  const resetDetailModal = () => {
+    setDetailModal(false);
+    setSelectedProduct(null);
+    setIsEditing(false);
+    setEditTab(0);
   };
 
   if (loading) return <LoadingScreen />;
 
   const available = products.filter(p => p.is_available).length;
+  const lowStock = products.filter(p => p.stock > 0 && p.stock <= 5).length;
 
+  // ══════════════════════════════════════════════════
+  // ══  RENDER FORM TABS (shared for Add & Edit)  ══
+  // ══════════════════════════════════════════════════
+
+  const renderFormTab = (
+    tab: number,
+    data: FormData,
+    update: (key: keyof FormData, val: string) => void,
+  ) => {
+    if (tab === 0) {
+      // ── TAB: Details
+      return (
+        <View>
+          {/* Thumbnail */}
+          <Text style={styles.sectionHeader}>Product Images</Text>
+          <TouchableOpacity
+            style={styles.thumbnailPicker}
+            onPress={() => pickImage(uri => update("image", uri))}
+          >
+            {data.image ? (
+              <Image source={{ uri: data.image }} style={styles.thumbnailImage} />
+            ) : (
+              <View style={styles.thumbnailEmpty}>
+                <View style={styles.thumbnailIconCircle}>
+                  <Ionicons name="camera" size={24} color={C.dark} />
+                </View>
+                <Text style={styles.thumbnailLabel}>Add Thumbnail</Text>
+                <Text style={styles.thumbnailSub}>Main product image</Text>
+              </View>
+            )}
+            {data.image ? (
+              <View style={styles.thumbnailEditBadge}>
+                <Ionicons name="pencil" size={12} color={C.white} />
+              </View>
+            ) : null}
+          </TouchableOpacity>
+
+          {/* Additional Images Row */}
+          <View style={styles.additionalImagesRow}>
+            {/* Image 2 */}
+            <TouchableOpacity
+              style={styles.additionalImagePicker}
+              onPress={() => pickImage(uri => update("image2", uri))}
+            >
+              {data.image2 ? (
+                <Image source={{ uri: data.image2 }} style={styles.additionalImage} />
+              ) : (
+                <View style={styles.additionalImageEmpty}>
+                  <Ionicons name="add-circle-outline" size={22} color={C.textLight} />
+                  <Text style={styles.additionalImageText}>Image 2</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+
+            {/* Image 3 */}
+            <TouchableOpacity
+              style={styles.additionalImagePicker}
+              onPress={() => pickImage(uri => update("image3", uri))}
+            >
+              {data.image3 ? (
+                <Image source={{ uri: data.image3 }} style={styles.additionalImage} />
+              ) : (
+                <View style={styles.additionalImageEmpty}>
+                  <Ionicons name="add-circle-outline" size={22} color={C.textLight} />
+                  <Text style={styles.additionalImageText}>Image 3</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {/* Product Name */}
+          <Text style={styles.fieldLabel}>Product Name</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="e.g. Full Cream Milk"
+            placeholderTextColor={C.textLight}
+            value={data.name}
+            onChangeText={v => update("name", v)}
+          />
+
+          {/* Category */}
+          <Text style={styles.fieldLabel}>Category</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryRow}>
+            {CATEGORIES.map(cat => (
+              <TouchableOpacity
+                key={cat}
+                style={[styles.catChip, data.category === cat && styles.catChipActive]}
+                onPress={() => update("category", cat)}
+              >
+                <Text style={[styles.catChipText, data.category === cat && styles.catChipTextActive]}>
+                  {cat}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          {/* MRP & Current Price */}
+          <View style={styles.row}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.fieldLabel}>MRP (₹)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="0.00"
+                placeholderTextColor={C.textLight}
+                keyboardType="numeric"
+                value={data.mrp}
+                onChangeText={v => update("mrp", v)}
+              />
+            </View>
+            <View style={{ width: 12 }} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.fieldLabel}>Selling Price (₹)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="0.00"
+                placeholderTextColor={C.textLight}
+                keyboardType="numeric"
+                value={data.price}
+                onChangeText={v => update("price", v)}
+              />
+            </View>
+          </View>
+
+          {/* Quantity & Stock */}
+          <View style={styles.row}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.fieldLabel}>Quantity / Unit</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="e.g. 500ml"
+                placeholderTextColor={C.textLight}
+                value={data.unit}
+                onChangeText={v => update("unit", v)}
+              />
+            </View>
+            <View style={{ width: 12 }} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.fieldLabel}>Stock</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="0"
+                placeholderTextColor={C.textLight}
+                keyboardType="numeric"
+                value={data.stock}
+                onChangeText={v => update("stock", v)}
+              />
+            </View>
+          </View>
+        </View>
+      );
+    }
+
+    if (tab === 1) {
+      // ── TAB: Highlights
+      return (
+        <View>
+          <Text style={styles.sectionHeader}>Product Highlights</Text>
+
+          <Text style={styles.fieldLabel}>Product Type</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="e.g. Organic, Fresh, Pasteurized"
+            placeholderTextColor={C.textLight}
+            value={data.product_type}
+            onChangeText={v => update("product_type", v)}
+          />
+
+          <Text style={styles.fieldLabel}>Dietary Preference</Text>
+          <View style={styles.dietaryGrid}>
+            {DIETARY_OPTIONS.map(opt => {
+              const isActive = data.dietary_preference === opt;
+              const icon = opt === "Veg" ? "leaf" : opt === "Non-Veg" ? "restaurant" :
+                           opt === "Vegan" ? "nutrition" : "fitness";
+              return (
+                <TouchableOpacity
+                  key={opt}
+                  style={[styles.dietaryChip, isActive && styles.dietaryChipActive]}
+                  onPress={() => update("dietary_preference", isActive ? "" : opt)}
+                >
+                  <Ionicons
+                    name={icon as any}
+                    size={16}
+                    color={isActive ? C.dark : C.textMuted}
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text style={[styles.dietaryChipText, isActive && styles.dietaryChipTextActive]}>
+                    {opt}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+      );
+    }
+
+    // ── TAB: Information
+    return (
+      <View>
+        <Text style={styles.sectionHeader}>Product Information</Text>
+
+        <Text style={styles.fieldLabel}>Description</Text>
+        <TextInput
+          style={[styles.input, styles.textArea]}
+          placeholder="Describe your product..."
+          placeholderTextColor={C.textLight}
+          value={data.description}
+          onChangeText={v => update("description", v)}
+          multiline
+          numberOfLines={3}
+          textAlignVertical="top"
+        />
+
+        <Text style={styles.fieldLabel}>Disclaimer</Text>
+        <TextInput
+          style={[styles.input, styles.textArea]}
+          placeholder="Any legal disclaimers..."
+          placeholderTextColor={C.textLight}
+          value={data.disclaimer}
+          onChangeText={v => update("disclaimer", v)}
+          multiline
+          numberOfLines={2}
+          textAlignVertical="top"
+        />
+
+        <Text style={styles.fieldLabel}>Customer Care Details</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="e.g. +91 9876543210"
+          placeholderTextColor={C.textLight}
+          value={data.customer_care}
+          onChangeText={v => update("customer_care", v)}
+        />
+
+        <View style={styles.row}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.fieldLabel}>Seller Name</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Seller / Brand"
+              placeholderTextColor={C.textLight}
+              value={data.seller_name}
+              onChangeText={v => update("seller_name", v)}
+            />
+          </View>
+          <View style={{ width: 12 }} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.fieldLabel}>Shelf Life</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. 7 days"
+              placeholderTextColor={C.textLight}
+              value={data.shelf_life}
+              onChangeText={v => update("shelf_life", v)}
+            />
+          </View>
+        </View>
+
+        <Text style={styles.fieldLabel}>Seller Address</Text>
+        <TextInput
+          style={[styles.input, styles.textArea]}
+          placeholder="Full seller address..."
+          placeholderTextColor={C.textLight}
+          value={data.seller_address}
+          onChangeText={v => update("seller_address", v)}
+          multiline
+          numberOfLines={2}
+          textAlignVertical="top"
+        />
+      </View>
+    );
+  };
+
+  // ── Tab Bar Component
+  const renderTabBar = (tabs: string[], active: number, onSelect: (i: number) => void) => (
+    <View style={styles.tabBar}>
+      {tabs.map((t, i) => (
+        <TouchableOpacity
+          key={t}
+          style={[styles.tab, active === i && styles.tabActive]}
+          onPress={() => onSelect(i)}
+        >
+          <Text style={[styles.tabText, active === i && styles.tabTextActive]}>{t}</Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+
+  // ══════════════════════════════════════════════════
+  // ══  RENDER PRODUCT DETAIL (View Mode)  ══
+  // ══════════════════════════════════════════════════
+  const renderProductDetail = () => {
+    if (!selectedProduct) return null;
+    const p = selectedProduct;
+    const allImages = [p.image, ...(p.images || [])].filter(Boolean) as string[];
+    const hasMrp = p.mrp && p.mrp > p.price;
+
+    return (
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 30 }}>
+        {/* Image Gallery */}
+        {allImages.length > 0 ? (
+          <ScrollView
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            style={styles.detailImageGallery}
+          >
+            {allImages.map((img, idx) => (
+              <Image key={idx} source={{ uri: img }} style={styles.detailGalleryImage} />
+            ))}
+          </ScrollView>
+        ) : (
+          <View style={styles.detailNoImage}>
+            <Ionicons name="cube-outline" size={48} color={C.textLight} />
+          </View>
+        )}
+        {allImages.length > 1 && (
+          <View style={styles.dotRow}>
+            {allImages.map((_, i) => (
+              <View key={i} style={styles.dot} />
+            ))}
+          </View>
+        )}
+
+        {/* Name & Price */}
+        <View style={styles.detailSection}>
+          <Text style={styles.detailName}>{p.name}</Text>
+          <View style={styles.detailPriceRow}>
+            <Text style={styles.detailPrice}>₹{p.price}</Text>
+            {hasMrp && (
+              <Text style={styles.detailMrp}>₹{p.mrp}</Text>
+            )}
+            {hasMrp && (
+              <View style={styles.discountBadge}>
+                <Text style={styles.discountText}>
+                  {Math.round(((p.mrp! - p.price) / p.mrp!) * 100)}% OFF
+                </Text>
+              </View>
+            )}
+          </View>
+          <View style={styles.detailMetaRow}>
+            <View style={styles.metaChip}>
+              <Ionicons name="pricetag-outline" size={12} color={C.dark} />
+              <Text style={styles.metaChipText}>{p.category}</Text>
+            </View>
+            <View style={styles.metaChip}>
+              <Ionicons name="scale-outline" size={12} color={C.dark} />
+              <Text style={styles.metaChipText}>{p.unit}</Text>
+            </View>
+            <View style={[
+              styles.metaChip,
+              { backgroundColor: p.is_available ? C.successBg : '#FFF0F0' }
+            ]}>
+              <View style={[
+                styles.statusDot,
+                { backgroundColor: p.is_available ? C.success : '#FF6B6B' }
+              ]} />
+              <Text style={[
+                styles.metaChipText,
+                { color: p.is_available ? '#16A34A' : '#DC2626' }
+              ]}>
+                {p.is_available ? "Available" : "Unavailable"}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Stock Controls */}
+        <View style={styles.stockControlCard}>
+          <View>
+            <Text style={styles.stockControlLabel}>Current Stock</Text>
+            <Text style={styles.stockControlSub}>Adjust product quantity</Text>
+          </View>
+          <View style={styles.stockControlBtns}>
+            <TouchableOpacity
+              style={styles.stockBtn}
+              onPress={() => adjustStock(-1)}
+              disabled={stockUpdating || p.stock <= 0}
+            >
+              <Ionicons name="remove" size={20} color={p.stock <= 0 ? C.textLight : C.dark} />
+            </TouchableOpacity>
+            <View style={styles.stockDisplay}>
+              <Text style={styles.stockDisplayVal}>{p.stock}</Text>
+            </View>
+            <TouchableOpacity
+              style={[styles.stockBtn, styles.stockBtnAdd]}
+              onPress={() => adjustStock(1)}
+              disabled={stockUpdating}
+            >
+              <Ionicons name="add" size={20} color={C.white} />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Highlights */}
+        {(p.product_type || p.dietary_preference) && (
+          <View style={styles.detailSection}>
+            <Text style={styles.detailSectionTitle}>
+              <Ionicons name="star-outline" size={14} color={C.dark} />  Highlights
+            </Text>
+            {p.product_type ? (
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Product Type</Text>
+                <Text style={styles.infoValue}>{p.product_type}</Text>
+              </View>
+            ) : null}
+            {p.dietary_preference ? (
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Dietary</Text>
+                <View style={[styles.metaChip, { backgroundColor: '#F0FDF4' }]}>
+                  <Ionicons name="leaf" size={12} color="#16A34A" />
+                  <Text style={[styles.metaChipText, { color: '#16A34A' }]}>{p.dietary_preference}</Text>
+                </View>
+              </View>
+            ) : null}
+          </View>
+        )}
+
+        {/* Information */}
+        {(p.description || p.disclaimer || p.customer_care || p.seller_name || p.shelf_life) && (
+          <View style={styles.detailSection}>
+            <Text style={styles.detailSectionTitle}>
+              <Ionicons name="information-circle-outline" size={14} color={C.dark} />  Information
+            </Text>
+            {p.description ? (
+              <View style={styles.infoBlock}>
+                <Text style={styles.infoLabel}>Description</Text>
+                <Text style={styles.infoValueMultiline}>{p.description}</Text>
+              </View>
+            ) : null}
+            {p.shelf_life ? (
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Shelf Life</Text>
+                <Text style={styles.infoValue}>{p.shelf_life}</Text>
+              </View>
+            ) : null}
+            {p.seller_name ? (
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Seller</Text>
+                <Text style={styles.infoValue}>{p.seller_name}</Text>
+              </View>
+            ) : null}
+            {p.seller_address ? (
+              <View style={styles.infoBlock}>
+                <Text style={styles.infoLabel}>Seller Address</Text>
+                <Text style={styles.infoValueMultiline}>{p.seller_address}</Text>
+              </View>
+            ) : null}
+            {p.customer_care ? (
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Customer Care</Text>
+                <Text style={styles.infoValue}>{p.customer_care}</Text>
+              </View>
+            ) : null}
+            {p.disclaimer ? (
+              <View style={styles.infoBlock}>
+                <Text style={styles.infoLabel}>Disclaimer</Text>
+                <Text style={styles.infoValueMultiline}>{p.disclaimer}</Text>
+              </View>
+            ) : null}
+          </View>
+        )}
+
+        {/* Action Buttons */}
+        {isAdmin && (
+          <View style={styles.detailActions}>
+            <TouchableOpacity
+              style={styles.detailEditBtn}
+              onPress={() => setIsEditing(true)}
+            >
+              <Ionicons name="create-outline" size={18} color={C.white} />
+              <Text style={styles.detailEditBtnText}>Edit Product</Text>
+            </TouchableOpacity>
+
+            <View style={styles.detailSmallBtnsRow}>
+              <TouchableOpacity
+                style={[styles.detailSmallBtn, {
+                  backgroundColor: selectedProduct?.is_available ? '#FFF0F0' : C.successBg
+                }]}
+                onPress={() => toggleAvailability(selectedProduct!)}
+              >
+                <Ionicons
+                  name={selectedProduct?.is_available ? "eye-off-outline" : "eye-outline"}
+                  size={16}
+                  color={selectedProduct?.is_available ? '#DC2626' : C.success}
+                />
+                <Text style={[styles.detailSmallBtnText, {
+                  color: selectedProduct?.is_available ? '#DC2626' : C.success
+                }]}>
+                  {selectedProduct?.is_available ? "Mark Unavailable" : "Mark Available"}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.detailSmallBtn, { backgroundColor: '#FFF0F0' }]}
+                onPress={() => deleteProduct(selectedProduct?.id)}
+              >
+                <Ionicons name="trash-outline" size={16} color="#DC2626" />
+                <Text style={[styles.detailSmallBtnText, { color: '#DC2626' }]}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+      </ScrollView>
+    );
+  };
+
+
+  // ══════════════════════════════════════════════════
+  // ══  MAIN RENDER  ══
+  // ══════════════════════════════════════════════════
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
 
@@ -251,7 +1056,7 @@ export default function InventoryScreen() {
         </View>
         {isAdmin && (
           <TouchableOpacity style={styles.addBtn} onPress={() => setAddModal(true)}>
-            <Ionicons name="add" size={22} color={C.deep} />
+            <Ionicons name="add" size={22} color={C.white} />
           </TouchableOpacity>
         )}
       </View>
@@ -264,8 +1069,13 @@ export default function InventoryScreen() {
         </View>
         <View style={styles.summaryDivider} />
         <View style={styles.summaryItem}>
-          <Text style={[styles.summaryVal, { color: C.dark }]}>{available}</Text>
+          <Text style={[styles.summaryVal, { color: C.success }]}>{available}</Text>
           <Text style={styles.summaryLabel}>Active</Text>
+        </View>
+        <View style={styles.summaryDivider} />
+        <View style={styles.summaryItem}>
+          <Text style={[styles.summaryVal, { color: '#F59E0B' }]}>{lowStock}</Text>
+          <Text style={styles.summaryLabel}>Low Stock</Text>
         </View>
         <View style={styles.summaryDivider} />
         <View style={styles.summaryItem}>
@@ -289,73 +1099,82 @@ export default function InventoryScreen() {
       >
         {products.length === 0 ? (
           <View style={styles.emptyState}>
-            <Ionicons name="cube-outline" size={52} color={C.light} />
+            <View style={styles.emptyIconWrap}>
+              <Ionicons name="cube-outline" size={48} color={C.textLight} />
+            </View>
             <Text style={styles.emptyTitle}>No products yet</Text>
             <Text style={styles.emptyDesc}>Tap + to add your first product</Text>
           </View>
         ) : (
           products.map((product) => (
-            <View key={product.id} style={styles.productCard}>
+            <TouchableOpacity
+              key={product.id}
+              style={styles.productCard}
+              activeOpacity={0.7}
+              onPress={() => openDetail(product)}
+            >
+              {/* Image */}
               {product.image ? (
                 <Image source={{ uri: product.image }} style={styles.productImage} />
               ) : (
                 <View style={styles.imagePlaceholder}>
-                  <Ionicons name="cube-outline" size={22} color={C.light} />
+                  <Ionicons name="cube-outline" size={22} color={C.textLight} />
                 </View>
               )}
 
+              {/* Info */}
               <View style={styles.productInfo}>
                 <Text style={styles.productName} numberOfLines={1}>{product.name}</Text>
-                <Text style={styles.productMeta}>{product.unit} · ₹{product.price}</Text>
+                <View style={styles.productPriceRow}>
+                  <Text style={styles.productPrice}>₹{product.price}</Text>
+                  {product.mrp && product.mrp > product.price && (
+                    <Text style={styles.productMrp}>₹{product.mrp}</Text>
+                  )}
+                </View>
+                <Text style={styles.productMeta}>{product.unit} · {product.category}</Text>
                 <View style={[
                   styles.statusPill,
-                  { backgroundColor: product.is_available ? '#FFF3DC' : '#FFE8D6' }
+                  { backgroundColor: product.is_available ? C.successBg : '#FFF0F0' }
                 ]}>
                   <View style={[
                     styles.statusDot,
-                    { backgroundColor: product.is_available ? C.dark : C.secondary }
+                    { backgroundColor: product.is_available ? C.success : '#FF6B6B' }
                   ]} />
                   <Text style={[
                     styles.statusText,
-                    { color: product.is_available ? C.dark : C.secondary }
+                    { color: product.is_available ? '#16A34A' : '#DC2626' }
                   ]}>
                     {product.is_available ? 'Available' : 'Unavailable'}
                   </Text>
                 </View>
               </View>
 
-              <View style={styles.stockBadge}>
-                <Text style={styles.stockVal}>{product.stock}</Text>
+              {/* Stock Badge */}
+              <View style={[
+                styles.stockBadge,
+                product.stock <= 5 && product.stock > 0 && { backgroundColor: '#FFF8E1' },
+                product.stock === 0 && { backgroundColor: '#FFF0F0' },
+              ]}>
+                <Text style={[
+                  styles.stockVal,
+                  product.stock <= 5 && product.stock > 0 && { color: '#F59E0B' },
+                  product.stock === 0 && { color: '#DC2626' },
+                ]}>{product.stock}</Text>
                 <Text style={styles.stockLabel}>stock</Text>
               </View>
 
-              {isAdmin && (
-                <View style={styles.actions}>
-                  <TouchableOpacity
-                    style={[styles.actionBtn, { backgroundColor: product.is_available ? '#FFE8D6' : '#FFF3DC' }]}
-                    onPress={() => toggleAvailability(product)}
-                  >
-                    <Ionicons
-                      name={product.is_available ? "eye-off" : "eye"}
-                      size={15}
-                      color={product.is_available ? C.secondary : C.dark}
-                    />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.actionBtn, { backgroundColor: '#FFE8D6' }]}
-                    onPress={() => deleteProduct(product.id)}
-                  >
-                    <Ionicons name="trash-outline" size={15} color={C.secondary} />
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
+              {/* Chevron */}
+              <Ionicons name="chevron-forward" size={16} color={C.textLight} style={{ marginLeft: 4 }} />
+            </TouchableOpacity>
           ))
         )}
         <View style={{ height: 20 }} />
       </ScrollView>
 
-      {/* ── Add Product Modal ── */}
+
+      {/* ═══════════════════════════════════════════
+           ADD PRODUCT MODAL (Tabbed)
+          ═══════════════════════════════════════════ */}
       <Modal visible={addModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalSheet}>
@@ -363,91 +1182,24 @@ export default function InventoryScreen() {
 
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Add Product</Text>
-              <TouchableOpacity style={styles.closeBtn} onPress={resetModal}>
+              <TouchableOpacity style={styles.closeBtn} onPress={resetAddModal}>
                 <Ionicons name="close" size={16} color={C.deep} />
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
+            {/* Tab Bar */}
+            {renderTabBar(TABS, activeTab, setActiveTab)}
 
-              <TouchableOpacity style={styles.imagePicker} onPress={pickImageFromGallery}>
-                {newProduct.image ? (
-                  <Image source={{ uri: newProduct.image }} style={styles.previewImage} />
-                ) : (
-                  <View style={styles.imagePickerEmpty}>
-                    <Ionicons name="camera-outline" size={28} color={C.light} />
-                    <Text style={styles.imagePickerText}>Tap to add product image</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-
-              <Text style={styles.fieldLabel}>Product Name</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. Full Cream Milk"
-                placeholderTextColor={C.textLight}
-                value={newProduct.name}
-                onChangeText={(v) => setNewProduct(p => ({ ...p, name: v }))}
-              />
-
-              <Text style={styles.fieldLabel}>Category</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryRow}>
-                {CATEGORIES.map((cat) => (
-                  <TouchableOpacity
-                    key={cat}
-                    style={[
-                      styles.catChip,
-                      newProduct.category === cat && styles.catChipActive
-                    ]}
-                    onPress={() => setNewProduct(p => ({ ...p, category: cat }))}
-                  >
-                    <Text style={[
-                      styles.catChipText,
-                      newProduct.category === cat && styles.catChipTextActive
-                    ]}>
-                      {cat}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-
-              <View style={styles.row}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.fieldLabel}>Unit</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. 500ml"
-                    placeholderTextColor={C.textLight}
-                    value={newProduct.unit}
-                    onChangeText={(v) => setNewProduct(p => ({ ...p, unit: v }))}
-                  />
-                </View>
-                <View style={{ width: 12 }} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.fieldLabel}>Price (₹)</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="0.00"
-                    placeholderTextColor={C.textLight}
-                    keyboardType="numeric"
-                    value={newProduct.price}
-                    onChangeText={(v) => setNewProduct(p => ({ ...p, price: v }))}
-                  />
-                </View>
-              </View>
-
-              <Text style={styles.fieldLabel}>Stock Quantity</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="0"
-                placeholderTextColor={C.textLight}
-                keyboardType="numeric"
-                value={newProduct.stock}
-                onChangeText={(v) => setNewProduct(p => ({ ...p, stock: v }))}
-              />
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: 20 }}
+              keyboardShouldPersistTaps="handled"
+            >
+              {renderFormTab(activeTab, formData, updateForm)}
 
               <View style={{ height: 16 }} />
 
+              {/* Swipe to Add — shown on last tab or when form is valid */}
               {isFormValid && (
                 <View style={styles.swipeWrapper}>
                   <SwipeToConfirm
@@ -458,273 +1210,439 @@ export default function InventoryScreen() {
                 </View>
               )}
 
-              <TouchableOpacity style={styles.cancelBtn} onPress={resetModal}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={resetAddModal}>
                 <Text style={styles.cancelBtnText}>Cancel</Text>
               </TouchableOpacity>
-
-              <View style={{ height: 20 }} />
             </ScrollView>
+
+            {/* Success Tick Overlay */}
+            <SuccessTick visible={showSuccessTick} onDone={onTickDone} />
           </View>
         </View>
       </Modal>
+
+
+      {/* ═══════════════════════════════════════════
+           PRODUCT DETAIL / EDIT MODAL
+          ═══════════════════════════════════════════ */}
+      <Modal visible={detailModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalSheet, { maxHeight: '95%' }]}>
+            <View style={styles.dragHandle} />
+
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {isEditing ? "Edit Product" : "Product Details"}
+              </Text>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                {isEditing && (
+                  <TouchableOpacity
+                    style={[styles.closeBtn, { backgroundColor: C.successBg }]}
+                    onPress={() => setIsEditing(false)}
+                  >
+                    <Ionicons name="eye-outline" size={16} color={C.success} />
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity style={styles.closeBtn} onPress={resetDetailModal}>
+                  <Ionicons name="close" size={16} color={C.deep} />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {isEditing ? (
+              <>
+                {renderTabBar(TABS, editTab, setEditTab)}
+                <ScrollView
+                  showsVerticalScrollIndicator={false}
+                  contentContainerStyle={{ paddingBottom: 20 }}
+                  keyboardShouldPersistTaps="handled"
+                >
+                  {renderFormTab(editTab, editForm, updateEditForm)}
+
+                  <View style={{ height: 16 }} />
+
+                  <View style={styles.swipeWrapper}>
+                    <SwipeToConfirm
+                      text="Swipe to Save Changes"
+                      onSwipeSuccess={handleSaveEdit}
+                    />
+                  </View>
+
+                  <TouchableOpacity
+                    style={styles.cancelBtn}
+                    onPress={() => setIsEditing(false)}
+                  >
+                    <Text style={styles.cancelBtnText}>Cancel Editing</Text>
+                  </TouchableOpacity>
+                </ScrollView>
+              </>
+            ) : (
+              renderProductDetail()
+            )}
+
+            {/* Success Tick Overlay for Edit */}
+            <SuccessTick visible={showEditSuccessTick} onDone={onEditTickDone} />
+          </View>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 }
 
-// ── Alert Styles 
+
+// ══════════════════════════════════════════════════
+// ══  ALERT STYLES  ══
+// ══════════════════════════════════════════════════
 const alertStyles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(61,31,10,0.45)',
+    backgroundColor: C.overlay,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 32,
   },
   box: {
     width: '100%',
-    backgroundColor: '#FFF8EF',
+    backgroundColor: C.bg,
     borderRadius: 24,
     paddingTop: 28,
     paddingBottom: 20,
     paddingHorizontal: 24,
     alignItems: 'center',
-    shadowColor: '#3D1F0A',
+    shadowColor: C.text,
     shadowOpacity: 0.18,
     shadowRadius: 24,
     elevation: 10,
   },
   iconWrap: {
-    width: 56,
-    height: 56,
-    borderRadius: 18,
-    backgroundColor: '#FFE8D6',
-    justifyContent: 'center',
-    alignItems: 'center',
+    width: 56, height: 56, borderRadius: 18,
+    backgroundColor: C.card, justifyContent: 'center', alignItems: 'center',
     marginBottom: 14,
   },
   title: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#3D1F0A',
-    textAlign: 'center',
-    marginBottom: 6,
-    letterSpacing: -0.3,
+    fontSize: 17, fontWeight: '800', color: C.text,
+    textAlign: 'center', marginBottom: 6, letterSpacing: -0.3,
   },
   message: {
-    fontSize: 14,
-    color: '#A07850',
-    textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 22,
-    fontWeight: '500',
+    fontSize: 14, color: C.textMuted, textAlign: 'center',
+    lineHeight: 20, marginBottom: 22, fontWeight: '500',
   },
-  btnRow: {
-    flexDirection: 'row',
-    gap: 10,
-    width: '100%',
-    marginTop: 4,
-  },
+  btnRow: { flexDirection: 'row', gap: 10, width: '100%', marginTop: 4 },
   btn: {
-    flex: 1,
-    paddingVertical: 13,
-    borderRadius: 14,
-    backgroundColor: '#FFE8D6',
-    alignItems: 'center',
+    flex: 1, paddingVertical: 13, borderRadius: 14,
+    backgroundColor: C.card, alignItems: 'center',
   },
-  btnCancel: {
-    backgroundColor: '#FFF3DC',
-  },
-  btnDestructive: {
-    backgroundColor: '#FF9675',
-  },
-  btnText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#BB6B3F',
-  },
-  btnTextCancel: {
-    color: '#A07850',
-  },
-  btnTextDestructive: {
-    color: '#3D1F0A',
-  },
+  btnCancel: { backgroundColor: C.chipBg },
+  btnDestructive: { backgroundColor: C.secondary },
+  btnText: { fontSize: 14, fontWeight: '700', color: C.dark },
+  btnTextCancel: { color: C.textMuted },
+  btnTextDestructive: { color: C.text },
 });
 
-// ── Screen Styles 
+
+// ══════════════════════════════════════════════════
+// ══  SCREEN STYLES  ══
+// ══════════════════════════════════════════════════
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
 
+  // ── Header
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 14,
-    paddingBottom: 10,
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'center', paddingHorizontal: 20,
+    paddingTop: 14, paddingBottom: 10,
   },
   title: { fontSize: 26, fontWeight: '800', color: C.text, letterSpacing: -0.5 },
   subtitle: { fontSize: 13, color: C.textLight, marginTop: 2, fontWeight: '500' },
   addBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: C.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: C.dark,
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    width: 44, height: 44, borderRadius: 14,
+    backgroundColor: C.dark, justifyContent: 'center', alignItems: 'center',
+    shadowColor: C.dark, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4,
   },
 
+  // ── Summary Strip
   summaryStrip: {
-    flexDirection: 'row',
-    backgroundColor: C.card,
-    marginHorizontal: 20,
-    borderRadius: 16,
-    paddingVertical: 14,
-    marginBottom: 16,
-    shadowColor: C.dark,
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 2,
+    flexDirection: 'row', backgroundColor: C.card,
+    marginHorizontal: 20, borderRadius: 16,
+    paddingVertical: 14, marginBottom: 16,
+    shadowColor: C.dark, shadowOpacity: 0.06, shadowRadius: 6, elevation: 2,
   },
   summaryItem: { flex: 1, alignItems: 'center' },
-  summaryVal: { fontSize: 22, fontWeight: '800', color: C.text },
-  summaryLabel: { fontSize: 11, color: C.textLight, fontWeight: '600', marginTop: 2 },
-  summaryDivider: { width: 1, backgroundColor: '#FFE8C8' },
+  summaryVal: { fontSize: 20, fontWeight: '800', color: C.text },
+  summaryLabel: { fontSize: 10, color: C.textLight, fontWeight: '600', marginTop: 2, textTransform: 'uppercase', letterSpacing: 0.5 },
+  summaryDivider: { width: 1, backgroundColor: C.border },
 
+  // ── Product List
   listContent: { paddingHorizontal: 16 },
   productCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: C.card,
-    borderRadius: 16,
-    padding: 12,
-    marginBottom: 10,
-    gap: 12,
-    shadowColor: C.dark,
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 1,
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: C.card, borderRadius: 16,
+    padding: 12, marginBottom: 10, gap: 10,
+    shadowColor: C.dark, shadowOpacity: 0.05, shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 }, elevation: 1,
   },
-  productImage: { width: 56, height: 56, borderRadius: 12 },
+  productImage: { width: 56, height: 56, borderRadius: 14 },
   imagePlaceholder: {
-    width: 56, height: 56, borderRadius: 12,
-    backgroundColor: '#FFF3DC',
-    justifyContent: 'center', alignItems: 'center',
+    width: 56, height: 56, borderRadius: 14,
+    backgroundColor: C.chipBg, justifyContent: 'center', alignItems: 'center',
   },
-  productInfo: { flex: 1, gap: 3 },
+  productInfo: { flex: 1, gap: 2 },
   productName: { fontSize: 15, fontWeight: '700', color: C.text },
-  productMeta: { fontSize: 12, color: C.textMuted, fontWeight: '500' },
+  productPriceRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  productPrice: { fontSize: 14, fontWeight: '800', color: C.dark },
+  productMrp: {
+    fontSize: 12, fontWeight: '500', color: C.textLight,
+    textDecorationLine: 'line-through',
+  },
+  productMeta: { fontSize: 11, color: C.textMuted, fontWeight: '500', textTransform: 'capitalize' },
+
   statusPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 20,
-    marginTop: 2,
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    alignSelf: 'flex-start', paddingHorizontal: 8,
+    paddingVertical: 3, borderRadius: 20, marginTop: 2,
   },
   statusDot: { width: 6, height: 6, borderRadius: 3 },
-  statusText: { fontSize: 11, fontWeight: '700' },
+  statusText: { fontSize: 10, fontWeight: '700' },
 
   stockBadge: {
-    alignItems: 'center',
-    backgroundColor: '#FFF3DC',
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    alignItems: 'center', backgroundColor: C.chipBg,
+    borderRadius: 12, paddingHorizontal: 10, paddingVertical: 6,
+    minWidth: 44,
   },
   stockVal: { fontSize: 16, fontWeight: '800', color: C.dark },
   stockLabel: { fontSize: 9, color: C.textMuted, fontWeight: '600' },
 
-  actions: { gap: 6 },
-  actionBtn: {
-    width: 32, height: 32, borderRadius: 10,
-    justifyContent: 'center', alignItems: 'center',
-  },
-
+  // ── Empty State
   emptyState: { alignItems: 'center', paddingTop: 80, gap: 8 },
-  emptyTitle: { fontSize: 16, fontWeight: '700', color: C.textLight },
+  emptyIconWrap: {
+    width: 80, height: 80, borderRadius: 24,
+    backgroundColor: C.card, justifyContent: 'center', alignItems: 'center',
+    marginBottom: 8,
+  },
+  emptyTitle: { fontSize: 16, fontWeight: '700', color: C.textMuted },
   emptyDesc: { fontSize: 13, color: C.textLight },
 
+  // ── Modal
   modalOverlay: { flex: 1, backgroundColor: 'rgba(61,31,10,0.4)', justifyContent: 'flex-end' },
   modalSheet: {
     backgroundColor: C.card,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    padding: 24,
-    maxHeight: '92%',
+    borderTopLeftRadius: 28, borderTopRightRadius: 28,
+    padding: 24, maxHeight: '92%',
   },
   dragHandle: {
     width: 40, height: 4, backgroundColor: C.light,
-    borderRadius: 2, alignSelf: 'center', marginBottom: 20,
+    borderRadius: 2, alignSelf: 'center', marginBottom: 16,
   },
   modalHeader: {
     flexDirection: 'row', justifyContent: 'space-between',
-    alignItems: 'center', marginBottom: 20,
+    alignItems: 'center', marginBottom: 16,
   },
   modalTitle: { fontSize: 20, fontWeight: '800', color: C.text },
   closeBtn: {
     width: 32, height: 32, borderRadius: 10,
-    backgroundColor: '#FFF3DC', justifyContent: 'center', alignItems: 'center',
+    backgroundColor: C.chipBg, justifyContent: 'center', alignItems: 'center',
   },
 
-  imagePicker: {
-    borderRadius: 16,
-    overflow: 'hidden',
-    marginBottom: 20,
-    borderWidth: 1.5,
-    borderColor: C.light,
-    borderStyle: 'dashed',
+  // ── Tab Bar
+  tabBar: {
+    flexDirection: 'row', backgroundColor: C.inputBg,
+    borderRadius: 12, padding: 3, marginBottom: 16,
   },
-  imagePickerEmpty: {
-    height: 130,
-    justifyContent: 'center',
+  tab: {
+    flex: 1, paddingVertical: 10, borderRadius: 10,
     alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#FFF8EF',
   },
-  imagePickerText: { fontSize: 13, color: C.textLight, fontWeight: '500' },
-  previewImage: { width: '100%', height: 150 },
+  tabActive: { backgroundColor: C.dark },
+  tabText: { fontSize: 13, fontWeight: '600', color: C.textMuted },
+  tabTextActive: { color: C.white, fontWeight: '700' },
 
+  // ── Form Fields
+  sectionHeader: {
+    fontSize: 14, fontWeight: '700', color: C.dark,
+    marginBottom: 12, marginTop: 4,
+  },
   fieldLabel: {
     fontSize: 12, fontWeight: '700', color: C.textMuted,
     textTransform: 'uppercase', letterSpacing: 0.6,
     marginBottom: 8, marginTop: 4,
   },
   input: {
-    backgroundColor: '#FFF8EF',
-    padding: 14,
-    borderRadius: 12,
-    marginBottom: 12,
-    fontSize: 15,
-    color: C.text,
-    borderWidth: 1,
-    borderColor: '#FFE8C8',
+    backgroundColor: C.inputBg, padding: 14,
+    borderRadius: 12, marginBottom: 12,
+    fontSize: 15, color: C.text,
+    borderWidth: 1, borderColor: C.border,
   },
+  textArea: { minHeight: 70, paddingTop: 14 },
   row: { flexDirection: 'row' },
 
+  // ── Thumbnail Picker
+  thumbnailPicker: {
+    borderRadius: 16, overflow: 'hidden',
+    marginBottom: 12, borderWidth: 1.5,
+    borderColor: C.border, borderStyle: 'dashed',
+    position: 'relative',
+  },
+  thumbnailImage: { width: '100%', height: 170, borderRadius: 14 },
+  thumbnailEmpty: {
+    height: 150, justifyContent: 'center', alignItems: 'center',
+    gap: 6, backgroundColor: C.inputBg,
+  },
+  thumbnailIconCircle: {
+    width: 48, height: 48, borderRadius: 24,
+    backgroundColor: C.card, justifyContent: 'center', alignItems: 'center',
+    marginBottom: 4,
+  },
+  thumbnailLabel: { fontSize: 14, fontWeight: '700', color: C.textMuted },
+  thumbnailSub: { fontSize: 12, color: C.textLight },
+  thumbnailEditBadge: {
+    position: 'absolute', top: 10, right: 10,
+    width: 28, height: 28, borderRadius: 14,
+    backgroundColor: C.dark, justifyContent: 'center', alignItems: 'center',
+  },
+
+  // ── Additional Images
+  additionalImagesRow: {
+    flexDirection: 'row', gap: 12, marginBottom: 16,
+  },
+  additionalImagePicker: {
+    flex: 1, height: 90, borderRadius: 12,
+    borderWidth: 1.5, borderColor: C.border, borderStyle: 'dashed',
+    overflow: 'hidden',
+  },
+  additionalImage: { width: '100%', height: '100%', borderRadius: 10 },
+  additionalImageEmpty: {
+    flex: 1, justifyContent: 'center', alignItems: 'center',
+    backgroundColor: C.inputBg, gap: 4,
+  },
+  additionalImageText: { fontSize: 11, color: C.textLight, fontWeight: '500' },
+
+  // ── Category Chips
   categoryRow: { marginBottom: 16 },
   catChip: {
     paddingHorizontal: 14, paddingVertical: 8,
-    borderRadius: 20, backgroundColor: '#FFF3DC',
+    borderRadius: 20, backgroundColor: C.chipBg,
     marginRight: 8, borderWidth: 1.5, borderColor: 'transparent',
   },
   catChipActive: { backgroundColor: C.primary + '25', borderColor: C.primary },
   catChipText: { fontSize: 13, fontWeight: '600', color: C.textMuted, textTransform: 'capitalize' },
   catChipTextActive: { color: C.dark },
 
+  // ── Dietary Grid
+  dietaryGrid: {
+    flexDirection: 'row', flexWrap: 'wrap',
+    gap: 10, marginBottom: 16,
+  },
+  dietaryChip: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 14, paddingVertical: 10,
+    borderRadius: 12, backgroundColor: C.inputBg,
+    borderWidth: 1.5, borderColor: C.border,
+  },
+  dietaryChipActive: {
+    backgroundColor: C.primary + '20', borderColor: C.primary,
+  },
+  dietaryChipText: { fontSize: 13, fontWeight: '600', color: C.textMuted },
+  dietaryChipTextActive: { color: C.dark },
+
+  // ── Swipe / Cancel
   swipeWrapper: { marginBottom: 12, alignItems: 'center' },
   cancelBtn: {
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: '#FFE8D6',
-    alignItems: 'center',
-    marginTop: 8,
+    paddingVertical: 14, borderRadius: 12,
+    backgroundColor: C.card, alignItems: 'center',
+    marginTop: 4, borderWidth: 1, borderColor: C.border,
   },
-  cancelBtnText: { fontSize: 15, fontWeight: '700', color: C.secondary },
+  cancelBtnText: { fontSize: 15, fontWeight: '700', color: C.textMuted },
+
+  // ── Detail Modal — Image Gallery
+  detailImageGallery: { height: 220, borderRadius: 16, overflow: 'hidden', marginBottom: 8 },
+  detailGalleryImage: { width: SCREEN_WIDTH - 48, height: 220, borderRadius: 16, marginRight: 8 },
+  detailNoImage: {
+    height: 160, borderRadius: 16, backgroundColor: C.inputBg,
+    justifyContent: 'center', alignItems: 'center', marginBottom: 8,
+  },
+  dotRow: {
+    flexDirection: 'row', justifyContent: 'center', gap: 6, marginBottom: 12,
+  },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: C.textLight },
+
+  // ── Detail Sections
+  detailSection: {
+    backgroundColor: C.inputBg, borderRadius: 16, padding: 16,
+    marginBottom: 12, borderWidth: 1, borderColor: C.border,
+  },
+  detailName: { fontSize: 20, fontWeight: '800', color: C.text, marginBottom: 6 },
+  detailPriceRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  detailPrice: { fontSize: 22, fontWeight: '800', color: C.dark },
+  detailMrp: {
+    fontSize: 16, fontWeight: '500', color: C.textLight,
+    textDecorationLine: 'line-through',
+  },
+  discountBadge: {
+    backgroundColor: '#FEF3C7', paddingHorizontal: 8,
+    paddingVertical: 3, borderRadius: 8,
+  },
+  discountText: { fontSize: 11, fontWeight: '800', color: '#D97706' },
+
+  detailMetaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  metaChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: C.chipBg, paddingHorizontal: 10,
+    paddingVertical: 5, borderRadius: 20,
+  },
+  metaChipText: { fontSize: 12, fontWeight: '600', color: C.dark, textTransform: 'capitalize' },
+
+  detailSectionTitle: {
+    fontSize: 14, fontWeight: '700', color: C.dark, marginBottom: 12,
+  },
+  infoRow: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'center', paddingVertical: 8,
+    borderBottomWidth: 1, borderBottomColor: C.border,
+  },
+  infoLabel: { fontSize: 13, fontWeight: '600', color: C.textMuted },
+  infoValue: { fontSize: 13, fontWeight: '700', color: C.text },
+  infoBlock: { paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: C.border },
+  infoValueMultiline: {
+    fontSize: 13, fontWeight: '500', color: C.text,
+    lineHeight: 20, marginTop: 4,
+  },
+
+  // ── Stock Controls
+  stockControlCard: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    backgroundColor: C.inputBg, borderRadius: 16, padding: 16,
+    marginBottom: 12, borderWidth: 1, borderColor: C.border,
+  },
+  stockControlLabel: { fontSize: 14, fontWeight: '700', color: C.text },
+  stockControlSub: { fontSize: 11, color: C.textMuted, marginTop: 2 },
+  stockControlBtns: { flexDirection: 'row', alignItems: 'center', gap: 0 },
+  stockBtn: {
+    width: 36, height: 36, borderRadius: 12,
+    backgroundColor: C.card, justifyContent: 'center', alignItems: 'center',
+    borderWidth: 1, borderColor: C.border,
+  },
+  stockBtnAdd: { backgroundColor: C.dark, borderColor: C.dark },
+  stockDisplay: {
+    minWidth: 50, height: 36, justifyContent: 'center', alignItems: 'center',
+    backgroundColor: C.white, borderRadius: 10, marginHorizontal: 4,
+    borderWidth: 1, borderColor: C.border, paddingHorizontal: 12,
+  },
+  stockDisplayVal: { fontSize: 18, fontWeight: '800', color: C.text },
+
+  // ── Detail Action Buttons
+  detailActions: { paddingHorizontal: 4, gap: 10, marginTop: 4 },
+  detailEditBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: C.dark, paddingVertical: 14,
+    borderRadius: 14, gap: 8,
+  },
+  detailEditBtnText: { fontSize: 15, fontWeight: '700', color: C.white },
+  detailSmallBtnsRow: { flexDirection: 'row', gap: 10 },
+  detailSmallBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    paddingVertical: 12, borderRadius: 12, gap: 6,
+    borderWidth: 1, borderColor: C.border,
+  },
+  detailSmallBtnText: { fontSize: 13, fontWeight: '600' },
 });
