@@ -594,6 +594,20 @@ export default function AdminSettingsScreen() {
   const router = useRouter();
   const { cfg: alertCfg, show: showAlert, dismiss: dismissAlert } = useAlert();
 
+  const referralCode = (() => {
+    const name = user?.name || "GAU";
+    const nameClean = name.replace(/[^a-zA-Z]/g, "");
+    const namePart = nameClean.slice(0, 3).toUpperCase().padEnd(3, "X");
+
+    const adminId = user?.id || "000";
+    const asciiSum = adminId
+      .split("")
+      .reduce((sum: number, c: string) => sum + c.charCodeAt(0), 0);
+    const numPart = String((asciiSum % 900) + 100);
+
+    return `${namePart}${numPart}`;
+  })();
+
   const [activeModal, setActiveModal] = useState<ModalType>(null);
   const [settings, setSettings] = useState<Settings>({
     cutoffHour: "10",
@@ -626,6 +640,7 @@ export default function AdminSettingsScreen() {
   const [otpResendTimer, setOtpResendTimer] = useState(0);
   const [pwDraft, setPwDraft] = useState({ newPw: "", confirm: "" });
   const [showPw, setShowPw] = useState({ newPw: false, confirm: false });
+  const [referralExpanded, setReferralExpanded] = useState(false);
 
   useEffect(() => {
     AsyncStorage.getItem("APP_SETTINGS").then((data) => {
@@ -907,9 +922,6 @@ export default function AdminSettingsScreen() {
       <ScrollView showsVerticalScrollIndicator={false}>
         <View style={s.header}>
           <Text style={s.title}>Settings</Text>
-          <TouchableOpacity style={s.shareBtn} onPress={() => openModal("share")}>
-            <Ionicons name="share-social-outline" size={18} color="#BB6B3F" />
-          </TouchableOpacity>
         </View>
 
         {/* ── Profile Card ── */}
@@ -954,6 +966,54 @@ export default function AdminSettingsScreen() {
             <Ionicons name="shield-checkmark" size={11} color="#fff" />
             <Text style={s.adminBadgeTxt}>Administrator</Text>
           </View>
+        </View>
+
+        <View style={s.referralCard}>
+          <TouchableOpacity
+            style={[
+              s.referralHeader,
+              referralExpanded ? s.referralHeaderExpanded : null,
+            ]}
+            activeOpacity={0.85}
+            onPress={() => setReferralExpanded((prev) => !prev)}
+          >
+            <View style={s.referralIconWrap}>
+              <Ionicons name="gift-outline" size={18} color={C.dark} />
+            </View>
+            <View style={s.referralContent}>
+              <Text style={s.referralTitle}>Referral & Share</Text>
+              <Text style={s.referralSubtitle}>
+                Share your farm QR and referral code with customers.
+              </Text>
+            </View>
+            <View style={s.referralToggleBtn}>
+              <Ionicons
+                name={referralExpanded ? "remove" : "add"}
+                size={18}
+                color={C.dark}
+              />
+            </View>
+          </TouchableOpacity>
+
+          {referralExpanded ? (
+            <View style={s.referralRow}>
+              <View style={s.referralCodeBlock}>
+                <Text style={s.referralLabel}>Referral Code</Text>
+                <View style={s.referralCodePill}>
+                  <Text style={s.referralCodeValue}>{referralCode}</Text>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                style={s.referralShareBtn}
+                activeOpacity={0.85}
+                onPress={() => openModal("share")}
+              >
+                <Ionicons name="share-social-outline" size={15} color="#fff" />
+                <Text style={s.referralShareTxt}>Share</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
         </View>
 
         {/* ── System Configuration ── */}
@@ -1857,15 +1917,6 @@ const s = StyleSheet.create({
     color: "#1A1A1A",
     letterSpacing: -0.5,
   },
-  shareBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: "#FFE8D6",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-
   profileCard: {
     backgroundColor: "#FF9675",
     marginHorizontal: 20,
@@ -1926,6 +1977,102 @@ const s = StyleSheet.create({
     borderRadius: 20,
   },
   adminBadgeTxt: { fontSize: 12, fontWeight: "700", color: "#fff" },
+  referralCard: {
+    backgroundColor: "#fff",
+    marginHorizontal: 20,
+    marginBottom: 22,
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: C.deepPeach,
+    shadowColor: "#BB6B3F",
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  referralHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  referralHeaderExpanded: { marginBottom: 12 },
+  referralIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: C.peach,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  referralContent: { flex: 1 },
+  referralTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: C.text,
+    letterSpacing: -0.2,
+    marginBottom: 2,
+  },
+  referralSubtitle: {
+    fontSize: 11,
+    lineHeight: 16,
+    color: C.muted,
+    fontWeight: "500",
+  },
+  referralToggleBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: C.peach,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  referralRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  referralCodeBlock: { flex: 1, gap: 8 },
+  referralLabel: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: C.accent,
+    textTransform: "uppercase",
+    letterSpacing: 0.7,
+  },
+  referralCodePill: {
+    alignSelf: "flex-start",
+    backgroundColor: "#FFF6EE",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: C.deepPeach,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  referralCodeValue: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: C.dark,
+    letterSpacing: 1,
+  },
+  referralShareBtn: {
+    minWidth: 90,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    backgroundColor: C.primary,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  referralShareTxt: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#fff",
+  },
 
   section: { marginBottom: 16 },
   sectionTitle: {

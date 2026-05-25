@@ -203,6 +203,50 @@ interface FIProps {
   onBlur?: () => void;
 }
 
+function friendlyAuthError(error: any, fallback: string): string {
+  const raw = String(error?.message ?? error?.detail ?? error ?? "").trim();
+  if (!raw) return fallback;
+
+  let parsed: any = null;
+  if ((raw.startsWith("{") && raw.endsWith("}")) || (raw.startsWith("[") && raw.endsWith("]"))) {
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      parsed = null;
+    }
+  }
+
+  const detail = parsed?.detail ?? parsed?.message ?? parsed?.error ?? raw;
+  const detailText =
+    typeof detail === "string"
+      ? detail
+      : Array.isArray(detail)
+        ? detail
+            .map((item) => item?.msg || item?.message || item?.detail)
+            .filter(Boolean)
+            .join(". ")
+        : "";
+  const msg = detailText || fallback;
+  const lower = msg.toLowerCase();
+
+  if (lower.includes("already") && lower.includes("email")) {
+    return "This email is already registered. Try signing in instead.";
+  }
+  if (lower.includes("already") && (lower.includes("phone") || lower.includes("mobile"))) {
+    return "This mobile number is already registered. Try signing in instead.";
+  }
+  if (lower.includes("otp") || lower.includes("code")) {
+    return "The OTP is incorrect or expired. Please try again.";
+  }
+  if (lower.includes("network") || lower.includes("fetch")) {
+    return "Network issue. Please check your connection and try again.";
+  }
+  if (msg.length > 140 || msg.includes("{") || msg.includes("}")) {
+    return fallback;
+  }
+  return msg;
+}
+
 function FloatInput({
   label,
   value,
@@ -312,6 +356,7 @@ export default function RegisterScreen() {
 
   const [step, setStep] = useState<Step>("phone");
   const otpInputRef = useRef<TextInput | null>(null);
+  const otpFocusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
@@ -516,6 +561,21 @@ export default function RegisterScreen() {
     }
   }, [otpVerified, step]);
 
+  useEffect(() => {
+    if (step !== "otp") return;
+    if (otpFocusTimer.current) clearTimeout(otpFocusTimer.current);
+    otpFocusTimer.current = setTimeout(() => otpInputRef.current?.focus(), 250);
+    return () => {
+      if (otpFocusTimer.current) clearTimeout(otpFocusTimer.current);
+    };
+  }, [step]);
+
+  const focusOtpInput = () => {
+    otpInputRef.current?.blur();
+    if (otpFocusTimer.current) clearTimeout(otpFocusTimer.current);
+    otpFocusTimer.current = setTimeout(() => otpInputRef.current?.focus(), 60);
+  };
+
   const sendOtp = async (isResend = false) => {
     setOtpSending(true);
     setOtpErr("");
@@ -534,7 +594,7 @@ export default function RegisterScreen() {
         setTimeout(() => otpInputRef.current?.focus(), 350);
       }
     } catch (error: any) {
-      showToast(error?.message || "Could not send OTP", "error");
+      showToast(friendlyAuthError(error, "Could not send OTP. Please try again."), "error");
     } finally {
       setOtpSending(false);
     }
@@ -589,8 +649,9 @@ export default function RegisterScreen() {
       showToast("Phone number verified successfully", "success");
       goToDetails();
     } catch (error: any) {
-      setOtpErr(error?.message || "Invalid OTP");
-      showToast(error?.message || "Could not verify OTP", "error");
+      const message = friendlyAuthError(error, "Could not verify OTP. Please try again.");
+      setOtpErr(message);
+      showToast(message, "error");
     } finally {
       setOtpVerifying(false);
     }
@@ -648,13 +709,14 @@ export default function RegisterScreen() {
       showToast("Account created! Welcome 🎉", "success");
       setTimeout(() => router.replace("/"), 1200);
     } catch (error: any) {
-      const msg: string = error?.message ?? "";
+      const rawMsg: string = error?.message ?? "";
+      const msg = friendlyAuthError(error, "Could not create account. Please try again.");
       if (/email/i.test(msg)) { setEmailErr("This email is already registered."); setEmailSt("error"); }
-      else if (/phone/i.test(msg)) {
+      else if (/phone|mobile/i.test(rawMsg + msg)) {
         goToPhone();
         setTimeout(() => { setPhoneErr("This number is already registered."); setPhoneSt("error"); }, 400);
       }
-      showToast(msg || "Could not create account", "error");
+      showToast(msg, "error");
     } finally {
       setLoading(false);
     }
@@ -759,8 +821,8 @@ export default function RegisterScreen() {
             {/* ══ STEP 1 ══ */}
             {step === "phone" && (
               <View>
-                <Text style={s.stepTitle}>What's your number?</Text>
-                <Text style={s.stepSub}>We'll keep it safe. No spam, ever.</Text>
+                <Text style={s.stepTitle}>What is your number?</Text>
+                <Text style={s.stepSub}>We will keep it safe. No spam, ever.</Text>
 
                 <View style={[s.phoneCard, phoneSt === "error" && s.phoneCardErr, phoneSt === "ok" && s.phoneCardOk]}>
                   <View style={s.phoneRow}>
@@ -851,7 +913,7 @@ export default function RegisterScreen() {
                   <Text style={s.otpPhoneText}>{fullPhone}</Text>
                 </Text>
 
-                <Pressable style={s.otpCard} onPress={() => otpInputRef.current?.focus()}>
+                <Pressable style={s.otpCard} onPress={focusOtpInput}>
                   <View style={s.otpBadge}>
                     <Ionicons name="keypad-outline" size={14} color={C.primary} />
                     <Text style={s.otpBadgeText}>SMS Verification</Text>
@@ -884,6 +946,10 @@ export default function RegisterScreen() {
                     keyboardType="number-pad"
                     maxLength={6}
                     style={s.otpHiddenInput}
+                    caretHidden
+                    showSoftInputOnFocus
+                    onPressIn={focusOtpInput}
+                    onFocus={() => setOtpErr("")}
                     autoFocus
                   />
 
@@ -1005,7 +1071,7 @@ export default function RegisterScreen() {
                           <Text style={s.referralBannerText}>
                             ✓ Linked to{" "}
                             <Text style={{ fontWeight: "800" }}>{referralAdminName}</Text>
-                            's Gaushala
+                            {"'s Gaushala"}
                           </Text>
                         </View>
                       ) : referralStatus === "invalid" ? (
@@ -1266,9 +1332,12 @@ const s = StyleSheet.create({
   },
   otpHiddenInput: {
     position: "absolute",
-    opacity: 0,
-    width: 1,
-    height: 1,
+    opacity: 0.01,
+    left: 12,
+    right: 12,
+    top: 58,
+    height: 68,
+    color: "transparent",
   },
   otpFooterRow: {
     flexDirection: "row",

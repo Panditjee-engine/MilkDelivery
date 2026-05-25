@@ -622,6 +622,13 @@ export default function GausevakTabs() {
       {/* ── Header ── */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
+          <TouchableOpacity
+            style={styles.backBtn}
+            onPress={() => router.back()}
+            activeOpacity={0.75}
+          >
+            <Ionicons name="arrow-back" size={18} color={C.text} />
+          </TouchableOpacity>
           <View style={styles.logoWrap}>
             <Ionicons name="leaf" size={18} color="white" />
           </View>
@@ -759,6 +766,16 @@ const styles = StyleSheet.create({
     borderBottomColor: C.border,
   },
   headerLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
+  backBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: C.bg,
+    borderWidth: 1,
+    borderColor: C.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   logoWrap: {
     width: 38,
     height: 38,

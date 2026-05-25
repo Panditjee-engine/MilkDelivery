@@ -3,7 +3,7 @@ import {
   View, Text, StyleSheet, ScrollView, RefreshControl,
   TouchableOpacity, TextInput, Modal, Image,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import SwipeToConfirm from "../../src/components/SwipeToConfirm";
@@ -131,9 +131,56 @@ type Product = {
   is_available: boolean;
 };
 
+type SnackbarState = {
+  visible: boolean;
+  message: string;
+  type: "success" | "error";
+};
+
 const CATEGORIES = ["milk", "dairy", "bakery", "fruits", "vegetables", "essentials"];
 
+const EMPTY_PRODUCT_FORM = {
+  name: "",
+  category: "",
+  unit: "",
+  price: "",
+  stock: "",
+  image: "",
+};
+
+function Snackbar({
+  visible,
+  message,
+  type,
+}: SnackbarState) {
+  if (!visible) return null;
+  const isSuccess = type === "success";
+  return (
+    <View
+      style={[
+        snackStyles.wrap,
+        isSuccess ? snackStyles.successWrap : snackStyles.errorWrap,
+      ]}
+    >
+      <Ionicons
+        name={isSuccess ? "checkmark-circle" : "alert-circle"}
+        size={18}
+        color={isSuccess ? "#166534" : "#b91c1c"}
+      />
+      <Text
+        style={[
+          snackStyles.text,
+          { color: isSuccess ? "#166534" : "#b91c1c" },
+        ]}
+      >
+        {message}
+      </Text>
+    </View>
+  );
+}
+
 export default function InventoryScreen() {
+  const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
   const { alertConfig, showAlert, dismissAlert } = useCustomAlert();
@@ -142,9 +189,25 @@ export default function InventoryScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
   const [addModal, setAddModal] = useState(false);
-  const [newProduct, setNewProduct] = useState({
-    name: "", category: "", unit: "", price: "", stock: "", image: "",
+  const [newProduct, setNewProduct] = useState(EMPTY_PRODUCT_FORM);
+  const [addingProduct, setAddingProduct] = useState(false);
+  const [snackbar, setSnackbar] = useState<SnackbarState>({
+    visible: false,
+    message: "",
+    type: "success",
   });
+
+  const showSnackbar = useCallback((message: string, type: "success" | "error") => {
+    setSnackbar({ visible: true, message, type });
+  }, []);
+
+  useEffect(() => {
+    if (!snackbar.visible) return;
+    const timer = setTimeout(() => {
+      setSnackbar((prev) => ({ ...prev, visible: false }));
+    }, 2600);
+    return () => clearTimeout(timer);
+  }, [snackbar.visible]);
 
   const fetchData = async () => {
     try {
@@ -186,31 +249,73 @@ export default function InventoryScreen() {
   }, [newProduct]);
 
   const handleAddProduct = async () => {
+    if (addingProduct || !isFormValid) return;
+    setAddingProduct(true);
     try {
-      await api.createProduct({
-        name: newProduct.name,
+      const created = await api.createProduct({
+        name: newProduct.name.trim(),
         category: newProduct.category.toLowerCase(),
-        unit: newProduct.unit,
+        unit: newProduct.unit.trim(),
         price: Number(newProduct.price),
         stock: Number(newProduct.stock),
         image: newProduct.image,
         image_type: "base64",
       });
+      const optimisticProduct: Product = {
+        id: created?.id ?? created?._id ?? `${Date.now()}`,
+        name: created?.name ?? newProduct.name.trim(),
+        category: created?.category ?? newProduct.category.toLowerCase(),
+        unit: created?.unit ?? newProduct.unit.trim(),
+        price: Number(created?.price ?? newProduct.price),
+        stock: Number(created?.stock ?? newProduct.stock),
+        image: created?.image ?? newProduct.image,
+        is_available: created?.is_available ?? true,
+      };
+      setProducts((prev) => [optimisticProduct, ...prev]);
+      setNewProduct(EMPTY_PRODUCT_FORM);
       setAddModal(false);
-      setNewProduct({ name: "", category: "", unit: "", price: "", stock: "", image: "" });
+      showSnackbar("Product added successfully", "success");
       fetchData();
     } catch (e: any) {
-      showAlert("Something went wrong", e.message);
+      const message = e?.message || "Could not add product";
+      showAlert("Something went wrong", message);
+      showSnackbar(message, "error");
+    } finally {
+      setAddingProduct(false);
     }
   };
 
   const toggleAvailability = async (product: Product) => {
-    try {
-      await api.updateProduct(product.id!, { is_available: !product.is_available });
-      fetchData();
-    } catch (e: any) {
-      showAlert("Update Failed", e.message);
-    }
+    const nextState = !product.is_available;
+    showAlert(
+      nextState ? "Make Product Available?" : "Make Product Unavailable?",
+      nextState
+        ? `${product.name} will be visible for orders.`
+        : `${product.name} will be hidden from orders.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: nextState ? "Make Available" : "Make Unavailable",
+          style: "default",
+          onPress: async () => {
+            try {
+              await api.updateProduct(product.id!, { is_available: nextState });
+              await fetchData();
+              showSnackbar(
+                nextState
+                  ? `${product.name} is now available`
+                  : `${product.name} is now unavailable`,
+                "success",
+              );
+            } catch (e: any) {
+              const message = e?.message || "Could not update availability";
+              showAlert("Update Failed", message);
+              showSnackbar(message, "error");
+            }
+          },
+        },
+      ],
+    );
   };
 
   const deleteProduct = (id?: string) => {
@@ -231,7 +336,8 @@ export default function InventoryScreen() {
 
   const resetModal = () => {
     setAddModal(false);
-    setNewProduct({ name: "", category: "", unit: "", price: "", stock: "", image: "" });
+    setNewProduct(EMPTY_PRODUCT_FORM);
+    setAddingProduct(false);
   };
 
   if (loading) return <LoadingScreen />;
@@ -242,6 +348,12 @@ export default function InventoryScreen() {
     <SafeAreaView style={styles.container} edges={["top"]}>
 
       <CustomAlert config={alertConfig} onDismiss={dismissAlert} />
+      <View
+        pointerEvents="none"
+        style={[styles.snackbarWrap, { top: insets.top + 10 }]}
+      >
+        <Snackbar {...snackbar} />
+      </View>
 
       {/* ── Header ── */}
       <View style={styles.header}>
@@ -451,8 +563,8 @@ export default function InventoryScreen() {
               {isFormValid && (
                 <View style={styles.swipeWrapper}>
                   <SwipeToConfirm
-                    text="Swipe to Add Product"
-                    disabled={!isFormValid}
+                    text={addingProduct ? "Adding Product..." : "Swipe to Add Product"}
+                    disabled={!isFormValid || addingProduct}
                     onSwipeSuccess={handleAddProduct}
                   />
                 </View>
@@ -550,9 +662,45 @@ const alertStyles = StyleSheet.create({
   },
 });
 
+const snackStyles = StyleSheet.create({
+  wrap: {
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    shadowColor: "#000",
+    shadowOpacity: 0.14,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 8,
+    borderWidth: 1,
+  },
+  successWrap: {
+    backgroundColor: "#f0fdf4",
+    borderColor: "#bbf7d0",
+  },
+  errorWrap: {
+    backgroundColor: "#fef2f2",
+    borderColor: "#fecaca",
+  },
+  text: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "700",
+  },
+});
+
 // ── Screen Styles 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
+  snackbarWrap: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    zIndex: 60,
+  },
 
   header: {
     flexDirection: 'row',
