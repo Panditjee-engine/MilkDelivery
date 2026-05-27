@@ -454,9 +454,10 @@ class ApiService {
     });
   }
 
-  async deleteAccount() {
+  async deleteAccount(password: string) {
     const result = await this.request<any>("/auth/account", {
       method: "DELETE",
+      body: JSON.stringify({ password }),
     });
     this.setToken(null);
     await AsyncStorage.multiRemove(["access_token", "worker_token", "worker_data"]);

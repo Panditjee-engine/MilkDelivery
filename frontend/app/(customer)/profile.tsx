@@ -312,6 +312,9 @@ export default function ProfileScreen() {
     user?.address || { tower: "", flat: "", floor: "" },
   );
   const [saving, setSaving] = useState(false);
+  const [deleteModal, setDeleteModal] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deletingAccount, setDeletingAccount] = useState(false);
   const isFocused = useIsFocused();
 
   // Custom alert state
@@ -408,6 +411,15 @@ useEffect(() => {
   };
 
   const handleDeleteAccount = () => {
+    setDeletePassword("");
+    setDeleteModal(true);
+  };
+
+  const confirmDeleteAccount = async () => {
+    if (!deletePassword.trim()) {
+      showToast("Please enter your password to delete your account.", "error");
+      return;
+    }
     showAlert({
       icon: "trash-outline",
       iconColor: "#DC2626",
@@ -421,11 +433,15 @@ useEffect(() => {
           text: "Delete Account",
           style: "destructive",
           onPress: async () => {
+            setDeletingAccount(true);
             try {
-              await api.deleteAccount();
+              await api.deleteAccount(deletePassword);
+              setDeleteModal(false);
               router.replace("/(auth)/login");
             } catch (error: any) {
               showToast(error?.message || "Could not delete account. Please try again.", "error");
+            } finally {
+              setDeletingAccount(false);
             }
           },
         },
@@ -847,6 +863,37 @@ useEffect(() => {
         </TouchableOpacity>
       </ScrollView>
 
+      <Modal visible={deleteModal} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <View style={styles.dragHandle} />
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Delete Account</Text>
+              <TouchableOpacity onPress={() => setDeleteModal(false)}>
+                <Ionicons name="close" size={22} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.modalBody}>
+              <Text style={styles.deleteAccountHelp}>
+                Enter your password to confirm permanent account deletion.
+              </Text>
+              <Input
+                label="Password"
+                placeholder="Enter password"
+                value={deletePassword}
+                onChangeText={setDeletePassword}
+                secureTextEntry
+              />
+              <Button
+                title={deletingAccount ? "Deleting..." : "Continue"}
+                onPress={confirmDeleteAccount}
+                loading={deletingAccount}
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* ── Vacation Modal ── */}
       <Modal visible={vacationModal} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
@@ -1259,6 +1306,12 @@ const styles = StyleSheet.create({
     borderColor: "#FECACA",
   },
   deleteAccountText: { fontSize: 15, fontWeight: "800", color: "#dc2626" },
+  deleteAccountHelp: {
+    fontSize: 14,
+    color: "#6B7280",
+    lineHeight: 20,
+    marginBottom: 14,
+  },
 
   // Modals
   modalOverlay: {

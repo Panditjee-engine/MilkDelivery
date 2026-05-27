@@ -641,6 +641,9 @@ export default function AdminSettingsScreen() {
   const [pwDraft, setPwDraft] = useState({ newPw: "", confirm: "" });
   const [showPw, setShowPw] = useState({ newPw: false, confirm: false });
   const [referralExpanded, setReferralExpanded] = useState(false);
+  const [deleteModal, setDeleteModal] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   useEffect(() => {
     AsyncStorage.getItem("APP_SETTINGS").then((data) => {
@@ -903,6 +906,22 @@ export default function AdminSettingsScreen() {
   };
 
   const handleDeleteAccount = () => {
+    setDeletePassword("");
+    setDeleteModal(true);
+  };
+
+  const confirmDeleteAccount = () => {
+    if (!deletePassword.trim()) {
+      showAlert(
+        "Password Required",
+        "Enter your password to delete your account.",
+        undefined,
+        "alert-circle-outline",
+        "#FEF2F2",
+        "#dc2626",
+      );
+      return;
+    }
     showAlert(
       "Delete Account",
       "This will permanently delete your Gau Satva account and remove your personal profile data. This action cannot be undone.",
@@ -912,8 +931,10 @@ export default function AdminSettingsScreen() {
           text: "Delete Account",
           style: "destructive",
           onPress: async () => {
+            setDeletingAccount(true);
             try {
-              await api.deleteAccount();
+              await api.deleteAccount(deletePassword);
+              setDeleteModal(false);
               router.replace("/(auth)/login");
             } catch (err: any) {
               showAlert(
@@ -924,6 +945,8 @@ export default function AdminSettingsScreen() {
                 "#FEF2F2",
                 "#dc2626",
               );
+            } finally {
+              setDeletingAccount(false);
             }
           },
         },
@@ -1131,6 +1154,46 @@ export default function AdminSettingsScreen() {
         <View style={{ height: 30 }} />
       </ScrollView>
 
+      <Modal visible={deleteModal} animationType="slide" transparent>
+        <View style={mS.overlay}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            style={mS.sheet}
+          >
+            <View style={mS.drag} />
+            <View style={mS.header}>
+              <Text style={mS.headerTitle}>Delete Account</Text>
+              <TouchableOpacity onPress={() => setDeleteModal(false)}>
+                <Ionicons name="close" size={22} color={C.muted} />
+              </TouchableOpacity>
+            </View>
+            <View style={mS.body}>
+              <Text style={mS.shareSubtitle}>
+                Enter your password to confirm permanent account deletion.
+              </Text>
+              <TextInput
+                style={mS.input}
+                value={deletePassword}
+                onChangeText={setDeletePassword}
+                placeholder="Password"
+                placeholderTextColor={C.light}
+                secureTextEntry
+              />
+              <TouchableOpacity
+                style={[mS.saveBtn, { backgroundColor: "#dc2626" }]}
+                onPress={confirmDeleteAccount}
+                disabled={deletingAccount}
+              >
+                {deletingAccount ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={mS.saveTxt}>Continue</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
 
       {/* ── Modal: Order Cut-off ── */}
       <SettingModal

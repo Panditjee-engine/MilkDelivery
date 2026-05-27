@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Modal, TextInput, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,6 +10,9 @@ import { api } from '../../src/services/api';
 export default function DeliveryProfileScreen() {
   const { user, logout } = useAuth();
   const router = useRouter();
+  const [deleteModal, setDeleteModal] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   const handleLogout = () => {
     Alert.alert('Logout', 'Are you sure you want to logout?', [
@@ -22,6 +25,15 @@ export default function DeliveryProfileScreen() {
   };
 
   const handleDeleteAccount = () => {
+    setDeletePassword('');
+    setDeleteModal(true);
+  };
+
+  const confirmDeleteAccount = () => {
+    if (!deletePassword.trim()) {
+      Alert.alert('Password Required', 'Enter your password to delete your account.');
+      return;
+    }
     Alert.alert(
       'Delete Account',
       'This will permanently delete your Gau Satva account and remove your personal profile data. This action cannot be undone.',
@@ -31,11 +43,15 @@ export default function DeliveryProfileScreen() {
           text: 'Delete Account',
           style: 'destructive',
           onPress: async () => {
+            setDeletingAccount(true);
             try {
-              await api.deleteAccount();
+              await api.deleteAccount(deletePassword);
+              setDeleteModal(false);
               router.replace('/(auth)/login');
             } catch (error: any) {
               Alert.alert('Delete Failed', error?.message || 'Could not delete account. Please try again.');
+            } finally {
+              setDeletingAccount(false);
             }
           },
         },
@@ -157,6 +173,40 @@ export default function DeliveryProfileScreen() {
 
         <View style={{ height: 30 }} />
       </ScrollView>
+
+      <Modal visible={deleteModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.deleteSheet}>
+            <View style={styles.deleteIconWrap}>
+              <Ionicons name="trash-outline" size={26} color="#dc2626" />
+            </View>
+            <Text style={styles.deleteTitle}>Delete Account</Text>
+            <Text style={styles.deleteHelp}>
+              Enter your password to confirm permanent account deletion.
+            </Text>
+            <TextInput
+              style={styles.passwordInput}
+              value={deletePassword}
+              onChangeText={setDeletePassword}
+              placeholder="Password"
+              placeholderTextColor="#9CA3AF"
+              secureTextEntry
+            />
+            <View style={styles.deleteActions}>
+              <TouchableOpacity style={styles.cancelDeleteBtn} onPress={() => setDeleteModal(false)}>
+                <Text style={styles.cancelDeleteText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.confirmDeleteBtn} onPress={confirmDeleteAccount} disabled={deletingAccount}>
+                {deletingAccount ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.confirmDeleteText}>Continue</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -280,4 +330,38 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: '#FECACA',
   },
   deleteAccountText: { fontSize: 15, fontWeight: '800', color: '#dc2626' },
+  modalOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: 'center', justifyContent: 'center', padding: 24,
+  },
+  deleteSheet: {
+    width: '100%', backgroundColor: '#fff', borderRadius: 24,
+    padding: 22, alignItems: 'center',
+  },
+  deleteIconWrap: {
+    width: 58, height: 58, borderRadius: 20,
+    backgroundColor: '#FEF2F2', alignItems: 'center', justifyContent: 'center',
+    marginBottom: 12,
+  },
+  deleteTitle: { fontSize: 21, fontWeight: '900', color: '#111827' },
+  deleteHelp: {
+    fontSize: 14, color: '#6B7280', textAlign: 'center',
+    lineHeight: 20, marginTop: 8, marginBottom: 16,
+  },
+  passwordInput: {
+    width: '100%', borderWidth: 1, borderColor: '#E5E7EB',
+    borderRadius: 14, padding: 14, fontSize: 15, color: '#111827',
+    marginBottom: 16,
+  },
+  deleteActions: { flexDirection: 'row', gap: 10, width: '100%' },
+  cancelDeleteBtn: {
+    flex: 1, height: 48, borderRadius: 14, backgroundColor: '#F3F4F6',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  cancelDeleteText: { fontSize: 15, fontWeight: '800', color: '#111827' },
+  confirmDeleteBtn: {
+    flex: 1, height: 48, borderRadius: 14, backgroundColor: '#dc2626',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  confirmDeleteText: { fontSize: 15, fontWeight: '900', color: '#fff' },
 });
