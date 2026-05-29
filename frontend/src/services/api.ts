@@ -772,6 +772,8 @@ class ApiService {
     isSold: boolean;
     type: string;
     milkActive: boolean;   // ← ADD THIS
+    qrLinkedData: string;
+    isBarcodeLinked: boolean;
   }>) {
     return this.request<any>(`/gausevak/cows/${id}`, {
       method: "PUT",
@@ -1296,6 +1298,17 @@ class ApiService {
   async generateCowQR(cowId: string) {
     return this.request<any>(`/gausevak/cows/${cowId}/qr`, {
       method: "POST",
+    });
+  }
+
+  async linkQRToCow(
+    cowId: string,
+    qrData: string,
+    isBarcodeLinked: boolean = false,
+  ) {
+    return this.updateCow(cowId, {
+      qrLinkedData: qrData,
+      isBarcodeLinked,
     });
   }
 

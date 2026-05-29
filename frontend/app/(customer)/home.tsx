@@ -521,9 +521,13 @@ export default function CustomerHome() {
         {/* ── Brand Header ── */}
         <View style={s.headerRow}>
           <BrandHeader />
-          <TouchableOpacity style={s.notifBtn}>
+          <TouchableOpacity
+            style={s.notifBtn}
+            onPress={() => router.push("/(customer)/order-notifications" as any)}
+            activeOpacity={0.82}
+          >
             <Ionicons name="notifications-outline" size={21} color="#333" />
-            <View style={s.notifDot} />
+            {recentOrder ? <View style={s.notifDot} /> : null}
           </TouchableOpacity>
         </View>
 
@@ -577,7 +581,11 @@ export default function CustomerHome() {
                       <Text style={s.okBadgeText}>Good</Text>
                     </View>
                   )}
-                  <TouchableOpacity style={s.topUpBtn}>
+                  <TouchableOpacity
+                    style={s.topUpBtn}
+                    onPress={() => router.push("/(customer)/wallet")}
+                    activeOpacity={0.85}
+                  >
                     <Text style={s.topUpText}>Top Up</Text>
                   </TouchableOpacity>
                 </View>

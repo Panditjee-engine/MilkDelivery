@@ -551,6 +551,7 @@ export default function VeterinaryScreen() {
   const [detailVisible, setDetailVisible] = useState(false);
   const [toast, setToast] = useState({ visible: false, msg: "", variant: "success" as ToastVariant });
   const [form, setForm] = useState({ name: "", email: "", phone: "", password: "", specialization: "", license_number: "" });
+  const [showPassword, setShowPassword] = useState(false);
 
   const showToast = (msg: string, variant: ToastVariant = "success") => setToast({ visible: true, msg, variant });
   const hideToast = () => setToast((t) => ({ ...t, visible: false }));
@@ -585,6 +586,7 @@ export default function VeterinaryScreen() {
         license_number: form.license_number.trim() || undefined,
       });
       setModalVisible(false);
+      setShowPassword(false);
       setForm({ name: "", email: "", phone: "", password: "", specialization: "", license_number: "" });
       fetchVets();
       showToast("Veterinarian created successfully!", "success");
@@ -641,7 +643,13 @@ export default function VeterinaryScreen() {
           </View>
           <Text style={styles.headerSub}>{vets.length} total · {totalActive} active</Text>
         </View>
-        <TouchableOpacity style={styles.addBtn} onPress={() => setModalVisible(true)}>
+        <TouchableOpacity
+          style={styles.addBtn}
+          onPress={() => {
+            setShowPassword(false);
+            setModalVisible(true);
+          }}
+        >
           <LinearGradient colors={[C.primary, C.dark]} style={styles.addBtnGrad}>
             <Ionicons name="add" size={22} color="#fff" />
           </LinearGradient>
@@ -679,7 +687,13 @@ export default function VeterinaryScreen() {
           </LinearGradient>
           <Text style={styles.emptyTitle}>No Veterinarians Yet</Text>
           <Text style={styles.emptySubtitle}>Add your first vet to get started</Text>
-          <TouchableOpacity style={styles.emptyBtn} onPress={() => setModalVisible(true)}>
+          <TouchableOpacity
+            style={styles.emptyBtn}
+            onPress={() => {
+              setShowPassword(false);
+              setModalVisible(true);
+            }}
+          >
             <Ionicons name="add-circle-outline" size={18} color="#fff" />
             <Text style={styles.emptyBtnText}>Add Veterinarian</Text>
           </TouchableOpacity>
@@ -728,7 +742,13 @@ export default function VeterinaryScreen() {
                     <Text style={styles.modalSub}>Linked to your farm</Text>
                   </View>
                 </View>
-                <TouchableOpacity style={styles.closeBtn} onPress={() => setModalVisible(false)}>
+                <TouchableOpacity
+                  style={styles.closeBtn}
+                  onPress={() => {
+                    setShowPassword(false);
+                    setModalVisible(false);
+                  }}
+                >
                   <Ionicons name="close" size={19} color={C.textMuted} />
                 </TouchableOpacity>
               </View>
@@ -751,8 +771,23 @@ export default function VeterinaryScreen() {
                       onChangeText={(v) => setForm((p) => ({ ...p, [f.key]: v }))}
                       autoCapitalize="none"
                       keyboardType={f.kb as any}
-                      secureTextEntry={f.secure}
+                      secureTextEntry={f.secure && !showPassword}
                     />
+                    {f.secure && (
+                      <TouchableOpacity
+                        style={styles.passwordEyeBtn}
+                        onPress={() => setShowPassword((visible) => !visible)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        accessibilityRole="button"
+                        accessibilityLabel={showPassword ? "Hide password" : "Show password"}
+                      >
+                        <Ionicons
+                          name={showPassword ? "eye-off-outline" : "eye-outline"}
+                          size={20}
+                          color={showPassword ? C.dark : C.textMuted}
+                        />
+                      </TouchableOpacity>
+                    )}
                   </View>
                 ))}
 
@@ -1033,6 +1068,15 @@ const styles = StyleSheet.create({
   },
   inputIcon: { marginRight: 8 },
   input:     { flex: 1, paddingVertical: 13, fontSize: 15, color: C.text },
+  passwordEyeBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFF3ED",
+    marginLeft: 8,
+  },
   designationChip: {
     flexDirection: "row",
     alignItems: "center",

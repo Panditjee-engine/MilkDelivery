@@ -9,12 +9,13 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
+      "bundleIdentifier": "com.cowsatva.gausatv",
       "infoPlist": {
         "NSCameraUsageDescription": "Gau Satva uses the camera to scan cow QR tags and capture proof photos for farm, delivery, and worker tasks. For example, a worker can scan a cow tag to open that cow's milk, feed, or health record.",
-
         "NSPhotoLibraryUsageDescription": "Gau Satva accesses your photo library only when you choose an image to upload, such as a product photo, inventory image, or extra task proof photo for admin verification.",
-
-        "NSPhotoLibraryAddUsageDescription": "Gau Satva saves images to your photo library only when you request it, such as saving a generated cow QR code or shared report image."
+        "NSPhotoLibraryAddUsageDescription": "Gau Satva saves images to your photo library only when you request it, such as saving a generated cow QR code or shared report image.",
+        "NSLocationWhenInUseUsageDescription": "Gau Satva may use your location while the app is open to support delivery and farm operations, such as helping delivery partners view assigned routes or confirming service areas for orders.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
