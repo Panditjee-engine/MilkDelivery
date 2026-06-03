@@ -89,6 +89,12 @@ export default function AdminLayout() {
             href: null,
           }}
         />
+        <Tabs.Screen
+          name="order-summary"
+          options={{
+            href: null,
+          }}
+        />
       </Tabs>
     </NotificationProvider>
   );

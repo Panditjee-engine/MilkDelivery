@@ -6,6 +6,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
+import { useRouter } from "expo-router";
 import SwipeToConfirm from "../../src/components/SwipeToConfirm";
 import { api } from "../../src/services/api";
 import Button from "../../src/components/Button";
@@ -180,6 +181,7 @@ function Snackbar({
 }
 
 export default function InventoryScreen() {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
@@ -385,6 +387,25 @@ export default function InventoryScreen() {
           <Text style={styles.summaryLabel}>Inactive</Text>
         </View>
       </View>
+
+      <TouchableOpacity
+        style={styles.orderSummaryCard}
+        activeOpacity={0.82}
+        onPress={() => router.push("/(admin)/order-summary" as any)}
+      >
+        <View style={styles.orderSummaryLeft}>
+          <View style={styles.orderSummaryIcon}>
+            <Ionicons name="receipt-outline" size={20} color={C.dark} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.orderSummaryTitle}>Product Order Summary</Text>
+            <Text style={styles.orderSummarySub}>
+              Check today orders by Milk, Paneer or any inventory product
+            </Text>
+          </View>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color={C.dark} />
+      </TouchableOpacity>
 
       {/* ── Product List ── */}
       <ScrollView
@@ -741,6 +762,46 @@ const styles = StyleSheet.create({
   summaryVal: { fontSize: 22, fontWeight: '800', color: C.text },
   summaryLabel: { fontSize: 11, color: C.textLight, fontWeight: '600', marginTop: 2 },
   summaryDivider: { width: 1, backgroundColor: '#FFE8C8' },
+
+  orderSummaryCard: {
+    marginHorizontal: 20,
+    marginBottom: 16,
+    backgroundColor: "#fff",
+    borderRadius: 18,
+    padding: 15,
+    borderWidth: 1.5,
+    borderColor: "#FFE1CC",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    shadowColor: C.dark,
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  orderSummaryLeft: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  orderSummaryIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: "#FFF3DC",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  orderSummaryTitle: { fontSize: 14, fontWeight: "800", color: C.text },
+  orderSummarySub: {
+    fontSize: 12,
+    color: C.textMuted,
+    fontWeight: "600",
+    marginTop: 2,
+    lineHeight: 16,
+  },
 
   listContent: { paddingHorizontal: 16 },
   productCard: {

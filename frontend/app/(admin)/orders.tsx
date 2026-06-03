@@ -1,9 +1,10 @@
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import {
   View,
   Text,
   StyleSheet,
   FlatList,
+  ScrollView,
   TouchableOpacity,
   RefreshControl,
   LayoutAnimation,
@@ -16,6 +17,7 @@ import {
 import { useIsFocused } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { api } from "../../src/services/api";
 import LoadingScreen from "../../src/components/LoadingScreen";
 
@@ -45,7 +47,15 @@ interface Order {
   customer_name?: string;
   customer_phone?: string;
   total_amount?: number;
-  items: { product_name: string; quantity?: number }[];
+  items: {
+    product_name?: string;
+    product_id?: string;
+    product?: { id?: string; _id?: string; name?: string };
+    id?: string;
+    _id?: string;
+    quantity?: number;
+    name?: string;
+  }[];
   address?: { tower?: string; flat?: string; area?: string };
   delivery_partner_name?: string;
   delivery_partner_phone?: string;
@@ -309,6 +319,63 @@ const cm = StyleSheet.create({
 
 // Main Screen
 const FILTERS = ["ALL", "PENDING", "DELIVERED"] as const;
+const DATE_FILTERS = ["ALL", "TODAY", "TOMORROW", "CUSTOM"] as const;
+
+const getLocalDateKey = (date = new Date()) => {
+  const y = date.getFullYear();
+  const m = `${date.getMonth() + 1}`.padStart(2, "0");
+  const d = `${date.getDate()}`.padStart(2, "0");
+  return `${y}-${m}-${d}`;
+};
+
+const getTomorrowDateKey = () => {
+  const date = new Date();
+  date.setDate(date.getDate() + 1);
+  return getLocalDateKey(date);
+};
+
+const getOrderDateKey = (date?: string) => {
+  if (!date) return "";
+  if (/^\d{4}-\d{2}-\d{2}/.test(date)) return date.slice(0, 10);
+  const parsed = new Date(date);
+  if (Number.isNaN(parsed.getTime())) return date;
+  return getLocalDateKey(parsed);
+};
+
+const dateFromKey = (dateKey?: string) => {
+  if (!dateKey) return new Date();
+  const [year, month, day] = dateKey.split("-").map(Number);
+  if (!year || !month || !day) return new Date();
+  return new Date(year, month - 1, day);
+};
+
+const getOrderItemName = (item: Order["items"][number]) =>
+  item.product_name || item.product?.name || item.name || "";
+const getOrderItemProductId = (item: Order["items"][number]) =>
+  item.product_id || item.product?.id || item.product?._id || item.id || item._id || "";
+const getProductId = (product: any) => product?.id || product?._id || "";
+const normalizeName = (value: string) => value.trim().toLowerCase();
+const itemMatchesProduct = (
+  item: Order["items"][number],
+  product: string,
+  productMeta?: any,
+) => {
+  if (product === "ALL") return true;
+  const productId = getProductId(productMeta);
+  const itemId = getOrderItemProductId(item);
+  if (productId && itemId && productId === itemId) return true;
+  const itemValue = normalizeName(getOrderItemName(item));
+  const productValue = normalizeName(product);
+  const metaValue = normalizeName(productMeta?.name || product);
+  return (
+    itemValue === productValue ||
+    itemValue === metaValue ||
+    itemValue.includes(productValue) ||
+    productValue.includes(itemValue) ||
+    itemValue.includes(metaValue) ||
+    metaValue.includes(itemValue)
+  );
+};
 
 const statusConfig: Record<
   string,
@@ -354,9 +421,18 @@ const statusConfig: Record<
 
 export default function AdminOrdersScreen() {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<"ALL" | "PENDING" | "DELIVERED">("ALL");
+  const [dateFilter, setDateFilter] = useState<(typeof DATE_FILTERS)[number]>("ALL");
+  const [productFilter, setProductFilter] = useState("ALL");
+  const [selectedCustomer, setSelectedCustomer] = useState("ALL");
+  const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false);
+  const [customStartDate, setCustomStartDate] = useState("");
+  const [customEndDate, setCustomEndDate] = useState("");
+  const [datePickerTarget, setDatePickerTarget] = useState<"start" | "end" | null>(null);
+  const [filterSheetVisible, setFilterSheetVisible] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const isFocused = useIsFocused();
 
@@ -366,14 +442,18 @@ export default function AdminOrdersScreen() {
 
   const fetchOrders = async () => {
     try {
-      const status =
-        filter === "ALL"
-          ? undefined
-          : filter === "DELIVERED"
-            ? "DELIVERED"
-            : "ASSIGNED";
-      const data = await api.getAllOrders(status);
-      setOrders(data);
+      const date =
+        dateFilter === "TODAY"
+          ? getLocalDateKey()
+          : dateFilter === "TOMORROW"
+            ? getTomorrowDateKey()
+            : undefined;
+      const [ordersData, productsData] = await Promise.all([
+        api.getAllOrders(undefined, date),
+        api.getProducts(),
+      ]);
+      setOrders(ordersData);
+      setProducts(productsData);
     } catch (e) {
       console.error("Error loading orders", e);
     } finally {
@@ -387,12 +467,12 @@ export default function AdminOrdersScreen() {
     fetchOrders();
     const interval = setInterval(() => fetchOrders(), 2000);
     return () => clearInterval(interval);
-  }, [filter, isFocused]);
+  }, [dateFilter, customStartDate, customEndDate, isFocused]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     fetchOrders();
-  }, [filter]);
+  }, [dateFilter, customStartDate, customEndDate]);
 
   const toggleExpand = (id: string) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -422,8 +502,6 @@ export default function AdminOrdersScreen() {
     }
   };
 
-  if (loading) return <LoadingScreen />;
-
   const isCancellable = (order: Order) => {
     const s = order.status?.toLowerCase();
     return s !== "delivered" && s !== "cancelled";
@@ -439,10 +517,93 @@ export default function AdminOrdersScreen() {
     if (!items?.length) return "No items";
     return items
       .map((i) =>
-        i.quantity ? `${i.product_name} ×${i.quantity}` : i.product_name,
+        i.quantity ? `${getOrderItemName(i)} ×${i.quantity}` : getOrderItemName(i),
       )
       .join("  ·  ");
   };
+
+  const productTabs = useMemo(() => {
+    const fromOrders = orders.flatMap((order) =>
+      (order.items || []).map((item) => getOrderItemName(item)).filter(Boolean),
+    );
+    return ["ALL", ...Array.from(new Set([...products.map((p) => p.name), ...fromOrders]))];
+  }, [orders, products]);
+
+  const customerOptions = useMemo(() => {
+    const names = orders
+      .map((order) => order.customer_name || order.customer_phone || "Unknown Customer")
+      .filter(Boolean);
+    return ["ALL", ...Array.from(new Set(names))];
+  }, [orders]);
+
+  const filteredOrders = useMemo(() => {
+    const selectedProductMeta = products.find((product) => {
+      const productValue = normalizeName(product.name || "");
+      const selectedValue = normalizeName(productFilter);
+      return (
+        productValue === selectedValue ||
+        productValue.includes(selectedValue) ||
+        selectedValue.includes(productValue)
+      );
+    });
+    return orders.filter((order) => {
+      const status = order.status?.toLowerCase();
+      const statusMatch =
+        filter === "ALL" ||
+        (filter === "DELIVERED"
+          ? status === "delivered"
+          : status !== "delivered" && status !== "cancelled");
+      const customerMatch =
+        selectedCustomer === "ALL" ||
+        order.customer_name === selectedCustomer ||
+        order.customer_phone === selectedCustomer;
+      const productMatch =
+        productFilter === "ALL" ||
+        order.items?.some((item) =>
+          itemMatchesProduct(item, productFilter, selectedProductMeta),
+        );
+      const dateMatch =
+        dateFilter === "ALL" ||
+        (dateFilter === "CUSTOM"
+          ? (!customStartDate || getOrderDateKey(order.delivery_date) >= customStartDate) &&
+            (!customEndDate || getOrderDateKey(order.delivery_date) <= customEndDate)
+          : getOrderDateKey(order.delivery_date) ===
+            (dateFilter === "TODAY" ? getLocalDateKey() : getTomorrowDateKey()));
+      return statusMatch && customerMatch && productMatch && dateMatch;
+    });
+  }, [customEndDate, customStartDate, dateFilter, filter, orders, productFilter, products, selectedCustomer]);
+
+  const activeFilterCount = [
+    filter !== "ALL",
+    dateFilter !== "ALL",
+    selectedCustomer !== "ALL",
+  ].filter(Boolean).length;
+
+  const resetFilters = () => {
+    setFilter("ALL");
+    setDateFilter("ALL");
+    setProductFilter("ALL");
+    setSelectedCustomer("ALL");
+    setCustomerDropdownOpen(false);
+    setCustomStartDate("");
+    setCustomEndDate("");
+    setDatePickerTarget(null);
+  };
+
+  const handleCustomDateChange = (_event: any, selectedDate?: Date) => {
+    if (Platform.OS === "android") setDatePickerTarget(null);
+    if (!selectedDate || !datePickerTarget) return;
+    const dateKey = getLocalDateKey(selectedDate);
+    if (datePickerTarget === "start") {
+      setCustomStartDate(dateKey);
+      if (customEndDate && dateKey > customEndDate) setCustomEndDate(dateKey);
+    } else {
+      setCustomEndDate(dateKey);
+      if (customStartDate && dateKey < customStartDate) setCustomStartDate(dateKey);
+    }
+  };
+
+  if (loading) return <LoadingScreen />;
 
   const renderOrder = ({ item }: { item: Order }) => {
     const sc =
@@ -645,7 +806,7 @@ export default function AdminOrdersScreen() {
               {item.items?.map((p, i) => (
                 <View key={i} style={styles.itemRow}>
                   <View style={styles.itemDot} />
-                  <Text style={styles.itemName}>{p.product_name}</Text>
+                  <Text style={styles.itemName}>{getOrderItemName(p)}</Text>
                   {p.quantity && (
                     <Text style={styles.itemQty}>×{p.quantity}</Text>
                   )}
@@ -740,33 +901,219 @@ export default function AdminOrdersScreen() {
       />
 
       <View style={styles.header}>
-        <Text style={styles.title}>Orders</Text>
-        <View style={styles.countBadge}>
-          <Text style={styles.countText}>{orders.length}</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.title}>Orders</Text>
+          <Text style={styles.activeFilterText}>
+            {filteredOrders.length} shown · {filter} · {dateFilter}
+          </Text>
         </View>
+          <TouchableOpacity
+          style={styles.headerFilterBtn}
+          onPress={() => setFilterSheetVisible(true)}
+          activeOpacity={0.82}
+        >
+          <Ionicons name="options-outline" size={19} color="#BB6B3F" />
+          {activeFilterCount ? (
+            <View style={styles.filterCountDot}>
+              <Text style={styles.filterCountText}>{activeFilterCount}</Text>
+            </View>
+          ) : null}
+        </TouchableOpacity>
       </View>
 
-      <View style={styles.filterRow}>
-        {FILTERS.map((f) => (
+      <Modal
+        visible={filterSheetVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setFilterSheetVisible(false)}
+      >
+        <View style={styles.sheetOverlay}>
+          <View style={styles.filterSheet}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>Filter Orders</Text>
+              <TouchableOpacity style={styles.sheetCloseBtn} onPress={() => setFilterSheetVisible(false)}>
+                <Ionicons name="close" size={18} color="#8B6854" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.sheetLabel}>Customer</Text>
+            <TouchableOpacity
+              style={styles.customerDropdown}
+              onPress={() => setCustomerDropdownOpen((open) => !open)}
+              activeOpacity={0.82}
+            >
+              <Ionicons name="person-outline" size={16} color="#8B6854" />
+              <Text style={styles.customerDropdownText} numberOfLines={1}>
+                {selectedCustomer === "ALL" ? "All Customers" : selectedCustomer}
+              </Text>
+              <Ionicons
+                name={customerDropdownOpen ? "chevron-up" : "chevron-down"}
+                size={17}
+                color="#8B6854"
+              />
+            </TouchableOpacity>
+            {customerDropdownOpen ? (
+              <View style={styles.customerDropdownList}>
+                <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false}>
+                  {customerOptions.map((customer) => {
+                    const active = selectedCustomer === customer;
+                    return (
+                      <TouchableOpacity
+                        key={customer}
+                        style={[
+                          styles.customerOption,
+                          active && styles.customerOptionActive,
+                        ]}
+                        onPress={() => {
+                          setSelectedCustomer(customer);
+                          setCustomerDropdownOpen(false);
+                        }}
+                      >
+                        <Text
+                          style={[
+                            styles.customerOptionText,
+                            active && styles.customerOptionTextActive,
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {customer === "ALL" ? "All Customers" : customer}
+                        </Text>
+                        {active ? (
+                          <Ionicons name="checkmark" size={16} color="#BB6B3F" />
+                        ) : null}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            ) : null}
+
+            <Text style={styles.sheetLabel}>Status</Text>
+            <View style={styles.filterRowSheet}>
+              {FILTERS.map((f) => (
+                <TouchableOpacity
+                  key={f}
+                  style={[styles.filterChip, filter === f && styles.filterChipActive]}
+                  onPress={() => setFilter(f)}
+                >
+                  <Text style={[styles.filterText, filter === f && styles.filterTextActive]}>
+                    {f}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={styles.sheetLabel}>Date</Text>
+            <View style={styles.filterRowSheet}>
+              {DATE_FILTERS.map((f) => (
+                <TouchableOpacity
+                  key={f}
+                  style={[styles.filterChip, dateFilter === f && styles.filterChipActive]}
+                  onPress={() => setDateFilter(f)}
+                >
+                  <Text style={[styles.filterText, dateFilter === f && styles.filterTextActive]}>
+                    {f}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {dateFilter === "CUSTOM" ? (
+              <>
+                <View style={styles.dateRangeRow}>
+                  <TouchableOpacity
+                    style={styles.dateRangeBtn}
+                    onPress={() => setDatePickerTarget("start")}
+                    activeOpacity={0.82}
+                  >
+                    <Text style={styles.dateRangeLabel}>From</Text>
+                    <Text style={styles.dateRangeValue}>
+                      {customStartDate || "Select date"}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.dateRangeBtn}
+                    onPress={() => setDatePickerTarget("end")}
+                    activeOpacity={0.82}
+                  >
+                    <Text style={styles.dateRangeLabel}>To</Text>
+                    <Text style={styles.dateRangeValue}>
+                      {customEndDate || "Select date"}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                {datePickerTarget ? (
+                  <View style={styles.datePickerWrap}>
+                    <DateTimePicker
+                      value={
+                        dateFromKey(
+                          datePickerTarget === "start"
+                            ? customStartDate || getLocalDateKey()
+                            : customEndDate || customStartDate || getLocalDateKey(),
+                        )
+                      }
+                      mode="date"
+                      display={Platform.OS === "ios" ? "inline" : "default"}
+                      onChange={handleCustomDateChange}
+                      maximumDate={new Date()}
+                    />
+                    {Platform.OS === "ios" ? (
+                      <TouchableOpacity
+                        style={styles.datePickerDoneBtn}
+                        onPress={() => setDatePickerTarget(null)}
+                      >
+                        <Text style={styles.datePickerDoneText}>Done</Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
+                ) : null}
+              </>
+            ) : null}
+
+            <View style={styles.sheetActions}>
+              <TouchableOpacity style={styles.resetBtn} onPress={resetFilters}>
+                <Text style={styles.resetBtnText}>Reset</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.applyBtn} onPress={() => setFilterSheetVisible(false)}>
+                <Text style={styles.applyBtnText}>Show {filteredOrders.length} Orders</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.productFilterScroll}
+        contentContainerStyle={styles.productFilterContent}
+      >
+        {productTabs.map((product) => (
           <TouchableOpacity
-            key={f}
-            style={[styles.filterChip, filter === f && styles.filterChipActive]}
-            onPress={() => setFilter(f)}
+            key={product}
+            style={[
+              styles.productFilterChip,
+              productFilter === product && styles.productFilterChipActive,
+            ]}
+            onPress={() => setProductFilter(product)}
+            activeOpacity={0.82}
           >
             <Text
               style={[
-                styles.filterText,
-                filter === f && styles.filterTextActive,
+                styles.productFilterText,
+                productFilter === product && styles.productFilterTextActive,
               ]}
             >
-              {f}
+              {product}
             </Text>
           </TouchableOpacity>
         ))}
-      </View>
+      </ScrollView>
 
       <FlatList
-        data={orders}
+        style={styles.orderList}
+        data={filteredOrders}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
@@ -781,7 +1128,7 @@ export default function AdminOrdersScreen() {
           <View style={styles.emptyState}>
             <Ionicons name="receipt-outline" size={48} color="#8B6854" />
             <Text style={styles.emptyTitle}>No orders found</Text>
-            <Text style={styles.emptyDesc}>Try changing the filter</Text>
+            <Text style={styles.emptyDesc}>Try changing customer, product or date filter</Text>
           </View>
         }
         renderItem={renderOrder}
@@ -807,6 +1154,37 @@ const styles = StyleSheet.create({
     color: "#1A1A1A",
     letterSpacing: -0.5,
   },
+  activeFilterText: {
+    fontSize: 12,
+    color: "#8B6854",
+    fontWeight: "700",
+    marginTop: 2,
+  },
+  headerFilterBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: "#fff",
+    borderWidth: 1.5,
+    borderColor: "#FFE1CC",
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+  },
+  filterCountDot: {
+    position: "absolute",
+    top: -5,
+    right: -5,
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: "#FF9675",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: "#fff",
+  },
+  filterCountText: { fontSize: 10, fontWeight: "900", color: "#fff" },
   countBadge: {
     backgroundColor: "#FF967520",
     paddingHorizontal: 10,
@@ -815,11 +1193,177 @@ const styles = StyleSheet.create({
   },
   countText: { fontSize: 13, fontWeight: "800", color: "#FF9675" },
 
+  customerDropdown: {
+    marginBottom: 10,
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: "#FFE1CC",
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  customerDropdownText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#1A1A1A",
+  },
+  customerDropdownList: {
+    maxHeight: 180,
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: "#FFE1CC",
+    marginBottom: 10,
+    overflow: "hidden",
+  },
+  customerOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#FFF0E8",
+    gap: 10,
+  },
+  customerOptionActive: { backgroundColor: "#FFF3E8" },
+  customerOptionText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#8B6854",
+  },
+  customerOptionTextActive: { color: "#BB6B3F", fontWeight: "900" },
+
+  sheetOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(61,31,10,0.35)",
+    justifyContent: "flex-end",
+  },
+  filterSheet: {
+    backgroundColor: "#FFF8F4",
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
+    paddingHorizontal: 18,
+    paddingTop: 10,
+    paddingBottom: 24,
+  },
+  sheetHandle: {
+    width: 42,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#E8CDBD",
+    alignSelf: "center",
+    marginBottom: 14,
+  },
+  sheetHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 14,
+  },
+  sheetTitle: {
+    fontSize: 18,
+    fontWeight: "900",
+    color: "#1A1A1A",
+  },
+  sheetCloseBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#FFE1CC",
+  },
+  sheetLabel: {
+    fontSize: 11,
+    color: "#8B6854",
+    fontWeight: "900",
+    letterSpacing: 0.7,
+    marginBottom: 8,
+    marginTop: 6,
+    textTransform: "uppercase",
+  },
+  filterRowSheet: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 8,
+  },
+  customDateInput: {
+    backgroundColor: "#fff",
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: "#FFE1CC",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#1A1A1A",
+    marginBottom: 8,
+  },
+  dateRangeRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 10,
+  },
+  dateRangeBtn: {
+    flex: 1,
+    backgroundColor: "#fff",
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: "#FFE1CC",
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+  },
+  dateRangeLabel: {
+    fontSize: 10,
+    fontWeight: "900",
+    color: "#C9A882",
+    textTransform: "uppercase",
+    marginBottom: 3,
+  },
+  dateRangeValue: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#1A1A1A",
+  },
+  datePickerWrap: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: "#FFE1CC",
+    marginBottom: 10,
+    overflow: "hidden",
+  },
+  datePickerDoneBtn: {
+    alignSelf: "flex-end",
+    backgroundColor: "#FF9675",
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    margin: 10,
+  },
+  datePickerDoneText: { fontSize: 13, fontWeight: "900", color: "#fff" },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#1A1A1A",
+    padding: 0,
+  },
+
   filterRow: {
     flexDirection: "row",
     paddingHorizontal: 20,
     gap: 8,
-    marginBottom: 14,
+    marginBottom: 10,
   },
   filterChip: {
     paddingHorizontal: 16,
@@ -833,6 +1377,57 @@ const styles = StyleSheet.create({
   filterText: { fontSize: 13, fontWeight: "600", color: "#8B6854" },
   filterTextActive: { color: "#FF9675" },
 
+  sheetActions: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 12,
+  },
+  resetBtn: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 16,
+    backgroundColor: "#fff",
+    borderWidth: 1.5,
+    borderColor: "#FFE1CC",
+    paddingVertical: 14,
+  },
+  resetBtnText: { fontSize: 14, fontWeight: "900", color: "#8B6854" },
+  applyBtn: {
+    flex: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 16,
+    backgroundColor: "#FF9675",
+    paddingVertical: 14,
+  },
+  applyBtnText: { fontSize: 14, fontWeight: "900", color: "#fff" },
+
+  productFilterScroll: {
+    flexGrow: 0,
+    maxHeight: 52,
+  },
+  productFilterContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 12,
+    gap: 8,
+  },
+  productFilterChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: "#fff",
+    borderWidth: 1.5,
+    borderColor: "#FFE1CC",
+  },
+  productFilterChipActive: {
+    backgroundColor: "#8B6854",
+    borderColor: "#8B6854",
+  },
+  productFilterText: { fontSize: 12, fontWeight: "800", color: "#8B6854" },
+  productFilterTextActive: { color: "#fff" },
+
+  orderList: { flex: 1 },
   list: { paddingHorizontal: 16, paddingBottom: 30 },
 
   card: {
