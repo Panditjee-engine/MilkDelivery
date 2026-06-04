@@ -21,6 +21,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../../../src/services/api";
+import DateTimePicker from "@react-native-community/datetimepicker";
 
 const bullImg = require("../../../assets/images/bull-cow.png");
 const calfImg = require("../../../assets/images/calf-cow.png");
@@ -195,6 +196,19 @@ const TREATMENT_OPTIONS = [
   { label: "Homeopathic", value: "Homeopathic" },
   { label: "Ethnovetary", value: "Ethnovetary" },
   { label: "Antibiotic", value: "Antibiotic" },
+];
+
+const COMMON_ISSUES = [
+  { label: "Fever", icon: "thermometer-outline", color: "#dc2626" },
+  { label: "Mastitis", icon: "water-outline", color: "#e11d48" },
+  { label: "Bloat", icon: "resize-outline", color: "#ea580c" },
+  { label: "Diarrhea", icon: "alert-circle-outline", color: "#d97706" },
+  { label: "Lameness", icon: "footsteps-outline", color: "#9333ea" },
+  { label: "Eye Infection", icon: "eye-outline", color: "#0891b2" },
+  { label: "Skin Disease", icon: "body-outline", color: "#65a30d" },
+  { label: "Respiratory", icon: "cloud-outline", color: "#6366f1" },
+  { label: "Tick Infestation", icon: "bug-outline", color: "#b45309" },
+  { label: "FMD", icon: "paw-outline", color: "#be123c" },
 ];
 
 const CALF_VACCINE_SCHEDULE = [
@@ -475,6 +489,229 @@ function VaccinePicker({
           </TouchableOpacity>
         )}
       </View>
+    </View>
+  );
+}
+
+// COMMON ISSUE PICKER
+function IssuePicker({
+  label,
+  value,
+  onChange,
+  accentColor = "#ea580c",
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  accentColor?: string;
+}) {
+  const [focused, setFocused] = useState(false);
+  const [showAll, setShowAll] = useState(false);
+  const visibleIssues = showAll ? COMMON_ISSUES : COMMON_ISSUES.slice(0, 6);
+  return (
+    <View style={ip.wrap}>
+      <Text style={f.label}>{label}</Text>
+      <View style={ip.chipGrid}>
+        {visibleIssues.map((issue) => {
+          const active = value === issue.label;
+          return (
+            <TouchableOpacity
+              key={issue.label}
+              style={[
+                ip.chip,
+                active && {
+                  backgroundColor: issue.color + "18",
+                  borderColor: issue.color,
+                },
+              ]}
+              onPress={() => onChange(active ? "" : issue.label)}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name={issue.icon as any}
+                size={12}
+                color={active ? issue.color : "#9ca3af"}
+              />
+              <Text
+                style={[
+                  ip.chipLabel,
+                  active && { color: issue.color },
+                ]}
+              >
+                {issue.label}
+              </Text>
+              {active && <Ionicons name="checkmark" size={11} color={issue.color} />}
+            </TouchableOpacity>
+          );
+        })}
+        {!showAll && COMMON_ISSUES.length > 6 && (
+          <TouchableOpacity
+            style={ip.moreChip}
+            onPress={() => setShowAll(true)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="ellipsis-horizontal" size={12} color="#9ca3af" />
+            <Text style={ip.moreText}>+{COMMON_ISSUES.length - 6} more</Text>
+          </TouchableOpacity>
+        )}
+        {showAll && (
+          <TouchableOpacity
+            style={ip.moreChip}
+            onPress={() => setShowAll(false)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="chevron-up" size={12} color="#9ca3af" />
+            <Text style={ip.moreText}>Show less</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+      <View style={[ip.inputRow, focused && { borderColor: accentColor, backgroundColor: "#fff" }]}>
+        <Ionicons
+          name="bandage-outline"
+          size={14}
+          color={focused ? accentColor : "#9ca3af"}
+          style={{ marginRight: 8 }}
+        />
+        <TextInput
+          style={ip.input}
+          value={value}
+          onChangeText={onChange}
+          placeholder="Or type custom issue..."
+          placeholderTextColor="#d1d5db"
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+        />
+        {value.length > 0 && (
+          <TouchableOpacity onPress={() => onChange("")}>
+            <Ionicons name="close-circle" size={15} color="#9ca3af" />
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+  );
+}
+
+// DATE FIELD WITH CALENDAR PICKER
+function DateField({
+  label,
+  value,
+  onChange,
+  color = "#7c3aed",
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  color?: string;
+}) {
+  const [showPicker, setShowPicker] = useState(false);
+
+  const parseDate = (ddmmyyyy: string): Date => {
+    const parts = ddmmyyyy.split("/");
+    if (parts.length === 3) {
+      const d = new Date(+parts[2], +parts[1] - 1, +parts[0]);
+      if (!isNaN(d.getTime())) return d;
+    }
+    return new Date();
+  };
+
+  const formatToDisplay = (ddmmyyyy: string): string => {
+    const parts = ddmmyyyy.split("/");
+    if (parts.length === 3) {
+      const d = new Date(+parts[2], +parts[1] - 1, +parts[0]);
+      if (!isNaN(d.getTime())) {
+        return d.toLocaleDateString("en-IN", {
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+        });
+      }
+    }
+    return "";
+  };
+
+  const handleDateChange = (_event: any, selectedDate?: Date) => {
+    if (Platform.OS === "android") setShowPicker(false);
+    if (selectedDate) {
+      const dd = String(selectedDate.getDate()).padStart(2, "0");
+      const mm = String(selectedDate.getMonth() + 1).padStart(2, "0");
+      const yyyy = selectedDate.getFullYear();
+      onChange(`${dd}/${mm}/${yyyy}`);
+    }
+  };
+
+  const displayValue = value ? formatToDisplay(value) : "";
+
+  return (
+    <View style={df.wrap}>
+      <Text style={f.label}>{label}</Text>
+      <TouchableOpacity
+        style={[
+          df.row,
+          value ? { borderColor: color + "55", backgroundColor: color + "08" } : {},
+        ]}
+        onPress={() => setShowPicker(true)}
+        activeOpacity={0.8}
+      >
+        <View style={[df.iconWrap, { backgroundColor: color + "18" }]}>
+          <Ionicons name="calendar" size={14} color={color} />
+        </View>
+        <Text
+          style={[
+            df.valueText,
+            !displayValue && df.placeholder,
+            displayValue ? { color: "#0f172a" } : {},
+          ]}
+        >
+          {displayValue || "Select date"}
+        </Text>
+        {value ? (
+          <TouchableOpacity
+            onPress={() => onChange("")}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons name="close-circle" size={16} color="#9ca3af" />
+          </TouchableOpacity>
+        ) : (
+          <Ionicons name="chevron-down" size={14} color="#9ca3af" />
+        )}
+      </TouchableOpacity>
+      {showPicker && (
+        Platform.OS === "ios" ? (
+          <Modal transparent animationType="fade" onRequestClose={() => setShowPicker(false)}>
+            <TouchableOpacity
+              style={df.overlay}
+              activeOpacity={1}
+              onPress={() => setShowPicker(false)}
+            >
+              <View style={df.pickerSheet}>
+                <View style={df.pickerHeader}>
+                  <Text style={df.pickerTitle}>{label}</Text>
+                  <TouchableOpacity
+                    onPress={() => setShowPicker(false)}
+                    style={df.pickerDoneBtn}
+                  >
+                    <Text style={[df.pickerDoneText, { color }]}>Done</Text>
+                  </TouchableOpacity>
+                </View>
+                <DateTimePicker
+                  value={parseDate(value)}
+                  mode="date"
+                  display="spinner"
+                  onChange={handleDateChange}
+                  style={{ height: 200 }}
+                />
+              </View>
+            </TouchableOpacity>
+          </Modal>
+        ) : (
+          <DateTimePicker
+            value={parseDate(value)}
+            mode="date"
+            display="default"
+            onChange={handleDateChange}
+          />
+        )
+      )}
     </View>
   );
 }
@@ -875,71 +1112,47 @@ function MedicalFormBody({
       />
       <View style={f.twoCol}>
         <View style={{ flex: 1 }}>
-          <Field
+          <DateField
             label="Last Vaccination"
             value={form.lastVaccinationDate}
             onChange={setF("lastVaccinationDate")}
-            placeholder="DD/MM/YYYY"
-            icon="calendar-outline"
             color="#7c3aed"
           />
         </View>
         <View style={{ flex: 1 }}>
-          <Field
+          <DateField
             label="Next Vaccination"
             value={form.nextVaccinationDate}
             onChange={setF("nextVaccinationDate")}
-            placeholder="DD/MM/YYYY"
-            icon="calendar-outline"
             color="#7c3aed"
           />
         </View>
       </View>
       <Sec title="Health Issues" icon="alert-circle-outline" color="#ea580c" />
-      <View style={f.twoCol}>
-        <View style={{ flex: 1 }}>
-          <Field
-            label="Last Issue"
-            value={form.lastIssueName}
-            onChange={setF("lastIssueName")}
-            placeholder="e.g. Fever"
-            icon="bandage-outline"
-            color="#ea580c"
-          />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Field
-            label="Last Issue Date"
-            value={form.lastIssueDate}
-            onChange={setF("lastIssueDate")}
-            placeholder="DD/MM/YYYY"
-            icon="calendar-outline"
-            color="#ea580c"
-          />
-        </View>
-      </View>
-      <View style={f.twoCol}>
-        <View style={{ flex: 1 }}>
-          <Field
-            label="Current Issue"
-            value={form.currentIssueName}
-            onChange={setF("currentIssueName")}
-            placeholder="e.g. Mastitis"
-            icon="bandage-outline"
-            color="#dc2626"
-          />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Field
-            label="Issue Date"
-            value={form.currentIssueDate}
-            onChange={setF("currentIssueDate")}
-            placeholder="DD/MM/YYYY"
-            icon="calendar-outline"
-            color="#dc2626"
-          />
-        </View>
-      </View>
+      <IssuePicker
+        label="LAST ISSUE"
+        value={form.lastIssueName}
+        onChange={setF("lastIssueName")}
+        accentColor="#ea580c"
+      />
+      <DateField
+        label="Last Issue Date"
+        value={form.lastIssueDate}
+        onChange={setF("lastIssueDate")}
+        color="#ea580c"
+      />
+      <IssuePicker
+        label="CURRENT ISSUE"
+        value={form.currentIssueName}
+        onChange={setF("currentIssueName")}
+        accentColor="#dc2626"
+      />
+      <DateField
+        label="Issue Date"
+        value={form.currentIssueDate}
+        onChange={setF("currentIssueDate")}
+        color="#dc2626"
+      />
       <Sec title="Treatment" icon="flask-outline" color="#0891b2" />
       <View style={{ marginBottom: 12 }}>
         <Text style={f.label}>TREATMENT GIVEN</Text>
@@ -4598,6 +4811,119 @@ const vp = StyleSheet.create({
   },
   inputFocused: { borderColor: "#7c3aed", backgroundColor: "#fff" },
   input: { flex: 1, color: "#0f172a", fontSize: 14, fontWeight: "500" },
+});
+
+const ip = StyleSheet.create({
+  wrap: { marginBottom: 12 },
+  chipGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 7,
+    marginBottom: 8,
+  },
+  chip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 10,
+    backgroundColor: "#f8fafc",
+    borderWidth: 1.5,
+    borderColor: "#e2e8f0",
+  },
+  chipLabel: { fontSize: 11, fontWeight: "700", color: "#6b7280" },
+  moreChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 10,
+    backgroundColor: "#f1f5f9",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    borderStyle: "dashed" as any,
+  },
+  moreText: { fontSize: 11, fontWeight: "600", color: "#9ca3af" },
+  inputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f8fafc",
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: "#e2e8f0",
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+  },
+  input: { flex: 1, color: "#0f172a", fontSize: 14, fontWeight: "500" },
+});
+
+const df = StyleSheet.create({
+  wrap: { marginBottom: 10 },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f8fafc",
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: "#e2e8f0",
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    gap: 10,
+  },
+  iconWrap: {
+    width: 30,
+    height: 30,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  valueText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#0f172a",
+  },
+  placeholder: {
+    color: "#d1d5db",
+    fontWeight: "500",
+  },
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "flex-end",
+  },
+  pickerSheet: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingBottom: 30,
+  },
+  pickerHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f5f9",
+  },
+  pickerTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#0f172a",
+  },
+  pickerDoneBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: "#f8fafc",
+  },
+  pickerDoneText: {
+    fontSize: 15,
+    fontWeight: "700",
+  },
 });
 
 const cs = StyleSheet.create({

@@ -1244,7 +1244,9 @@ useEffect(() => {
   const fetchData = async () => {
     try {
       const data = await api.getSubscriptions();
-      setSubscriptions(data);
+      // Filter to show only "buy once" orders
+      const buyOnceOrders = data.filter((sub: any) => sub.pattern === "buy_once");
+      setSubscriptions(buyOnceOrders);
     } catch (error) {
       console.error("Error fetching subscriptions:", error);
     } finally {

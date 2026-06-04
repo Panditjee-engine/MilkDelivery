@@ -1,8 +1,25 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+} from "react";
 import {
-  View, Text, StyleSheet, ScrollView, RefreshControl,
-  TouchableOpacity, TextInput, Modal, Image, Animated, Easing,
-  Dimensions, KeyboardAvoidingView, Platform,
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  RefreshControl,
+  TouchableOpacity,
+  TextInput,
+  Modal,
+  Image,
+  Animated,
+  Easing,
+  Dimensions,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -14,32 +31,32 @@ import { useAuth } from "../../src/contexts/AuthContext";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
-// ── Warm Color Palette 
+// ── Warm Color Palette
 const C = {
-  primary:    '#FF9675',
-  secondary:  '#FF9675',
-  accent:     '#8B6854',
-  light:      '#8B6854',
-  dark:       '#BB6B3F',
-  deep:       '#8B6854',
-  bg:         '#FFF8EF',
-  card:       '#FFE8D6',
-  text:       '#3D1F0A',
-  textMuted:  '#A07850',
-  textLight:  '#C9A882',
-  success:    '#22C55E',
-  successBg:  '#F0FDF4',
-  white:      '#FFFFFF',
-  border:     '#FFE8C8',
-  inputBg:    '#FFF8EF',
-  chipBg:     '#FFF3DC',
-  overlay:    'rgba(61,31,10,0.45)',
+  primary: "#FF9675",
+  secondary: "#FF9675",
+  accent: "#8B6854",
+  light: "#8B6854",
+  dark: "#BB6B3F",
+  deep: "#8B6854",
+  bg: "#FFF8EF",
+  card: "#FFE8D6",
+  text: "#3D1F0A",
+  textMuted: "#A07850",
+  textLight: "#C9A882",
+  success: "#22C55E",
+  successBg: "#F0FDF4",
+  white: "#FFFFFF",
+  border: "#FFE8C8",
+  inputBg: "#FFF8EF",
+  chipBg: "#FFF3DC",
+  overlay: "rgba(61,31,10,0.45)",
 };
 
 // ── Custom Alert
 type AlertButton = {
   text: string;
-  style?: 'default' | 'cancel' | 'destructive';
+  style?: "default" | "cancel" | "destructive";
   onPress?: () => void;
 };
 
@@ -50,31 +67,48 @@ type AlertConfig = {
   buttons: AlertButton[];
 };
 
-function CustomAlert({ config, onDismiss }: { config: AlertConfig; onDismiss: () => void }) {
+function CustomAlert({
+  config,
+  onDismiss,
+}: {
+  config: AlertConfig;
+  onDismiss: () => void;
+}) {
   if (!config.visible) return null;
   return (
-    <Modal transparent animationType="fade" visible={config.visible} onRequestClose={onDismiss}>
+    <Modal
+      transparent
+      animationType="fade"
+      visible={config.visible}
+      onRequestClose={onDismiss}
+    >
       <View style={alertStyles.overlay}>
         <View style={alertStyles.box}>
           <View style={alertStyles.iconWrap}>
             <Ionicons
               name={
-                config.buttons.some(b => b.style === 'destructive')
-                  ? 'warning-outline'
-                  : 'information-circle-outline'
+                config.buttons.some((b) => b.style === "destructive")
+                  ? "warning-outline"
+                  : "information-circle-outline"
               }
               size={28}
-              color={config.buttons.some(b => b.style === 'destructive') ? C.secondary : C.dark}
+              color={
+                config.buttons.some((b) => b.style === "destructive")
+                  ? C.secondary
+                  : C.dark
+              }
             />
           </View>
 
           <Text style={alertStyles.title}>{config.title}</Text>
-          {config.message ? <Text style={alertStyles.message}>{config.message}</Text> : null}
+          {config.message ? (
+            <Text style={alertStyles.message}>{config.message}</Text>
+          ) : null}
 
           <View style={alertStyles.btnRow}>
             {config.buttons.map((btn, idx) => {
-              const isDestructive = btn.style === 'destructive';
-              const isCancel = btn.style === 'cancel';
+              const isDestructive = btn.style === "destructive";
+              const isCancel = btn.style === "cancel";
               return (
                 <TouchableOpacity
                   key={idx}
@@ -90,11 +124,13 @@ function CustomAlert({ config, onDismiss }: { config: AlertConfig; onDismiss: ()
                   }}
                   activeOpacity={0.75}
                 >
-                  <Text style={[
-                    alertStyles.btnText,
-                    isDestructive && alertStyles.btnTextDestructive,
-                    isCancel && alertStyles.btnTextCancel,
-                  ]}>
+                  <Text
+                    style={[
+                      alertStyles.btnText,
+                      isDestructive && alertStyles.btnTextDestructive,
+                      isCancel && alertStyles.btnTextCancel,
+                    ]}
+                  >
                     {btn.text}
                   </Text>
                 </TouchableOpacity>
@@ -107,27 +143,34 @@ function CustomAlert({ config, onDismiss }: { config: AlertConfig; onDismiss: ()
   );
 }
 
-// ── Alert hook 
+// ── Alert hook
 function useCustomAlert() {
   const [alertConfig, setAlertConfig] = useState<AlertConfig>({
-    visible: false, title: '', buttons: [],
+    visible: false,
+    title: "",
+    buttons: [],
   });
 
-  const showAlert = (title: string, message?: string, buttons?: AlertButton[]) => {
+  const showAlert = (
+    title: string,
+    message?: string,
+    buttons?: AlertButton[],
+  ) => {
     setAlertConfig({
       visible: true,
       title,
       message,
-      buttons: buttons ?? [{ text: 'OK', style: 'default' }],
+      buttons: buttons ?? [{ text: "OK", style: "default" }],
     });
   };
 
-  const dismissAlert = () => setAlertConfig(prev => ({ ...prev, visible: false }));
+  const dismissAlert = () =>
+    setAlertConfig((prev) => ({ ...prev, visible: false }));
 
   return { alertConfig, showAlert, dismissAlert };
 }
 
-// ── Types 
+// ── Types
 type Product = {
   id?: string;
   name: string;
@@ -170,19 +213,44 @@ type FormData = {
 };
 
 const EMPTY_FORM: FormData = {
-  name: "", category: "", unit: "", price: "", mrp: "", stock: "",
-  image: "", image2: "", image3: "",
-  product_type: "", dietary_preference: "",
-  description: "", disclaimer: "", customer_care: "",
-  seller_name: "", seller_address: "", shelf_life: "",
+  name: "",
+  category: "",
+  unit: "",
+  price: "",
+  mrp: "",
+  stock: "",
+  image: "",
+  image2: "",
+  image3: "",
+  product_type: "",
+  dietary_preference: "",
+  description: "",
+  disclaimer: "",
+  customer_care: "",
+  seller_name: "",
+  seller_address: "",
+  shelf_life: "",
 };
 
-const CATEGORIES = ["milk", "dairy", "bakery", "fruits", "vegetables", "essentials"];
+const CATEGORIES = [
+  "milk",
+  "dairy",
+  "bakery",
+  "fruits",
+  "vegetables",
+  "essentials",
+];
 const DIETARY_OPTIONS = ["Veg", "Non-Veg", "Vegan", "Gluten-Free"];
 const TABS = ["Details", "Highlights", "Information"];
 
 // ── Animated Success Tick Component ──
-function SuccessTick({ visible, onDone }: { visible: boolean; onDone: () => void }) {
+function SuccessTick({
+  visible,
+  onDone,
+}: {
+  visible: boolean;
+  onDone: () => void;
+}) {
   const scaleAnim = useRef(new Animated.Value(0)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
   const checkScale = useRef(new Animated.Value(0)).current;
@@ -233,7 +301,9 @@ function SuccessTick({ visible, onDone }: { visible: boolean; onDone: () => void
 
   return (
     <Animated.View style={[tickStyles.overlay, { opacity: opacityAnim }]}>
-      <Animated.View style={[tickStyles.circle, { transform: [{ scale: scaleAnim }] }]}>
+      <Animated.View
+        style={[tickStyles.circle, { transform: [{ scale: scaleAnim }] }]}
+      >
         <Animated.View style={{ transform: [{ scale: checkScale }] }}>
           <Ionicons name="checkmark-sharp" size={56} color={C.white} />
         </Animated.View>
@@ -248,9 +318,9 @@ function SuccessTick({ visible, onDone }: { visible: boolean; onDone: () => void
 const tickStyles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(0,0,0,0.55)",
+    justifyContent: "center",
+    alignItems: "center",
     zIndex: 999,
   },
   circle: {
@@ -258,8 +328,8 @@ const tickStyles = StyleSheet.create({
     height: 110,
     borderRadius: 55,
     backgroundColor: C.success,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     shadowColor: C.success,
     shadowOpacity: 0.5,
     shadowRadius: 20,
@@ -268,16 +338,14 @@ const tickStyles = StyleSheet.create({
   text: {
     marginTop: 20,
     fontSize: 20,
-    fontWeight: '800',
+    fontWeight: "800",
     color: C.white,
     letterSpacing: -0.3,
   },
 });
 
 
-// ══════════════════════════════════════════════════
 // ══  MAIN SCREEN  ══
-// ══════════════════════════════════════════════════
 export default function InventoryScreen() {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
@@ -314,19 +382,28 @@ export default function InventoryScreen() {
     }
   };
 
-  useEffect(() => { fetchData(); }, []);
-  const onRefresh = useCallback(() => { setRefreshing(true); fetchData(); }, []);
+  useEffect(() => {
+    fetchData();
+  }, []);
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchData();
+  }, []);
 
   // ── Image Picker Helper
   const pickImage = async (onPicked: (base64Uri: string) => void) => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      showAlert("Permission Required", "Gallery access is needed to pick a product image.");
+      showAlert(
+        "Permission Required",
+        "Gallery access is needed to pick a product image.",
+      );
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.6, base64: true,
+      quality: 0.6,
+      base64: true,
     });
     if (!result.canceled && result.assets[0].base64) {
       onPicked(`data:image/jpeg;base64,${result.assets[0].base64}`);
@@ -335,16 +412,21 @@ export default function InventoryScreen() {
 
   // ── Form Update Helpers
   const updateForm = (key: keyof FormData, val: string) =>
-    setFormData(p => ({ ...p, [key]: val }));
+    setFormData((p) => ({ ...p, [key]: val }));
 
   const updateEditForm = (key: keyof FormData, val: string) =>
-    setEditForm(p => ({ ...p, [key]: val }));
+    setEditForm((p) => ({ ...p, [key]: val }));
 
   // ── Validation
   const isFormValid = useMemo(() => {
     const price = parseFloat(formData.price);
     const stock = parseInt(formData.stock, 10);
-    if (!formData.name.trim() || !formData.category.trim() || !formData.unit.trim()) return false;
+    if (
+      !formData.name.trim() ||
+      !formData.category.trim() ||
+      !formData.unit.trim()
+    )
+      return false;
     if (!Number.isFinite(price) || price <= 0) return false;
     if (!Number.isInteger(stock) || stock < 0) return false;
     if (!formData.image || formData.image.length < 10) return false;
@@ -428,8 +510,10 @@ export default function InventoryScreen() {
     setStockUpdating(true);
     try {
       await api.updateProduct(selectedProduct.id, { stock: newStock });
-      setSelectedProduct(prev => prev ? { ...prev, stock: newStock } : prev);
-      setEditForm(prev => ({ ...prev, stock: String(newStock) }));
+      setSelectedProduct((prev) =>
+        prev ? { ...prev, stock: newStock } : prev,
+      );
+      setEditForm((prev) => ({ ...prev, stock: String(newStock) }));
       fetchData();
     } catch (e: any) {
       showAlert("Update Failed", e.message);
@@ -481,9 +565,13 @@ export default function InventoryScreen() {
   // ── Toggle availability
   const toggleAvailability = async (product: Product) => {
     try {
-      await api.updateProduct(product.id!, { is_available: !product.is_available });
+      await api.updateProduct(product.id!, {
+        is_available: !product.is_available,
+      });
       if (selectedProduct?.id === product.id) {
-        setSelectedProduct(prev => prev ? { ...prev, is_available: !prev.is_available } : prev);
+        setSelectedProduct((prev) =>
+          prev ? { ...prev, is_available: !prev.is_available } : prev,
+        );
       }
       fetchData();
     } catch (e: any) {
@@ -509,7 +597,7 @@ export default function InventoryScreen() {
             fetchData();
           },
         },
-      ]
+      ],
     );
   };
 
@@ -529,13 +617,10 @@ export default function InventoryScreen() {
 
   if (loading) return <LoadingScreen />;
 
-  const available = products.filter(p => p.is_available).length;
-  const lowStock = products.filter(p => p.stock > 0 && p.stock <= 5).length;
+  const available = products.filter((p) => p.is_available).length;
+  const lowStock = products.filter((p) => p.stock > 0 && p.stock <= 5).length;
 
-  // ══════════════════════════════════════════════════
   // ══  RENDER FORM TABS (shared for Add & Edit)  ══
-  // ══════════════════════════════════════════════════
-
   const renderFormTab = (
     tab: number,
     data: FormData,
@@ -549,10 +634,13 @@ export default function InventoryScreen() {
           <Text style={styles.sectionHeader}>Product Images</Text>
           <TouchableOpacity
             style={styles.thumbnailPicker}
-            onPress={() => pickImage(uri => update("image", uri))}
+            onPress={() => pickImage((uri) => update("image", uri))}
           >
             {data.image ? (
-              <Image source={{ uri: data.image }} style={styles.thumbnailImage} />
+              <Image
+                source={{ uri: data.image }}
+                style={styles.thumbnailImage}
+              />
             ) : (
               <View style={styles.thumbnailEmpty}>
                 <View style={styles.thumbnailIconCircle}>
@@ -574,13 +662,20 @@ export default function InventoryScreen() {
             {/* Image 2 */}
             <TouchableOpacity
               style={styles.additionalImagePicker}
-              onPress={() => pickImage(uri => update("image2", uri))}
+              onPress={() => pickImage((uri) => update("image2", uri))}
             >
               {data.image2 ? (
-                <Image source={{ uri: data.image2 }} style={styles.additionalImage} />
+                <Image
+                  source={{ uri: data.image2 }}
+                  style={styles.additionalImage}
+                />
               ) : (
                 <View style={styles.additionalImageEmpty}>
-                  <Ionicons name="add-circle-outline" size={22} color={C.textLight} />
+                  <Ionicons
+                    name="add-circle-outline"
+                    size={22}
+                    color={C.textLight}
+                  />
                   <Text style={styles.additionalImageText}>Image 2</Text>
                 </View>
               )}
@@ -589,13 +684,20 @@ export default function InventoryScreen() {
             {/* Image 3 */}
             <TouchableOpacity
               style={styles.additionalImagePicker}
-              onPress={() => pickImage(uri => update("image3", uri))}
+              onPress={() => pickImage((uri) => update("image3", uri))}
             >
               {data.image3 ? (
-                <Image source={{ uri: data.image3 }} style={styles.additionalImage} />
+                <Image
+                  source={{ uri: data.image3 }}
+                  style={styles.additionalImage}
+                />
               ) : (
                 <View style={styles.additionalImageEmpty}>
-                  <Ionicons name="add-circle-outline" size={22} color={C.textLight} />
+                  <Ionicons
+                    name="add-circle-outline"
+                    size={22}
+                    color={C.textLight}
+                  />
                   <Text style={styles.additionalImageText}>Image 3</Text>
                 </View>
               )}
@@ -609,19 +711,31 @@ export default function InventoryScreen() {
             placeholder="e.g. Full Cream Milk"
             placeholderTextColor={C.textLight}
             value={data.name}
-            onChangeText={v => update("name", v)}
+            onChangeText={(v) => update("name", v)}
           />
 
           {/* Category */}
           <Text style={styles.fieldLabel}>Category</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryRow}>
-            {CATEGORIES.map(cat => (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.categoryRow}
+          >
+            {CATEGORIES.map((cat) => (
               <TouchableOpacity
                 key={cat}
-                style={[styles.catChip, data.category === cat && styles.catChipActive]}
+                style={[
+                  styles.catChip,
+                  data.category === cat && styles.catChipActive,
+                ]}
                 onPress={() => update("category", cat)}
               >
-                <Text style={[styles.catChipText, data.category === cat && styles.catChipTextActive]}>
+                <Text
+                  style={[
+                    styles.catChipText,
+                    data.category === cat && styles.catChipTextActive,
+                  ]}
+                >
                   {cat}
                 </Text>
               </TouchableOpacity>
@@ -638,7 +752,7 @@ export default function InventoryScreen() {
                 placeholderTextColor={C.textLight}
                 keyboardType="numeric"
                 value={data.mrp}
-                onChangeText={v => update("mrp", v)}
+                onChangeText={(v) => update("mrp", v)}
               />
             </View>
             <View style={{ width: 12 }} />
@@ -650,7 +764,7 @@ export default function InventoryScreen() {
                 placeholderTextColor={C.textLight}
                 keyboardType="numeric"
                 value={data.price}
-                onChangeText={v => update("price", v)}
+                onChangeText={(v) => update("price", v)}
               />
             </View>
           </View>
@@ -664,7 +778,7 @@ export default function InventoryScreen() {
                 placeholder="e.g. 500ml"
                 placeholderTextColor={C.textLight}
                 value={data.unit}
-                onChangeText={v => update("unit", v)}
+                onChangeText={(v) => update("unit", v)}
               />
             </View>
             <View style={{ width: 12 }} />
@@ -676,7 +790,7 @@ export default function InventoryScreen() {
                 placeholderTextColor={C.textLight}
                 keyboardType="numeric"
                 value={data.stock}
-                onChangeText={v => update("stock", v)}
+                onChangeText={(v) => update("stock", v)}
               />
             </View>
           </View>
@@ -696,20 +810,31 @@ export default function InventoryScreen() {
             placeholder="e.g. Organic, Fresh, Pasteurized"
             placeholderTextColor={C.textLight}
             value={data.product_type}
-            onChangeText={v => update("product_type", v)}
+            onChangeText={(v) => update("product_type", v)}
           />
 
           <Text style={styles.fieldLabel}>Dietary Preference</Text>
           <View style={styles.dietaryGrid}>
-            {DIETARY_OPTIONS.map(opt => {
+            {DIETARY_OPTIONS.map((opt) => {
               const isActive = data.dietary_preference === opt;
-              const icon = opt === "Veg" ? "leaf" : opt === "Non-Veg" ? "restaurant" :
-                           opt === "Vegan" ? "nutrition" : "fitness";
+              const icon =
+                opt === "Veg"
+                  ? "leaf"
+                  : opt === "Non-Veg"
+                    ? "restaurant"
+                    : opt === "Vegan"
+                      ? "nutrition"
+                      : "fitness";
               return (
                 <TouchableOpacity
                   key={opt}
-                  style={[styles.dietaryChip, isActive && styles.dietaryChipActive]}
-                  onPress={() => update("dietary_preference", isActive ? "" : opt)}
+                  style={[
+                    styles.dietaryChip,
+                    isActive && styles.dietaryChipActive,
+                  ]}
+                  onPress={() =>
+                    update("dietary_preference", isActive ? "" : opt)
+                  }
                 >
                   <Ionicons
                     name={icon as any}
@@ -717,7 +842,12 @@ export default function InventoryScreen() {
                     color={isActive ? C.dark : C.textMuted}
                     style={{ marginRight: 6 }}
                   />
-                  <Text style={[styles.dietaryChipText, isActive && styles.dietaryChipTextActive]}>
+                  <Text
+                    style={[
+                      styles.dietaryChipText,
+                      isActive && styles.dietaryChipTextActive,
+                    ]}
+                  >
                     {opt}
                   </Text>
                 </TouchableOpacity>
@@ -739,7 +869,7 @@ export default function InventoryScreen() {
           placeholder="Describe your product..."
           placeholderTextColor={C.textLight}
           value={data.description}
-          onChangeText={v => update("description", v)}
+          onChangeText={(v) => update("description", v)}
           multiline
           numberOfLines={3}
           textAlignVertical="top"
@@ -751,7 +881,7 @@ export default function InventoryScreen() {
           placeholder="Any legal disclaimers..."
           placeholderTextColor={C.textLight}
           value={data.disclaimer}
-          onChangeText={v => update("disclaimer", v)}
+          onChangeText={(v) => update("disclaimer", v)}
           multiline
           numberOfLines={2}
           textAlignVertical="top"
@@ -763,7 +893,7 @@ export default function InventoryScreen() {
           placeholder="e.g. +91 9876543210"
           placeholderTextColor={C.textLight}
           value={data.customer_care}
-          onChangeText={v => update("customer_care", v)}
+          onChangeText={(v) => update("customer_care", v)}
         />
 
         <View style={styles.row}>
@@ -774,7 +904,7 @@ export default function InventoryScreen() {
               placeholder="Seller / Brand"
               placeholderTextColor={C.textLight}
               value={data.seller_name}
-              onChangeText={v => update("seller_name", v)}
+              onChangeText={(v) => update("seller_name", v)}
             />
           </View>
           <View style={{ width: 12 }} />
@@ -785,7 +915,7 @@ export default function InventoryScreen() {
               placeholder="e.g. 7 days"
               placeholderTextColor={C.textLight}
               value={data.shelf_life}
-              onChangeText={v => update("shelf_life", v)}
+              onChangeText={(v) => update("shelf_life", v)}
             />
           </View>
         </View>
@@ -796,7 +926,7 @@ export default function InventoryScreen() {
           placeholder="Full seller address..."
           placeholderTextColor={C.textLight}
           value={data.seller_address}
-          onChangeText={v => update("seller_address", v)}
+          onChangeText={(v) => update("seller_address", v)}
           multiline
           numberOfLines={2}
           textAlignVertical="top"
@@ -806,7 +936,11 @@ export default function InventoryScreen() {
   };
 
   // ── Tab Bar Component
-  const renderTabBar = (tabs: string[], active: number, onSelect: (i: number) => void) => (
+  const renderTabBar = (
+    tabs: string[],
+    active: number,
+    onSelect: (i: number) => void,
+  ) => (
     <View style={styles.tabBar}>
       {tabs.map((t, i) => (
         <TouchableOpacity
@@ -814,23 +948,29 @@ export default function InventoryScreen() {
           style={[styles.tab, active === i && styles.tabActive]}
           onPress={() => onSelect(i)}
         >
-          <Text style={[styles.tabText, active === i && styles.tabTextActive]}>{t}</Text>
+          <Text style={[styles.tabText, active === i && styles.tabTextActive]}>
+            {t}
+          </Text>
         </TouchableOpacity>
       ))}
     </View>
   );
 
-  // ══════════════════════════════════════════════════
-  // ══  RENDER PRODUCT DETAIL (View Mode)  ══
-  // ══════════════════════════════════════════════════
+
+  // ══  RENDER PRODUCT DETAIL (View Mode)  
   const renderProductDetail = () => {
     if (!selectedProduct) return null;
     const p = selectedProduct;
-    const allImages = [p.image, ...(p.images || [])].filter(Boolean) as string[];
+    const allImages = [p.image, ...(p.images || [])].filter(
+      Boolean,
+    ) as string[];
     const hasMrp = p.mrp && p.mrp > p.price;
 
     return (
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 30 }}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 30 }}
+      >
         {/* Image Gallery */}
         {allImages.length > 0 ? (
           <ScrollView
@@ -840,7 +980,11 @@ export default function InventoryScreen() {
             style={styles.detailImageGallery}
           >
             {allImages.map((img, idx) => (
-              <Image key={idx} source={{ uri: img }} style={styles.detailGalleryImage} />
+              <Image
+                key={idx}
+                source={{ uri: img }}
+                style={styles.detailGalleryImage}
+              />
             ))}
           </ScrollView>
         ) : (
@@ -861,9 +1005,7 @@ export default function InventoryScreen() {
           <Text style={styles.detailName}>{p.name}</Text>
           <View style={styles.detailPriceRow}>
             <Text style={styles.detailPrice}>₹{p.price}</Text>
-            {hasMrp && (
-              <Text style={styles.detailMrp}>₹{p.mrp}</Text>
-            )}
+            {hasMrp && <Text style={styles.detailMrp}>₹{p.mrp}</Text>}
             {hasMrp && (
               <View style={styles.discountBadge}>
                 <Text style={styles.discountText}>
@@ -881,18 +1023,24 @@ export default function InventoryScreen() {
               <Ionicons name="scale-outline" size={12} color={C.dark} />
               <Text style={styles.metaChipText}>{p.unit}</Text>
             </View>
-            <View style={[
-              styles.metaChip,
-              { backgroundColor: p.is_available ? C.successBg : '#FFF0F0' }
-            ]}>
-              <View style={[
-                styles.statusDot,
-                { backgroundColor: p.is_available ? C.success : '#FF6B6B' }
-              ]} />
-              <Text style={[
-                styles.metaChipText,
-                { color: p.is_available ? '#16A34A' : '#DC2626' }
-              ]}>
+            <View
+              style={[
+                styles.metaChip,
+                { backgroundColor: p.is_available ? C.successBg : "#FFF0F0" },
+              ]}
+            >
+              <View
+                style={[
+                  styles.statusDot,
+                  { backgroundColor: p.is_available ? C.success : "#FF6B6B" },
+                ]}
+              />
+              <Text
+                style={[
+                  styles.metaChipText,
+                  { color: p.is_available ? "#16A34A" : "#DC2626" },
+                ]}
+              >
                 {p.is_available ? "Available" : "Unavailable"}
               </Text>
             </View>
@@ -911,7 +1059,11 @@ export default function InventoryScreen() {
               onPress={() => adjustStock(-1)}
               disabled={stockUpdating || p.stock <= 0}
             >
-              <Ionicons name="remove" size={20} color={p.stock <= 0 ? C.textLight : C.dark} />
+              <Ionicons
+                name="remove"
+                size={20}
+                color={p.stock <= 0 ? C.textLight : C.dark}
+              />
             </TouchableOpacity>
             <View style={styles.stockDisplay}>
               <Text style={styles.stockDisplayVal}>{p.stock}</Text>
@@ -930,7 +1082,8 @@ export default function InventoryScreen() {
         {(p.product_type || p.dietary_preference) && (
           <View style={styles.detailSection}>
             <Text style={styles.detailSectionTitle}>
-              <Ionicons name="star-outline" size={14} color={C.dark} />  Highlights
+              <Ionicons name="star-outline" size={14} color={C.dark} />{" "}
+              Highlights
             </Text>
             {p.product_type ? (
               <View style={styles.infoRow}>
@@ -941,9 +1094,11 @@ export default function InventoryScreen() {
             {p.dietary_preference ? (
               <View style={styles.infoRow}>
                 <Text style={styles.infoLabel}>Dietary</Text>
-                <View style={[styles.metaChip, { backgroundColor: '#F0FDF4' }]}>
+                <View style={[styles.metaChip, { backgroundColor: "#F0FDF4" }]}>
                   <Ionicons name="leaf" size={12} color="#16A34A" />
-                  <Text style={[styles.metaChipText, { color: '#16A34A' }]}>{p.dietary_preference}</Text>
+                  <Text style={[styles.metaChipText, { color: "#16A34A" }]}>
+                    {p.dietary_preference}
+                  </Text>
                 </View>
               </View>
             ) : null}
@@ -951,10 +1106,19 @@ export default function InventoryScreen() {
         )}
 
         {/* Information */}
-        {(p.description || p.disclaimer || p.customer_care || p.seller_name || p.shelf_life) && (
+        {(p.description ||
+          p.disclaimer ||
+          p.customer_care ||
+          p.seller_name ||
+          p.shelf_life) && (
           <View style={styles.detailSection}>
             <Text style={styles.detailSectionTitle}>
-              <Ionicons name="information-circle-outline" size={14} color={C.dark} />  Information
+              <Ionicons
+                name="information-circle-outline"
+                size={14}
+                color={C.dark}
+              />{" "}
+              Information
             </Text>
             {p.description ? (
               <View style={styles.infoBlock}>
@@ -977,7 +1141,9 @@ export default function InventoryScreen() {
             {p.seller_address ? (
               <View style={styles.infoBlock}>
                 <Text style={styles.infoLabel}>Seller Address</Text>
-                <Text style={styles.infoValueMultiline}>{p.seller_address}</Text>
+                <Text style={styles.infoValueMultiline}>
+                  {p.seller_address}
+                </Text>
               </View>
             ) : null}
             {p.customer_care ? (
@@ -1008,29 +1174,49 @@ export default function InventoryScreen() {
 
             <View style={styles.detailSmallBtnsRow}>
               <TouchableOpacity
-                style={[styles.detailSmallBtn, {
-                  backgroundColor: selectedProduct?.is_available ? '#FFF0F0' : C.successBg
-                }]}
+                style={[
+                  styles.detailSmallBtn,
+                  {
+                    backgroundColor: selectedProduct?.is_available
+                      ? "#FFF0F0"
+                      : C.successBg,
+                  },
+                ]}
                 onPress={() => toggleAvailability(selectedProduct!)}
               >
                 <Ionicons
-                  name={selectedProduct?.is_available ? "eye-off-outline" : "eye-outline"}
+                  name={
+                    selectedProduct?.is_available
+                      ? "eye-off-outline"
+                      : "eye-outline"
+                  }
                   size={16}
-                  color={selectedProduct?.is_available ? '#DC2626' : C.success}
+                  color={selectedProduct?.is_available ? "#DC2626" : C.success}
                 />
-                <Text style={[styles.detailSmallBtnText, {
-                  color: selectedProduct?.is_available ? '#DC2626' : C.success
-                }]}>
-                  {selectedProduct?.is_available ? "Mark Unavailable" : "Mark Available"}
+                <Text
+                  style={[
+                    styles.detailSmallBtnText,
+                    {
+                      color: selectedProduct?.is_available
+                        ? "#DC2626"
+                        : C.success,
+                    },
+                  ]}
+                >
+                  {selectedProduct?.is_available
+                    ? "Mark Unavailable"
+                    : "Mark Available"}
                 </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.detailSmallBtn, { backgroundColor: '#FFF0F0' }]}
+                style={[styles.detailSmallBtn, { backgroundColor: "#FFF0F0" }]}
                 onPress={() => deleteProduct(selectedProduct?.id)}
               >
                 <Ionicons name="trash-outline" size={16} color="#DC2626" />
-                <Text style={[styles.detailSmallBtnText, { color: '#DC2626' }]}>Delete</Text>
+                <Text style={[styles.detailSmallBtnText, { color: "#DC2626" }]}>
+                  Delete
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1040,22 +1226,24 @@ export default function InventoryScreen() {
   };
 
 
-  // ══════════════════════════════════════════════════
-  // ══  MAIN RENDER  ══
-  // ══════════════════════════════════════════════════
+  // ══  MAIN RENDER  
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-
       <CustomAlert config={alertConfig} onDismiss={dismissAlert} />
 
       {/* ── Header ── */}
       <View style={styles.header}>
         <View>
           <Text style={styles.title}>Inventory</Text>
-          <Text style={styles.subtitle}>{products.length} products · {available} available</Text>
+          <Text style={styles.subtitle}>
+            {products.length} products · {available} available
+          </Text>
         </View>
         {isAdmin && (
-          <TouchableOpacity style={styles.addBtn} onPress={() => setAddModal(true)}>
+          <TouchableOpacity
+            style={styles.addBtn}
+            onPress={() => setAddModal(true)}
+          >
             <Ionicons name="add" size={22} color={C.white} />
           </TouchableOpacity>
         )}
@@ -1069,17 +1257,23 @@ export default function InventoryScreen() {
         </View>
         <View style={styles.summaryDivider} />
         <View style={styles.summaryItem}>
-          <Text style={[styles.summaryVal, { color: C.success }]}>{available}</Text>
+          <Text style={[styles.summaryVal, { color: C.success }]}>
+            {available}
+          </Text>
           <Text style={styles.summaryLabel}>Active</Text>
         </View>
         <View style={styles.summaryDivider} />
         <View style={styles.summaryItem}>
-          <Text style={[styles.summaryVal, { color: '#F59E0B' }]}>{lowStock}</Text>
+          <Text style={[styles.summaryVal, { color: "#F59E0B" }]}>
+            {lowStock}
+          </Text>
           <Text style={styles.summaryLabel}>Low Stock</Text>
         </View>
         <View style={styles.summaryDivider} />
         <View style={styles.summaryItem}>
-          <Text style={[styles.summaryVal, { color: C.secondary }]}>{products.length - available}</Text>
+          <Text style={[styles.summaryVal, { color: C.secondary }]}>
+            {products.length - available}
+          </Text>
           <Text style={styles.summaryLabel}>Inactive</Text>
         </View>
       </View>
@@ -1103,7 +1297,9 @@ export default function InventoryScreen() {
               <Ionicons name="cube-outline" size={48} color={C.textLight} />
             </View>
             <Text style={styles.emptyTitle}>No products yet</Text>
-            <Text style={styles.emptyDesc}>Tap + to add your first product</Text>
+            <Text style={styles.emptyDesc}>
+              Tap + to add your first product
+            </Text>
           </View>
         ) : (
           products.map((product) => (
@@ -1115,7 +1311,10 @@ export default function InventoryScreen() {
             >
               {/* Image */}
               {product.image ? (
-                <Image source={{ uri: product.image }} style={styles.productImage} />
+                <Image
+                  source={{ uri: product.image }}
+                  style={styles.productImage}
+                />
               ) : (
                 <View style={styles.imagePlaceholder}>
                   <Ionicons name="cube-outline" size={22} color={C.textLight} />
@@ -1124,57 +1323,85 @@ export default function InventoryScreen() {
 
               {/* Info */}
               <View style={styles.productInfo}>
-                <Text style={styles.productName} numberOfLines={1}>{product.name}</Text>
+                <Text style={styles.productName} numberOfLines={1}>
+                  {product.name}
+                </Text>
                 <View style={styles.productPriceRow}>
                   <Text style={styles.productPrice}>₹{product.price}</Text>
                   {product.mrp && product.mrp > product.price && (
                     <Text style={styles.productMrp}>₹{product.mrp}</Text>
                   )}
                 </View>
-                <Text style={styles.productMeta}>{product.unit} · {product.category}</Text>
-                <View style={[
-                  styles.statusPill,
-                  { backgroundColor: product.is_available ? C.successBg : '#FFF0F0' }
-                ]}>
-                  <View style={[
-                    styles.statusDot,
-                    { backgroundColor: product.is_available ? C.success : '#FF6B6B' }
-                  ]} />
-                  <Text style={[
-                    styles.statusText,
-                    { color: product.is_available ? '#16A34A' : '#DC2626' }
-                  ]}>
-                    {product.is_available ? 'Available' : 'Unavailable'}
+                <Text style={styles.productMeta}>
+                  {product.unit} · {product.category}
+                </Text>
+                <View
+                  style={[
+                    styles.statusPill,
+                    {
+                      backgroundColor: product.is_available
+                        ? C.successBg
+                        : "#FFF0F0",
+                    },
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.statusDot,
+                      {
+                        backgroundColor: product.is_available
+                          ? C.success
+                          : "#FF6B6B",
+                      },
+                    ]}
+                  />
+                  <Text
+                    style={[
+                      styles.statusText,
+                      { color: product.is_available ? "#16A34A" : "#DC2626" },
+                    ]}
+                  >
+                    {product.is_available ? "Available" : "Unavailable"}
                   </Text>
                 </View>
               </View>
 
               {/* Stock Badge */}
-              <View style={[
-                styles.stockBadge,
-                product.stock <= 5 && product.stock > 0 && { backgroundColor: '#FFF8E1' },
-                product.stock === 0 && { backgroundColor: '#FFF0F0' },
-              ]}>
-                <Text style={[
-                  styles.stockVal,
-                  product.stock <= 5 && product.stock > 0 && { color: '#F59E0B' },
-                  product.stock === 0 && { color: '#DC2626' },
-                ]}>{product.stock}</Text>
+              <View
+                style={[
+                  styles.stockBadge,
+                  product.stock <= 5 &&
+                    product.stock > 0 && { backgroundColor: "#FFF8E1" },
+                  product.stock === 0 && { backgroundColor: "#FFF0F0" },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.stockVal,
+                    product.stock <= 5 &&
+                      product.stock > 0 && { color: "#F59E0B" },
+                    product.stock === 0 && { color: "#DC2626" },
+                  ]}
+                >
+                  {product.stock}
+                </Text>
                 <Text style={styles.stockLabel}>stock</Text>
               </View>
 
               {/* Chevron */}
-              <Ionicons name="chevron-forward" size={16} color={C.textLight} style={{ marginLeft: 4 }} />
+              <Ionicons
+                name="chevron-forward"
+                size={16}
+                color={C.textLight}
+                style={{ marginLeft: 4 }}
+              />
             </TouchableOpacity>
           ))
         )}
         <View style={{ height: 20 }} />
       </ScrollView>
 
-
-      {/* ═══════════════════════════════════════════
-           ADD PRODUCT MODAL (Tabbed)
-          ═══════════════════════════════════════════ */}
+      {/* ADD PRODUCT MODAL (Tabbed)*/}
       <Modal visible={addModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalSheet}>
@@ -1210,7 +1437,10 @@ export default function InventoryScreen() {
                 </View>
               )}
 
-              <TouchableOpacity style={styles.cancelBtn} onPress={resetAddModal}>
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={resetAddModal}
+              >
                 <Text style={styles.cancelBtnText}>Cancel</Text>
               </TouchableOpacity>
             </ScrollView>
@@ -1221,20 +1451,17 @@ export default function InventoryScreen() {
         </View>
       </Modal>
 
-
-      {/* ═══════════════════════════════════════════
-           PRODUCT DETAIL / EDIT MODAL
-          ═══════════════════════════════════════════ */}
+      {/*PRODUCT DETAIL / EDIT MODAL*/}
       <Modal visible={detailModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalSheet, { maxHeight: '95%' }]}>
+          <View style={[styles.modalSheet, { maxHeight: "95%" }]}>
             <View style={styles.dragHandle} />
 
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
                 {isEditing ? "Edit Product" : "Product Details"}
               </Text>
-              <View style={{ flexDirection: 'row', gap: 8 }}>
+              <View style={{ flexDirection: "row", gap: 8 }}>
                 {isEditing && (
                   <TouchableOpacity
                     style={[styles.closeBtn, { backgroundColor: C.successBg }]}
@@ -1243,7 +1470,10 @@ export default function InventoryScreen() {
                     <Ionicons name="eye-outline" size={16} color={C.success} />
                   </TouchableOpacity>
                 )}
-                <TouchableOpacity style={styles.closeBtn} onPress={resetDetailModal}>
+                <TouchableOpacity
+                  style={styles.closeBtn}
+                  onPress={resetDetailModal}
+                >
                   <Ionicons name="close" size={16} color={C.deep} />
                 </TouchableOpacity>
               </View>
@@ -1281,368 +1511,604 @@ export default function InventoryScreen() {
             )}
 
             {/* Success Tick Overlay for Edit */}
-            <SuccessTick visible={showEditSuccessTick} onDone={onEditTickDone} />
+            <SuccessTick
+              visible={showEditSuccessTick}
+              onDone={onEditTickDone}
+            />
           </View>
         </View>
       </Modal>
-
     </SafeAreaView>
   );
 }
 
-
-// ══════════════════════════════════════════════════
-// ══  ALERT STYLES  ══
-// ══════════════════════════════════════════════════
+// ══  ALERT STYLES  
 const alertStyles = StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: C.overlay,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     paddingHorizontal: 32,
   },
   box: {
-    width: '100%',
+    width: "100%",
     backgroundColor: C.bg,
     borderRadius: 24,
     paddingTop: 28,
     paddingBottom: 20,
     paddingHorizontal: 24,
-    alignItems: 'center',
+    alignItems: "center",
     shadowColor: C.text,
     shadowOpacity: 0.18,
     shadowRadius: 24,
     elevation: 10,
   },
   iconWrap: {
-    width: 56, height: 56, borderRadius: 18,
-    backgroundColor: C.card, justifyContent: 'center', alignItems: 'center',
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: C.card,
+    justifyContent: "center",
+    alignItems: "center",
     marginBottom: 14,
   },
   title: {
-    fontSize: 17, fontWeight: '800', color: C.text,
-    textAlign: 'center', marginBottom: 6, letterSpacing: -0.3,
+    fontSize: 17,
+    fontWeight: "800",
+    color: C.text,
+    textAlign: "center",
+    marginBottom: 6,
+    letterSpacing: -0.3,
   },
   message: {
-    fontSize: 14, color: C.textMuted, textAlign: 'center',
-    lineHeight: 20, marginBottom: 22, fontWeight: '500',
+    fontSize: 14,
+    color: C.textMuted,
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: 22,
+    fontWeight: "500",
   },
-  btnRow: { flexDirection: 'row', gap: 10, width: '100%', marginTop: 4 },
+  btnRow: { flexDirection: "row", gap: 10, width: "100%", marginTop: 4 },
   btn: {
-    flex: 1, paddingVertical: 13, borderRadius: 14,
-    backgroundColor: C.card, alignItems: 'center',
+    flex: 1,
+    paddingVertical: 13,
+    borderRadius: 14,
+    backgroundColor: C.card,
+    alignItems: "center",
   },
   btnCancel: { backgroundColor: C.chipBg },
   btnDestructive: { backgroundColor: C.secondary },
-  btnText: { fontSize: 14, fontWeight: '700', color: C.dark },
+  btnText: { fontSize: 14, fontWeight: "700", color: C.dark },
   btnTextCancel: { color: C.textMuted },
   btnTextDestructive: { color: C.text },
 });
 
-
-// ══════════════════════════════════════════════════
-// ══  SCREEN STYLES  ══
-// ══════════════════════════════════════════════════
+//SCREEN STYLES  
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
 
   // ── Header
   header: {
-    flexDirection: 'row', justifyContent: 'space-between',
-    alignItems: 'center', paddingHorizontal: 20,
-    paddingTop: 14, paddingBottom: 10,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingBottom: 10,
   },
-  title: { fontSize: 26, fontWeight: '800', color: C.text, letterSpacing: -0.5 },
-  subtitle: { fontSize: 13, color: C.textLight, marginTop: 2, fontWeight: '500' },
+  title: {
+    fontSize: 26,
+    fontWeight: "800",
+    color: C.text,
+    letterSpacing: -0.5,
+  },
+  subtitle: {
+    fontSize: 13,
+    color: C.textLight,
+    marginTop: 2,
+    fontWeight: "500",
+  },
   addBtn: {
-    width: 44, height: 44, borderRadius: 14,
-    backgroundColor: C.dark, justifyContent: 'center', alignItems: 'center',
-    shadowColor: C.dark, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: C.dark,
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: C.dark,
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
 
   // ── Summary Strip
   summaryStrip: {
-    flexDirection: 'row', backgroundColor: C.card,
-    marginHorizontal: 20, borderRadius: 16,
-    paddingVertical: 14, marginBottom: 16,
-    shadowColor: C.dark, shadowOpacity: 0.06, shadowRadius: 6, elevation: 2,
+    flexDirection: "row",
+    backgroundColor: C.card,
+    marginHorizontal: 20,
+    borderRadius: 16,
+    paddingVertical: 14,
+    marginBottom: 16,
+    shadowColor: C.dark,
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
   },
-  summaryItem: { flex: 1, alignItems: 'center' },
-  summaryVal: { fontSize: 20, fontWeight: '800', color: C.text },
-  summaryLabel: { fontSize: 10, color: C.textLight, fontWeight: '600', marginTop: 2, textTransform: 'uppercase', letterSpacing: 0.5 },
+  summaryItem: { flex: 1, alignItems: "center" },
+  summaryVal: { fontSize: 20, fontWeight: "800", color: C.text },
+  summaryLabel: {
+    fontSize: 10,
+    color: C.textLight,
+    fontWeight: "600",
+    marginTop: 2,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
   summaryDivider: { width: 1, backgroundColor: C.border },
 
   // ── Product List
   listContent: { paddingHorizontal: 16 },
   productCard: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: C.card, borderRadius: 16,
-    padding: 12, marginBottom: 10, gap: 10,
-    shadowColor: C.dark, shadowOpacity: 0.05, shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 }, elevation: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: C.card,
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 10,
+    gap: 10,
+    shadowColor: C.dark,
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
   },
   productImage: { width: 56, height: 56, borderRadius: 14 },
   imagePlaceholder: {
-    width: 56, height: 56, borderRadius: 14,
-    backgroundColor: C.chipBg, justifyContent: 'center', alignItems: 'center',
+    width: 56,
+    height: 56,
+    borderRadius: 14,
+    backgroundColor: C.chipBg,
+    justifyContent: "center",
+    alignItems: "center",
   },
   productInfo: { flex: 1, gap: 2 },
-  productName: { fontSize: 15, fontWeight: '700', color: C.text },
-  productPriceRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  productPrice: { fontSize: 14, fontWeight: '800', color: C.dark },
+  productName: { fontSize: 15, fontWeight: "700", color: C.text },
+  productPriceRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  productPrice: { fontSize: 14, fontWeight: "800", color: C.dark },
   productMrp: {
-    fontSize: 12, fontWeight: '500', color: C.textLight,
-    textDecorationLine: 'line-through',
+    fontSize: 12,
+    fontWeight: "500",
+    color: C.textLight,
+    textDecorationLine: "line-through",
   },
-  productMeta: { fontSize: 11, color: C.textMuted, fontWeight: '500', textTransform: 'capitalize' },
+  productMeta: {
+    fontSize: 11,
+    color: C.textMuted,
+    fontWeight: "500",
+    textTransform: "capitalize",
+  },
 
   statusPill: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    alignSelf: 'flex-start', paddingHorizontal: 8,
-    paddingVertical: 3, borderRadius: 20, marginTop: 2,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    alignSelf: "flex-start",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 20,
+    marginTop: 2,
   },
   statusDot: { width: 6, height: 6, borderRadius: 3 },
-  statusText: { fontSize: 10, fontWeight: '700' },
+  statusText: { fontSize: 10, fontWeight: "700" },
 
   stockBadge: {
-    alignItems: 'center', backgroundColor: C.chipBg,
-    borderRadius: 12, paddingHorizontal: 10, paddingVertical: 6,
+    alignItems: "center",
+    backgroundColor: C.chipBg,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     minWidth: 44,
   },
-  stockVal: { fontSize: 16, fontWeight: '800', color: C.dark },
-  stockLabel: { fontSize: 9, color: C.textMuted, fontWeight: '600' },
+  stockVal: { fontSize: 16, fontWeight: "800", color: C.dark },
+  stockLabel: { fontSize: 9, color: C.textMuted, fontWeight: "600" },
 
   // ── Empty State
-  emptyState: { alignItems: 'center', paddingTop: 80, gap: 8 },
+  emptyState: { alignItems: "center", paddingTop: 80, gap: 8 },
   emptyIconWrap: {
-    width: 80, height: 80, borderRadius: 24,
-    backgroundColor: C.card, justifyContent: 'center', alignItems: 'center',
+    width: 80,
+    height: 80,
+    borderRadius: 24,
+    backgroundColor: C.card,
+    justifyContent: "center",
+    alignItems: "center",
     marginBottom: 8,
   },
-  emptyTitle: { fontSize: 16, fontWeight: '700', color: C.textMuted },
+  emptyTitle: { fontSize: 16, fontWeight: "700", color: C.textMuted },
   emptyDesc: { fontSize: 13, color: C.textLight },
 
   // ── Modal
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(61,31,10,0.4)', justifyContent: 'flex-end' },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(61,31,10,0.4)",
+    justifyContent: "flex-end",
+  },
   modalSheet: {
     backgroundColor: C.card,
-    borderTopLeftRadius: 28, borderTopRightRadius: 28,
-    padding: 24, maxHeight: '92%',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: 24,
+    maxHeight: "92%",
   },
   dragHandle: {
-    width: 40, height: 4, backgroundColor: C.light,
-    borderRadius: 2, alignSelf: 'center', marginBottom: 16,
+    width: 40,
+    height: 4,
+    backgroundColor: C.light,
+    borderRadius: 2,
+    alignSelf: "center",
+    marginBottom: 16,
   },
   modalHeader: {
-    flexDirection: 'row', justifyContent: 'space-between',
-    alignItems: 'center', marginBottom: 16,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
   },
-  modalTitle: { fontSize: 20, fontWeight: '800', color: C.text },
+  modalTitle: { fontSize: 20, fontWeight: "800", color: C.text },
   closeBtn: {
-    width: 32, height: 32, borderRadius: 10,
-    backgroundColor: C.chipBg, justifyContent: 'center', alignItems: 'center',
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: C.chipBg,
+    justifyContent: "center",
+    alignItems: "center",
   },
 
   // ── Tab Bar
   tabBar: {
-    flexDirection: 'row', backgroundColor: C.inputBg,
-    borderRadius: 12, padding: 3, marginBottom: 16,
+    flexDirection: "row",
+    backgroundColor: C.inputBg,
+    borderRadius: 12,
+    padding: 3,
+    marginBottom: 16,
   },
   tab: {
-    flex: 1, paddingVertical: 10, borderRadius: 10,
-    alignItems: 'center',
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: "center",
   },
   tabActive: { backgroundColor: C.dark },
-  tabText: { fontSize: 13, fontWeight: '600', color: C.textMuted },
-  tabTextActive: { color: C.white, fontWeight: '700' },
+  tabText: { fontSize: 13, fontWeight: "600", color: C.textMuted },
+  tabTextActive: { color: C.white, fontWeight: "700" },
 
   // ── Form Fields
   sectionHeader: {
-    fontSize: 14, fontWeight: '700', color: C.dark,
-    marginBottom: 12, marginTop: 4,
+    fontSize: 14,
+    fontWeight: "700",
+    color: C.dark,
+    marginBottom: 12,
+    marginTop: 4,
   },
   fieldLabel: {
-    fontSize: 12, fontWeight: '700', color: C.textMuted,
-    textTransform: 'uppercase', letterSpacing: 0.6,
-    marginBottom: 8, marginTop: 4,
+    fontSize: 12,
+    fontWeight: "700",
+    color: C.textMuted,
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+    marginBottom: 8,
+    marginTop: 4,
   },
   input: {
-    backgroundColor: C.inputBg, padding: 14,
-    borderRadius: 12, marginBottom: 12,
-    fontSize: 15, color: C.text,
-    borderWidth: 1, borderColor: C.border,
+    backgroundColor: C.inputBg,
+    padding: 14,
+    borderRadius: 12,
+    marginBottom: 12,
+    fontSize: 15,
+    color: C.text,
+    borderWidth: 1,
+    borderColor: C.border,
   },
   textArea: { minHeight: 70, paddingTop: 14 },
-  row: { flexDirection: 'row' },
+  row: { flexDirection: "row" },
 
   // ── Thumbnail Picker
   thumbnailPicker: {
-    borderRadius: 16, overflow: 'hidden',
-    marginBottom: 12, borderWidth: 1.5,
-    borderColor: C.border, borderStyle: 'dashed',
-    position: 'relative',
+    borderRadius: 16,
+    overflow: "hidden",
+    marginBottom: 12,
+    borderWidth: 1.5,
+    borderColor: C.border,
+    borderStyle: "dashed",
+    position: "relative",
   },
-  thumbnailImage: { width: '100%', height: 170, borderRadius: 14 },
+  thumbnailImage: { width: "100%", height: 170, borderRadius: 14 },
   thumbnailEmpty: {
-    height: 150, justifyContent: 'center', alignItems: 'center',
-    gap: 6, backgroundColor: C.inputBg,
+    height: 150,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: C.inputBg,
   },
   thumbnailIconCircle: {
-    width: 48, height: 48, borderRadius: 24,
-    backgroundColor: C.card, justifyContent: 'center', alignItems: 'center',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: C.card,
+    justifyContent: "center",
+    alignItems: "center",
     marginBottom: 4,
   },
-  thumbnailLabel: { fontSize: 14, fontWeight: '700', color: C.textMuted },
+  thumbnailLabel: { fontSize: 14, fontWeight: "700", color: C.textMuted },
   thumbnailSub: { fontSize: 12, color: C.textLight },
   thumbnailEditBadge: {
-    position: 'absolute', top: 10, right: 10,
-    width: 28, height: 28, borderRadius: 14,
-    backgroundColor: C.dark, justifyContent: 'center', alignItems: 'center',
+    position: "absolute",
+    top: 10,
+    right: 10,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: C.dark,
+    justifyContent: "center",
+    alignItems: "center",
   },
 
   // ── Additional Images
   additionalImagesRow: {
-    flexDirection: 'row', gap: 12, marginBottom: 16,
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: 16,
   },
   additionalImagePicker: {
-    flex: 1, height: 90, borderRadius: 12,
-    borderWidth: 1.5, borderColor: C.border, borderStyle: 'dashed',
-    overflow: 'hidden',
+    flex: 1,
+    height: 90,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: C.border,
+    borderStyle: "dashed",
+    overflow: "hidden",
   },
-  additionalImage: { width: '100%', height: '100%', borderRadius: 10 },
+  additionalImage: { width: "100%", height: "100%", borderRadius: 10 },
   additionalImageEmpty: {
-    flex: 1, justifyContent: 'center', alignItems: 'center',
-    backgroundColor: C.inputBg, gap: 4,
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: C.inputBg,
+    gap: 4,
   },
-  additionalImageText: { fontSize: 11, color: C.textLight, fontWeight: '500' },
+  additionalImageText: { fontSize: 11, color: C.textLight, fontWeight: "500" },
 
   // ── Category Chips
   categoryRow: { marginBottom: 16 },
   catChip: {
-    paddingHorizontal: 14, paddingVertical: 8,
-    borderRadius: 20, backgroundColor: C.chipBg,
-    marginRight: 8, borderWidth: 1.5, borderColor: 'transparent',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: C.chipBg,
+    marginRight: 8,
+    borderWidth: 1.5,
+    borderColor: "transparent",
   },
-  catChipActive: { backgroundColor: C.primary + '25', borderColor: C.primary },
-  catChipText: { fontSize: 13, fontWeight: '600', color: C.textMuted, textTransform: 'capitalize' },
+  catChipActive: { backgroundColor: C.primary + "25", borderColor: C.primary },
+  catChipText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: C.textMuted,
+    textTransform: "capitalize",
+  },
   catChipTextActive: { color: C.dark },
 
   // ── Dietary Grid
   dietaryGrid: {
-    flexDirection: 'row', flexWrap: 'wrap',
-    gap: 10, marginBottom: 16,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginBottom: 16,
   },
   dietaryChip: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 14, paddingVertical: 10,
-    borderRadius: 12, backgroundColor: C.inputBg,
-    borderWidth: 1.5, borderColor: C.border,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: C.inputBg,
+    borderWidth: 1.5,
+    borderColor: C.border,
   },
   dietaryChipActive: {
-    backgroundColor: C.primary + '20', borderColor: C.primary,
+    backgroundColor: C.primary + "20",
+    borderColor: C.primary,
   },
-  dietaryChipText: { fontSize: 13, fontWeight: '600', color: C.textMuted },
+  dietaryChipText: { fontSize: 13, fontWeight: "600", color: C.textMuted },
   dietaryChipTextActive: { color: C.dark },
 
   // ── Swipe / Cancel
-  swipeWrapper: { marginBottom: 12, alignItems: 'center' },
+  swipeWrapper: { marginBottom: 12, alignItems: "center" },
   cancelBtn: {
-    paddingVertical: 14, borderRadius: 12,
-    backgroundColor: C.card, alignItems: 'center',
-    marginTop: 4, borderWidth: 1, borderColor: C.border,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: C.card,
+    alignItems: "center",
+    marginTop: 4,
+    borderWidth: 1,
+    borderColor: C.border,
   },
-  cancelBtnText: { fontSize: 15, fontWeight: '700', color: C.textMuted },
+  cancelBtnText: { fontSize: 15, fontWeight: "700", color: C.textMuted },
 
   // ── Detail Modal — Image Gallery
-  detailImageGallery: { height: 220, borderRadius: 16, overflow: 'hidden', marginBottom: 8 },
-  detailGalleryImage: { width: SCREEN_WIDTH - 48, height: 220, borderRadius: 16, marginRight: 8 },
+  detailImageGallery: {
+    height: 220,
+    borderRadius: 16,
+    overflow: "hidden",
+    marginBottom: 8,
+  },
+  detailGalleryImage: {
+    width: SCREEN_WIDTH - 48,
+    height: 220,
+    borderRadius: 16,
+    marginRight: 8,
+  },
   detailNoImage: {
-    height: 160, borderRadius: 16, backgroundColor: C.inputBg,
-    justifyContent: 'center', alignItems: 'center', marginBottom: 8,
+    height: 160,
+    borderRadius: 16,
+    backgroundColor: C.inputBg,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 8,
   },
   dotRow: {
-    flexDirection: 'row', justifyContent: 'center', gap: 6, marginBottom: 12,
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 6,
+    marginBottom: 12,
   },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: C.textLight },
 
   // ── Detail Sections
   detailSection: {
-    backgroundColor: C.inputBg, borderRadius: 16, padding: 16,
-    marginBottom: 12, borderWidth: 1, borderColor: C.border,
+    backgroundColor: C.inputBg,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: C.border,
   },
-  detailName: { fontSize: 20, fontWeight: '800', color: C.text, marginBottom: 6 },
-  detailPriceRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
-  detailPrice: { fontSize: 22, fontWeight: '800', color: C.dark },
+  detailName: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: C.text,
+    marginBottom: 6,
+  },
+  detailPriceRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 8,
+  },
+  detailPrice: { fontSize: 22, fontWeight: "800", color: C.dark },
   detailMrp: {
-    fontSize: 16, fontWeight: '500', color: C.textLight,
-    textDecorationLine: 'line-through',
+    fontSize: 16,
+    fontWeight: "500",
+    color: C.textLight,
+    textDecorationLine: "line-through",
   },
   discountBadge: {
-    backgroundColor: '#FEF3C7', paddingHorizontal: 8,
-    paddingVertical: 3, borderRadius: 8,
+    backgroundColor: "#FEF3C7",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
   },
-  discountText: { fontSize: 11, fontWeight: '800', color: '#D97706' },
+  discountText: { fontSize: 11, fontWeight: "800", color: "#D97706" },
 
-  detailMetaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  detailMetaRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   metaChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: C.chipBg, paddingHorizontal: 10,
-    paddingVertical: 5, borderRadius: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: C.chipBg,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
   },
-  metaChipText: { fontSize: 12, fontWeight: '600', color: C.dark, textTransform: 'capitalize' },
+  metaChipText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: C.dark,
+    textTransform: "capitalize",
+  },
 
   detailSectionTitle: {
-    fontSize: 14, fontWeight: '700', color: C.dark, marginBottom: 12,
+    fontSize: 14,
+    fontWeight: "700",
+    color: C.dark,
+    marginBottom: 12,
   },
   infoRow: {
-    flexDirection: 'row', justifyContent: 'space-between',
-    alignItems: 'center', paddingVertical: 8,
-    borderBottomWidth: 1, borderBottomColor: C.border,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: C.border,
   },
-  infoLabel: { fontSize: 13, fontWeight: '600', color: C.textMuted },
-  infoValue: { fontSize: 13, fontWeight: '700', color: C.text },
-  infoBlock: { paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: C.border },
+  infoLabel: { fontSize: 13, fontWeight: "600", color: C.textMuted },
+  infoValue: { fontSize: 13, fontWeight: "700", color: C.text },
+  infoBlock: {
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: C.border,
+  },
   infoValueMultiline: {
-    fontSize: 13, fontWeight: '500', color: C.text,
-    lineHeight: 20, marginTop: 4,
+    fontSize: 13,
+    fontWeight: "500",
+    color: C.text,
+    lineHeight: 20,
+    marginTop: 4,
   },
 
   // ── Stock Controls
   stockControlCard: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    backgroundColor: C.inputBg, borderRadius: 16, padding: 16,
-    marginBottom: 12, borderWidth: 1, borderColor: C.border,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: C.inputBg,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: C.border,
   },
-  stockControlLabel: { fontSize: 14, fontWeight: '700', color: C.text },
+  stockControlLabel: { fontSize: 14, fontWeight: "700", color: C.text },
   stockControlSub: { fontSize: 11, color: C.textMuted, marginTop: 2 },
-  stockControlBtns: { flexDirection: 'row', alignItems: 'center', gap: 0 },
+  stockControlBtns: { flexDirection: "row", alignItems: "center", gap: 0 },
   stockBtn: {
-    width: 36, height: 36, borderRadius: 12,
-    backgroundColor: C.card, justifyContent: 'center', alignItems: 'center',
-    borderWidth: 1, borderColor: C.border,
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: C.card,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: C.border,
   },
   stockBtnAdd: { backgroundColor: C.dark, borderColor: C.dark },
   stockDisplay: {
-    minWidth: 50, height: 36, justifyContent: 'center', alignItems: 'center',
-    backgroundColor: C.white, borderRadius: 10, marginHorizontal: 4,
-    borderWidth: 1, borderColor: C.border, paddingHorizontal: 12,
+    minWidth: 50,
+    height: 36,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: C.white,
+    borderRadius: 10,
+    marginHorizontal: 4,
+    borderWidth: 1,
+    borderColor: C.border,
+    paddingHorizontal: 12,
   },
-  stockDisplayVal: { fontSize: 18, fontWeight: '800', color: C.text },
+  stockDisplayVal: { fontSize: 18, fontWeight: "800", color: C.text },
 
   // ── Detail Action Buttons
   detailActions: { paddingHorizontal: 4, gap: 10, marginTop: 4 },
   detailEditBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    backgroundColor: C.dark, paddingVertical: 14,
-    borderRadius: 14, gap: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: C.dark,
+    paddingVertical: 14,
+    borderRadius: 14,
+    gap: 8,
   },
-  detailEditBtnText: { fontSize: 15, fontWeight: '700', color: C.white },
-  detailSmallBtnsRow: { flexDirection: 'row', gap: 10 },
+  detailEditBtnText: { fontSize: 15, fontWeight: "700", color: C.white },
+  detailSmallBtnsRow: { flexDirection: "row", gap: 10 },
   detailSmallBtn: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    paddingVertical: 12, borderRadius: 12, gap: 6,
-    borderWidth: 1, borderColor: C.border,
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    borderRadius: 12,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: C.border,
   },
-  detailSmallBtnText: { fontSize: 13, fontWeight: '600' },
+  detailSmallBtnText: { fontSize: 13, fontWeight: "600" },
 });

@@ -42,14 +42,21 @@ export default function DeliveryLayout() {
         }}
       />
       <Tabs.Screen
-              name="wallet"
-              options={{
-                title: "Wallet",
-                tabBarIcon: ({ color, size }) => (
-                  <Ionicons name="wallet" size={size} color={color} />
-                ),
-              }}
-            />
+        name="subscriptions"
+        options={{
+          title: 'Subscriptions',
+          tabBarIcon: ({ color, size }) => <Ionicons name="cube" size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="wallet"
+        options={{
+          title: "Wallet",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="wallet" size={size} color={color} />
+          ),
+        }}
+      />
       <Tabs.Screen
         name="profile"
         options={{

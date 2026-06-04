@@ -2,11 +2,11 @@ import React from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../src/constants/colors';
-import { Platform, View } from 'react-native';
+import { Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function CustomerLayout() {
-  const insets = useSafeAreaInsets(); // ← add this
+  const insets = useSafeAreaInsets();
   return (
     <Tabs
       screenOptions={{
@@ -18,7 +18,7 @@ export default function CustomerLayout() {
           borderTopWidth: 1,
           borderTopColor: Colors.border,
           paddingTop: 8,
-          paddingBottom: (Platform.OS === 'ios' ? 28 : 12)+ insets.bottom,
+          paddingBottom: (Platform.OS === 'ios' ? 28 : 12) + insets.bottom,
           height: (Platform.OS === 'ios' ? 88 : 70) + insets.bottom,
         },
         tabBarLabelStyle: {
@@ -44,8 +44,15 @@ export default function CustomerLayout() {
       <Tabs.Screen
         name="subscriptions"
         options={{
+          title: 'Orders',
+          tabBarIcon: ({ color, size }) => <Ionicons name="bag" size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="my-subscriptions"
+        options={{
           title: 'Subscriptions',
-          tabBarIcon: ({ color, size }) => <Ionicons name="calendar" size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => <Ionicons name="refresh-circle" size={size} color={color} />,
         }}
       />
       <Tabs.Screen

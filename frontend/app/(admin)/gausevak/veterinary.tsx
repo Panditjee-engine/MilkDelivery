@@ -551,6 +551,7 @@ export default function VeterinaryScreen() {
   const [detailVisible, setDetailVisible] = useState(false);
   const [toast, setToast] = useState({ visible: false, msg: "", variant: "success" as ToastVariant });
   const [form, setForm] = useState({ name: "", email: "", phone: "", password: "", specialization: "", license_number: "" });
+  const [showPassword, setShowPassword] = useState(false);
 
   const showToast = (msg: string, variant: ToastVariant = "success") => setToast({ visible: true, msg, variant });
   const hideToast = () => setToast((t) => ({ ...t, visible: false }));
@@ -737,9 +738,8 @@ export default function VeterinaryScreen() {
                 {/* Required */}
                 <Text style={styles.sectionLabel}>REQUIRED</Text>
                 {[
-                  { icon: "person-outline"      as keyof typeof Ionicons.glyphMap, key: "name",     label: "Full Name",  kb: "default",       secure: false },
-                  { icon: "mail-outline"         as keyof typeof Ionicons.glyphMap, key: "email",    label: "Email",      kb: "email-address", secure: false },
-                  { icon: "lock-closed-outline"  as keyof typeof Ionicons.glyphMap, key: "password", label: "Password",   kb: "default",       secure: true  },
+                  { icon: "person-outline" as keyof typeof Ionicons.glyphMap, key: "name",  label: "Full Name", kb: "default" },
+                  { icon: "mail-outline"   as keyof typeof Ionicons.glyphMap, key: "email", label: "Email",     kb: "email-address" },
                 ].map((f) => (
                   <View key={f.key} style={styles.inputWrapper}>
                     <Ionicons name={f.icon} size={16} color={C.textMuted} style={styles.inputIcon} />
@@ -751,10 +751,32 @@ export default function VeterinaryScreen() {
                       onChangeText={(v) => setForm((p) => ({ ...p, [f.key]: v }))}
                       autoCapitalize="none"
                       keyboardType={f.kb as any}
-                      secureTextEntry={f.secure}
                     />
                   </View>
                 ))}
+                <View style={styles.inputWrapper}>
+                  <Ionicons name="lock-closed-outline" size={16} color={C.textMuted} style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Password"
+                    placeholderTextColor={C.textLight}
+                    value={form.password}
+                    onChangeText={(v) => setForm((p) => ({ ...p, password: v }))}
+                    autoCapitalize="none"
+                    secureTextEntry={!showPassword}
+                  />
+                  <TouchableOpacity
+                    onPress={() => setShowPassword((prev) => !prev)}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    style={styles.eyeBtn}
+                  >
+                    <Ionicons
+                      name={showPassword ? "eye-outline" : "eye-off-outline"}
+                      size={20}
+                      color={C.textMuted}
+                    />
+                  </TouchableOpacity>
+                </View>
 
                 {/* Optional */}
                 <Text style={[styles.sectionLabel, { marginTop: 16 }]}>OPTIONAL</Text>

@@ -476,7 +476,7 @@ class ApiService {
     return this.request<any[]>("/subscriptions");
   }
 
-  async createSubscription(data: {
+async createSubscription(data: {
     product_id: string;
     quantity: number;
     pattern: string;
@@ -484,6 +484,7 @@ class ApiService {
     start_date: string;
     end_date?: string | null;
     amount: number;
+    delivery_slot: string; // Added to match the backend field addition
   }) {
     return this.request<any>("/subscriptions", {
       method: "POST",
@@ -498,12 +499,12 @@ class ApiService {
     });
   }
 
-  async modifySubscriptionDate(id: string, date: string, quantity: number) {
-    return this.request<any>(`/subscriptions/${id}/modify`, {
-      method: "POST",
-      body: JSON.stringify({ date, quantity }),
-    });
-  }
+ async modifySubscriptionDate(id: string, date: string, quantity: number) {
+  return this.request<any>(`/subscriptions/${id}/modify`, {
+    method: "POST",
+    body: JSON.stringify({ date, quantity }),
+  });
+}
 
   async cancelSubscription(id: string) {
     return this.request<any>(`/subscriptions/${id}`, {
@@ -611,6 +612,20 @@ class ApiService {
         order_id: orderId,
         status,
       }),
+    });
+  }
+
+  async verifyPickupOtp(orderId: string, otp: string) {
+    return this.request<any>(`/delivery/orders/${orderId}/verify-pickup-otp`, {
+      method: "POST",
+      body: JSON.stringify({ otp }),
+    });
+  }
+
+  async verifyDeliveryOtp(orderId: string, otp: string) {
+    return this.request<any>(`/delivery/orders/${orderId}/verify-delivery-otp`, {
+      method: "POST",
+      body: JSON.stringify({ otp }),
     });
   }
 
@@ -2273,6 +2288,25 @@ async createFeedStock(data: FeedStockCreate): Promise<FeedStock> {
     );
   }
  
+  async editSubscription(
+  id: string,
+  data: {
+    product_id?: string;
+    quantity?: number;
+    amount?: number;
+    pattern?: string;
+    custom_days?: number[] | null;
+    start_date?: string;   // YYYY-MM-DD
+    end_date?: string | null;  // YYYY-MM-DD or null to clear
+  }
+) {
+  return this.request<any>(`/subscriptions/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
+
 
 // Logout
   logout = async () => {

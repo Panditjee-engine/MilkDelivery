@@ -7,7 +7,6 @@ import {
   RefreshControl,
   TouchableOpacity,
   Image,
-  Modal,
   Animated,
   Easing,
 } from "react-native";
@@ -28,7 +27,6 @@ import Svg, {
 import { useAuth } from "../../src/contexts/AuthContext";
 import { api } from "../../src/services/api";
 import { Colors } from "../../src/constants/colors";
-import Button from "../../src/components/Button";
 import LoadingScreen from "../../src/components/LoadingScreen";
 
 // ─── Category config 
@@ -46,43 +44,6 @@ const CATEGORY_THEMES: Record<
 };
 const getCategoryTheme = (cat: string) =>
   CATEGORY_THEMES[cat?.toLowerCase()] || CATEGORY_THEMES.other;
-
-// ─── Delivery pattern config 
-const patterns = [
-  {
-    value: "daily",
-    label: "Daily",
-    description: "Every day",
-    icon: "sunny-outline",
-  },
-  {
-    value: "alternate",
-    label: "Alternate",
-    description: "Every other day",
-    icon: "repeat-outline",
-  },
-  {
-    value: "custom",
-    label: "Custom",
-    description: "Choose specific days",
-    icon: "calendar-outline",
-  },
-  {
-    value: "buy_once",
-    label: "Buy Once",
-    description: "One-time purchase",
-    icon: "bag-check-outline",
-  },
-];
-const weekDays = [
-  { value: 0, label: "M" },
-  { value: 1, label: "T" },
-  { value: 2, label: "W" },
-  { value: 3, label: "T" },
-  { value: 4, label: "F" },
-  { value: 5, label: "S" },
-  { value: 6, label: "S" },
-];
 
 // ─── Status helpers 
 const statusConfig = (status: string) => {
@@ -122,7 +83,7 @@ const statusConfig = (status: string) => {
   }
 };
 
-// ─── Animated brand logo (Zomato / Paytm style) 
+// ─── Animated brand logo 
 function BrandHeader() {
   const leafRotate = useRef(new Animated.Value(0)).current;
   const leafScale = useRef(new Animated.Value(0.7)).current;
@@ -131,7 +92,6 @@ function BrandHeader() {
   const pulseScale = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    // Entrance
     Animated.parallel([
       Animated.spring(leafScale, {
         toValue: 1,
@@ -160,7 +120,6 @@ function BrandHeader() {
       }),
     ]).start();
 
-    // Idle pulse on leaf
     const pulse = Animated.loop(
       Animated.sequence([
         Animated.timing(pulseScale, {
@@ -188,7 +147,6 @@ function BrandHeader() {
 
   return (
     <View style={brandStyles.wrap}>
-      {/* Brand mark */}
       <View style={brandStyles.logoRow}>
         <Animated.View
           style={[
@@ -264,7 +222,7 @@ const brandStyles = StyleSheet.create({
   },
 });
 
-// ─── Product row item 
+// ─── Product row — tapping navigates to catalog 
 function ProductRow({
   product,
   index,
@@ -326,15 +284,15 @@ function ProductRow({
           <Text style={productRowStyles.unit}>{product.unit}</Text>
         </View>
 
-        {/* Price + CTA */}
+        {/* Price + arrow (no add button — navigates to catalog) */}
         <View style={productRowStyles.right}>
           <Text style={[productRowStyles.price, { color: theme.accent }]}>
             ₹{product.price}
           </Text>
           <View
-            style={[productRowStyles.addBtn, { backgroundColor: theme.accent }]}
+            style={[productRowStyles.arrowBtn, { backgroundColor: theme.accent }]}
           >
-            <Ionicons name="add" size={14} color="#fff" />
+            <Ionicons name="arrow-forward" size={13} color="#fff" />
           </View>
         </View>
       </TouchableOpacity>
@@ -364,7 +322,7 @@ const productRowStyles = StyleSheet.create({
   unit: { fontSize: 12, color: "#bbb", fontWeight: "500" },
   right: { alignItems: "flex-end", gap: 6 },
   price: { fontSize: 15, fontWeight: "800" },
-  addBtn: {
+  arrowBtn: {
     width: 26,
     height: 26,
     borderRadius: 8,
@@ -385,14 +343,6 @@ export default function CustomerHome() {
   const [recentOrder, setRecentOrder] = useState<any>(null);
   const [featuredProducts, setFeaturedProducts] = useState<any[]>([]);
 
-  const [modalVisible, setModalVisible] = useState(false);
-  const [selectedProduct, setSelectedProduct] = useState<any>(null);
-  const [quantity, setQuantity] = useState(1);
-  const [pattern, setPattern] = useState("daily");
-  const [customDays, setCustomDays] = useState<number[]>([]);
-  const [submitting, setSubmitting] = useState(false);
-
-  // Wallet card entrance
   const walletAnim = useRef(new Animated.Value(0)).current;
   const headerAnim = useRef(new Animated.Value(0)).current;
 
@@ -438,61 +388,14 @@ export default function CustomerHome() {
 
   useEffect(() => {
     if (!isFocused) return;
-
-    fetchData(true); // runs animation only on first load
-    const interval = setInterval(() => {
-      fetchData(false); // silent background refresh, no animation
-    }, 2000);
-
+    fetchData(true);
+    const interval = setInterval(() => fetchData(false), 2000);
     return () => clearInterval(interval);
   }, [isFocused]);
 
-  const openModal = (product: any) => {
-    setSelectedProduct(product);
-    setQuantity(1);
-    setPattern("daily");
-    setCustomDays([]);
-    setModalVisible(true);
-  };
+  // ✅ Clicking any product just goes to catalog
+  const goToCatalog = () => router.push("/(customer)/catalog");
 
-  const toggleCustomDay = (day: number) =>
-    setCustomDays((prev) =>
-      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day],
-    );
-
-  const handleSubscribe = async () => {
-    if (pattern === "custom" && customDays.length === 0) return;
-    if (pattern === "buy_once") {
-      const stock = selectedProduct?.stock ?? 0;
-      if (quantity > stock) {
-        alert(`Only ${stock} item available!`);
-        return;
-      }
-    }
-    setSubmitting(true);
-    try {
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const tomorrowStr = tomorrow.toISOString().split("T")[0];
-
-      await api.createSubscription({
-        product_id: selectedProduct.id,
-        quantity,
-        pattern,
-        custom_days: pattern === "custom" ? customDays : null,
-        start_date: tomorrowStr,
-        end_date: pattern === "buy_once" ? tomorrowStr : null,
-        amount: selectedProduct.price * quantity,  // ← ADD THIS
-      });
-      setModalVisible(false);
-      fetchData();
-    } catch (e: any) {
-      const msg = e?.message || "Out OfStock";
-      alert(msg);
-    } finally {
-      setSubmitting(false);
-    }
-  };
   if (loading) return <LoadingScreen />;
 
   const formatDate = (d: string) =>
@@ -503,7 +406,6 @@ export default function CustomerHome() {
     });
 
   const sc = recentOrder ? statusConfig(recentOrder.status) : null;
-  const modalTheme = getCategoryTheme(selectedProduct?.category);
 
   const walletSlide = walletAnim.interpolate({
     inputRange: [0, 1],
@@ -550,7 +452,6 @@ export default function CustomerHome() {
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
             >
-              {/* Decorative circles */}
               <View style={s.walletCircle1} />
               <View style={s.walletCircle2} />
 
@@ -574,11 +475,7 @@ export default function CustomerHome() {
                     </View>
                   ) : (
                     <View style={s.okBadge}>
-                      <Ionicons
-                        name="checkmark-circle"
-                        size={10}
-                        color="#4ade80"
-                      />
+                      <Ionicons name="checkmark-circle" size={10} color="#4ade80" />
                       <Text style={s.okBadgeText}>Good</Text>
                     </View>
                   )}
@@ -604,11 +501,7 @@ export default function CustomerHome() {
                       { backgroundColor: sc.bg, borderColor: sc.border },
                     ]}
                   >
-                    <Ionicons
-                      name={sc.icon as any}
-                      size={12}
-                      color={sc.color}
-                    />
+                    <Ionicons name={sc.icon as any} size={12} color={sc.color} />
                     <Text style={[s.orderStatusText, { color: sc.color }]}>
                       {sc.label}
                     </Text>
@@ -625,7 +518,7 @@ export default function CustomerHome() {
                     style={[
                       s.orderItem,
                       i < Math.min(recentOrder.items.length, 3) - 1 &&
-                      s.orderItemBorder,
+                        s.orderItemBorder,
                     ]}
                   >
                     <Text style={s.orderItemName}>{item.product_name}</Text>
@@ -640,9 +533,7 @@ export default function CustomerHome() {
                 )}
                 <View style={s.orderTotalRow}>
                   <Text style={s.orderTotalLabel}>Total</Text>
-                  <Text style={s.orderTotalAmt}>
-                    ₹{recentOrder.total_amount}
-                  </Text>
+                  <Text style={s.orderTotalAmt}>₹{recentOrder.total_amount}</Text>
                 </View>
               </>
             ) : (
@@ -663,24 +554,31 @@ export default function CustomerHome() {
           </View>
         </View>
 
-        {/* ── Popular Items Card ── */}
+        {/* ── Popular Items ── */}
         {featuredProducts.length > 0 && (
           <View style={s.sectionWrap}>
-            <Text style={s.sectionTitle}>Popular Items</Text>
+            <View style={s.sectionHeaderRow}>
+              <Text style={s.sectionTitle}>Popular Items</Text>
+              {/* Subtle hint that tapping goes to catalog */}
+              <TouchableOpacity onPress={goToCatalog}>
+                <Text style={s.seeAllText}>See all →</Text>
+              </TouchableOpacity>
+            </View>
+
             <View style={s.card}>
               {featuredProducts.map((product, i) => (
                 <ProductRow
                   key={product.id}
                   product={product}
                   index={i}
-                  onPress={() => openModal(product)}
+                  onPress={goToCatalog}   // ✅ navigate to catalog
                 />
               ))}
 
-              {/* Explore More button */}
+              {/* Explore All Products */}
               <TouchableOpacity
                 style={s.exploreBtn}
-                onPress={() => router.push("/(customer)/catalog")}
+                onPress={goToCatalog}
                 activeOpacity={0.85}
               >
                 <LinearGradient
@@ -698,190 +596,55 @@ export default function CustomerHome() {
                       />
                     </View>
                     <View>
-                      <Text style={s.exploreBtnTitle}>
-                        Explore All Products
+                      <Text style={s.exploreBtnTitle}>Explore All Products</Text>
+                      <Text style={s.exploreBtnSub}>Browse the full catalogue →</Text>
+                    </View>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color={Colors.primary} />
+                </LinearGradient>
+              </TouchableOpacity>
+
+              {/* My Subscriptions */}
+              <TouchableOpacity
+                style={s.exploreBtn}
+                onPress={() => router.push("/(customer)/my-subscriptions")}
+                activeOpacity={0.85}
+              >
+                <LinearGradient
+                  colors={["#F0FDF4", "#DCFCE7"]}
+                  style={[s.exploreBtnGrad, { borderColor: "#BBF7D0" }]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                >
+                  <View style={s.exploreBtnLeft}>
+                    <View style={[s.exploreBtnIcon, { backgroundColor: "#DCFCE7" }]}>
+                      <Ionicons name="repeat-outline" size={16} color="#22C55E" />
+                    </View>
+                    <View>
+                      <Text style={[s.exploreBtnTitle, { color: "#166534" }]}>
+                        My Subscriptions
                       </Text>
-                      <Text style={s.exploreBtnSub}>
-                        Browse the full catalogue →
+                      <Text style={[s.exploreBtnSub, { color: "#4B7C59" }]}>
+                        Manage your subscriptions →
                       </Text>
                     </View>
                   </View>
-                  <Ionicons
-                    name="chevron-forward"
-                    size={16}
-                    color={Colors.primary}
-                  />
+                  <Ionicons name="chevron-forward" size={16} color="#22C55E" />
                 </LinearGradient>
               </TouchableOpacity>
             </View>
           </View>
         )}
 
-        {/* ── Animated Brand Footer ── */}
+        {/* ── Brand Footer ── */}
         <BrandFooter />
       </ScrollView>
-
-      {/* ── Subscription Modal ── */}
-      <Modal visible={modalVisible} animationType="slide" transparent>
-        <View style={s.modalOverlay}>
-          <View style={s.modalSheet}>
-            <View style={s.dragHandle} />
-
-            <View
-              style={[s.modalProductHeader, { backgroundColor: modalTheme.bg }]}
-            >
-              <View
-                style={[
-                  s.modalIconCircle,
-                  { backgroundColor: modalTheme.accent + "22" },
-                ]}
-              >
-                {selectedProduct?.image ? (
-                  <Image
-                    source={{ uri: selectedProduct.image }}
-                    style={s.modalProductImage}
-                  />
-                ) : (
-                  <Ionicons
-                    name={modalTheme.icon as any}
-                    size={30}
-                    color={modalTheme.accent}
-                  />
-                )}
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={s.modalTitle}>{selectedProduct?.name}</Text>
-                <Text style={[s.modalPrice, { color: modalTheme.accent }]}>
-                  ₹{selectedProduct?.price} / {selectedProduct?.unit}
-                </Text>
-              </View>
-              <TouchableOpacity
-                style={s.modalCloseBtn}
-                onPress={() => setModalVisible(false)}
-              >
-                <Ionicons name="close" size={15} color="#555" />
-              </TouchableOpacity>
-            </View>
-
-            <View style={s.divider} />
-
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <Text style={s.modalLabel}>Quantity</Text>
-              <View style={s.quantityRow}>
-                {/* ── MINUS button ── */}
-                <TouchableOpacity
-                  style={s.qtyBtn}
-                  onPress={() => setQuantity((q) => Math.max(1, q - 1))}
-                >
-                  <Ionicons name="remove" size={18} color="#333" />
-                </TouchableOpacity>
-
-                <Text style={s.qtyValue}>{quantity}</Text>
-
-                {/* ── PLUS button ── */}
-                <TouchableOpacity
-                  style={[s.qtyBtn, { backgroundColor: modalTheme.accent }]}
-                  onPress={() => {
-                    const maxStock = selectedProduct?.stock ?? 0;
-                    if (quantity >= maxStock) {
-                      alert(`Only ${maxStock} item available!`);
-                      return;
-                    }
-                    setQuantity((q) => q + 1);
-                  }}
-                >
-                  <Ionicons name="add" size={18} color="#fff" />
-                </TouchableOpacity>
-              </View>
-
-              <Text style={s.modalLabel}>Delivery Pattern</Text>
-              <View style={s.patternGrid}>
-                {patterns.map((p) => (
-                  <TouchableOpacity
-                    key={p.value}
-                    style={[
-                      s.patternCard,
-                      pattern === p.value && {
-                        backgroundColor: modalTheme.accent,
-                        borderColor: modalTheme.accent,
-                      },
-                    ]}
-                    onPress={() => setPattern(p.value)}
-                  >
-                    <Ionicons
-                      name={p.icon as any}
-                      size={19}
-                      color={pattern === p.value ? "#fff" : modalTheme.accent}
-                    />
-                    <Text
-                      style={[
-                        s.patternLabel,
-                        pattern === p.value && { color: "#fff" },
-                      ]}
-                    >
-                      {p.label}
-                    </Text>
-                    <Text
-                      style={[
-                        s.patternDesc,
-                        pattern === p.value && {
-                          color: "rgba(255,255,255,0.7)",
-                        },
-                      ]}
-                    >
-                      {p.description}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              {pattern === "custom" && (
-                <>
-                  <Text style={s.modalLabel}>Select Days</Text>
-                  <View style={s.daysRow}>
-                    {weekDays.map((day) => (
-                      <TouchableOpacity
-                        key={day.value}
-                        style={[
-                          s.dayCircle,
-                          customDays.includes(day.value) && {
-                            backgroundColor: modalTheme.accent,
-                          },
-                        ]}
-                        onPress={() => toggleCustomDay(day.value)}
-                      >
-                        <Text
-                          style={[
-                            s.dayLabel,
-                            customDays.includes(day.value) && { color: "#fff" },
-                          ]}
-                        >
-                          {day.label}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </>
-              )}
-
-              <View style={{ height: 16 }} />
-              <Button
-                title={submitting ? "Creating..." : "Subscribe Now"}
-                onPress={handleSubscribe}
-                loading={submitting}
-              />
-              <View style={{ height: 20 }} />
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 }
 
-// ─── Paytm-style Brand Footer 
+// ─── Brand Footer 
 function BrandFooter() {
-  const countAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const sceneSlide = useRef(new Animated.Value(30)).current;
 
@@ -901,56 +664,24 @@ function BrandFooter() {
         useNativeDriver: true,
       }),
     ]).start();
-
-    Animated.timing(countAnim, {
-      toValue: 1,
-      duration: 1200,
-      delay: 400,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: false,
-    }).start();
   }, []);
-
-  const countInterp = countAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 500],
-  });
 
   return (
     <Animated.View style={[footerStyles.wrap, { opacity: fadeAnim }]}>
-      {/* Trust stat — "Trusted by X+ families" */}
       <Text style={footerStyles.trustedBy}>TRUSTED BY</Text>
       <View style={footerStyles.statRow}>
-        {/* <AnimatedCountText animValue={countAnim} /> */}
         <Text style={footerStyles.statSuffix}> Families</Text>
       </View>
       <Text style={footerStyles.statSub}>ACROSS YOUR SOCIETY</Text>
-
-      {/* Tagline */}
       <Text style={footerStyles.tagline}>Pure. Fresh. Delivered daily.</Text>
 
-      {/* Illustrated scenic strip */}
       <Animated.View
-        style={[
-          footerStyles.sceneWrap,
-          { transform: [{ translateY: sceneSlide }] },
-        ]}
+        style={[footerStyles.sceneWrap, { transform: [{ translateY: sceneSlide }] }]}
       >
         <Svg width="100%" height={130} viewBox="0 0 400 130">
-          {/* Sky */}
-          <Rect
-            x="0"
-            y="0"
-            width="400"
-            height="130"
-            fill={Colors.primary + "10"}
-          />
-
-          {/* Sun */}
+          <Rect x="0" y="0" width="400" height="130" fill={Colors.primary + "10"} />
           <Circle cx="48" cy="45" r="28" fill="#FCD34D" opacity={0.9} />
           <Circle cx="48" cy="45" r="20" fill="#FDE68A" />
-
-          {/* Rolling hills */}
           <Path
             d="M0 95 Q50 65 100 90 Q150 110 200 85 Q250 60 300 88 Q350 108 400 80 L400 130 L0 130 Z"
             fill={Colors.primary + "22"}
@@ -959,271 +690,57 @@ function BrandFooter() {
             d="M0 105 Q60 80 120 100 Q180 118 240 95 Q300 72 360 100 L400 95 L400 130 L0 130 Z"
             fill={Colors.primary + "40"}
           />
-
-          {/* Cow silhouette 1 */}
           <G transform="translate(60, 72)">
-            <Ellipse
-              cx="0"
-              cy="0"
-              rx="18"
-              ry="10"
-              fill={Colors.primary + "CC"}
-            />
+            <Ellipse cx="0" cy="0" rx="18" ry="10" fill={Colors.primary + "CC"} />
             <Circle cx="16" cy="-8" r="7" fill={Colors.primary + "CC"} />
-            <Line
-              x1="-10"
-              y1="8"
-              x2="-10"
-              y2="20"
-              stroke={Colors.primary}
-              strokeWidth="3"
-              strokeLinecap="round"
-            />
-            <Line
-              x1="-2"
-              y1="9"
-              x2="-2"
-              y2="21"
-              stroke={Colors.primary}
-              strokeWidth="3"
-              strokeLinecap="round"
-            />
-            <Line
-              x1="8"
-              y1="9"
-              x2="8"
-              y2="21"
-              stroke={Colors.primary}
-              strokeWidth="3"
-              strokeLinecap="round"
-            />
-            <Line
-              x1="15"
-              y1="8"
-              x2="15"
-              y2="20"
-              stroke={Colors.primary}
-              strokeWidth="3"
-              strokeLinecap="round"
-            />
-            <Path
-              d="M19 -13 Q24 -18 22 -22"
-              stroke={Colors.primary}
-              strokeWidth="2"
-              fill="none"
-              strokeLinecap="round"
-            />
-            <Path
-              d="M22 -13 Q28 -14 27 -18"
-              stroke={Colors.primary}
-              strokeWidth="2"
-              fill="none"
-              strokeLinecap="round"
-            />
+            <Line x1="-10" y1="8" x2="-10" y2="20" stroke={Colors.primary} strokeWidth="3" strokeLinecap="round" />
+            <Line x1="-2" y1="9" x2="-2" y2="21" stroke={Colors.primary} strokeWidth="3" strokeLinecap="round" />
+            <Line x1="8" y1="9" x2="8" y2="21" stroke={Colors.primary} strokeWidth="3" strokeLinecap="round" />
+            <Line x1="15" y1="8" x2="15" y2="20" stroke={Colors.primary} strokeWidth="3" strokeLinecap="round" />
+            <Path d="M19 -13 Q24 -18 22 -22" stroke={Colors.primary} strokeWidth="2" fill="none" strokeLinecap="round" />
+            <Path d="M22 -13 Q28 -14 27 -18" stroke={Colors.primary} strokeWidth="2" fill="none" strokeLinecap="round" />
           </G>
-
-          {/* Milk bottle */}
           <G transform="translate(155, 58)">
-            <Rect
-              x="-8"
-              y="0"
-              width="16"
-              height="28"
-              rx="4"
-              fill="#fff"
-              stroke={Colors.primary}
-              strokeWidth="1.5"
-            />
-            <Rect
-              x="-5"
-              y="-6"
-              width="10"
-              height="8"
-              rx="2"
-              fill="#fff"
-              stroke={Colors.primary}
-              strokeWidth="1.5"
-            />
-            <Rect
-              x="-8"
-              y="6"
-              width="16"
-              height="8"
-              fill={Colors.primary + "40"}
-            />
+            <Rect x="-8" y="0" width="16" height="28" rx="4" fill="#fff" stroke={Colors.primary} strokeWidth="1.5" />
+            <Rect x="-5" y="-6" width="10" height="8" rx="2" fill="#fff" stroke={Colors.primary} strokeWidth="1.5" />
+            <Rect x="-8" y="6" width="16" height="8" fill={Colors.primary + "40"} />
           </G>
-
-          {/* Cow silhouette 2 (smaller, distant) */}
           <G transform="translate(230, 80)">
-            <Ellipse
-              cx="0"
-              cy="0"
-              rx="12"
-              ry="7"
-              fill={Colors.primary + "88"}
-            />
+            <Ellipse cx="0" cy="0" rx="12" ry="7" fill={Colors.primary + "88"} />
             <Circle cx="11" cy="-6" r="5" fill={Colors.primary + "88"} />
-            <Line
-              x1="-7"
-              y1="6"
-              x2="-7"
-              y2="14"
-              stroke={Colors.primary + "88"}
-              strokeWidth="2"
-              strokeLinecap="round"
-            />
-            <Line
-              x1="-1"
-              y1="7"
-              x2="-1"
-              y2="15"
-              stroke={Colors.primary + "88"}
-              strokeWidth="2"
-              strokeLinecap="round"
-            />
-            <Line
-              x1="6"
-              y1="7"
-              x2="6"
-              y2="15"
-              stroke={Colors.primary + "88"}
-              strokeWidth="2"
-              strokeLinecap="round"
-            />
-            <Line
-              x1="10"
-              y1="6"
-              x2="10"
-              y2="14"
-              stroke={Colors.primary + "88"}
-              strokeWidth="2"
-              strokeLinecap="round"
-            />
+            <Line x1="-7" y1="6" x2="-7" y2="14" stroke={Colors.primary + "88"} strokeWidth="2" strokeLinecap="round" />
+            <Line x1="-1" y1="7" x2="-1" y2="15" stroke={Colors.primary + "88"} strokeWidth="2" strokeLinecap="round" />
+            <Line x1="6" y1="7" x2="6" y2="15" stroke={Colors.primary + "88"} strokeWidth="2" strokeLinecap="round" />
+            <Line x1="10" y1="6" x2="10" y2="14" stroke={Colors.primary + "88"} strokeWidth="2" strokeLinecap="round" />
           </G>
-
-          {/* Trees */}
           <G transform="translate(310, 55)">
-            <Rect
-              x="-3"
-              y="20"
-              width="6"
-              height="18"
-              fill={Colors.primary + "80"}
-            />
-            <Ellipse
-              cx="0"
-              cy="18"
-              rx="14"
-              ry="18"
-              fill={Colors.primary + "90"}
-            />
+            <Rect x="-3" y="20" width="6" height="18" fill={Colors.primary + "80"} />
+            <Ellipse cx="0" cy="18" rx="14" ry="18" fill={Colors.primary + "90"} />
           </G>
           <G transform="translate(340, 62)">
-            <Rect
-              x="-2"
-              y="15"
-              width="5"
-              height="14"
-              fill={Colors.primary + "60"}
-            />
-            <Ellipse
-              cx="0"
-              cy="14"
-              rx="10"
-              ry="13"
-              fill={Colors.primary + "70"}
-            />
+            <Rect x="-2" y="15" width="5" height="14" fill={Colors.primary + "60"} />
+            <Ellipse cx="0" cy="14" rx="10" ry="13" fill={Colors.primary + "70"} />
           </G>
           <G transform="translate(370, 58)">
-            <Rect
-              x="-3"
-              y="18"
-              width="6"
-              height="16"
-              fill={Colors.primary + "80"}
-            />
-            <Ellipse
-              cx="0"
-              cy="16"
-              rx="13"
-              ry="16"
-              fill={Colors.primary + "88"}
-            />
+            <Rect x="-3" y="18" width="6" height="16" fill={Colors.primary + "80"} />
+            <Ellipse cx="0" cy="16" rx="13" ry="16" fill={Colors.primary + "88"} />
           </G>
-
-          {/* Ground line */}
-          <Line
-            x1="0"
-            y1="108"
-            x2="400"
-            y2="108"
-            stroke={Colors.primary + "60"}
-            strokeWidth="1"
-          />
-
-          {/* Delivery bike */}
+          <Line x1="0" y1="108" x2="400" y2="108" stroke={Colors.primary + "60"} strokeWidth="1" />
           <G transform="translate(310, 90)">
-            <Circle
-              cx="-12"
-              cy="10"
-              r="7"
-              fill="none"
-              stroke={Colors.primary}
-              strokeWidth="2.5"
-            />
-            <Circle
-              cx="12"
-              cy="10"
-              r="7"
-              fill="none"
-              stroke={Colors.primary}
-              strokeWidth="2.5"
-            />
-            <Path
-              d="M-12 10 L0 2 L12 10"
-              fill="none"
-              stroke={Colors.primary}
-              strokeWidth="2"
-            />
-            <Path
-              d="M0 2 L4 -6 L14 -6"
-              fill="none"
-              stroke={Colors.primary}
-              strokeWidth="2"
-              strokeLinecap="round"
-            />
-            <Rect
-              x="4"
-              y="-14"
-              width="20"
-              height="10"
-              rx="3"
-              fill={Colors.primary}
-            />
-            <SvgText fill="#fff" x={7} y={-6} fontSize={6}>
-              milk
-            </SvgText>
+            <Circle cx="-12" cy="10" r="7" fill="none" stroke={Colors.primary} strokeWidth="2.5" />
+            <Circle cx="12" cy="10" r="7" fill="none" stroke={Colors.primary} strokeWidth="2.5" />
+            <Path d="M-12 10 L0 2 L12 10" fill="none" stroke={Colors.primary} strokeWidth="2" />
+            <Path d="M0 2 L4 -6 L14 -6" fill="none" stroke={Colors.primary} strokeWidth="2" strokeLinecap="round" />
+            <Rect x="4" y="-14" width="20" height="10" rx="3" fill={Colors.primary} />
+            <SvgText fill="#fff" x={7} y={-6} fontSize={6}>milk</SvgText>
           </G>
-
-          {/* Bottom teal strip */}
           <Rect x="0" y="120" width="400" height="10" fill={Colors.primary} />
         </Svg>
       </Animated.View>
 
-      <Text style={footerStyles.madeIn}>MADE WITH LOVE FOR PURITY </Text>
+      <Text style={footerStyles.madeIn}>MADE WITH LOVE FOR PURITY</Text>
     </Animated.View>
   );
-}
-
-function AnimatedCountText({ animValue }: { animValue: Animated.Value }) {
-  const [display, setDisplay] = useState("0");
-  useEffect(() => {
-    const id = animValue.addListener(({ value }) => {
-      setDisplay(Math.round(value).toString());
-    });
-    return () => animValue.removeListener(id);
-  }, []);
-  return <Text style={footerStyles.statNumber}>{display}</Text>;
 }
 
 const footerStyles = StyleSheet.create({
@@ -1243,18 +760,7 @@ const footerStyles = StyleSheet.create({
     marginBottom: 6,
   },
   statRow: { flexDirection: "row", alignItems: "baseline", gap: 4 },
-  statNumber: {
-    fontSize: 52,
-    fontWeight: "900",
-    color: "#E0E0E0",
-    letterSpacing: -2,
-  },
-  statSuffix: {
-    fontSize: 28,
-    fontWeight: "900",
-    color: "#E0E0E0",
-    letterSpacing: -1,
-  },
+  statSuffix: { fontSize: 28, fontWeight: "900", color: "#E0E0E0", letterSpacing: -1 },
   statSub: {
     fontSize: 11,
     fontWeight: "700",
@@ -1404,12 +910,22 @@ const s = StyleSheet.create({
 
   // Sections
   sectionWrap: { marginHorizontal: 20, marginBottom: 20 },
+  sectionHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
   sectionTitle: {
     fontSize: 16,
     fontWeight: "800",
     color: "#111",
-    marginBottom: 12,
     letterSpacing: -0.3,
+  },
+  seeAllText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: Colors.primary,
   },
 
   // Generic card
@@ -1486,7 +1002,7 @@ const s = StyleSheet.create({
   emptyTitle: { fontSize: 15, fontWeight: "700", color: "#999" },
   emptySubtitle: { fontSize: 12, color: "#ccc" },
 
-  // Explore button inside products card
+  // Explore / subscription buttons
   exploreBtn: { marginTop: 14, borderRadius: 16, overflow: "hidden" },
   exploreBtnGrad: {
     flexDirection: "row",
@@ -1514,123 +1030,4 @@ const s = StyleSheet.create({
     fontWeight: "600",
     marginTop: 1,
   },
-
-  // Modal
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "flex-end",
-  },
-  modalSheet: {
-    backgroundColor: "#fff",
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
-    paddingHorizontal: 24,
-    paddingTop: 12,
-    paddingBottom: 34,
-    maxHeight: "92%",
-  },
-  dragHandle: {
-    width: 36,
-    height: 4,
-    backgroundColor: "#E5E7EB",
-    borderRadius: 2,
-    alignSelf: "center",
-    marginBottom: 16,
-  },
-  modalProductHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 14,
-    borderRadius: 18,
-    padding: 14,
-    marginBottom: 4,
-  },
-  modalIconCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    justifyContent: "center",
-    alignItems: "center",
-    overflow: "hidden",
-  },
-  modalProductImage: { width: "100%", height: "100%" },
-  modalTitle: {
-    fontSize: 17,
-    fontWeight: "800",
-    color: "#111",
-    letterSpacing: -0.3,
-    flexShrink: 1,
-  },
-  modalPrice: { fontSize: 14, fontWeight: "700", marginTop: 3 },
-  modalCloseBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: "rgba(0,0,0,0.07)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  divider: { height: 1, backgroundColor: "#F0F0F0", marginVertical: 16 },
-  modalLabel: {
-    fontSize: 10,
-    fontWeight: "700",
-    color: "#bbb",
-    letterSpacing: 1.2,
-    textTransform: "uppercase",
-    marginBottom: 12,
-    marginTop: 4,
-  },
-  quantityRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 24,
-    gap: 20,
-  },
-  qtyBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: "#F5F5F5",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  qtyValue: {
-    fontSize: 22,
-    fontWeight: "800",
-    color: "#111",
-    minWidth: 30,
-    textAlign: "center",
-  },
-  patternGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-    marginBottom: 24,
-  },
-  patternCard: {
-    width: "47%",
-    padding: 14,
-    borderRadius: 16,
-    backgroundColor: "#F8F8F8",
-    borderWidth: 1.5,
-    borderColor: "transparent",
-    gap: 5,
-  },
-  patternLabel: { fontSize: 14, fontWeight: "700", color: "#111" },
-  patternDesc: { fontSize: 11, color: "#aaa" },
-  daysRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 24,
-  },
-  dayCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#F5F5F5",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  dayLabel: { fontSize: 12, fontWeight: "700", color: "#aaa" },
 });

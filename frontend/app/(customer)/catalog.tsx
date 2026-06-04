@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
   View,
   Text,
@@ -20,1100 +20,1110 @@ import { api } from "../../src/services/api";
 import { Colors } from "../../src/constants/colors";
 import Button from "../../src/components/Button";
 import LoadingScreen from "../../src/components/LoadingScreen";
+import { useAuth } from "../../src/contexts/AuthContext";
 
-const CARD_WIDTH = 130;
+const CARD_WIDTH = 134;
 const SCREEN_WIDTH = Dimensions.get("window").width;
-
-// Dairy category key — adjust if your API uses a different value
 const DAIRY_CATEGORIES = ["milk", "dairy"];
 
-// All 4 patterns available for dairy
-const subscriptionPatterns = [
-  {
-    value: "daily",
-    label: "Daily",
-    description: "Subscription",
-    icon: "sunny-outline",
-    isSubscription: true,
-    hint: "Delivered every day",
-  },
-  {
-    value: "alternate",
-    label: "Alternate",
-    description: "Subscription",
-    icon: "repeat-outline",
-    isSubscription: true,
-    hint: "Every other day",
-  },
-  {
-    value: "custom",
-    label: "Custom Days",
-    description: "Subscription",
-    icon: "calendar-outline",
-    isSubscription: true,
-    hint: "Pick your days",
-  },
-  {
-    value: "buy_once",
-    label: "Buy Once",
-    description: "One-time",
-    icon: "bag-check-outline",
-    isSubscription: false,
-    hint: "Single delivery",
-  },
-];
-
-// Only buy once for non-dairy
-const buyOncePattern = {
-  value: "buy_once",
-  label: "Buy Once",
-  description: "One-time",
-  icon: "bag-check-outline",
-  isSubscription: false,
-  hint: "Single delivery",
+// ─── Design tokens ─────────────────────────────────────────────────────────
+const T = {
+  bg: "#F9F8F6",
+  surface: "#FFFFFF",
+  border: "#EBEBEB",
+  text: "#111111",
+  muted: "#888888",
+  faint: "#BBBBBB",
+  accent: "#111111",
+  amber: "#D97706",
+  amberLight: "#FEF3C7",
+  amberBorder: "#FDE68A",
+  green: "#16A34A",
+  greenLight: "#F0FDF4",
+  red: "#DC2626",
+  redLight: "#FEF2F2",
+  orange: "#EA580C",
+  orangeLight: "#FFF7ED",
+  radius: { sm: 8, md: 12, lg: 16, xl: 20, full: 999 },
 };
 
+// ─── Data ──────────────────────────────────────────────────────────────────
+const subscriptionPatterns = [
+  { value: "daily",     label: "Daily",       icon: "sunny-outline",    hint: "Every day" },
+  { value: "alternate", label: "Alternate",   icon: "repeat-outline",   hint: "Every other day" },
+  { value: "custom",    label: "Custom",      icon: "calendar-outline", hint: "Pick days" },
+];
+
 const weekDays = [
-  { value: 0, label: "Mon" },
-  { value: 1, label: "Tue" },
-  { value: 2, label: "Wed" },
-  { value: 3, label: "Thu" },
-  { value: 4, label: "Fri" },
-  { value: 5, label: "Sat" },
+  { value: 0, label: "Mon" }, { value: 1, label: "Tue" }, { value: 2, label: "Wed" },
+  { value: 3, label: "Thu" }, { value: 4, label: "Fri" }, { value: 5, label: "Sat" },
   { value: 6, label: "Sun" },
 ];
 
-const CATEGORY_THEMES: Record<
-  string,
-  { bg: string; accent: string; icon: string }
-> = {
-  milk: { bg: "#EAF4FF", accent: "#3B82F6", icon: "water" },
-  dairy: { bg: "#FFF4E6", accent: "#F59E0B", icon: "ice-cream" },
-  bakery: { bg: "#FEF2F2", accent: "#EF4444", icon: "pizza" },
-  fruits: { bg: "#F0FDF4", accent: "#22C55E", icon: "nutrition" },
-  vegetables: { bg: "#F0FDF4", accent: "#16A34A", icon: "leaf" },
-  essentials: { bg: "#F5F3FF", accent: "#8B5CF6", icon: "basket" },
-  other: { bg: "#F8F7F4", accent: "#6B7280", icon: "cube" },
+const DELIVERY_SLOTS = [
+  { value: "morning",   label: "Morning",   time: "6 AM – 9 AM",  icon: "sunny-outline" },
+  { value: "afternoon", label: "Afternoon", time: "12 PM – 3 PM", icon: "partly-sunny-outline" },
+  { value: "evening",   label: "Evening",   time: "5 PM – 8 PM",  icon: "moon-outline" },
+];
+
+const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const DAY_NAMES   = ["Su","Mo","Tu","We","Th","Fr","Sa"];
+
+const CATEGORY_THEMES: Record<string, { bg: string; accent: string; icon: string }> = {
+  milk:       { bg: "#EBF5FF", accent: "#2563EB", icon: "water" },
+  dairy:      { bg: "#FEF9EC", accent: "#CA8A04", icon: "ice-cream" },
+  bakery:     { bg: "#FEF2F2", accent: "#DC2626", icon: "pizza" },
+  fruits:     { bg: "#F0FDF4", accent: "#16A34A", icon: "nutrition" },
+  vegetables: { bg: "#F0FDF4", accent: "#15803D", icon: "leaf" },
+  essentials: { bg: "#F5F3FF", accent: "#7C3AED", icon: "basket" },
+  other:      { bg: "#F5F5F4", accent: "#57534E", icon: "cube" },
 };
 
 interface CartItem {
-  id: string;
-  product: any;
-  quantity: number;
-  pattern: string;
-  customDays: number[];
+  id: string; product: any; quantity: number; pattern: string; customDays: number[];
 }
 
-function isDairyProduct(product: any): boolean {
-  return DAIRY_CATEGORIES.includes(product?.category?.toLowerCase());
+function isDairyProduct(p: any): boolean {
+  return DAIRY_CATEGORIES.includes(p?.category?.toLowerCase());
 }
-
-function getCategoryTheme(category: string) {
-  return CATEGORY_THEMES[category?.toLowerCase()] || CATEGORY_THEMES.other;
+function getCategoryTheme(cat: string) {
+  return CATEGORY_THEMES[cat?.toLowerCase()] || CATEGORY_THEMES.other;
 }
-
 function formatUnit(unit: string): string {
   if (!unit) return "";
-  const lower = unit.toLowerCase().trim();
-  const lMatch = lower.match(/^(\d+\.?\d*)\s*(l|litre|litres|liter|liters)$/);
-  if (lMatch) return `${lMatch[1]}L`;
-  const mlMatch = lower.match(/^(\d+\.?\d*)\s*ml$/);
-  if (mlMatch) return `${mlMatch[1]}ml`;
-  const kgMatch = lower.match(/^(\d+\.?\d*)\s*kg$/);
-  if (kgMatch) return `${kgMatch[1]}kg`;
-  const gMatch = lower.match(/^(\d+\.?\d*)\s*g$/);
-  if (gMatch) return `${gMatch[1]}g`;
+  const l = unit.toLowerCase().trim();
+  const m = l.match(/^(\d+\.?\d*)\s*(l|litre|litres|liter|liters)$/) ||
+            l.match(/^(\d+\.?\d*)\s*ml$/) ||
+            l.match(/^(\d+\.?\d*)\s*kg$/) ||
+            l.match(/^(\d+\.?\d*)\s*g$/);
+  if (m) {
+    if (l.match(/l(itre)?s?$/)) return `${m[1]}L`;
+    if (l.endsWith("ml"))        return `${m[1]}ml`;
+    if (l.endsWith("kg"))        return `${m[1]}kg`;
+    if (l.endsWith("g"))         return `${m[1]}g`;
+  }
   return unit.charAt(0).toUpperCase() + unit.slice(1);
 }
+function patternLabel(p: string) {
+  return ({ daily:"Daily", alternate:"Alternate", custom:"Custom", buy_once:"Once" }[p] ?? p);
+}
+function formatDate(s: string): string {
+  if (!s) return "";
+  const d = new Date(s + "T00:00:00");
+  return `${d.getDate()} ${MONTH_NAMES[d.getMonth()].slice(0,3)} ${d.getFullYear()}`;
+}
+function dateToString(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+function estimateDeliveryCount(pattern: string, start: string, end: string|null, custom: number[]): number {
+  if (!start) return 0;
+  if (pattern === "buy_once") return 1;
+  if (!end) return 30;
+  const s = new Date(start + "T00:00:00"), e = new Date(end + "T00:00:00");
+  let count = 0, cur = new Date(s), idx = 0;
+  while (cur <= e) {
+    const dow = cur.getDay() === 0 ? 6 : cur.getDay() - 1;
+    if (pattern === "daily") count++;
+    else if (pattern === "alternate" && idx % 2 === 0) count++;
+    else if (pattern === "custom" && custom.includes(dow)) count++;
+    cur.setDate(cur.getDate() + 1); idx++;
+  }
+  return count;
+}
 
-function patternLabel(pattern: string): string {
+// ─── Mini Calendar ──────────────────────────────────────────────────────────
+function MiniCalendar({ startDate, endDate, onSelect, accentColor, minDate, isBuyOnce }: {
+  startDate: string|null; endDate: string|null;
+  onSelect: (s: string, e: string|null) => void;
+  accentColor: string; minDate?: string; isBuyOnce?: boolean;
+}) {
+  const today   = new Date();
+  const init    = startDate ? new Date(startDate + "T00:00:00") : today;
+  const [yr, setYr]   = useState(init.getFullYear());
+  const [mo, setMo]   = useState(init.getMonth());
+  const [sel, setSel] = useState<"start"|"end">(startDate ? "end" : "start");
+
+  const minObj      = minDate ? new Date(minDate + "T00:00:00") : today;
+  const daysInMonth = new Date(yr, mo+1, 0).getDate();
+  const firstDay    = new Date(yr, mo, 1).getDay();
+
+  const cells: (number|null)[] = [];
+  for (let i = 0; i < firstDay; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+
+  const ds = (day: number) => dateToString(new Date(yr, mo, day));
+  const minStr = dateToString(minObj);
+
+  const press = (day: number) => {
+    const s = ds(day);
+    if (s < minStr) return;
+    if (isBuyOnce) { onSelect(s, s); return; }
+    if (sel === "start" || !startDate) { onSelect(s, null); setSel("end"); }
+    else if (s < startDate)            { onSelect(s, null); setSel("end"); }
+    else                               { onSelect(startDate, s); setSel("start"); }
+  };
+  const prevMo = () => mo === 0 ? (setMo(11), setYr(y => y-1)) : setMo(m => m-1);
+  const nextMo = () => mo === 11 ? (setMo(0),  setYr(y => y+1)) : setMo(m => m+1);
+
   return (
-    {
-      daily: "Daily",
-      alternate: "Alternate",
-      custom: "Custom",
-      buy_once: "Once",
-    }[pattern] ?? pattern
+    <View style={calS.wrap}>
+      <View style={calS.header}>
+        <TouchableOpacity onPress={prevMo} style={calS.nav}><Ionicons name="chevron-back"    size={15} color={T.muted} /></TouchableOpacity>
+        <Text style={calS.title}>{MONTH_NAMES[mo]} {yr}</Text>
+        <TouchableOpacity onPress={nextMo} style={calS.nav}><Ionicons name="chevron-forward" size={15} color={T.muted} /></TouchableOpacity>
+      </View>
+      <View style={calS.names}>
+        {DAY_NAMES.map(d => <Text key={d} style={calS.name}>{d}</Text>)}
+      </View>
+      <View style={calS.grid}>
+        {cells.map((day, i) => {
+          if (!day) return <View key={`e-${i}`} style={calS.cell} />;
+          const str   = ds(day);
+          const past  = str < minStr;
+          const isS   = startDate === str;
+          const isE   = endDate === str;
+          const inR   = !!(startDate && endDate && str > startDate && str < endDate);
+          const isTod = str === dateToString(today);
+          return (
+            <TouchableOpacity
+              key={`d-${day}`}
+              style={[calS.cell, inR && calS.cellRange, (isS||isE) && { backgroundColor: accentColor, borderRadius: 8 }, past && { opacity: 0.25 }]}
+              onPress={() => !past && press(day)} activeOpacity={past ? 1 : 0.7}
+            >
+              <Text style={[calS.day, (isS||isE) && { color:"#fff", fontWeight:"800" }, isTod && !isS && !isE && { color: accentColor, fontWeight:"700" }]}>{day}</Text>
+              {isTod && !isS && !isE && <View style={[calS.dot, { backgroundColor: accentColor }]} />}
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+      {!isBuyOnce && (
+        <View style={calS.hint}>
+          <Text style={[calS.hintTxt, { color: accentColor }]}>
+            {sel === "start" ? "Tap to set start date" : "Tap to set end date (or skip)"}
+          </Text>
+        </View>
+      )}
+    </View>
   );
 }
 
-// ─── Add-to-Cart Toast 
-function AddedToCartToast({
-  visible,
-  productName,
-  isSubscription,
-}: {
-  visible: boolean;
-  productName: string;
-  isSubscription?: boolean;
-}) {
-  const translateY = useRef(new Animated.Value(60)).current;
-  const opacity = useRef(new Animated.Value(0)).current;
+const calS = StyleSheet.create({
+  wrap:  { paddingBottom: 4 },
+  header:{ flexDirection:"row", alignItems:"center", justifyContent:"space-between", marginBottom: 12 },
+  nav:   { width: 30, height: 30, borderRadius: T.radius.sm, backgroundColor:"#F5F5F3", justifyContent:"center", alignItems:"center" },
+  title: { fontSize: 13, fontWeight:"700", color: T.text, letterSpacing: 0.2 },
+  names: { flexDirection:"row", marginBottom: 6 },
+  name:  { flex:1, textAlign:"center", fontSize: 10, fontWeight:"600", color: T.faint },
+  grid:  { flexDirection:"row", flexWrap:"wrap" },
+  cell:  { width:`${100/7}%`, aspectRatio:1, justifyContent:"center", alignItems:"center" },
+  cellRange: { backgroundColor:"#11111110" },
+  day:   { fontSize: 12, fontWeight:"500", color: T.text },
+  dot:   { width: 3, height: 3, borderRadius: 2, position:"absolute", bottom: 4 },
+  hint:  { marginTop: 8 },
+  hintTxt:{ fontSize: 10, fontWeight:"600", textAlign:"center" },
+});
 
+// ─── Toast ──────────────────────────────────────────────────────────────────
+function AddedToCartToast({ visible, productName, isSubscription }: { visible: boolean; productName: string; isSubscription?: boolean }) {
+  const ty  = useRef(new Animated.Value(60)).current;
+  const op  = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     if (visible) {
-      translateY.setValue(60);
-      opacity.setValue(0);
+      ty.setValue(60); op.setValue(0);
       Animated.parallel([
-        Animated.spring(translateY, {
-          toValue: 0,
-          useNativeDriver: true,
-          damping: 16,
-          stiffness: 200,
-        }),
-        Animated.timing(opacity, {
-          toValue: 1,
-          duration: 200,
-          useNativeDriver: true,
-        }),
+        Animated.spring(ty, { toValue:0, useNativeDriver:true, damping:16, stiffness:200 }),
+        Animated.timing(op, { toValue:1, duration:180, useNativeDriver:true }),
       ]).start();
     } else {
       Animated.parallel([
-        Animated.timing(translateY, {
-          toValue: 60,
-          duration: 220,
-          useNativeDriver: true,
-        }),
-        Animated.timing(opacity, {
-          toValue: 0,
-          duration: 180,
-          useNativeDriver: true,
-        }),
+        Animated.timing(ty, { toValue:60, duration:200, useNativeDriver:true }),
+        Animated.timing(op, { toValue:0,  duration:160, useNativeDriver:true }),
       ]).start();
     }
   }, [visible]);
-
   return (
-    <Animated.View
-      pointerEvents="none"
-      style={[toastStyles.toast, { opacity, transform: [{ translateY }] }]}
-    >
-      <Ionicons
-        name={isSubscription ? "repeat-outline" : "checkmark-circle"}
-        size={18}
-        color={isSubscription ? "#f59e0b" : "#22c55e"}
-      />
-      <Text style={toastStyles.text}>
-        <Text style={{ fontWeight: "800" }}>{productName}</Text>{" "}
-        {isSubscription ? "subscription activated!" : "added to cart"}
+    <Animated.View pointerEvents="none" style={[toastS.wrap, { opacity:op, transform:[{translateY:ty}] }]}>
+      <View style={[toastS.dot, { backgroundColor: isSubscription ? T.amber : T.green }]} />
+      <Text style={toastS.txt}>
+        <Text style={{ fontWeight:"700" }}>{productName}</Text>
+        {isSubscription ? " subscribed" : " added"}
       </Text>
     </Animated.View>
   );
 }
-
-const toastStyles = StyleSheet.create({
-  toast: {
-    position: "absolute",
-    bottom: 100,
-    alignSelf: "center",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    backgroundColor: "#1A1A1A",
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderRadius: 30,
-    shadowColor: "#000",
-    shadowOpacity: 0.18,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 8,
-    zIndex: 999,
-  },
-  text: { fontSize: 13, color: "#fff", fontWeight: "500" },
+const toastS = StyleSheet.create({
+  wrap: { position:"absolute", bottom:100, alignSelf:"center", flexDirection:"row", alignItems:"center", gap:8, backgroundColor: T.text, paddingHorizontal:16, paddingVertical:11, borderRadius: T.radius.full, zIndex:999, shadowColor:"#000", shadowOpacity:0.15, shadowRadius:16, elevation:8 },
+  dot:  { width:7, height:7, borderRadius:4 },
+  txt:  { fontSize:13, color:"#fff", fontWeight:"500" },
 });
 
-// ─── Success Modal 
-function SuccessModal({
-  visible,
-  itemCount,
-  isSubscription,
-  onClose,
-}: {
-  visible: boolean;
-  itemCount: number;
-  isSubscription?: boolean;
-  onClose: () => void;
-}) {
-  const scaleAnim = useRef(new Animated.Value(0.8)).current;
-  const opacityAnim = useRef(new Animated.Value(0)).current;
-  const checkScale = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(18)).current;
-
+// ─── Modals (Success, Info, WalletError) ───────────────────────────────────
+function AnimCard({ visible, children }: { visible: boolean; children: React.ReactNode }) {
+  const sc = useRef(new Animated.Value(0.92)).current;
+  const op = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     if (visible) {
-      [scaleAnim, opacityAnim, checkScale, slideAnim].forEach((a) =>
-        a.stopAnimation()
-      );
-      scaleAnim.setValue(0.8);
-      opacityAnim.setValue(0);
-      checkScale.setValue(0);
-      slideAnim.setValue(18);
-
+      sc.setValue(0.92); op.setValue(0);
       Animated.parallel([
-        Animated.spring(scaleAnim, {
-          toValue: 1,
-          useNativeDriver: true,
-          damping: 14,
-          stiffness: 180,
-        }),
-        Animated.timing(opacityAnim, {
-          toValue: 1,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-      ]).start(() => {
-        Animated.spring(checkScale, {
-          toValue: 1,
-          useNativeDriver: true,
-          damping: 8,
-          stiffness: 220,
-        }).start();
-        Animated.spring(slideAnim, {
-          toValue: 0,
-          useNativeDriver: true,
-          damping: 16,
-          stiffness: 160,
-        }).start();
-      });
-      Vibration.vibrate([0, 60, 40, 80]);
-    }
-  }, [visible]);
-
-  const color = isSubscription ? "#f59e0b" : "#22c55e";
-  const bgColor = isSubscription ? "#fffbeb" : "#f0fdf4";
-  const borderColor = isSubscription ? "#fde68a" : "#bbf7d0";
-
-  return (
-    <Modal visible={visible} transparent animationType="fade">
-      <View style={ms.overlay}>
-        <Animated.View
-          style={[
-            ms.card,
-            { opacity: opacityAnim, transform: [{ scale: scaleAnim }] },
-          ]}
-        >
-          <View style={ms.iconWrap}>
-            <Animated.View
-              style={[
-                ms.iconCircle,
-                { backgroundColor: bgColor, borderColor },
-                { transform: [{ scale: checkScale }] },
-              ]}
-            >
-              <Ionicons
-                name={isSubscription ? "repeat" : "checkmark-circle"}
-                size={28}
-                color={color}
-              />
-            </Animated.View>
-          </View>
-          <Text style={ms.title}>
-            {isSubscription ? "Subscription Active!" : "Order Placed!"}
-          </Text>
-          <Text style={ms.subtitle}>
-            {isSubscription
-              ? "Your dairy subscription has been activated\nand will be delivered as scheduled."
-              : `${itemCount} item${itemCount > 1 ? "s" : ""} from your cart\nhave been placed successfully.`}
-          </Text>
-          <Animated.View
-            style={[
-              ms.tagRow,
-              { opacity: opacityAnim, transform: [{ translateY: slideAnim }] },
-            ]}
-          >
-            <View style={[ms.tag, { backgroundColor: bgColor, borderColor }]}>
-              <Ionicons
-                name={isSubscription ? "calendar-outline" : "bag-check-outline"}
-                size={12}
-                color={color}
-              />
-              <Text style={[ms.tagText, { color }]}>
-                {isSubscription ? "Auto-delivery scheduled" : "Delivery scheduled"}
-              </Text>
-            </View>
-          </Animated.View>
-          <TouchableOpacity
-            style={[ms.btn, { backgroundColor: color, shadowColor: color }]}
-            onPress={onClose}
-            activeOpacity={0.85}
-          >
-            <Text style={ms.btnText}>Great!</Text>
-          </TouchableOpacity>
-        </Animated.View>
-      </View>
-    </Modal>
-  );
-}
-
-// ─── Info Modal 
-function InfoModal({
-  visible,
-  onClose,
-}: {
-  visible: boolean;
-  onClose: () => void;
-}) {
-  const scaleAnim = useRef(new Animated.Value(0.85)).current;
-  const opacityAnim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    if (visible) {
-      scaleAnim.setValue(0.85);
-      opacityAnim.setValue(0);
-      Animated.parallel([
-        Animated.spring(scaleAnim, {
-          toValue: 1,
-          useNativeDriver: true,
-          damping: 15,
-          stiffness: 200,
-        }),
-        Animated.timing(opacityAnim, {
-          toValue: 1,
-          duration: 180,
-          useNativeDriver: true,
-        }),
+        Animated.spring(sc, { toValue:1, useNativeDriver:true, damping:15, stiffness:200 }),
+        Animated.timing(op, { toValue:1, duration:180, useNativeDriver:true }),
       ]).start();
-      Vibration.vibrate(60);
+      Vibration.vibrate([0,50,30,60]);
     }
   }, [visible]);
+  return (
+    <Animated.View style={[mBase.card, { opacity:op, transform:[{scale:sc}] }]}>
+      {children}
+    </Animated.View>
+  );
+}
 
+function SuccessModal({ visible, itemCount, isSubscription, onClose }: { visible:boolean; itemCount:number; isSubscription?:boolean; onClose:()=>void }) {
+  const color = isSubscription ? T.amber : T.green;
   return (
     <Modal visible={visible} transparent animationType="fade">
-      <View style={ms.overlay}>
-        <Animated.View
-          style={[
-            ms.card,
-            { opacity: opacityAnim, transform: [{ scale: scaleAnim }] },
-          ]}
-        >
-          <View style={ms.iconWrap}>
-            <View
-              style={[
-                ms.iconCircle,
-                { backgroundColor: "#fffbeb", borderColor: "#fde68a" },
-              ]}
-            >
-              <Ionicons name="calendar-outline" size={28} color="#f59e0b" />
-            </View>
+      <View style={mBase.overlay}>
+        <AnimCard visible={visible}>
+          <View style={[mBase.iconRing, { borderColor: color + "30", backgroundColor: color + "12" }]}>
+            <Ionicons name={isSubscription ? "repeat" : "checkmark"} size={24} color={color} />
           </View>
-          <Text style={ms.title}>Select Days</Text>
-          <Text style={ms.subtitle}>
-            Please choose at least one day for your custom delivery schedule.
-          </Text>
-          <TouchableOpacity
-            style={[
-              ms.btn,
-              { backgroundColor: "#f59e0b", shadowColor: "#f59e0b" },
-            ]}
-            onPress={onClose}
-            activeOpacity={0.85}
-          >
-            <Text style={ms.btnText}>Got it</Text>
+          <Text style={mBase.title}>{isSubscription ? "Subscribed" : "Order Placed"}</Text>
+          <Text style={mBase.sub}>{isSubscription ? "Delivery scheduled as configured." : `${itemCount} item${itemCount>1?"s":""} confirmed.`}</Text>
+          <TouchableOpacity style={[mBase.btn, { backgroundColor: color }]} onPress={onClose}>
+            <Text style={mBase.btnTxt}>Done</Text>
           </TouchableOpacity>
-        </Animated.View>
+        </AnimCard>
       </View>
     </Modal>
   );
 }
 
-// ─── Wallet Error Modal 
-function WalletErrorModal({
-  visible,
-  walletBalance,
-  orderTotal,
-  onClose,
-}: {
-  visible: boolean;
-  walletBalance: number;
-  orderTotal: number;
-  onClose: () => void;
-}) {
-  const scaleAnim = useRef(new Animated.Value(0.85)).current;
-  const opacityAnim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    if (visible) {
-      scaleAnim.setValue(0.85);
-      opacityAnim.setValue(0);
-      Animated.parallel([
-        Animated.spring(scaleAnim, {
-          toValue: 1,
-          useNativeDriver: true,
-          damping: 14,
-          stiffness: 200,
-        }),
-        Animated.timing(opacityAnim, {
-          toValue: 1,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-      ]).start();
-      Vibration.vibrate([0, 50, 30, 60]);
-    }
-  }, [visible]);
-
+function InfoModal({ visible, onClose }: { visible:boolean; onClose:()=>void }) {
   return (
     <Modal visible={visible} transparent animationType="fade">
-      <View style={ms.overlay}>
-        <Animated.View
-          style={[
-            ms.card,
-            { opacity: opacityAnim, transform: [{ scale: scaleAnim }] },
-          ]}
-        >
-          <View style={ms.iconWrap}>
-            <View
-              style={[
-                ms.iconCircle,
-                { backgroundColor: "#fff7ed", borderColor: "#fed7aa" },
-              ]}
-            >
-              <Ionicons name="wallet-outline" size={28} color="#f97316" />
-            </View>
+      <View style={mBase.overlay}>
+        <AnimCard visible={visible}>
+          <View style={[mBase.iconRing, { borderColor: T.amberBorder, backgroundColor: T.amberLight }]}>
+            <Ionicons name="calendar-outline" size={22} color={T.amber} />
           </View>
-          <Text style={ms.title}>Insufficient Balance</Text>
-          <Text style={ms.subtitle}>
-            Your wallet balance{" "}
-            <Text style={{ fontWeight: "800", color: "#f97316" }}>
-              ₹{walletBalance.toFixed(2)}
-            </Text>{" "}
-            is less than the cart total{" "}
-            <Text style={{ fontWeight: "800", color: "#1A1A1A" }}>
-              ₹{orderTotal.toFixed(2)}
-            </Text>
-            .{"\n"}Please recharge your wallet to continue.
-          </Text>
-          <TouchableOpacity
-            style={[
-              ms.btn,
-              { backgroundColor: "#f97316", shadowColor: "#f97316" },
-            ]}
-            onPress={onClose}
-            activeOpacity={0.85}
-          >
-            <Text style={ms.btnText}>OK, Got it</Text>
+          <Text style={mBase.title}>Select Days</Text>
+          <Text style={mBase.sub}>Choose at least one delivery day for your custom schedule.</Text>
+          <TouchableOpacity style={[mBase.btn, { backgroundColor: T.amber }]} onPress={onClose}>
+            <Text style={mBase.btnTxt}>Got it</Text>
           </TouchableOpacity>
-        </Animated.View>
+        </AnimCard>
       </View>
     </Modal>
   );
 }
 
-const ms = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.52)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 32,
-  },
-  card: {
-    backgroundColor: "#fff",
-    borderRadius: 28,
-    paddingHorizontal: 24,
-    paddingTop: 32,
-    paddingBottom: 24,
-    width: "100%",
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.16,
-    shadowRadius: 28,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 14,
-  },
-  iconWrap: {
-    width: 90,
-    height: 90,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 18,
-  },
-  iconCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 2,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#111",
-    marginBottom: 8,
-    letterSpacing: -0.4,
-    textAlign: "center",
-  },
-  subtitle: {
-    fontSize: 13,
-    color: "#888",
-    textAlign: "center",
-    lineHeight: 20,
-    marginBottom: 20,
-  },
-  tagRow: { marginBottom: 22 },
-  tag: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    borderWidth: 1,
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-  },
-  tagText: { fontSize: 11, fontWeight: "700" },
-  btn: {
-    width: "100%",
-    paddingVertical: 15,
-    borderRadius: 16,
-    alignItems: "center",
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 5,
-  },
-  btnText: { fontSize: 16, fontWeight: "800", color: "#fff" },
+function WalletErrorModal({ visible, walletBalance, orderTotal, onClose }: { visible:boolean; walletBalance:number; orderTotal:number; onClose:()=>void }) {
+  return (
+    <Modal visible={visible} transparent animationType="fade">
+      <View style={mBase.overlay}>
+        <AnimCard visible={visible}>
+          <View style={[mBase.iconRing, { borderColor:"#FDBA74", backgroundColor: T.orangeLight }]}>
+            <Ionicons name="wallet-outline" size={22} color={T.orange} />
+          </View>
+          <Text style={mBase.title}>Low Balance</Text>
+          <Text style={mBase.sub}>
+            Wallet <Text style={{ fontWeight:"800", color: T.orange }}>₹{walletBalance.toFixed(2)}</Text>
+            {" "}· Order <Text style={{ fontWeight:"800", color: T.text }}>₹{orderTotal.toFixed(2)}</Text>
+            {"\n"}Please recharge to continue.
+          </Text>
+          <TouchableOpacity style={[mBase.btn, { backgroundColor: T.orange }]} onPress={onClose}>
+            <Text style={mBase.btnTxt}>OK</Text>
+          </TouchableOpacity>
+        </AnimCard>
+      </View>
+    </Modal>
+  );
+}
+
+const mBase = StyleSheet.create({
+  overlay: { flex:1, backgroundColor:"rgba(0,0,0,0.48)", justifyContent:"center", alignItems:"center", padding:36 },
+  card:    { backgroundColor: T.surface, borderRadius: 24, paddingHorizontal:24, paddingVertical:32, width:"100%", alignItems:"center", shadowColor:"#000", shadowOpacity:0.1, shadowRadius:28, elevation:12 },
+  iconRing:{ width:56, height:56, borderRadius:28, borderWidth:1.5, justifyContent:"center", alignItems:"center", marginBottom:20 },
+  title:   { fontSize:18, fontWeight:"800", color: T.text, marginBottom:6, letterSpacing:-0.4, textAlign:"center" },
+  sub:     { fontSize:13, color: T.muted, textAlign:"center", lineHeight:20, marginBottom:24 },
+  btn:     { width:"100%", paddingVertical:14, borderRadius: T.radius.md, alignItems:"center" },
+  btnTxt:  { fontSize:15, fontWeight:"700", color:"#fff" },
 });
 
-// ─── Subscription Details Sheet 
-function SubscriptionSheet({
-  visible,
-  subscriptions,
-  onClose,
-  onCancel,
-  cancelling,
-}: {
-  visible: boolean;
-  subscriptions: any[];
-  onClose: () => void;
-  onCancel: (id: string) => void;
-  cancelling: string | null;
+// ─── Subscription Sheet ─────────────────────────────────────────────────────
+function SubscriptionSheet({ visible, subscriptions, onClose, onCancel, cancelling }: {
+  visible:boolean; subscriptions:any[]; onClose:()=>void; onCancel:(id:string)=>void; cancelling:string|null;
 }) {
   return (
     <Modal visible={visible} animationType="slide" transparent>
-      <View style={subStyles.overlay}>
-        <View style={subStyles.sheet}>
-          <View style={subStyles.dragHandle} />
-          <View style={subStyles.header}>
-            <View style={subStyles.headerLeft}>
-              <Ionicons name="repeat" size={18} color="#f59e0b" />
-              <Text style={subStyles.headerTitle}>Active Subscriptions</Text>
-              <View style={[subStyles.countBadge, { backgroundColor: "#f59e0b" }]}>
-                <Text style={subStyles.countBadgeText}>
-                  {subscriptions.length}
-                </Text>
-              </View>
+      <View style={ssS.overlay}>
+        <View style={ssS.sheet}>
+          <View style={ssS.handle} />
+          <View style={ssS.header}>
+            <View style={{ flexDirection:"row", alignItems:"center", gap:8 }}>
+              <Text style={ssS.title}>Subscriptions</Text>
+              {subscriptions.length > 0 && (
+                <View style={ssS.badge}><Text style={ssS.badgeTxt}>{subscriptions.length}</Text></View>
+              )}
             </View>
-            <TouchableOpacity style={subStyles.closeBtn} onPress={onClose}>
-              <Ionicons name="close" size={16} color="#555" />
+            <TouchableOpacity onPress={onClose} style={ssS.closeBtn}>
+              <Ionicons name="close" size={15} color={T.muted} />
             </TouchableOpacity>
           </View>
-
           {subscriptions.length === 0 ? (
-            <View style={subStyles.empty}>
-              <Ionicons name="repeat-outline" size={44} color="#ddd" />
-              <Text style={subStyles.emptyText}>No active subscriptions</Text>
-              <Text style={subStyles.emptySubtext}>
-                Subscribe to dairy products to see them here
-              </Text>
+            <View style={ssS.empty}>
+              <Ionicons name="repeat-outline" size={36} color={T.faint} />
+              <Text style={ssS.emptyTxt}>No active subscriptions</Text>
             </View>
           ) : (
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingBottom: 16 }}
-            >
-              {subscriptions.map((sub) => {
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom:24 }}>
+              {subscriptions.map(sub => {
                 const theme = getCategoryTheme(sub.product?.category || "dairy");
-                const isCancelling = cancelling === sub.id;
                 return (
-                  <View key={sub.id} style={subStyles.subItem}>
-                    <View
-                      style={[subStyles.subIcon, { backgroundColor: theme.bg }]}
-                    >
-                      <Ionicons
-                        name={theme.icon as any}
-                        size={18}
-                        color={theme.accent}
-                      />
+                  <View key={sub.id} style={ssS.item}>
+                    <View style={[ssS.icon, { backgroundColor: theme.bg }]}>
+                      <Ionicons name={theme.icon as any} size={15} color={theme.accent} />
                     </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={subStyles.subName} numberOfLines={1}>
-                        {sub.product?.name ?? sub.product_name ?? "Product"}
-                      </Text>
-                      <View style={subStyles.subMeta}>
-                        <View style={subStyles.patternPill}>
-                          <Ionicons
-                            name="repeat-outline"
-                            size={9}
-                            color="#f59e0b"
-                          />
-                          <Text style={subStyles.patternPillText}>
-                            {patternLabel(sub.pattern)}
-                          </Text>
-                        </View>
-                        <Text style={subStyles.subQty}>Qty: {sub.quantity}</Text>
-                        <Text style={subStyles.subPrice}>
-                          ₹{(sub.amount ?? 0).toFixed(2)}
-                        </Text>
+                    <View style={{ flex:1, gap:3 }}>
+                      <Text style={ssS.name} numberOfLines={1}>{sub.product?.name ?? "Product"}</Text>
+                      <View style={{ flexDirection:"row", alignItems:"center", gap:8 }}>
+                        <Text style={ssS.pattern}>{patternLabel(sub.pattern)}</Text>
+                        <Text style={ssS.meta}>Qty {sub.quantity}</Text>
+                        <Text style={ssS.meta}>₹{(sub.amount ?? 0).toFixed(2)}</Text>
                       </View>
                       {sub.start_date && (
-                        <Text style={subStyles.subDate}>
-                          Started: {sub.start_date}
-                        </Text>
+                        <Text style={ssS.date}>{formatDate(sub.start_date)}{sub.end_date ? ` → ${formatDate(sub.end_date)}` : " · Ongoing"}</Text>
                       )}
                     </View>
                     <TouchableOpacity
-                      style={[
-                        subStyles.cancelBtn,
-                        isCancelling && { opacity: 0.5 },
-                      ]}
-                      onPress={() => onCancel(sub.id)}
-                      disabled={isCancelling}
+                      style={[ssS.cancelBtn, cancelling === sub.id && { opacity:0.4 }]}
+                      onPress={() => onCancel(sub.id)} disabled={cancelling === sub.id}
                     >
-                      <Ionicons name="close-circle" size={13} color="#ef4444" />
-                      <Text style={subStyles.cancelBtnText}>
-                        {isCancelling ? "Cancelling…" : "Cancel"}
-                      </Text>
+                      <Text style={ssS.cancelTxt}>{cancelling === sub.id ? "…" : "Cancel"}</Text>
                     </TouchableOpacity>
                   </View>
                 );
               })}
             </ScrollView>
           )}
-          <View style={{ height: 8 }} />
         </View>
       </View>
     </Modal>
   );
 }
-
-const subStyles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.45)",
-    justifyContent: "flex-end",
-  },
-  sheet: {
-    backgroundColor: "#fff",
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingHorizontal: 22,
-    paddingTop: 12,
-    paddingBottom: 34,
-    maxHeight: "80%",
-  },
-  dragHandle: {
-    width: 38,
-    height: 4,
-    backgroundColor: "#E0E0E0",
-    borderRadius: 2,
-    alignSelf: "center",
-    marginBottom: 16,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 14,
-  },
-  headerLeft: { flexDirection: "row", alignItems: "center", gap: 8 },
-  headerTitle: { fontSize: 17, fontWeight: "800", color: "#1A1A1A" },
-  countBadge: {
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 5,
-  },
-  countBadgeText: { fontSize: 11, fontWeight: "800", color: "#fff" },
-  closeBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: "rgba(0,0,0,0.07)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  subItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F5F5F5",
-  },
-  subIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  subName: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#1A1A1A",
-    marginBottom: 4,
-  },
-  subMeta: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 3,
-  },
-  patternPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "#fffbeb",
-    borderRadius: 8,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-  },
-  patternPillText: { fontSize: 10, fontWeight: "700", color: "#b45309" },
-  subQty: { fontSize: 11, color: "#888", fontWeight: "600" },
-  subPrice: { fontSize: 11, fontWeight: "700", color: "#888" },
-  subDate: { fontSize: 10, color: "#bbb", fontWeight: "500" },
-  cancelBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "#fef2f2",
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderWidth: 1,
-    borderColor: "#fecaca",
-  },
-  cancelBtnText: { fontSize: 11, fontWeight: "700", color: "#ef4444" },
-  empty: { alignItems: "center", paddingVertical: 44, gap: 8 },
-  emptyText: { fontSize: 15, fontWeight: "800", color: "#aaa" },
-  emptySubtext: { fontSize: 12, color: "#ccc", fontWeight: "500" },
+const ssS = StyleSheet.create({
+  overlay:   { flex:1, backgroundColor:"rgba(0,0,0,0.4)", justifyContent:"flex-end" },
+  sheet:     { backgroundColor: T.surface, borderTopLeftRadius:24, borderTopRightRadius:24, paddingHorizontal:20, paddingTop:12, paddingBottom:36, maxHeight:"80%" },
+  handle:    { width:36, height:3, backgroundColor: T.border, borderRadius:2, alignSelf:"center", marginBottom:18 },
+  header:    { flexDirection:"row", alignItems:"center", justifyContent:"space-between", marginBottom:18 },
+  title:     { fontSize:17, fontWeight:"800", color: T.text },
+  badge:     { backgroundColor: T.amber, borderRadius:10, minWidth:20, height:20, alignItems:"center", justifyContent:"center", paddingHorizontal:5 },
+  badgeTxt:  { fontSize:10, fontWeight:"800", color:"#fff" },
+  closeBtn:  { width:30, height:30, borderRadius:T.radius.sm, backgroundColor:"#F5F5F3", justifyContent:"center", alignItems:"center" },
+  item:      { flexDirection:"row", alignItems:"center", gap:12, paddingVertical:13, borderBottomWidth:1, borderBottomColor: T.border },
+  icon:      { width:38, height:38, borderRadius: T.radius.sm, justifyContent:"center", alignItems:"center" },
+  name:      { fontSize:13, fontWeight:"700", color: T.text },
+  pattern:   { fontSize:10, fontWeight:"700", color: T.amber, backgroundColor: T.amberLight, paddingHorizontal:6, paddingVertical:2, borderRadius:6 },
+  meta:      { fontSize:11, color: T.muted, fontWeight:"600" },
+  date:      { fontSize:10, color: T.faint, fontWeight:"500" },
+  cancelBtn: { paddingHorizontal:10, paddingVertical:6, borderRadius: T.radius.sm, borderWidth:1, borderColor:"#FECACA", backgroundColor: T.redLight },
+  cancelTxt: { fontSize:10, fontWeight:"700", color: T.red },
+  empty:     { alignItems:"center", paddingVertical:44, gap:8 },
+  emptyTxt:  { fontSize:14, fontWeight:"600", color: T.faint },
 });
 
-// ─── Product Card 
-function ModernProductCard({
-  product,
-  onPress,
-  cartQty,
-}: {
-  product: any;
-  onPress: () => void;
-  cartQty: number;
+// ─── Product Card ───────────────────────────────────────────────────────────
+function ProductCard({ product, onBuyOnce, onSubscribe, onAddToCart, cartQty }: {
+  product: any; onBuyOnce:()=>void; onSubscribe:()=>void; onAddToCart:()=>void; cartQty: number;
 }) {
-  const theme = getCategoryTheme(product.category);
-  const isDairy = isDairyProduct(product);
+  const theme    = getCategoryTheme(product.category);
+  const isDairy  = isDairyProduct(product);
+  const noStock  = !product.is_available || (product.stock ?? 0) === 0;
+
   return (
-    <TouchableOpacity
-      style={styles.card}
-      onPress={onPress}
-      activeOpacity={0.88}
-    >
-      <View style={[styles.cardImageBox, { backgroundColor: theme.bg }]}>
+    <View style={cardS.card}>
+      <View style={[cardS.imgBox, { backgroundColor: theme.bg }]}>
         {product.image ? (
-          <Image
-            source={{ uri: product.image }}
-            style={styles.cardImage}
-            resizeMode="cover"
-          />
+          <Image source={{ uri: product.image }} style={cardS.img} resizeMode="cover" />
         ) : (
-          <View
-            style={[
-              styles.cardIconCircle,
-              { backgroundColor: theme.accent + "22" },
-            ]}
-          >
-            <Ionicons name={theme.icon as any} size={24} color={theme.accent} />
+          <View style={[cardS.iconBox, { backgroundColor: theme.accent + "18" }]}>
+            <Ionicons name={theme.icon as any} size={22} color={theme.accent} />
           </View>
         )}
-        {(!product.is_available || (product.stock ?? 0) === 0) && (
-          <View style={styles.outOfStockBadge}>
-            <Text style={styles.outOfStockText}>Out of stock</Text>
-          </View>
-        )}
-        {isDairy ? (
-          <View style={[styles.subTypeBadge, { backgroundColor: "#f59e0b" }]}>
+        {noStock && <View style={cardS.oosBadge}><Text style={cardS.oosTxt}>Out of stock</Text></View>}
+        {isDairy && !noStock && (
+          <View style={cardS.subBadge}>
             <Ionicons name="repeat-outline" size={8} color="#fff" />
-            <Text style={styles.subTypeBadgeText}>Sub</Text>
           </View>
-        ) : (
-          cartQty > 0 && (
-            <View
-              style={[styles.cartQtyBadge, { backgroundColor: theme.accent }]}
-            >
-              <Text style={styles.cartQtyBadgeText}>{cartQty}</Text>
-            </View>
-          )
+        )}
+        {!isDairy && cartQty > 0 && (
+          <View style={[cardS.qtyBadge, { backgroundColor: theme.accent }]}>
+            <Text style={cardS.qtyBadgeTxt}>{cartQty}</Text>
+          </View>
         )}
       </View>
-      <View style={styles.cardBody}>
-        <Text style={styles.cardName} numberOfLines={1}>
-          {product.name}
-        </Text>
-        <View style={styles.cardFooter}>
-          <Text style={[styles.cardPrice, { color: theme.accent }]}>
-            ₹{product.price}
-          </Text>
-          <Text style={[styles.cardUnit, { color: theme.accent + "99" }]}>
-            {formatUnit(product.unit)}
-          </Text>
+      <View style={cardS.body}>
+        <Text style={cardS.name} numberOfLines={1}>{product.name}</Text>
+        <View style={cardS.priceRow}>
+          <Text style={[cardS.price, { color: theme.accent }]}>₹{product.price}</Text>
+          <Text style={[cardS.unit, { color: theme.accent + "88" }]}>{formatUnit(product.unit)}</Text>
         </View>
       </View>
-    </TouchableOpacity>
+      {noStock ? (
+        <View style={cardS.actionRow}>
+          <View style={cardS.oosBtn}><Text style={cardS.oosBtnTxt}>Unavailable</Text></View>
+        </View>
+      ) : isDairy ? (
+        <View style={cardS.actionRow}>
+          <TouchableOpacity style={[cardS.halfBtn, cardS.halfOutline, { borderColor: theme.accent }]} onPress={onBuyOnce} activeOpacity={0.7}>
+            <Text style={[cardS.halfTxt, { color: theme.accent }]}>Once</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[cardS.halfBtn, { backgroundColor: T.amber }]} onPress={onSubscribe} activeOpacity={0.7}>
+            <Ionicons name="repeat-outline" size={10} color="#fff" />
+            <Text style={[cardS.halfTxt, { color:"#fff" }]}>Sub</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <View style={cardS.actionRow}>
+          <TouchableOpacity style={[cardS.fullBtn, { backgroundColor: theme.accent }]} onPress={onAddToCart} activeOpacity={0.7}>
+            <Ionicons name="add" size={12} color="#fff" />
+            <Text style={cardS.fullTxt}>Add</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
   );
 }
+const cardS = StyleSheet.create({
+  card:        { width: CARD_WIDTH, backgroundColor: T.surface, borderRadius: T.radius.lg, overflow:"hidden", shadowColor:"#000", shadowOpacity:0.04, shadowRadius:8, elevation:2 },
+  imgBox:      { height:86, justifyContent:"center", alignItems:"center" },
+  img:         { width:"100%", height:"100%" },
+  iconBox:     { width:44, height:44, borderRadius:22, justifyContent:"center", alignItems:"center" },
+  oosBadge:    { position:"absolute", bottom:5, left:5, backgroundColor:"rgba(0,0,0,0.45)", paddingHorizontal:5, paddingVertical:2, borderRadius:5 },
+  oosTxt:      { color:"#fff", fontSize:8, fontWeight:"700" },
+  subBadge:    { position:"absolute", top:5, right:5, backgroundColor: T.amber, width:16, height:16, borderRadius:8, justifyContent:"center", alignItems:"center" },
+  qtyBadge:    { position:"absolute", top:5, right:5, width:18, height:18, borderRadius:9, justifyContent:"center", alignItems:"center" },
+  qtyBadgeTxt: { fontSize:9, fontWeight:"800", color:"#fff" },
+  body:        { padding:9, paddingBottom:6 },
+  name:        { fontSize:11, fontWeight:"700", color: T.text, marginBottom:3 },
+  priceRow:    { flexDirection:"row", alignItems:"center", justifyContent:"space-between" },
+  price:       { fontSize:13, fontWeight:"800" },
+  unit:        { fontSize:9, fontWeight:"600" },
+  actionRow:   { flexDirection:"row", gap:5, paddingHorizontal:8, paddingBottom:8, paddingTop:2 },
+  halfBtn:     { flex:1, flexDirection:"row", alignItems:"center", justifyContent:"center", gap:3, paddingVertical:6, borderRadius: T.radius.sm },
+  halfOutline: { borderWidth:1.5, backgroundColor:"transparent" },
+  halfTxt:     { fontSize:10, fontWeight:"800" },
+  fullBtn:     { flex:1, flexDirection:"row", alignItems:"center", justifyContent:"center", gap:3, paddingVertical:7, borderRadius: T.radius.sm },
+  fullTxt:     { fontSize:11, fontWeight:"800", color:"#fff" },
+  oosBtn:      { flex:1, paddingVertical:7, borderRadius: T.radius.sm, backgroundColor:"#F0EFED", alignItems:"center" },
+  oosBtnTxt:   { fontSize:10, fontWeight:"700", color: T.faint },
+});
 
-// ─── Category Section 
-function CategorySection({
-  value,
-  label,
-  items,
-  onPress,
-  cart,
-}: {
-  value: string;
-  label: string;
-  items: any[];
-  onPress: (item: any) => void;
-  cart: CartItem[];
+// ─── Category Section ────────────────────────────────────────────────────────
+function CategorySection({ value, label, items, onBuyOnce, onSubscribe, onAddToCart, cart }: {
+  value:string; label:string; items:any[];
+  onBuyOnce:(i:any)=>void; onSubscribe:(i:any)=>void; onAddToCart:(i:any)=>void;
+  cart:CartItem[];
 }) {
   const theme = getCategoryTheme(value);
-  const isDairy = DAIRY_CATEGORIES.includes(value.toLowerCase());
+  const isDairyCat = DAIRY_CATEGORIES.includes(value.toLowerCase());
   return (
-    <View style={styles.categorySection}>
-      <View style={styles.categoryHeader}>
-        <View style={styles.categoryTitleRow}>
-          <View
-            style={[styles.categoryDot, { backgroundColor: theme.accent }]}
-          />
-          <Text style={styles.categoryTitle}>{label}</Text>
-          <View
-            style={[
-              styles.categoryCountBadge,
-              { backgroundColor: theme.accent + "18" },
-            ]}
-          >
-            <Text style={[styles.categoryCount, { color: theme.accent }]}>
-              {items.length}
-            </Text>
+    <View style={secS.section}>
+      <View style={secS.header}>
+        <View style={[secS.dot, { backgroundColor: theme.accent }]} />
+        <Text style={secS.title}>{label}</Text>
+        <Text style={[secS.count, { color: theme.accent }]}>{items.length}</Text>
+        {isDairyCat && (
+          <View style={secS.subPill}>
+            <Ionicons name="repeat-outline" size={8} color={T.amber} />
+            <Text style={secS.subPillTxt}>Sub</Text>
           </View>
-          {isDairy && (
-            <View style={styles.dairySubBadge}>
-              <Ionicons name="repeat-outline" size={9} color="#f59e0b" />
-              <Text style={styles.dairySubBadgeText}>Sub available</Text>
-            </View>
-          )}
-        </View>
+        )}
       </View>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.horizontalList}
-        directionalLockEnabled={true}
-      >
-        {items.map((item) => {
-          const cartQty = cart
-            .filter((c) => c.product.id === item.id)
-            .reduce((sum, c) => sum + c.quantity, 0);
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={secS.list}>
+        {items.map(item => {
+          const qty = cart.filter(c => c.product.id === item.id).reduce((s,c)=>s+c.quantity,0);
           return (
-            <ModernProductCard
-              key={item.id?.toString()}
-              product={item}
-              cartQty={cartQty}
-              onPress={() => onPress(item)}
-            />
+            <ProductCard key={item.id?.toString()} product={item} cartQty={qty}
+              onBuyOnce={()=>onBuyOnce(item)} onSubscribe={()=>onSubscribe(item)} onAddToCart={()=>onAddToCart(item)} />
           );
         })}
       </ScrollView>
     </View>
   );
 }
+const secS = StyleSheet.create({
+  section: { marginTop:24 },
+  header:  { flexDirection:"row", alignItems:"center", gap:7, paddingHorizontal:20, marginBottom:12 },
+  dot:     { width:6, height:6, borderRadius:3 },
+  title:   { fontSize:14, fontWeight:"800", color: T.text, letterSpacing:-0.2 },
+  count:   { fontSize:11, fontWeight:"700", opacity:0.6 },
+  subPill: { flexDirection:"row", alignItems:"center", gap:3, backgroundColor: T.amberLight, borderRadius:6, paddingHorizontal:6, paddingVertical:2 },
+  subPillTxt:{ fontSize:9, fontWeight:"700", color: T.amber },
+  list:    { paddingLeft:20, paddingRight:8, gap:10 },
+});
 
-// ─── RIGHT SIDEBAR Cart Sheet 
-function CartSheet({
-  visible,
-  cart,
-  walletBalance,
-  onClose,
-  onRemove,
-  onUpdateQty,
-  onPlaceOrder,
-  submitting,
-}: {
-  visible: boolean;
-  cart: CartItem[];
-  walletBalance: number;
-  onClose: () => void;
-  onRemove: (id: string) => void;
-  onUpdateQty: (id: string, qty: number) => void;
-  onPlaceOrder: () => void;
-  submitting: boolean;
+// ─── Quick Add Modal ────────────────────────────────────────────────────────
+function QuickAddModal({ visible, product, walletBalance, onClose, onConfirm, submitting }: {
+  visible:boolean; product:any; walletBalance:number;
+  onClose:()=>void; onConfirm:(qty:number)=>void; submitting:boolean;
 }) {
-  const slideAnim = useRef(new Animated.Value(SCREEN_WIDTH)).current;
-  const overlayOpacity = useRef(new Animated.Value(0)).current;
+  const [qty, setQty] = useState(1);
+  const theme = getCategoryTheme(product?.category);
+  const total = (product?.price ?? 0) * qty;
+  const ok    = walletBalance >= total;
+
+  useEffect(() => { if (visible) setQty(1); }, [visible]);
+  if (!product) return null;
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent>
+      <View style={sheetS.overlay}>
+        <View style={sheetS.sheet}>
+          <View style={sheetS.handle} />
+          <View style={[sheetS.prodRow, { backgroundColor: theme.bg }]}>
+            <View style={[sheetS.prodIcon, { backgroundColor: theme.accent + "20" }]}>
+              <Ionicons name={theme.icon as any} size={22} color={theme.accent} />
+            </View>
+            <View style={{ flex:1 }}>
+              <Text style={sheetS.prodName}>{product.name}</Text>
+              <Text style={[sheetS.prodPrice, { color: theme.accent }]}>₹{product.price} · {formatUnit(product.unit)}</Text>
+            </View>
+            <TouchableOpacity style={sheetS.closeBtn} onPress={onClose}>
+              <Ionicons name="close" size={14} color={T.muted} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={qS.label}>
+            <Ionicons name="bag-check-outline" size={12} color={T.muted} />
+            <Text style={qS.labelTxt}>One-time purchase</Text>
+          </View>
+
+          <View style={sheetS.divider} />
+
+          <Text style={sheetS.sectionLabel}>Quantity</Text>
+          <View style={sheetS.qtyRow}>
+            <TouchableOpacity style={sheetS.qtyBtn} onPress={()=>setQty(q=>Math.max(1,q-1))}>
+              <Ionicons name="remove" size={15} color={T.text} />
+            </TouchableOpacity>
+            <View style={sheetS.qtyVal}>
+              <Text style={sheetS.qtyNum}>{qty}</Text>
+              <Text style={[sheetS.qtyUnit, { color: theme.accent }]}>{formatUnit(product.unit)}</Text>
+            </View>
+            <TouchableOpacity
+              style={[sheetS.qtyBtn, { backgroundColor: theme.accent }]}
+              onPress={()=>{ const m=product?.stock??Infinity; if(qty>=m){alert(`Only ${m} available`);return;} setQty(q=>q+1); }}
+            >
+              <Ionicons name="add" size={15} color="#fff" />
+            </TouchableOpacity>
+          </View>
+
+          <View style={qS.summary}>
+            <View style={qS.row}>
+              <Text style={qS.label2}>Total</Text>
+              <Text style={[qS.val, { color: theme.accent }]}>₹{total.toFixed(2)}</Text>
+            </View>
+            <View style={[qS.divLine]} />
+            <View style={qS.row}>
+              <View style={{ flexDirection:"row", alignItems:"center", gap:5 }}>
+                <Ionicons name="wallet-outline" size={12} color={ok ? T.green : T.orange} />
+                <Text style={qS.label2}>Wallet</Text>
+              </View>
+              <Text style={[qS.val, { color: ok ? T.green : T.orange }]}>₹{walletBalance.toFixed(2)}</Text>
+            </View>
+          </View>
+
+          <View style={{ height:16 }} />
+          <Button title={submitting ? "Adding…" : `Add to Cart · ₹${total.toFixed(2)}`} onPress={()=>onConfirm(qty)} loading={submitting} />
+          <View style={{ height:16 }} />
+        </View>
+      </View>
+    </Modal>
+  );
+}
+const qS = StyleSheet.create({
+  label:   { flexDirection:"row", alignItems:"center", gap:6, marginTop:12, marginBottom:2 },
+  labelTxt:{ fontSize:11, fontWeight:"600", color: T.muted },
+  summary: { backgroundColor:"#F7F6F4", borderRadius: T.radius.md, padding:14, marginTop:4 },
+  row:     { flexDirection:"row", justifyContent:"space-between", alignItems:"center" },
+  label2:  { fontSize:12, color: T.muted, fontWeight:"600" },
+  val:     { fontSize:15, fontWeight:"800" },
+  divLine: { height:1, backgroundColor: T.border, marginVertical:10 },
+});
+
+// ─── Subscribe Modal (3-step + delivery slot) ───────────────────────────────
+function SubscribeModal({ visible, product, walletBalance, tomorrow, onClose, onSuccess, onToast }: {
+  visible:boolean; product:any; walletBalance:number; tomorrow:string;
+  onClose:()=>void;
+  onSuccess:(refresh:()=>void)=>void;
+  onToast:(n:string,s:boolean)=>void;
+}) {
+  const [step,       setStep]       = useState<1|2|3>(1);
+  const [qty,        setQty]        = useState(1);
+  const [pattern,    setPattern]    = useState("daily");
+  const [customDays, setCustomDays] = useState<number[]>([]);
+  const [slot,       setSlot]       = useState("morning");
+  const [startDate,  setStartDate]  = useState<string|null>(null);
+  const [endDate,    setEndDate]    = useState<string|null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [infoVis,    setInfoVis]    = useState(false);
+
+  const theme     = getCategoryTheme(product?.category);
+  const total     = (product?.price ?? 0) * qty;
+  const canAfford = walletBalance >= total;
+  const deliveries= estimateDeliveryCount(pattern, startDate ?? "", endDate, customDays);
+
+  useEffect(() => {
+    if (visible) {
+      setStep(1); setQty(1); setPattern("daily");
+      setCustomDays([]); setSlot("morning");
+      setStartDate(tomorrow); setEndDate(null);
+    }
+  }, [visible, tomorrow]);
+
+  const toggleDay = (d:number) => setCustomDays(p => p.includes(d) ? p.filter(x=>x!==d) : [...p,d]);
+
+  const step1Next = () => {
+    if (pattern === "custom" && customDays.length === 0) { setInfoVis(true); return; }
+    setStep(2);
+  };
+  const step2Next = () => {
+    if (!startDate) { alert("Please select a start date."); return; }
+    setStep(3);
+  };
+  const confirm = async () => {
+    setSubmitting(true);
+    try {
+      await api.createSubscription({
+        product_id:   product.id,
+        quantity:     qty,
+        pattern,
+        custom_days:  pattern === "custom" ? customDays : null,
+        start_date:   startDate!,
+        end_date:     endDate || null,
+        amount:       product.price * qty,
+        delivery_slot: slot,  // ← NEW FIELD
+      });
+      onClose();
+      onToast(product.name, true);
+      onSuccess(() => api.getWallet().then(w=>w.balance??0).catch(()=>walletBalance));
+    } catch (e:any) {
+      alert(e?.message || "Something went wrong");
+    } finally { setSubmitting(false); }
+  };
+
+  if (!product) return null;
+
+  return (
+    <>
+      <Modal visible={visible} animationType="slide" transparent>
+        <View style={sheetS.overlay}>
+          <View style={[sheetS.sheet, step===2 && { maxHeight:"96%" }]}>
+            <View style={sheetS.handle} />
+
+            {/* Product header */}
+            <View style={[sheetS.prodRow, { backgroundColor: theme.bg }]}>
+              <View style={[sheetS.prodIcon, { backgroundColor: theme.accent + "20" }]}>
+                <Ionicons name={theme.icon as any} size={22} color={theme.accent} />
+              </View>
+              <View style={{ flex:1 }}>
+                <Text style={sheetS.prodName}>{product.name}</Text>
+                <Text style={[sheetS.prodPrice, { color: theme.accent }]}>₹{product.price} · {formatUnit(product.unit)}</Text>
+              </View>
+              <TouchableOpacity style={sheetS.closeBtn} onPress={onClose}>
+                <Ionicons name="close" size={14} color={T.muted} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={subModalS.subTag}>
+              <Ionicons name="repeat-outline" size={11} color={T.amber} />
+              <Text style={subModalS.subTagTxt}>Recurring subscription</Text>
+            </View>
+
+            <StepDots step={step} total={3} color={theme.accent} />
+
+            {/* ── STEP 1: Pattern + Qty + Slot ── */}
+            {step === 1 && (
+              <ScrollView showsVerticalScrollIndicator={false}>
+                {/* Quantity */}
+                <Text style={sheetS.sectionLabel}>Quantity</Text>
+                <View style={sheetS.qtyRow}>
+                  <TouchableOpacity style={sheetS.qtyBtn} onPress={()=>setQty(q=>Math.max(1,q-1))}>
+                    <Ionicons name="remove" size={15} color={T.text} />
+                  </TouchableOpacity>
+                  <View style={sheetS.qtyVal}>
+                    <Text style={sheetS.qtyNum}>{qty}</Text>
+                    <Text style={[sheetS.qtyUnit, { color: theme.accent }]}>{formatUnit(product.unit)}</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[sheetS.qtyBtn, { backgroundColor: theme.accent }]}
+                    onPress={()=>{ const m=product?.stock??Infinity; if(qty>=m){alert(`Only ${m} available`);return;} setQty(q=>q+1); }}
+                  >
+                    <Ionicons name="add" size={15} color="#fff" />
+                  </TouchableOpacity>
+                </View>
+
+                <View style={subModalS.subtotalRow}>
+                  <Text style={subModalS.subtotalLabel}>Per delivery</Text>
+                  <Text style={[subModalS.subtotalVal, { color: theme.accent }]}>₹{total.toFixed(2)}</Text>
+                </View>
+
+                {/* Schedule */}
+                <Text style={sheetS.sectionLabel}>Schedule</Text>
+                <View style={subModalS.patternRow}>
+                  {subscriptionPatterns.map(p => {
+                    const active = pattern === p.value;
+                    return (
+                      <TouchableOpacity
+                        key={p.value}
+                        style={[subModalS.patternCard, active && { backgroundColor: theme.accent, borderColor: theme.accent }]}
+                        onPress={()=>setPattern(p.value)}
+                      >
+                        <Ionicons name={p.icon as any} size={16} color={active ? "#fff" : theme.accent} />
+                        <Text style={[subModalS.patternLabel, active && { color:"#fff" }]}>{p.label}</Text>
+                        <Text style={[subModalS.patternHint, { color: active ? "rgba(255,255,255,0.7)" : T.faint }]}>{p.hint}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                {pattern === "custom" && (
+                  <>
+                    <Text style={sheetS.sectionLabel}>Days</Text>
+                    <View style={subModalS.daysRow}>
+                      {weekDays.map(d => {
+                        const sel = customDays.includes(d.value);
+                        return (
+                          <TouchableOpacity
+                            key={d.value}
+                            style={[subModalS.dayPill, sel && { backgroundColor: theme.accent, borderColor: theme.accent }]}
+                            onPress={()=>toggleDay(d.value)}
+                          >
+                            <Text style={[subModalS.dayTxt, sel && { color:"#fff" }]}>{d.label}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                    {customDays.length > 0 && (
+                      <Text style={subModalS.daysHint}>{customDays.length} day{customDays.length>1?"s":""} / week</Text>
+                    )}
+                  </>
+                )}
+
+                {/* Delivery Slot — NEW */}
+                <Text style={sheetS.sectionLabel}>Delivery Slot</Text>
+                <View style={subModalS.slotRow}>
+                  {DELIVERY_SLOTS.map(s => {
+                    const active = slot === s.value;
+                    return (
+                      <TouchableOpacity
+                        key={s.value}
+                        style={[subModalS.slotCard, active && { borderColor: theme.accent, backgroundColor: theme.bg }]}
+                        onPress={()=>setSlot(s.value)}
+                      >
+                        <Ionicons name={s.icon as any} size={15} color={active ? theme.accent : T.faint} />
+                        <Text style={[subModalS.slotLabel, active && { color: theme.accent }]}>{s.label}</Text>
+                        <Text style={subModalS.slotTime}>{s.time}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                <View style={{ height:16 }} />
+                <Button title="Next: Choose Dates →" onPress={step1Next} />
+                <View style={{ height:16 }} />
+              </ScrollView>
+            )}
+
+            {/* ── STEP 2: Calendar ── */}
+            {step === 2 && (
+              <ScrollView showsVerticalScrollIndicator={false}>
+                <TouchableOpacity style={subModalS.back} onPress={()=>setStep(1)}>
+                  <Ionicons name="arrow-back" size={13} color={T.muted} />
+                  <Text style={subModalS.backTxt}>Back</Text>
+                </TouchableOpacity>
+
+                <View style={[subModalS.infoBanner, { backgroundColor: theme.bg, borderColor: theme.accent + "30" }]}>
+                  <Ionicons name="calendar-outline" size={12} color={theme.accent} />
+                  <Text style={[subModalS.infoTxt, { color: theme.accent }]}>Set your window. End date is optional.</Text>
+                </View>
+
+                <View style={subModalS.rangeRow}>
+                  <View style={[subModalS.rangeBox, startDate && { borderColor: theme.accent }]}>
+                    <Text style={subModalS.rangeLabel}>Start</Text>
+                    <Text style={[subModalS.rangeVal, { color: startDate ? theme.accent : T.faint }]}>{startDate ? formatDate(startDate) : "—"}</Text>
+                  </View>
+                  <Ionicons name="arrow-forward" size={12} color={T.faint} />
+                  <View style={[subModalS.rangeBox, endDate && { borderColor: T.amber }]}>
+                    <Text style={subModalS.rangeLabel}>End</Text>
+                    <Text style={[subModalS.rangeVal, { color: endDate ? T.amber : T.faint }]}>{endDate ? formatDate(endDate) : "Ongoing"}</Text>
+                  </View>
+                </View>
+
+                <View style={[subModalS.calCard, { borderColor: theme.accent + "25" }]}>
+                  <MiniCalendar startDate={startDate} endDate={endDate}
+                    onSelect={(s,e)=>{ setStartDate(s); setEndDate(e); }}
+                    accentColor={theme.accent} minDate={tomorrow} isBuyOnce={false} />
+                </View>
+
+                {startDate && (
+                  <View style={[subModalS.estimate, { backgroundColor: theme.bg, borderColor: theme.accent + "22" }]}>
+                    <Ionicons name="cube-outline" size={12} color={theme.accent} />
+                    <Text style={[subModalS.estimateTxt, { color: theme.accent }]}>
+                      ~{deliveries} deliveries {!endDate ? "(30-day est.)" : "in this period"}
+                    </Text>
+                  </View>
+                )}
+
+                <View style={{ height:12 }} />
+                <Button title="Next: Review →" onPress={step2Next} disabled={!startDate} />
+                <View style={{ height:16 }} />
+              </ScrollView>
+            )}
+
+            {/* ── STEP 3: Summary ── */}
+            {step === 3 && (
+              <ScrollView showsVerticalScrollIndicator={false}>
+                <TouchableOpacity style={subModalS.back} onPress={()=>setStep(2)}>
+                  <Ionicons name="arrow-back" size={13} color={T.muted} />
+                  <Text style={subModalS.backTxt}>Back</Text>
+                </TouchableOpacity>
+
+                <View style={reviewS.card}>
+                  <Text style={reviewS.title}>Summary</Text>
+                  {[
+                    ["Product",   product.name],
+                    ["Quantity",  `${qty} × ${formatUnit(product.unit)}`],
+                    ["Schedule",  subscriptionPatterns.find(p=>p.value===pattern)?.label + (pattern==="custom" && customDays.length>0 ? ` · ${customDays.map(d=>weekDays[d].label).join(", ")}` : "")],
+                    ["Slot",      DELIVERY_SLOTS.find(s=>s.value===slot)?.label + " (" + DELIVERY_SLOTS.find(s=>s.value===slot)?.time + ")"],
+                    ["Start",     formatDate(startDate ?? "")],
+                    ["End",       endDate ? formatDate(endDate) : "Open-ended"],
+                    ...(deliveries > 0 ? [["Deliveries", `~${deliveries}${!endDate?" (est.)":""}`]] : []),
+                  ].map(([k,v]) => (
+                    <View key={k} style={reviewS.row}>
+                      <Text style={reviewS.key}>{k}</Text>
+                      <Text style={reviewS.val} numberOfLines={2}>{v}</Text>
+                    </View>
+                  ))}
+                  <View style={reviewS.divider} />
+                  <View style={reviewS.totalRow}>
+                    <Text style={reviewS.totalLabel}>Per delivery</Text>
+                    <Text style={[reviewS.totalVal, { color: theme.accent }]}>₹{total.toFixed(2)}</Text>
+                  </View>
+                  <Text style={reviewS.note}>Deducted from wallet each delivery</Text>
+                </View>
+
+                <View style={[reviewS.walletRow, { borderColor: canAfford ? "#BBF7D0" : "#FED7AA", backgroundColor: canAfford ? T.greenLight : T.orangeLight }]}>
+                  <View style={{ flexDirection:"row", alignItems:"center", gap:8 }}>
+                    <Ionicons name="wallet-outline" size={14} color={canAfford ? T.green : T.orange} />
+                    <View>
+                      <Text style={reviewS.walletLabel}>Wallet</Text>
+                      <Text style={[reviewS.walletVal, { color: canAfford ? T.green : T.orange }]}>₹{walletBalance.toFixed(2)}</Text>
+                    </View>
+                  </View>
+                  <View style={[reviewS.statusPill, { backgroundColor: canAfford ? "#DCF5E8" : "#FEE2C8" }]}>
+                    <Ionicons name={canAfford ? "checkmark-circle" : "warning"} size={12} color={canAfford ? T.green : T.orange} />
+                    <Text style={[reviewS.statusTxt, { color: canAfford ? T.green : T.orange }]}>
+                      {canAfford ? "Sufficient" : "Low"}
+                    </Text>
+                  </View>
+                </View>
+
+                {!canAfford && (
+                  <View style={reviewS.warn}>
+                    <Ionicons name="information-circle-outline" size={13} color={T.orange} />
+                    <Text style={reviewS.warnTxt}>Balance is below order amount. Recharge before confirming.</Text>
+                  </View>
+                )}
+
+                <View style={{ height:14 }} />
+                <Button
+                  title={submitting ? "Subscribing…" : `Confirm · ₹${total.toFixed(2)}/delivery`}
+                  onPress={confirm} loading={submitting} disabled={!canAfford}
+                />
+                <View style={{ height:16 }} />
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
+      <InfoModal visible={infoVis} onClose={()=>setInfoVis(false)} />
+    </>
+  );
+}
+
+const subModalS = StyleSheet.create({
+  subTag:       { flexDirection:"row", alignItems:"center", gap:6, marginTop:10, marginBottom:2 },
+  subTagTxt:    { fontSize:11, fontWeight:"600", color: T.amber },
+  subtotalRow:  { flexDirection:"row", justifyContent:"space-between", alignItems:"center", backgroundColor:"#F7F6F4", borderRadius: T.radius.md, paddingHorizontal:14, paddingVertical:10, marginBottom:20 },
+  subtotalLabel:{ fontSize:12, fontWeight:"600", color: T.muted },
+  subtotalVal:  { fontSize:16, fontWeight:"800" },
+  patternRow:   { flexDirection:"row", flexWrap:"wrap", gap:8, marginBottom:14 },
+  patternCard:  { width:"47%", padding:12, borderRadius: T.radius.md, backgroundColor:"#F7F6F4", borderWidth:1.5, borderColor:"transparent", gap:4 },
+  patternLabel: { fontSize:12, fontWeight:"700", color: T.text },
+  patternHint:  { fontSize:10, fontWeight:"500" },
+  // Delivery days
+  daysRow:      { flexDirection:"row", flexWrap:"wrap", gap:7, marginBottom:6 },
+  dayPill:      { paddingHorizontal:11, paddingVertical:7, borderRadius: T.radius.full, backgroundColor:"#F5F5F3", borderWidth:1.5, borderColor: T.border },
+  dayTxt:       { fontSize:11, fontWeight:"700", color: T.muted },
+  daysHint:     { fontSize:11, color: T.muted, marginBottom:16, fontWeight:"500" },
+  // Slot
+  slotRow:      { flexDirection:"row", gap:8, marginBottom:14 },
+  slotCard:     { flex:1, alignItems:"center", paddingVertical:12, borderRadius: T.radius.md, backgroundColor:"#F7F6F4", borderWidth:1.5, borderColor: T.border, gap:4 },
+  slotLabel:    { fontSize:11, fontWeight:"700", color: T.text },
+  slotTime:     { fontSize:9, fontWeight:"500", color: T.faint, textAlign:"center" },
+  // Step 2
+  back:         { flexDirection:"row", alignItems:"center", gap:5, marginBottom:14 },
+  backTxt:      { fontSize:12, color: T.muted, fontWeight:"600" },
+  infoBanner:   { flexDirection:"row", alignItems:"center", gap:7, borderWidth:1, borderRadius: T.radius.sm, paddingHorizontal:12, paddingVertical:9, marginBottom:14 },
+  infoTxt:      { fontSize:11, fontWeight:"600", flex:1 },
+  rangeRow:     { flexDirection:"row", alignItems:"center", gap:10, marginBottom:14 },
+  rangeBox:     { flex:1, borderWidth:1.5, borderColor: T.border, borderRadius: T.radius.md, paddingHorizontal:12, paddingVertical:10 },
+  rangeLabel:   { fontSize:9, fontWeight:"700", color: T.faint, textTransform:"uppercase", letterSpacing:0.5, marginBottom:2 },
+  rangeVal:     { fontSize:12, fontWeight:"700" },
+  calCard:      { borderWidth:1.5, borderRadius: T.radius.lg, padding:12, marginBottom:12 },
+  estimate:     { flexDirection:"row", alignItems:"center", gap:7, borderWidth:1, borderRadius: T.radius.sm, paddingHorizontal:12, paddingVertical:9, marginBottom:4 },
+  estimateTxt:  { fontSize:11, fontWeight:"700" },
+});
+
+const reviewS = StyleSheet.create({
+  card:        { borderWidth:1.5, borderColor: T.border, borderRadius: T.radius.lg, padding:16, marginBottom:14, backgroundColor:"#FAFAF8" },
+  title:       { fontSize:12, fontWeight:"800", color: T.text, marginBottom:14, textTransform:"uppercase", letterSpacing:0.5 },
+  row:         { flexDirection:"row", justifyContent:"space-between", alignItems:"flex-start", marginBottom:10 },
+  key:         { fontSize:12, color: T.muted, fontWeight:"500" },
+  val:         { fontSize:12, fontWeight:"700", color: T.text, maxWidth:"55%", textAlign:"right" },
+  divider:     { height:1, backgroundColor: T.border, marginVertical:12 },
+  totalRow:    { flexDirection:"row", justifyContent:"space-between", alignItems:"center" },
+  totalLabel:  { fontSize:13, fontWeight:"700", color: T.text },
+  totalVal:    { fontSize:20, fontWeight:"900", letterSpacing:-0.5 },
+  note:        { fontSize:10, color: T.faint, marginTop:4, textAlign:"right" },
+  walletRow:   { flexDirection:"row", alignItems:"center", justifyContent:"space-between", borderWidth:1.5, borderRadius: T.radius.md, paddingHorizontal:14, paddingVertical:12, marginBottom:10 },
+  walletLabel: { fontSize:9, color: T.muted, fontWeight:"600", textTransform:"uppercase", letterSpacing:0.5 },
+  walletVal:   { fontSize:16, fontWeight:"800", marginTop:2 },
+  statusPill:  { flexDirection:"row", alignItems:"center", gap:4, borderRadius: T.radius.sm, paddingHorizontal:10, paddingVertical:6 },
+  statusTxt:   { fontSize:11, fontWeight:"700" },
+  warn:        { flexDirection:"row", alignItems:"flex-start", gap:7, backgroundColor: T.orangeLight, borderRadius: T.radius.sm, paddingHorizontal:12, paddingVertical:10, marginBottom:6 },
+  warnTxt:     { fontSize:11, color: T.orange, fontWeight:"600", flex:1, lineHeight:16 },
+});
+
+// ─── Shared sheet styles ────────────────────────────────────────────────────
+const sheetS = StyleSheet.create({
+  overlay:      { flex:1, backgroundColor:"rgba(0,0,0,0.4)", justifyContent:"flex-end" },
+  sheet:        { backgroundColor: T.surface, borderTopLeftRadius:24, borderTopRightRadius:24, paddingHorizontal:20, paddingTop:12, paddingBottom:34, maxHeight:"92%" },
+  handle:       { width:36, height:3, backgroundColor: T.border, borderRadius:2, alignSelf:"center", marginBottom:14 },
+  prodRow:      { flexDirection:"row", alignItems:"center", gap:12, borderRadius: T.radius.md, padding:12, marginBottom:4 },
+  prodIcon:     { width:46, height:46, borderRadius: T.radius.sm, justifyContent:"center", alignItems:"center" },
+  prodName:     { fontSize:14, fontWeight:"800", color: T.text, marginBottom:3 },
+  prodPrice:    { fontSize:12, fontWeight:"600" },
+  closeBtn:     { width:30, height:30, borderRadius: T.radius.sm, backgroundColor:"rgba(0,0,0,0.06)", justifyContent:"center", alignItems:"center" },
+  divider:      { height:1, backgroundColor: T.border, marginVertical:14 },
+  sectionLabel: { fontSize:9, fontWeight:"700", color: T.faint, letterSpacing:1, textTransform:"uppercase", marginBottom:10, marginTop:2 },
+  qtyRow:       { flexDirection:"row", alignItems:"center", marginBottom:14, gap:16 },
+  qtyBtn:       { width:36, height:36, borderRadius: T.radius.sm, backgroundColor:"#F5F5F3", justifyContent:"center", alignItems:"center" },
+  qtyVal:       { alignItems:"center", minWidth:54 },
+  qtyNum:       { fontSize:24, fontWeight:"800", color: T.text },
+  qtyUnit:      { fontSize:10, fontWeight:"700", marginTop:1 },
+});
+
+// ─── Step Dots ──────────────────────────────────────────────────────────────
+function StepDots({ step, total, color }: { step:number; total:number; color:string }) {
+  return (
+    <View style={dotsS.row}>
+      {Array.from({length:total}).map((_,i) => (
+        <React.Fragment key={i}>
+          <View style={[dotsS.dot, i < step && { backgroundColor: color }, i === step-1 && { width:18 }]} />
+          {i < total-1 && <View style={[dotsS.line, i < step-1 && { backgroundColor: color }]} />}
+        </React.Fragment>
+      ))}
+    </View>
+  );
+}
+const dotsS = StyleSheet.create({
+  row:  { flexDirection:"row", alignItems:"center", justifyContent:"center", gap:4, marginBottom:18, marginTop:8 },
+  dot:  { width:7, height:7, borderRadius:4, backgroundColor: T.border },
+  line: { width:20, height:1.5, backgroundColor: T.border, borderRadius:1 },
+});
+
+// ─── Cart Sheet ─────────────────────────────────────────────────────────────
+function CartSheet({ visible, cart, walletBalance, onClose, onRemove, onUpdateQty, onPlaceOrder, submitting }: {
+  visible:boolean; cart:CartItem[]; walletBalance:number; onClose:()=>void;
+  onRemove:(id:string)=>void; onUpdateQty:(id:string,q:number)=>void;
+  onPlaceOrder:()=>void; submitting:boolean;
+}) {
+  const slide   = useRef(new Animated.Value(SCREEN_WIDTH)).current;
+  const overlay = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (visible) {
       Animated.parallel([
-        Animated.spring(slideAnim, {
-          toValue: 0,
-          useNativeDriver: true,
-          damping: 20,
-          stiffness: 200,
-        }),
-        Animated.timing(overlayOpacity, {
-          toValue: 1,
-          duration: 220,
-          useNativeDriver: true,
-        }),
+        Animated.spring(slide,   { toValue:0, useNativeDriver:true, damping:20, stiffness:220 }),
+        Animated.timing(overlay, { toValue:1, duration:200, useNativeDriver:true }),
       ]).start();
     } else {
       Animated.parallel([
-        Animated.timing(slideAnim, {
-          toValue: SCREEN_WIDTH,
-          duration: 240,
-          useNativeDriver: true,
-        }),
-        Animated.timing(overlayOpacity, {
-          toValue: 0,
-          duration: 200,
-          useNativeDriver: true,
-        }),
+        Animated.timing(slide,   { toValue:SCREEN_WIDTH, duration:220, useNativeDriver:true }),
+        Animated.timing(overlay, { toValue:0, duration:180, useNativeDriver:true }),
       ]).start();
     }
   }, [visible]);
 
-  const cartTotal = cart.reduce(
-    (sum, item) => sum + item.product.price * item.quantity,
-    0
-  );
+  const cartTotal = cart.reduce((s,i)=>s+i.product.price*i.quantity,0);
   const canAfford = walletBalance >= cartTotal;
-
   if (!visible) return null;
 
   return (
     <Modal visible={visible} transparent animationType="none">
-      <View style={{ flex: 1 }}>
-        {/* Dimmed overlay */}
-        <Animated.View
-          style={[cartStyles.overlay, { opacity: overlayOpacity }]}
-        >
-          <TouchableOpacity style={{ flex: 1 }} onPress={onClose} activeOpacity={1} />
+      <View style={{ flex:1 }}>
+        <Animated.View style={[cartS.overlay, { opacity:overlay }]}>
+          <TouchableOpacity style={{ flex:1 }} onPress={onClose} activeOpacity={1} />
         </Animated.View>
-
-        {/* Right sidebar panel */}
-        <Animated.View
-          style={[
-            cartStyles.sidebar,
-            { transform: [{ translateX: slideAnim }] },
-          ]}
-        >
-          {/* Header */}
-          <View style={cartStyles.header}>
-            <TouchableOpacity style={cartStyles.backBtn} onPress={onClose}>
-              <Ionicons name="arrow-back" size={18} color="#555" />
+        <Animated.View style={[cartS.sidebar, { transform:[{translateX:slide}] }]}>
+          <View style={cartS.header}>
+            <TouchableOpacity onPress={onClose} style={cartS.backBtn}>
+              <Ionicons name="arrow-back" size={16} color={T.muted} />
             </TouchableOpacity>
-            <View style={cartStyles.headerCenter}>
-              <Ionicons name="cart" size={18} color={Colors.primary} />
-              <Text style={cartStyles.headerTitle}>My Cart</Text>
-              {cart.length > 0 && (
-                <View style={cartStyles.countBadge}>
-                  <Text style={cartStyles.countBadgeText}>{cart.length}</Text>
-                </View>
-              )}
-            </View>
+            <Text style={cartS.title}>Cart</Text>
+            {cart.length > 0 && <View style={cartS.badge}><Text style={cartS.badgeTxt}>{cart.length}</Text></View>}
           </View>
 
-          {/* Wallet strip */}
-          <View style={cartStyles.walletStrip}>
-            <View style={cartStyles.walletLeft}>
-              <Ionicons
-                name="wallet-outline"
-                size={13}
-                color={canAfford ? "#22c55e" : "#f97316"}
-              />
-              <Text style={cartStyles.walletLabel}>Wallet</Text>
+          <View style={cartS.walletStrip}>
+            <View style={{ flexDirection:"row", alignItems:"center", gap:6 }}>
+              <Ionicons name="wallet-outline" size={12} color={canAfford ? T.green : T.orange} />
+              <Text style={cartS.walletLabel}>Wallet</Text>
             </View>
-            <Text
-              style={[
-                cartStyles.walletBalance,
-                { color: canAfford ? "#22c55e" : "#f97316" },
-              ]}
-            >
-              ₹{walletBalance.toFixed(2)}
-            </Text>
+            <Text style={[cartS.walletBal, { color: canAfford ? T.green : T.orange }]}>₹{walletBalance.toFixed(2)}</Text>
           </View>
 
-          <View style={styles.divider} />
+          <View style={cartS.divider} />
 
           {cart.length === 0 ? (
-            <View style={cartStyles.empty}>
-              <Ionicons name="cart-outline" size={44} color="#ddd" />
-              <Text style={cartStyles.emptyText}>Cart is empty</Text>
-              <Text style={cartStyles.emptySubtext}>Add products to order</Text>
+            <View style={cartS.empty}>
+              <Ionicons name="cart-outline" size={36} color={T.faint} />
+              <Text style={cartS.emptyTxt}>Cart is empty</Text>
             </View>
           ) : (
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingBottom: 8 }}
-            >
-              {cart.map((item) => {
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom:8 }}>
+              {cart.map(item => {
                 const theme = getCategoryTheme(item.product.category);
                 return (
-                  <View key={item.id} style={cartStyles.cartItem}>
-                    <View
-                      style={[
-                        cartStyles.cartItemIcon,
-                        { backgroundColor: theme.bg },
-                      ]}
-                    >
-                      <Ionicons
-                        name={theme.icon as any}
-                        size={16}
-                        color={theme.accent}
-                      />
+                  <View key={item.id} style={cartS.item}>
+                    <View style={[cartS.icon, { backgroundColor: theme.bg }]}>
+                      <Ionicons name={theme.icon as any} size={14} color={theme.accent} />
                     </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={cartStyles.cartItemName} numberOfLines={2}>
-                        {item.product.name}
-                      </Text>
-                      <Text style={cartStyles.cartItemPrice}>
-                        ₹{(item.product.price * item.quantity).toFixed(2)}
-                      </Text>
+                    <View style={{ flex:1 }}>
+                      <Text style={cartS.itemName} numberOfLines={2}>{item.product.name}</Text>
+                      <Text style={cartS.itemPrice}>₹{(item.product.price*item.quantity).toFixed(2)}</Text>
                     </View>
-                    <View style={cartStyles.qtyRow}>
-                      <TouchableOpacity
-                        style={cartStyles.qtyBtn}
-                        onPress={() =>
-                          item.quantity > 1
-                            ? onUpdateQty(item.id, item.quantity - 1)
-                            : onRemove(item.id)
-                        }
-                      >
-                        <Ionicons
-                          name={item.quantity === 1 ? "trash-outline" : "remove"}
-                          size={12}
-                          color={item.quantity === 1 ? "#f97316" : Colors.text}
-                        />
+                    <View style={cartS.qtyRow}>
+                      <TouchableOpacity style={cartS.qtyBtn} onPress={()=>item.quantity>1?onUpdateQty(item.id,item.quantity-1):onRemove(item.id)}>
+                        <Ionicons name={item.quantity===1?"trash-outline":"remove"} size={11} color={item.quantity===1?T.red:T.text} />
                       </TouchableOpacity>
-                      <Text style={cartStyles.qtyValue}>{item.quantity}</Text>
+                      <Text style={cartS.qtyVal}>{item.quantity}</Text>
                       <TouchableOpacity
-                        style={[
-                          cartStyles.qtyBtn,
-                          { backgroundColor: theme.accent },
-                        ]}
-                        onPress={() => {
-                          const maxStock = item.product.stock ?? 0;
-                          if (item.quantity >= maxStock) {
-                            alert(`Only ${maxStock} item available!`);
-                            return;
-                          }
-                          onUpdateQty(item.id, item.quantity + 1);
-                        }}
+                        style={[cartS.qtyBtn, { backgroundColor: theme.accent }]}
+                        onPress={()=>{ const m=item.product.stock??0; if(item.quantity>=m){alert(`Only ${m} available`);return;} onUpdateQty(item.id,item.quantity+1); }}
                       >
-                        <Ionicons name="add" size={12} color="#fff" />
+                        <Ionicons name="add" size={11} color="#fff" />
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -1123,37 +1133,19 @@ function CartSheet({
           )}
 
           {cart.length > 0 && (
-            <View style={cartStyles.footer}>
-              <View style={styles.divider} />
-              <View style={cartStyles.totalRow}>
-                <Text style={cartStyles.totalLabel}>Total</Text>
-                <Text
-                  style={[
-                    cartStyles.totalValue,
-                    { color: canAfford ? "#1A1A1A" : "#f97316" },
-                  ]}
-                >
-                  ₹{cartTotal.toFixed(2)}
-                </Text>
+            <View style={cartS.footer}>
+              <View style={cartS.divider} />
+              <View style={cartS.totalRow}>
+                <Text style={cartS.totalLabel}>Total</Text>
+                <Text style={[cartS.totalVal, { color: canAfford ? T.text : T.orange }]}>₹{cartTotal.toFixed(2)}</Text>
               </View>
               {!canAfford && (
-                <View style={cartStyles.insufficientBanner}>
-                  <Ionicons name="warning-outline" size={12} color="#f97316" />
-                  <Text style={cartStyles.insufficientText}>
-                    Insufficient balance. Recharge to order.
-                  </Text>
+                <View style={cartS.lowBal}>
+                  <Ionicons name="warning-outline" size={11} color={T.orange} />
+                  <Text style={cartS.lowBalTxt}>Insufficient balance. Recharge to order.</Text>
                 </View>
               )}
-              <Button
-                title={
-                  submitting
-                    ? "Placing Order..."
-                    : `Place Order · ₹${cartTotal.toFixed(2)}`
-                }
-                onPress={onPlaceOrder}
-                loading={submitting}
-                disabled={!canAfford}
-              />
+              <Button title={submitting ? "Placing Order…" : `Place Order · ₹${cartTotal.toFixed(2)}`} onPress={onPlaceOrder} loading={submitting} disabled={!canAfford} />
             </View>
           )}
         </Animated.View>
@@ -1161,707 +1153,285 @@ function CartSheet({
     </Modal>
   );
 }
-
-const cartStyles = StyleSheet.create({
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.45)",
-  },
-  sidebar: {
-    position: "absolute",
-    top: 0,
-    right: 0,
-    bottom: 0,
-    width: SCREEN_WIDTH * 0.82,
-    backgroundColor: "#fff",
-    borderTopLeftRadius: 24,
-    borderBottomLeftRadius: 24,
-    paddingBottom: 34,
-    shadowColor: "#000",
-    shadowOpacity: 0.22,
-    shadowRadius: 24,
-    shadowOffset: { width: -6, height: 0 },
-    elevation: 18,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingTop: 52,
-    paddingBottom: 14,
-    gap: 10,
-  },
-  backBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    backgroundColor: "rgba(0,0,0,0.06)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  headerCenter: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 7,
-    flex: 1,
-  },
-  headerTitle: { fontSize: 17, fontWeight: "800", color: "#1A1A1A" },
-  countBadge: {
-    backgroundColor: Colors.primary,
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 5,
-  },
-  countBadgeText: { fontSize: 11, fontWeight: "800", color: "#fff" },
-  walletStrip: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: "#F8F8F8",
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginHorizontal: 16,
-    marginBottom: 6,
-  },
-  walletLeft: { flexDirection: "row", alignItems: "center", gap: 6 },
-  walletLabel: { fontSize: 12, fontWeight: "600", color: "#888" },
-  walletBalance: { fontSize: 14, fontWeight: "800" },
-  cartItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingVertical: 11,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F5F5F5",
-  },
-  cartItemIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  cartItemName: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#1A1A1A",
-    marginBottom: 3,
-  },
-  cartItemPrice: { fontSize: 12, fontWeight: "700", color: "#888" },
-  qtyRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  qtyBtn: {
-    width: 26,
-    height: 26,
-    borderRadius: 7,
-    backgroundColor: "#F5F5F5",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  qtyValue: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: "#1A1A1A",
-    minWidth: 16,
-    textAlign: "center",
-  },
-  footer: {
-    paddingHorizontal: 16,
-  },
-  totalRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 10,
-  },
-  totalLabel: { fontSize: 13, fontWeight: "700", color: "#888" },
-  totalValue: { fontSize: 19, fontWeight: "800" },
-  insufficientBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 7,
-    backgroundColor: "#fff7ed",
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    marginBottom: 10,
-  },
-  insufficientText: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#f97316",
-    flex: 1,
-  },
-  empty: { alignItems: "center", paddingVertical: 60, gap: 8, flex: 1, justifyContent: "center" },
-  emptyText: { fontSize: 15, fontWeight: "800", color: "#aaa" },
-  emptySubtext: { fontSize: 12, color: "#ccc", fontWeight: "500" },
+const cartS = StyleSheet.create({
+  overlay:   { ...StyleSheet.absoluteFillObject, backgroundColor:"rgba(0,0,0,0.4)" },
+  sidebar:   { position:"absolute", top:0, right:0, bottom:0, width:SCREEN_WIDTH*0.82, backgroundColor: T.surface, borderTopLeftRadius:24, borderBottomLeftRadius:24, paddingBottom:34, shadowColor:"#000", shadowOpacity:0.14, shadowRadius:24, elevation:18 },
+  header:    { flexDirection:"row", alignItems:"center", paddingHorizontal:16, paddingTop:52, paddingBottom:14, gap:10 },
+  backBtn:   { width:32, height:32, borderRadius: T.radius.sm, backgroundColor:"#F5F5F3", justifyContent:"center", alignItems:"center" },
+  title:     { fontSize:17, fontWeight:"800", color: T.text, flex:1 },
+  badge:     { backgroundColor: Colors.primary, borderRadius:10, minWidth:20, height:20, alignItems:"center", justifyContent:"center", paddingHorizontal:5 },
+  badgeTxt:  { fontSize:10, fontWeight:"800", color:"#fff" },
+  walletStrip:{ flexDirection:"row", alignItems:"center", justifyContent:"space-between", backgroundColor:"#F7F6F4", borderRadius: T.radius.md, paddingHorizontal:14, paddingVertical:10, marginHorizontal:16, marginBottom:6 },
+  walletLabel:{ fontSize:12, fontWeight:"600", color: T.muted },
+  walletBal: { fontSize:14, fontWeight:"800" },
+  divider:   { height:1, backgroundColor: T.border, marginVertical:10 },
+  item:      { flexDirection:"row", alignItems:"center", gap:10, paddingVertical:11, paddingHorizontal:16, borderBottomWidth:1, borderBottomColor: T.border },
+  icon:      { width:36, height:36, borderRadius: T.radius.sm, justifyContent:"center", alignItems:"center" },
+  itemName:  { fontSize:12, fontWeight:"700", color: T.text, marginBottom:3 },
+  itemPrice: { fontSize:11, fontWeight:"700", color: T.muted },
+  qtyRow:    { flexDirection:"row", alignItems:"center", gap:6 },
+  qtyBtn:    { width:24, height:24, borderRadius:7, backgroundColor:"#F5F5F3", justifyContent:"center", alignItems:"center" },
+  qtyVal:    { fontSize:13, fontWeight:"800", color: T.text, minWidth:16, textAlign:"center" },
+  footer:    { paddingHorizontal:16 },
+  totalRow:  { flexDirection:"row", justifyContent:"space-between", alignItems:"center", paddingVertical:8 },
+  totalLabel:{ fontSize:13, fontWeight:"700", color: T.muted },
+  totalVal:  { fontSize:19, fontWeight:"800" },
+  lowBal:    { flexDirection:"row", alignItems:"center", gap:6, backgroundColor: T.orangeLight, borderRadius: T.radius.sm, paddingHorizontal:12, paddingVertical:9, marginBottom:10 },
+  lowBalTxt: { fontSize:11, fontWeight:"600", color: T.orange, flex:1 },
+  empty:     { alignItems:"center", paddingVertical:60, gap:8, flex:1, justifyContent:"center" },
+  emptyTxt:  { fontSize:14, fontWeight:"600", color: T.faint },
 });
 
-// ─── Zepto-style Mini Cart Pill 
-function MiniCartPill({
-  cart,
-  onPress,
-}: {
-  cart: CartItem[];
-  onPress: () => void;
-}) {
-  const translateY = useRef(new Animated.Value(80)).current;
-  const scale = useRef(new Animated.Value(0.9)).current;
-  const prevCount = useRef(0);
-  const bounceAnim = useRef(new Animated.Value(1)).current;
-
-  const totalItems = cart.reduce((sum, c) => sum + c.quantity, 0);
-  const cartTotal = cart.reduce(
-    (sum, item) => sum + item.product.price * item.quantity,
-    0
-  );
+// ─── Mini Cart Pill ─────────────────────────────────────────────────────────
+function MiniCartPill({ cart, onPress }: { cart:CartItem[]; onPress:()=>void }) {
+  const ty    = useRef(new Animated.Value(80)).current;
+  const sc    = useRef(new Animated.Value(0.9)).current;
+  const bounce= useRef(new Animated.Value(1)).current;
+  const prev  = useRef(0);
+  const total = cart.reduce((s,c)=>s+c.quantity,0);
+  const sum   = cart.reduce((s,i)=>s+i.product.price*i.quantity,0);
 
   useEffect(() => {
-    if (totalItems > 0) {
+    if (total > 0) {
       Animated.parallel([
-        Animated.spring(translateY, {
-          toValue: 0,
-          useNativeDriver: true,
-          damping: 18,
-          stiffness: 220,
-        }),
-        Animated.spring(scale, {
-          toValue: 1,
-          useNativeDriver: true,
-          damping: 14,
-          stiffness: 200,
-        }),
+        Animated.spring(ty, { toValue:0, useNativeDriver:true, damping:18, stiffness:220 }),
+        Animated.spring(sc, { toValue:1, useNativeDriver:true, damping:14, stiffness:200 }),
       ]).start();
     } else {
       Animated.parallel([
-        Animated.spring(translateY, {
-          toValue: 80,
-          useNativeDriver: true,
-          damping: 18,
-          stiffness: 220,
-        }),
-        Animated.spring(scale, {
-          toValue: 0.9,
-          useNativeDriver: true,
-          damping: 14,
-          stiffness: 200,
-        }),
+        Animated.spring(ty, { toValue:80, useNativeDriver:true, damping:18, stiffness:220 }),
+        Animated.spring(sc, { toValue:0.9, useNativeDriver:true, damping:14, stiffness:200 }),
       ]).start();
     }
-
-    // Bounce on count change
-    if (totalItems > 0 && totalItems !== prevCount.current) {
+    if (total > 0 && total !== prev.current) {
       Animated.sequence([
-        Animated.spring(bounceAnim, {
-          toValue: 1.12,
-          useNativeDriver: true,
-          damping: 6,
-          stiffness: 400,
-        }),
-        Animated.spring(bounceAnim, {
-          toValue: 1,
-          useNativeDriver: true,
-          damping: 10,
-          stiffness: 300,
-        }),
+        Animated.spring(bounce, { toValue:1.1, useNativeDriver:true, damping:6, stiffness:400 }),
+        Animated.spring(bounce, { toValue:1,   useNativeDriver:true, damping:10, stiffness:300 }),
       ]).start();
     }
-    prevCount.current = totalItems;
-  }, [totalItems]);
+    prev.current = total;
+  }, [total]);
 
-  if (totalItems === 0) return null;
+  if (total === 0) return null;
 
   return (
-    <Animated.View
-      style={[
-        miniCartStyles.container,
-        {
-          transform: [{ translateY }, { scale }],
-        },
-      ]}
-    >
-      <TouchableOpacity
-        style={miniCartStyles.pill}
-        onPress={onPress}
-        activeOpacity={0.93}
-      >
-        {/* Left: item count badge */}
-        <Animated.View
-          style={[
-            miniCartStyles.countBox,
-            { transform: [{ scale: bounceAnim }] },
-          ]}
-        >
-          <Text style={miniCartStyles.countText}>{totalItems}</Text>
+    <Animated.View style={[pillS.wrap, { transform:[{translateY:ty},{scale:sc}] }]}>
+      <TouchableOpacity style={pillS.pill} onPress={onPress} activeOpacity={0.9}>
+        <Animated.View style={[pillS.badge, { transform:[{scale:bounce}] }]}>
+          <Text style={pillS.badgeTxt}>{total}</Text>
         </Animated.View>
-
-        {/* Center: label */}
-        <View style={miniCartStyles.center}>
-          <Text style={miniCartStyles.label}>View Cart</Text>
-          <Text style={miniCartStyles.sublabel}>
-            {cart.length} item{cart.length > 1 ? "s" : ""}
-          </Text>
+        <View style={{ flex:1 }}>
+          <Text style={pillS.label}>View Cart</Text>
+          <Text style={pillS.sub}>{cart.length} item{cart.length>1?"s":""}</Text>
         </View>
-
-        {/* Right: total + arrow */}
-        <View style={miniCartStyles.right}>
-          <Text style={miniCartStyles.total}>₹{cartTotal.toFixed(0)}</Text>
-          <View style={miniCartStyles.arrowBox}>
-            <Ionicons name="chevron-forward" size={13} color={Colors.primary} />
-          </View>
-        </View>
+        <Text style={pillS.total}>₹{sum.toFixed(0)}</Text>
+        <View style={pillS.arrow}><Ionicons name="chevron-forward" size={12} color={Colors.primary} /></View>
       </TouchableOpacity>
     </Animated.View>
   );
 }
-
-const miniCartStyles = StyleSheet.create({
-  container: {
-    position: "absolute",
-    bottom: 20,
-    left: 16,
-    right: 16,
-    zIndex: 100,
-    shadowColor: "#000",
-    shadowOpacity: 0.18,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 14,
-  },
-  pill: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#1A1A1A",
-    borderRadius: 20,
-    paddingVertical: 10,
-    paddingLeft: 10,
-    paddingRight: 12,
-    gap: 10,
-  },
-  countBox: {
-    backgroundColor: Colors.primary,
-    borderRadius: 12,
-    minWidth: 32,
-    height: 32,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 6,
-  },
-  countText: { fontSize: 14, fontWeight: "900", color: "#fff" },
-  center: { flex: 1 },
-  label: { fontSize: 14, fontWeight: "800", color: "#fff" },
-  sublabel: { fontSize: 10, fontWeight: "500", color: "rgba(255,255,255,0.55)", marginTop: 1 },
-  right: { flexDirection: "row", alignItems: "center", gap: 6 },
-  total: { fontSize: 15, fontWeight: "800", color: "#fff" },
-  arrowBox: {
-    width: 26,
-    height: 26,
-    borderRadius: 8,
-    backgroundColor: Colors.primary + "25",
-    justifyContent: "center",
-    alignItems: "center",
-  },
+const pillS = StyleSheet.create({
+  wrap:    { position:"absolute", bottom:20, left:16, right:16, zIndex:100, shadowColor:"#000", shadowOpacity:0.14, shadowRadius:18, elevation:12 },
+  pill:    { flexDirection:"row", alignItems:"center", backgroundColor: T.text, borderRadius:18, paddingVertical:10, paddingLeft:10, paddingRight:12, gap:10 },
+  badge:   { backgroundColor: Colors.primary, borderRadius:12, minWidth:30, height:30, justifyContent:"center", alignItems:"center", paddingHorizontal:6 },
+  badgeTxt:{ fontSize:13, fontWeight:"900", color:"#fff" },
+  label:   { fontSize:13, fontWeight:"800", color:"#fff" },
+  sub:     { fontSize:10, color:"rgba(255,255,255,0.5)", marginTop:1 },
+  total:   { fontSize:14, fontWeight:"800", color:"#fff" },
+  arrow:   { width:24, height:24, borderRadius:7, backgroundColor: Colors.primary + "28", justifyContent:"center", alignItems:"center" },
 });
 
-// ─── Main Screen 
+// ─── Main Screen ─────────────────────────────────────────────────────────────
 export default function CatalogScreen() {
-  const [products, setProducts] = useState<any[]>([]);
-  const [categories, setCategories] = useState<any[]>([]);
-  const [admins, setAdmins] = useState<any[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const { user } = useAuth();
+  const [linkedAdminId, setLinkedAdminId]     = useState<string|null>(null);
+  const [products, setProducts]               = useState<any[]>([]);
+  const [categories, setCategories]           = useState<any[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string|null>(null);
+  const [loading, setLoading]                 = useState(true);
+  const [refreshing, setRefreshing]           = useState(false);
 
-  // Product detail modal
-  const [modalVisible, setModalVisible] = useState(false);
-  const [selectedProduct, setSelectedProduct] = useState<any>(null);
-  const [quantity, setQuantity] = useState(1);
-  const [pattern, setPattern] = useState("daily");
-  const [customDays, setCustomDays] = useState<number[]>([]);
+  const [quickAddVisible,    setQuickAddVisible]    = useState(false);
+  const [quickAddProduct,    setQuickAddProduct]    = useState<any>(null);
+  const [quickAddSubmitting, setQuickAddSubmitting] = useState(false);
 
-  // Cart (buy_once items for both dairy and non-dairy)
-  const [cart, setCart] = useState<CartItem[]>([]);
+  const [subscribeVisible, setSubscribeVisible] = useState(false);
+  const [subscribeProduct, setSubscribeProduct] = useState<any>(null);
+
+  const [cart,        setCart]        = useState<CartItem[]>([]);
   const [cartVisible, setCartVisible] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+  const [submitting,  setSubmitting]  = useState(false);
 
-  // Subscriptions panel
-  const [subSheetVisible, setSubSheetVisible] = useState(false);
-  const [activeSubscriptions, setActiveSubscriptions] = useState<any[]>([]);
-  const [cancelling, setCancelling] = useState<string | null>(null);
+  const [subSheetVisible,    setSubSheetVisible]    = useState(false);
+  const [activeSubscriptions,setActiveSubscriptions] = useState<any[]>([]);
+  const [cancelling,         setCancelling]         = useState<string|null>(null);
 
-  // Modals & feedback
-  const [successVisible, setSuccessVisible] = useState(false);
-  const [successIsSubscription, setSuccessIsSubscription] = useState(false);
-  const [infoVisible, setInfoVisible] = useState(false);
-  const [walletErrorVisible, setWalletErrorVisible] = useState(false);
-  const [walletBalance, setWalletBalance] = useState(0);
-  const [toastVisible, setToastVisible] = useState(false);
-  const [toastProduct, setToastProduct] = useState("");
-  const [toastIsSubscription, setToastIsSubscription] = useState(false);
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [successVisible,      setSuccessVisible]      = useState(false);
+  const [successIsSub,        setSuccessIsSub]        = useState(false);
+  const [walletErrorVisible,  setWalletErrorVisible]  = useState(false);
+  const [walletBalance,       setWalletBalance]       = useState(0);
+  const [toastVisible,        setToastVisible]        = useState(false);
+  const [toastProduct,        setToastProduct]        = useState("");
+  const [toastIsSub,          setToastIsSub]          = useState(false);
+  const toastTimer = useRef<ReturnType<typeof setTimeout>|null>(null);
+  const isFocused  = useIsFocused();
 
-  const isFocused = useIsFocused();
+  const tomorrow = useMemo(() => {
+    const d = new Date(); d.setDate(d.getDate()+1); return dateToString(d);
+  }, []);
 
-  const fetchSubscriptions = useCallback(async () => {
+  const fetchSubs = useCallback(async () => {
     try {
       const subs = await api.getSubscriptions();
-      setActiveSubscriptions(
-        (subs || []).filter(
-          (s: any) => s.status === "active" || !s.status
-        )
-      );
-    } catch (e) {
-      console.error("Subscriptions fetch error:", e);
-    }
+      setActiveSubscriptions((subs||[]).filter((s:any)=>s.status==="active"||!s.status));
+    } catch {}
   }, []);
+
+  useEffect(() => {
+    const id = (user as any)?.admin_id ?? (user as any)?.referral_admin_id;
+    setLinkedAdminId(id ?? null);
+  }, [user]);
 
   const fetchData = useCallback(async () => {
     try {
-      const [productsData, categoriesData, adminsData, walletData] =
-        await Promise.all([
-          api.getCatalogProducts(undefined, selectedCategory || undefined),
-          api.getCategories(),
-          api.getAdmins(),
-          api.getWallet(),
-        ]);
-      setProducts(productsData);
-      setCategories(categoriesData);
-      setAdmins(
-        adminsData.map((a: any) => ({
-          ...a,
-          id: a.id || a._id || a.admin_id,
-        }))
-      );
-      setWalletBalance(walletData.balance ?? 0);
-      await fetchSubscriptions();
-    } catch (error) {
-      console.error("Catalog error:", error);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [selectedCategory, fetchSubscriptions]);
+      const [prods, cats, wallet] = await Promise.all([
+        api.getCatalogProducts(linkedAdminId ?? undefined, selectedCategory || undefined),
+        api.getCategories(),
+        api.getWallet(),
+      ]);
+      setProducts(prods); setCategories(cats);
+      setWalletBalance(wallet.balance ?? 0);
+      await fetchSubs();
+    } catch {}
+    finally { setLoading(false); setRefreshing(false); }
+  }, [selectedCategory, fetchSubs, linkedAdminId]);
 
   useEffect(() => {
     if (!isFocused) return;
     fetchData();
-    const interval = setInterval(() => {
-      if (!modalVisible && !cartVisible && !subSheetVisible) fetchData();
+    const iv = setInterval(() => {
+      if (!quickAddVisible && !subscribeVisible && !cartVisible && !subSheetVisible) fetchData();
     }, 2000);
-    return () => clearInterval(interval);
-  }, [isFocused, fetchData, modalVisible, cartVisible, subSheetVisible]);
+    return () => clearInterval(iv);
+  }, [isFocused, fetchData, quickAddVisible, subscribeVisible, cartVisible, subSheetVisible]);
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchData();
+  const onRefresh = () => { setRefreshing(true); fetchData(); };
+
+  const showToast = (name:string, sub:boolean) => {
+    setToastProduct(name); setToastIsSub(sub); setToastVisible(true);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(()=>setToastVisible(false), 2800);
   };
 
-  const getAdminName = (adminId: string) => {
-    const admin = admins.find((a) => a.id === adminId);
-    return admin?.shop_name || admin?.name || null;
+  const handleAddToCart    = (p:any) => { if((p.stock??0)===0){alert("Out of stock");return;} setQuickAddProduct(p); setQuickAddVisible(true); };
+  const handleDairyBuyOnce = (p:any) => { if((p.stock??0)===0){alert("Out of stock");return;} setQuickAddProduct(p); setQuickAddVisible(true); };
+  const handleSubscribe    = (p:any) => { if((p.stock??0)===0){alert("Out of stock");return;} setSubscribeProduct(p); setSubscribeVisible(true); };
+
+  const handleQuickAddConfirm = async (qty:number) => {
+    if (!quickAddProduct) return;
+    const avail = quickAddProduct?.stock ?? 0;
+    if (qty > avail) { alert(`Only ${avail} available`); return; }
+    setQuickAddSubmitting(true);
+    await new Promise(r=>setTimeout(r,100));
+    setCart(prev => [...prev, { id:`${quickAddProduct.id}_${Date.now()}`, product:quickAddProduct, quantity:qty, pattern:"buy_once", customDays:[] }]);
+    setQuickAddVisible(false);
+    showToast(quickAddProduct.name, false);
+    setQuickAddSubmitting(false);
   };
 
-  const openModal = (product: any) => {
-    if ((product.stock ?? 0) === 0) {
-      alert("product out of stock!");
-      return;
-    }
-    const dairy = isDairyProduct(product);
-    setSelectedProduct(product);
-    setQuantity(1);
-    // Dairy defaults to daily; non-dairy only has buy_once
-    setPattern(dairy ? "daily" : "buy_once");
-    setCustomDays([]);
-    setModalVisible(true);
+  const handleRemove    = (id:string) => setCart(p=>p.filter(c=>c.id!==id));
+  const handleUpdateQty = (id:string, qty:number) => {
+    setCart(p=>p.map(c=>{
+      if(c.id!==id) return c;
+      const m=c.product.stock??Infinity;
+      if(qty>m){alert(`Only ${m} available`);return c;}
+      return {...c,quantity:qty};
+    }));
   };
 
-  const toggleCustomDay = (day: number) => {
-    setCustomDays((prev) =>
-      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]
-    );
-  };
-
-  // Whether the selected pattern is a subscription (not buy_once)
-  const isSubscriptionPattern = (p: string) => p !== "buy_once";
-
-  // ── Handle primary action
-  const handlePrimaryAction = async () => {
-    const dairy = isDairyProduct(selectedProduct);
-    const isSub = isSubscriptionPattern(pattern);
-
-    if (dairy && isSub) {
-      // Dairy + subscription pattern → direct subscription
-      if (pattern === "custom" && customDays.length === 0) {
-        setInfoVisible(true);
-        return;
-      }
-
-      setSubmitting(true);
-      try {
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        const startDate = tomorrow.toISOString().split("T")[0];
-
-        await api.createSubscription({
-          product_id: selectedProduct.id,
-          quantity,
-          pattern,
-          custom_days: pattern === "custom" ? customDays : null,
-          start_date: startDate,
-          end_date: null,
-          amount: selectedProduct.price * quantity,
-        });
-
-        setModalVisible(false);
-
-        // ✅ Fix: re-fetch subscriptions immediately so the badge updates
-        await fetchSubscriptions();
-        api.getWallet().then((w) => setWalletBalance(w.balance ?? 0)).catch(() => { });
-
-        setSuccessIsSubscription(true);
-        setSuccessVisible(true);
-
-        setToastProduct(selectedProduct.name);
-        setToastIsSubscription(true);
-        setToastVisible(true);
-        if (toastTimer.current) clearTimeout(toastTimer.current);
-        toastTimer.current = setTimeout(() => setToastVisible(false), 3000);
-      } catch (e: any) {
-        console.error("Subscription error:", e);
-        const msg = e?.message || "Something went wrong!";
-        alert(msg);
-      } finally {
-        setSubmitting(false);
-      }
-    } else {
-
-      const availableStock = selectedProduct?.stock ?? 0;
-      if (quantity > availableStock) {
-        alert(`Only ${availableStock} item available!`);
-        return;
-      }
-      // buy_once (dairy or non-dairy) → add to cart
-      const newItem: CartItem = {
-        id: `${selectedProduct.id}_${Date.now()}`,
-        product: selectedProduct,
-        quantity,
-        pattern: "buy_once",
-        customDays: [],
-      };
-
-      setCart((prev) => [...prev, newItem]);
-      setModalVisible(false);
-
-      setToastProduct(selectedProduct.name);
-      setToastIsSubscription(false);
-      setToastVisible(true);
-      if (toastTimer.current) clearTimeout(toastTimer.current);
-      toastTimer.current = setTimeout(() => setToastVisible(false), 2800);
-    }
-  };
-
-  // ── Cart handlers
-  const handleRemoveFromCart = (id: string) => {
-    setCart((prev) => prev.filter((c) => c.id !== id));
-  };
-
-  const handleUpdateQty = (id: string, qty: number) => {
-    setCart((prev) =>
-      prev.map((c) => {
-        if (c.id !== id) return c;
-        const maxStock = c.product.stock ?? Infinity;
-        if (qty > maxStock) {
-          alert(`Only ${maxStock} item available!`);
-          return c;
-        }
-        return { ...c, quantity: qty };
-      })
-    );
-  };
-
-  const cartTotal = cart.reduce(
-    (sum, item) => sum + item.product.price * item.quantity,
-    0
-  );
+  const cartTotal = cart.reduce((s,i)=>s+i.product.price*i.quantity,0);
 
   const handlePlaceOrder = async () => {
-    if (walletBalance < cartTotal) {
-      setWalletErrorVisible(true);
-      return;
-    }
-
+    if (walletBalance < cartTotal) { setWalletErrorVisible(true); return; }
     setSubmitting(true);
     try {
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const startDate = tomorrow.toISOString().split("T")[0];
-
-      await Promise.all(
-        cart.map((item) =>
-          api.createSubscription({
-            product_id: item.product.id,
-            quantity: item.quantity,
-            pattern: "buy_once",
-            custom_days: null,
-            start_date: startDate,
-            end_date: startDate,
-            amount: item.product.price * item.quantity,
-          })
-        )
-      )
-
-
-      const itemCount = cart.length;
-      setCart([]);
-      setCartVisible(false);
-      setSuccessIsSubscription(false);
-      setSuccessVisible(true);
-
-      api.getWallet().then((w) => setWalletBalance(w.balance ?? 0)).catch(() => { });
-      await fetchData(); 
-    } catch (e: any) {
-      console.error("Order error:", e);
-      const msg = e?.message || "Out Of Stock  ";
-      alert(msg);
-    } finally {
-      setSubmitting(false);
-    }
+      await Promise.all(cart.map(item=>api.createSubscription({
+        product_id:    item.product.id,
+        quantity:      item.quantity,
+        pattern:       "buy_once",
+        custom_days:   null,
+        start_date:    tomorrow,
+        end_date:      tomorrow,
+        amount:        item.product.price * item.quantity,
+        delivery_slot: "morning", // default for buy_once cart orders
+      })));
+      setCart([]); setCartVisible(false);
+      setSuccessIsSub(false); setSuccessVisible(true);
+      api.getWallet().then(w=>setWalletBalance(w.balance??0)).catch(()=>{});
+      await fetchData();
+    } catch (e:any) { alert(e?.message || "Order failed"); }
+    finally { setSubmitting(false); }
   };
 
-  // ── Cancel subscription
-  const handleCancelSubscription = async (id: string) => {
+  const handleCancelSub = async (id:string) => {
     setCancelling(id);
-    try {
-      await api.cancelSubscription(id);
-      setActiveSubscriptions((prev) => prev.filter((s) => s.id !== id));
-    } catch (e) {
-      console.error("Cancel subscription error:", e);
-    } finally {
-      setCancelling(null);
-    }
+    try { await api.cancelSubscription(id); setActiveSubscriptions(p=>p.filter(s=>s.id!==id)); }
+    catch {}
+    finally { setCancelling(null); }
   };
 
-  const groupedProducts = React.useMemo(() => {
+  const grouped = useMemo(() => {
     if (selectedCategory) {
-      const label =
-        categories.find((c) => c.value === selectedCategory)?.label ||
-        selectedCategory;
-      return [{ value: selectedCategory, label, items: products }];
+      const label = categories.find(c=>c.value===selectedCategory)?.label || selectedCategory;
+      return [{ value:selectedCategory, label, items:products }];
     }
-    const map: Record<string, any[]> = {};
-    products.forEach((p) => {
-      const cat = p.category || "other";
-      if (!map[cat]) map[cat] = [];
-      map[cat].push(p);
-    });
-    return Object.entries(map).map(([catValue, items]) => ({
-      value: catValue,
-      label:
-        categories.find((c) => c.value === catValue)?.label || catValue,
-      items,
-    }));
+    const map: Record<string,any[]> = {};
+    products.forEach(p=>{ const c=p.category||"other"; if(!map[c]) map[c]=[]; map[c].push(p); });
+    return Object.entries(map).map(([v,items])=>({ value:v, label:categories.find(c=>c.value===v)?.label||v, items }));
   }, [products, selectedCategory, categories]);
 
   if (loading) return <LoadingScreen />;
 
-  const modalTheme = getCategoryTheme(selectedProduct?.category);
-  const shopName = getAdminName(selectedProduct?.admin_id);
-  const isSelectedDairy = isDairyProduct(selectedProduct);
-  // All 4 patterns for dairy; only buy_once for non-dairy
-  const displayPatterns = isSelectedDairy ? subscriptionPatterns : [buyOncePattern];
-  const selectedPatternObj = displayPatterns.find((p) => p.value === pattern);
-  const orderTotal = (selectedProduct?.price ?? 0) * quantity;
-  const cartItemCount = cart.length;
-  const subCount = activeSubscriptions.length;
-  const isSub = isSubscriptionPattern(pattern);
-
   const ListHeader = (
     <>
-      <View style={styles.pageHeader}>
-        <View style={styles.pageHeaderTop}>
-          <Text style={styles.pageTitle}>Shop</Text>
-
-          <View style={styles.headerButtons}>
-            {/* Subscription details button */}
-            <TouchableOpacity
-              style={styles.subBtn}
-              onPress={() => setSubSheetVisible(true)}
-            >
-              <Ionicons name="repeat-outline" size={17} color="#f59e0b" />
-              {subCount > 0 && (
-                <View style={styles.subBadge}>
-                  <Text style={styles.subBadgeText}>{subCount}</Text>
+      <View style={mainS.pageHeader}>
+        <View style={mainS.headerTop}>
+          <Text style={mainS.pageTitle}>Shop</Text>
+          <View style={mainS.headerBtns}>
+            <TouchableOpacity style={mainS.iconBtn} onPress={()=>setSubSheetVisible(true)}>
+              <Ionicons name="repeat-outline" size={17} color={T.amber} />
+              {activeSubscriptions.length > 0 && (
+                <View style={[mainS.dot, { backgroundColor: T.amber }]}>
+                  <Text style={mainS.dotTxt}>{activeSubscriptions.length}</Text>
                 </View>
               )}
             </TouchableOpacity>
-
-            {/* Cart button */}
-            <TouchableOpacity
-              style={styles.cartBtn}
-              onPress={() => setCartVisible(true)}
-            >
-              <Ionicons name="cart-outline" size={20} color={Colors.primary} />
-              {cartItemCount > 0 && (
-                <View style={styles.cartBadge}>
-                  <Text style={styles.cartBadgeText}>{cartItemCount}</Text>
+            <TouchableOpacity style={mainS.iconBtn} onPress={()=>setCartVisible(true)}>
+              <Ionicons name="cart-outline" size={19} color={Colors.primary} />
+              {cart.length > 0 && (
+                <View style={[mainS.dot, { backgroundColor: Colors.primary }]}>
+                  <Text style={mainS.dotTxt}>{cart.length}</Text>
                 </View>
               )}
             </TouchableOpacity>
           </View>
         </View>
-
-        <View style={styles.pageHeaderRight}>
-          <Text style={styles.pageSubtitle}>
-            {products.length} products available
-          </Text>
-          <View style={styles.walletPill}>
-            <Ionicons name="wallet-outline" size={11} color={Colors.primary} />
-            <Text style={styles.walletPillText}>
-              ₹{walletBalance.toFixed(2)}
-            </Text>
+        <View style={mainS.headerSub}>
+          <Text style={mainS.productCount}>{products.length} products</Text>
+          <View style={mainS.walletPill}>
+            <Ionicons name="wallet-outline" size={10} color={Colors.primary} />
+            <Text style={mainS.walletTxt}>₹{walletBalance.toFixed(2)}</Text>
           </View>
         </View>
       </View>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.categoryRow}
-        style={styles.categoryChipsScroll}
-      >
-        <TouchableOpacity
-          style={[styles.chip, !selectedCategory && styles.chipActive]}
-          onPress={() => setSelectedCategory(null)}
-        >
-          <Text
-            style={[
-              styles.chipText,
-              !selectedCategory && styles.chipTextActive,
-            ]}
-          >
-            All
-          </Text>
+
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={mainS.chips} style={{ flexShrink:0 }}>
+        <TouchableOpacity style={[mainS.chip, !selectedCategory && mainS.chipActive]} onPress={()=>setSelectedCategory(null)}>
+          <Text style={[mainS.chipTxt, !selectedCategory && mainS.chipTxtActive]}>All</Text>
         </TouchableOpacity>
-        {categories.map((cat) => (
-          <TouchableOpacity
-            key={cat.value}
-            style={[
-              styles.chip,
-              selectedCategory === cat.value && styles.chipActive,
-            ]}
-            onPress={() => setSelectedCategory(cat.value)}
-          >
-            <Text
-              style={[
-                styles.chipText,
-                selectedCategory === cat.value && styles.chipTextActive,
-              ]}
-            >
-              {cat.label}
-            </Text>
+        {categories.map(cat=>(
+          <TouchableOpacity key={cat.value} style={[mainS.chip, selectedCategory===cat.value && mainS.chipActive]} onPress={()=>setSelectedCategory(cat.value)}>
+            <Text style={[mainS.chipTxt, selectedCategory===cat.value && mainS.chipTxtActive]}>{cat.label}</Text>
           </TouchableOpacity>
         ))}
       </ScrollView>
@@ -1869,721 +1439,70 @@ export default function CatalogScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={mainS.container}>
       <FlatList
-        data={groupedProducts}
-        keyExtractor={(item) => item.value}
+        data={grouped}
+        keyExtractor={i=>i.value}
         ListHeaderComponent={ListHeader}
         ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <View style={styles.emptyIconWrap}>
-              <Ionicons name="cube-outline" size={36} color="#ccc" />
-            </View>
-            <Text style={styles.emptyText}>No products found</Text>
+          <View style={mainS.empty}>
+            <Ionicons name="cube-outline" size={32} color={T.faint} />
+            <Text style={mainS.emptyTxt}>No products found</Text>
           </View>
         }
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={{ paddingBottom:120 }}
         showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-        renderItem={({ item }) => (
-          <CategorySection
-            value={item.value}
-            label={item.label}
-            items={item.items}
-            cart={cart}
-            onPress={openModal}
-          />
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        renderItem={({item})=>(
+          <CategorySection value={item.value} label={item.label} items={item.items} cart={cart}
+            onBuyOnce={handleDairyBuyOnce} onSubscribe={handleSubscribe} onAddToCart={handleAddToCart} />
         )}
       />
 
-      {/* ── Zepto-style Mini Cart Pill ── */}
-      <MiniCartPill cart={cart} onPress={() => setCartVisible(true)} />
+      <MiniCartPill cart={cart} onPress={()=>setCartVisible(true)} />
 
-      {/* ── Product Detail Modal ── */}
-      <Modal visible={modalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalSheet}>
-            <View style={styles.dragHandle} />
+      <QuickAddModal visible={quickAddVisible} product={quickAddProduct} walletBalance={walletBalance}
+        onClose={()=>setQuickAddVisible(false)} onConfirm={handleQuickAddConfirm} submitting={quickAddSubmitting} />
 
-            {/* Product header */}
-            <View
-              style={[
-                styles.modalProductHeader,
-                { backgroundColor: modalTheme.bg },
-              ]}
-            >
-              <View
-                style={[
-                  styles.modalIconCircle,
-                  { backgroundColor: modalTheme.accent + "22" },
-                ]}
-              >
-                <Ionicons
-                  name={modalTheme.icon as any}
-                  size={26}
-                  color={modalTheme.accent}
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                {shopName && (
-                  <Text style={styles.modalShopName}>{shopName}</Text>
-                )}
-                <Text style={styles.modalTitle}>{selectedProduct?.name}</Text>
-                <View style={styles.modalMetaRow}>
-                  <Text
-                    style={[styles.modalPrice, { color: modalTheme.accent }]}
-                  >
-                    ₹{selectedProduct?.price}
-                  </Text>
-                  <Text style={styles.modalDot}>·</Text>
-                  <Text
-                    style={[styles.modalUnit, { color: modalTheme.accent }]}
-                  >
-                    {formatUnit(selectedProduct?.unit)}
-                  </Text>
-                </View>
-              </View>
-              <TouchableOpacity
-                style={styles.closeBtn}
-                onPress={() => setModalVisible(false)}
-              >
-                <Ionicons name="close" size={16} color="#555" />
-              </TouchableOpacity>
-            </View>
+      <SubscribeModal visible={subscribeVisible} product={subscribeProduct} walletBalance={walletBalance}
+        tomorrow={tomorrow} onClose={()=>setSubscribeVisible(false)}
+        onSuccess={async (getWal)=>{ await fetchSubs(); const b=await getWal(); setWalletBalance(b); setSuccessIsSub(true); setSuccessVisible(true); }}
+        onToast={showToast} />
 
-            {/* Info banner: dairy shows "choose pattern", non-dairy shows "buy once only" */}
-            {isSelectedDairy ? (
-              <View style={styles.dairyInfoBanner}>
-                <Ionicons name="repeat-outline" size={13} color="#f59e0b" />
-                <Text style={styles.dairyInfoText}>
-                  Choose a subscription or buy once for dairy products
-                </Text>
-              </View>
-            ) : (
-              <View style={styles.buyOnceInfoBanner}>
-                <Ionicons name="flash-outline" size={13} color={Colors.primary} />
-                <Text style={styles.buyOnceInfoText}>
-                  Added to cart as a one-time order
-                </Text>
-              </View>
-            )}
+      <CartSheet visible={cartVisible} cart={cart} walletBalance={walletBalance}
+        onClose={()=>setCartVisible(false)} onRemove={handleRemove}
+        onUpdateQty={handleUpdateQty} onPlaceOrder={handlePlaceOrder} submitting={submitting} />
 
-            <View style={styles.divider} />
+      <SubscriptionSheet visible={subSheetVisible} subscriptions={activeSubscriptions}
+        onClose={()=>setSubSheetVisible(false)} onCancel={handleCancelSub} cancelling={cancelling} />
 
-            <ScrollView showsVerticalScrollIndicator={false}>
-              {/* Quantity */}
-              <Text style={styles.sectionLabel}>Quantity</Text>
-              <View style={styles.quantityRow}>
-                <TouchableOpacity
-                  style={styles.qtyBtn}
-                  onPress={() => setQuantity((q) => Math.max(1, q - 1))}
-                >
-                  <Ionicons name="remove" size={16} color={Colors.text} />
-                </TouchableOpacity>
-                <View style={styles.qtyValueBox}>
-                  <Text style={styles.qtyValue}>{quantity}</Text>
-                  <Text
-                    style={[styles.qtyUnitLabel, { color: modalTheme.accent }]}
-                  >
-                    {formatUnit(selectedProduct?.unit)}
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  style={[
-                    styles.qtyBtn,
-                    { backgroundColor: modalTheme.accent },
-                  ]}
-                  onPress={() => {
-                    const maxStock = selectedProduct?.stock ?? Infinity;
-                    if (quantity >= maxStock) {
-                      alert(`Only ${maxStock} item available!`);
-                      return;
-                    }
-                    setQuantity((q) => q + 1);
-                  }}
-                >
-                  <Ionicons name="add" size={16} color="#fff" />
-                </TouchableOpacity>
-              </View>
-
-              {/* Order subtotal */}
-              <View style={styles.orderTotalRow}>
-                <Text style={styles.orderTotalLabel}>Item Subtotal</Text>
-                <Text style={[styles.orderTotalValue, { color: "#1A1A1A" }]}>
-                  ₹{orderTotal.toFixed(2)}
-                </Text>
-              </View>
-
-              {/* Delivery Pattern — all 4 for dairy, only buy_once for non-dairy */}
-              <Text style={styles.sectionLabel}>
-                {isSelectedDairy ? "Delivery Option" : "Order Type"}
-              </Text>
-              <View style={styles.patternGrid}>
-                {displayPatterns.map((p) => {
-                  const isActive = pattern === p.value;
-                  const activeColor = p.isSubscription ? "#22c55e" : Colors.primary;
-                  return (
-                    <TouchableOpacity
-                      key={p.value}
-                      style={[
-                        styles.patternCard,
-                        isActive && {
-                          backgroundColor: activeColor,
-                          borderColor: activeColor,
-                        },
-                      ]}
-                      onPress={() => setPattern(p.value)}
-                    >
-                      <View style={styles.patternCardTop}>
-                        <Ionicons
-                          name={p.icon as any}
-                          size={18}
-                          color={isActive ? "#fff" : activeColor}
-                        />
-                        <View
-                          style={[
-                            styles.patternTypeBadge,
-                            {
-                              backgroundColor: isActive
-                                ? "rgba(255,255,255,0.2)"
-                                : activeColor + "15",
-                            },
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.patternTypeBadgeText,
-                              { color: isActive ? "#fff" : activeColor },
-                            ]}
-                          >
-                            {p.description}
-                          </Text>
-                        </View>
-                      </View>
-                      <Text
-                        style={[
-                          styles.patternLabel,
-                          isActive && { color: "#fff" },
-                        ]}
-                      >
-                        {p.label}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.patternHint,
-                          {
-                            color: isActive
-                              ? "rgba(255,255,255,0.8)"
-                              : "#aaa",
-                          },
-                        ]}
-                      >
-                        {p.hint}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-
-              {/* Custom days picker — only for dairy + custom pattern */}
-              {isSelectedDairy && pattern === "custom" && (
-                <>
-                  <Text style={styles.sectionLabel}>Select Delivery Days</Text>
-                  <View style={styles.daysRow}>
-                    {weekDays.map((day) => (
-                      <TouchableOpacity
-                        key={day.value}
-                        style={[
-                          styles.dayPill,
-                          customDays.includes(day.value) && {
-                            backgroundColor: modalTheme.accent,
-                            borderColor: modalTheme.accent,
-                          },
-                        ]}
-                        onPress={() => toggleCustomDay(day.value)}
-                      >
-                        <Text
-                          style={[
-                            styles.dayLabel,
-                            customDays.includes(day.value) &&
-                            styles.dayLabelActive,
-                          ]}
-                        >
-                          {day.label}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                  {customDays.length > 0 && (
-                    <Text style={styles.selectedDaysHint}>
-                      Delivering on {customDays.length} day
-                      {customDays.length > 1 ? "s" : ""} per week
-                    </Text>
-                  )}
-                </>
-              )}
-
-              <View style={{ height: 16 }} />
-
-              {/* Primary action button */}
-              <Button
-                title={
-                  submitting
-                    ? isSub
-                      ? "Subscribing..."
-                      : "Adding..."
-                    : isSub
-                      ? `Subscribe — ${selectedPatternObj?.label ?? "Daily"}`
-                      : "Add to Cart"
-                }
-                onPress={handlePrimaryAction}
-                loading={submitting}
-              />
-              <View style={{ height: 16 }} />
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
-      {/* ── Right Sidebar Cart ── */}
-      <CartSheet
-        visible={cartVisible}
-        cart={cart}
-        walletBalance={walletBalance}
-        onClose={() => setCartVisible(false)}
-        onRemove={handleRemoveFromCart}
-        onUpdateQty={handleUpdateQty}
-        onPlaceOrder={handlePlaceOrder}
-        submitting={submitting}
-      />
-
-      {/* ── Subscription Details Sheet ── */}
-      <SubscriptionSheet
-        visible={subSheetVisible}
-        subscriptions={activeSubscriptions}
-        onClose={() => setSubSheetVisible(false)}
-        onCancel={handleCancelSubscription}
-        cancelling={cancelling}
-      />
-
-      {/* ── Modals ── */}
-      <SuccessModal
-        visible={successVisible}
-        itemCount={cart.length || 1}
-        isSubscription={successIsSubscription}
-        onClose={() => setSuccessVisible(false)}
-      />
-      <InfoModal visible={infoVisible} onClose={() => setInfoVisible(false)} />
-      <WalletErrorModal
-        visible={walletErrorVisible}
-        walletBalance={walletBalance}
-        orderTotal={cartTotal}
-        onClose={() => setWalletErrorVisible(false)}
-      />
-
-      {/* ── Toast ── */}
-      <AddedToCartToast
-        visible={toastVisible}
-        productName={toastProduct}
-        isSubscription={toastIsSubscription}
-      />
+      <SuccessModal visible={successVisible} itemCount={cart.length||1} isSubscription={successIsSub}
+        onClose={()=>setSuccessVisible(false)} />
+      <WalletErrorModal visible={walletErrorVisible} walletBalance={walletBalance} orderTotal={cartTotal}
+        onClose={()=>setWalletErrorVisible(false)} />
+      <AddedToCartToast visible={toastVisible} productName={toastProduct} isSubscription={toastIsSub} />
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F8F7F4" },
-  listContent: { paddingBottom: 120 },
-
-  pageHeader: { paddingHorizontal: 24, paddingTop: 12, paddingBottom: 6 },
-  pageHeaderTop: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  pageTitle: {
-    fontSize: 24,
-    fontWeight: "800",
-    color: "#1A1A1A",
-    letterSpacing: -0.5,
-  },
-
-  headerButtons: { flexDirection: "row", alignItems: "center", gap: 10 },
-
-  subBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 14,
-    backgroundColor: "#fffbeb",
-    borderWidth: 1.5,
-    borderColor: "#fde68a",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  subBadge: {
-    position: "absolute",
-    top: -4,
-    right: -4,
-    backgroundColor: "#f59e0b",
-    borderRadius: 8,
-    minWidth: 16,
-    height: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 3,
-  },
-  subBadgeText: { fontSize: 9, fontWeight: "800", color: "#fff" },
-
-  cartBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 14,
-    backgroundColor: Colors.primary + "12",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  cartBadge: {
-    position: "absolute",
-    top: -4,
-    right: -4,
-    backgroundColor: Colors.primary,
-    borderRadius: 8,
-    minWidth: 16,
-    height: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 3,
-  },
-  cartBadgeText: { fontSize: 9, fontWeight: "800", color: "#fff" },
-  pageHeaderRight: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: 4,
-  },
-  pageSubtitle: { fontSize: 12, color: "#aaa" },
-  walletPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: Colors.primary + "12",
-    borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  walletPillText: { fontSize: 11, fontWeight: "700", color: Colors.primary },
-
-  categoryChipsScroll: { flexShrink: 0 },
-  categoryRow: { paddingHorizontal: 20, paddingVertical: 8, gap: 8 },
-  chip: {
-    paddingHorizontal: 13,
-    paddingVertical: 6,
-    borderRadius: 20,
-    backgroundColor: "#fff",
-    borderWidth: 1,
-    borderColor: "#eee",
-    marginRight: 6,
-  },
-  chipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  chipText: { fontSize: 12, fontWeight: "600", color: "#888" },
-  chipTextActive: { color: "#fff" },
-
-  categorySection: { marginTop: 22 },
-  categoryHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    marginBottom: 10,
-  },
-  categoryTitleRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  categoryDot: { width: 7, height: 7, borderRadius: 4 },
-  categoryTitle: {
-    fontSize: 15,
-    fontWeight: "800",
-    color: "#1A1A1A",
-    letterSpacing: -0.2,
-  },
-  categoryCountBadge: {
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 10,
-  },
-  categoryCount: { fontSize: 11, fontWeight: "700" },
-  dairySubBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "#fffbeb",
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderWidth: 1,
-    borderColor: "#fde68a",
-  },
-  dairySubBadgeText: { fontSize: 9, fontWeight: "700", color: "#b45309" },
-  horizontalList: { paddingLeft: 20, paddingRight: 8, gap: 10 },
-
-  card: {
-    width: CARD_WIDTH,
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    overflow: "hidden",
-    shadowColor: "#000",
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 2,
-    alignSelf: "flex-start",
-  },
-  cardImageBox: { height: 88, justifyContent: "center", alignItems: "center" },
-  cardImage: { width: "100%", height: "100%" },
-  cardIconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  outOfStockBadge: {
-    position: "absolute",
-    bottom: 6,
-    left: 6,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 5,
-  },
-  outOfStockText: { color: "#fff", fontSize: 9, fontWeight: "700" },
-  subTypeBadge: {
-    position: "absolute",
-    top: 6,
-    right: 6,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 2,
-    borderRadius: 8,
-    paddingHorizontal: 5,
-    paddingVertical: 3,
-  },
-  subTypeBadgeText: { fontSize: 8, fontWeight: "800", color: "#fff" },
-  cartQtyBadge: {
-    position: "absolute",
-    top: 6,
-    right: 6,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  cartQtyBadgeText: { fontSize: 10, fontWeight: "800", color: "#fff" },
-  cardBody: { padding: 8, paddingBottom: 10 },
-  cardName: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#1A1A1A",
-    marginBottom: 4,
-  },
-  cardFooter: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  cardPrice: { fontSize: 14, fontWeight: "800" },
-  cardUnit: { fontSize: 10, fontWeight: "600" },
-
-  emptyState: { alignItems: "center", paddingTop: 70, gap: 10 },
-  emptyIconWrap: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: "#f5f5f5",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  emptyText: { fontSize: 14, color: "#bbb", fontWeight: "500" },
-
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.45)",
-    justifyContent: "flex-end",
-  },
-  modalSheet: {
-    backgroundColor: "#fff",
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingHorizontal: 22,
-    paddingTop: 12,
-    paddingBottom: 34,
-    maxHeight: "92%",
-  },
-  dragHandle: {
-    width: 38,
-    height: 4,
-    backgroundColor: "#E0E0E0",
-    borderRadius: 2,
-    alignSelf: "center",
-    marginBottom: 14,
-  },
-  modalProductHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    borderRadius: 16,
-    padding: 12,
-    marginBottom: 4,
-  },
-  modalIconCircle: {
-    width: 50,
-    height: 50,
-    borderRadius: 14,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  modalShopName: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: "#1A1A1A",
-    letterSpacing: -0.3,
-    marginBottom: 1,
-  },
-  modalTitle: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#666",
-    marginBottom: 4,
-  },
-  modalMetaRow: { flexDirection: "row", alignItems: "center", gap: 5 },
-  modalPrice: { fontSize: 14, fontWeight: "800" },
-  modalDot: { fontSize: 13, color: "#ccc" },
-  modalUnit: { fontSize: 12, fontWeight: "600" },
-  closeBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: "rgba(0,0,0,0.07)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-
-  dairyInfoBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    backgroundColor: "#fffbeb",
-    borderColor: "#fde68a",
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginTop: 6,
-    marginBottom: 2,
-  },
-  dairyInfoText: { fontSize: 11, fontWeight: "600", color: "#b45309", flex: 1 },
-  buyOnceInfoBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    backgroundColor: Colors.primary + "10",
-    borderColor: Colors.primary + "30",
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginTop: 6,
-    marginBottom: 2,
-  },
-  buyOnceInfoText: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: Colors.primary,
-    flex: 1,
-  },
-
-  divider: { height: 1, backgroundColor: "#F0F0F0", marginVertical: 14 },
-  sectionLabel: {
-    fontSize: 10,
-    fontWeight: "700",
-    color: "#bbb",
-    letterSpacing: 1,
-    textTransform: "uppercase",
-    marginBottom: 10,
-    marginTop: 2,
-  },
-  orderTotalRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    backgroundColor: "#F8F8F8",
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginBottom: 22,
-  },
-  orderTotalLabel: { fontSize: 12, fontWeight: "600", color: "#888" },
-  orderTotalValue: { fontSize: 16, fontWeight: "800" },
-  quantityRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 14,
-    gap: 16,
-  },
-  qtyBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 11,
-    backgroundColor: "#F5F5F5",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  qtyValueBox: { alignItems: "center", minWidth: 54 },
-  qtyValue: { fontSize: 24, fontWeight: "800", color: "#1A1A1A" },
-  qtyUnitLabel: { fontSize: 10, fontWeight: "700", marginTop: 1 },
-  patternGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-    marginBottom: 14,
-  },
-  patternCard: {
-    width: "47%",
-    padding: 12,
-    borderRadius: 14,
-    backgroundColor: "#F8F8F8",
-    borderWidth: 1.5,
-    borderColor: "transparent",
-    gap: 4,
-  },
-  patternCardTop: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  patternTypeBadge: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 8 },
-  patternTypeBadgeText: {
-    fontSize: 9,
-    fontWeight: "800",
-    letterSpacing: 0.3,
-  },
-  patternLabel: { fontSize: 13, fontWeight: "700", color: "#1A1A1A" },
-  patternHint: { fontSize: 10, color: "#aaa", fontWeight: "500" },
-  daysRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 8 },
-  dayPill: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: "#F5F5F5",
-    borderWidth: 1.5,
-    borderColor: "#E5E5E5",
-  },
-  dayLabel: { fontSize: 11, fontWeight: "700", color: "#999" },
-  dayLabelActive: { color: "#fff" },
-  selectedDaysHint: {
-    fontSize: 11,
-    color: "#888",
-    marginBottom: 16,
-    fontWeight: "500",
-  },
+const mainS = StyleSheet.create({
+  container:    { flex:1, backgroundColor: T.bg },
+  pageHeader:   { paddingHorizontal:20, paddingTop:14, paddingBottom:8 },
+  headerTop:    { flexDirection:"row", alignItems:"center", justifyContent:"space-between" },
+  pageTitle:    { fontSize:24, fontWeight:"800", color: T.text, letterSpacing:-0.5 },
+  headerBtns:   { flexDirection:"row", alignItems:"center", gap:8 },
+  iconBtn:      { width:38, height:38, borderRadius: T.radius.md, backgroundColor: T.surface, borderWidth:1, borderColor: T.border, justifyContent:"center", alignItems:"center" },
+  dot:          { position:"absolute", top:-4, right:-4, borderRadius:8, minWidth:16, height:16, alignItems:"center", justifyContent:"center", paddingHorizontal:3 },
+  dotTxt:       { fontSize:9, fontWeight:"800", color:"#fff" },
+  headerSub:    { flexDirection:"row", alignItems:"center", justifyContent:"space-between", marginTop:6 },
+  productCount: { fontSize:12, color: T.muted },
+  walletPill:   { flexDirection:"row", alignItems:"center", gap:4, backgroundColor: Colors.primary + "12", borderRadius: T.radius.full, paddingHorizontal:10, paddingVertical:4 },
+  walletTxt:    { fontSize:11, fontWeight:"700", color: Colors.primary },
+  chips:        { paddingHorizontal:20, paddingVertical:10, gap:7 },
+  chip:         { paddingHorizontal:14, paddingVertical:7, borderRadius: T.radius.full, backgroundColor: T.surface, borderWidth:1, borderColor: T.border },
+  chipActive:   { backgroundColor: T.text, borderColor: T.text },
+  chipTxt:      { fontSize:12, fontWeight:"600", color: T.muted },
+  chipTxtActive:{ color:"#fff" },
+  empty:        { alignItems:"center", paddingTop:70, gap:8 },
+  emptyTxt:     { fontSize:13, color: T.faint, fontWeight:"500" },
 });
