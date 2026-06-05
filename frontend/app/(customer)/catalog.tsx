@@ -16,6 +16,7 @@ import {
 import { useIsFocused } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { api } from "../../src/services/api";
 import { Colors } from "../../src/constants/colors";
 import Button from "../../src/components/Button";
@@ -74,6 +75,15 @@ const buyOncePattern = {
   isSubscription: false,
   hint: "Single delivery",
 };
+
+const PRODUCT_BANNER_WIDTH = Math.max(0, SCREEN_WIDTH - 40);
+const newlyAddedBanners = [
+  { id: "fresh-milk", title: "Fresh A2 Milk", subtitle: "Newly added for daily delivery", tone: ["#123524", "#1f6f43"] },
+  { id: "farm-curd", title: "Farm Curd", subtitle: "Creamy dairy picks for your home", tone: ["#7c2d12", "#f97316"] },
+  { id: "pure-ghee", title: "Pure Ghee", subtitle: "Traditional taste, modern delivery", tone: ["#713f12", "#ca8a04"] },
+  { id: "paneer", title: "Soft Paneer", subtitle: "Fresh stock from trusted farms", tone: ["#1e3a8a", "#38bdf8"] },
+  { id: "dairy-combo", title: "Dairy Combo", subtitle: "Subscribe once, relax daily", tone: ["#3b0764", "#a855f7"] },
+];
 
 const weekDays = [
   { value: 0, label: "Mon" },
@@ -136,6 +146,62 @@ function patternLabel(pattern: string): string {
       custom: "Custom",
       buy_once: "Once",
     }[pattern] ?? pattern
+  );
+}
+
+function NewlyAddedProductSlider() {
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  return (
+    <View style={styles.newSliderWrap}>
+      <View style={styles.newSliderHeader}>
+        <Text style={styles.newSliderTitle}>Newly Added Product</Text>
+        <Text style={styles.newSliderCount}>5 new</Text>
+      </View>
+      <ScrollView
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        onMomentumScrollEnd={(event) => {
+          const index = Math.round(event.nativeEvent.contentOffset.x / PRODUCT_BANNER_WIDTH);
+          setActiveIndex(index);
+        }}
+      >
+        {newlyAddedBanners.map((banner) => (
+          <View key={banner.id} style={styles.newSlide}>
+            <LinearGradient
+              colors={banner.tone as [string, string]}
+              style={styles.newBannerCard}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <View style={styles.newBannerText}>
+                <Text style={styles.newBannerKicker}>Just arrived</Text>
+                <Text style={styles.newBannerTitle}>{banner.title}</Text>
+                <Text style={styles.newBannerSubtitle}>{banner.subtitle}</Text>
+              </View>
+              <Image
+                source={require("../../assets/images/bull-cow.png")}
+                style={styles.newBannerImage}
+                resizeMode="contain"
+              />
+              <View style={styles.newBannerGlow} />
+            </LinearGradient>
+          </View>
+        ))}
+      </ScrollView>
+      <View style={styles.newSliderDots}>
+        {newlyAddedBanners.map((banner, index) => (
+          <View
+            key={banner.id}
+            style={[
+              styles.newSliderDot,
+              activeIndex === index && styles.newSliderDotActive,
+            ]}
+          />
+        ))}
+      </View>
+    </View>
   );
 }
 
@@ -1880,6 +1946,7 @@ export default function CatalogScreen() {
           </View>
         </View>
       </View>
+      <NewlyAddedProductSlider />
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -2335,6 +2402,95 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   walletPillText: { fontSize: 11, fontWeight: "700", color: Colors.primary },
+
+  newSliderWrap: { marginHorizontal: 20, marginTop: 8, marginBottom: 10 },
+  newSliderHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
+  newSliderTitle: {
+    fontSize: 16,
+    fontWeight: "900",
+    color: "#111827",
+    letterSpacing: -0.3,
+  },
+  newSliderCount: {
+    fontSize: 11,
+    fontWeight: "900",
+    color: Colors.primary,
+    backgroundColor: Colors.primary + "12",
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 20,
+  },
+  newSlide: { width: PRODUCT_BANNER_WIDTH },
+  newBannerCard: {
+    height: 150,
+    borderRadius: 24,
+    overflow: "hidden",
+    padding: 18,
+    flexDirection: "row",
+    alignItems: "center",
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.14,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
+  },
+  newBannerText: { flex: 1, zIndex: 2 },
+  newBannerKicker: {
+    fontSize: 10,
+    fontWeight: "900",
+    color: "rgba(255,255,255,0.72)",
+    letterSpacing: 1.1,
+    textTransform: "uppercase",
+    marginBottom: 6,
+  },
+  newBannerTitle: {
+    fontSize: 22,
+    fontWeight: "900",
+    color: "#fff",
+    letterSpacing: -0.6,
+    maxWidth: 180,
+  },
+  newBannerSubtitle: {
+    fontSize: 11.5,
+    color: "rgba(255,255,255,0.78)",
+    fontWeight: "600",
+    marginTop: 7,
+    lineHeight: 16,
+    maxWidth: 175,
+  },
+  newBannerImage: {
+    width: 134,
+    height: 118,
+    marginRight: -8,
+    zIndex: 2,
+  },
+  newBannerGlow: {
+    position: "absolute",
+    right: -35,
+    bottom: -45,
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    backgroundColor: "rgba(255,255,255,0.16)",
+  },
+  newSliderDots: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 6,
+    marginTop: 9,
+  },
+  newSliderDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#D1D5DB",
+  },
+  newSliderDotActive: { width: 18, backgroundColor: Colors.primary },
 
   categoryChipsScroll: { flexShrink: 0 },
   categoryRow: { paddingHorizontal: 20, paddingVertical: 8, gap: 8 },

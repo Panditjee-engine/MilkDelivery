@@ -10,6 +10,7 @@ import {
   Modal,
   Animated,
   Easing,
+  Dimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -30,6 +31,8 @@ import { api } from "../../src/services/api";
 import { Colors } from "../../src/constants/colors";
 import Button from "../../src/components/Button";
 import LoadingScreen from "../../src/components/LoadingScreen";
+
+const SCREEN_WIDTH = Dimensions.get("window").width;
 
 // ─── Category config 
 const CATEGORY_THEMES: Record<
@@ -83,6 +86,16 @@ const weekDays = [
   { value: 5, label: "S" },
   { value: 6, label: "S" },
 ];
+
+const homeBanners = [
+  {
+    id: "bull-cow",
+    image: require("../../assets/images/bull-cow.png"),
+    title: "Fresh dairy, every day",
+    subtitle: "Manage subscriptions and deliveries in one place",
+  },
+];
+const HOME_BANNER_WIDTH = Math.max(0, SCREEN_WIDTH - 40);
 
 // ─── Status helpers 
 const statusConfig = (status: string) => {
@@ -221,6 +234,51 @@ function BrandHeader() {
         <Animated.View style={[brandStyles.tagPill, { opacity: textOpacity }]}>
           <Text style={brandStyles.tagText}>PURE</Text>
         </Animated.View>
+      </View>
+    </View>
+  );
+}
+
+function HomeBannerSlider() {
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  return (
+    <View style={s.bannerWrap}>
+      <ScrollView
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        onMomentumScrollEnd={(event) => {
+          const index = Math.round(event.nativeEvent.contentOffset.x / HOME_BANNER_WIDTH);
+          setActiveIndex(index);
+        }}
+      >
+        {homeBanners.map((banner) => (
+          <View key={banner.id} style={s.bannerSlide}>
+            <LinearGradient
+              colors={["#123524", "#1f6f43"]}
+              style={s.bannerCard}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <View style={s.bannerTextBox}>
+                <Text style={s.bannerKicker}>Gau Satva</Text>
+                <Text style={s.bannerTitle}>{banner.title}</Text>
+                <Text style={s.bannerSubtitle}>{banner.subtitle}</Text>
+              </View>
+              <Image source={banner.image} style={s.bannerImage} resizeMode="contain" />
+              <View style={s.bannerGlow} />
+            </LinearGradient>
+          </View>
+        ))}
+      </ScrollView>
+      <View style={s.bannerDots}>
+        {homeBanners.map((banner, index) => (
+          <View
+            key={banner.id}
+            style={[s.bannerDot, activeIndex === index && s.bannerDotActive]}
+          />
+        ))}
       </View>
     </View>
   );
@@ -593,6 +651,8 @@ export default function CustomerHome() {
             </LinearGradient>
           </TouchableOpacity>
         </Animated.View>
+
+        <HomeBannerSlider />
 
         {/* ── Recent Order ── */}
         <View style={s.sectionWrap}>
@@ -1409,6 +1469,75 @@ const s = StyleSheet.create({
     borderRadius: 20,
   },
   topUpText: { fontSize: 12, fontWeight: "700", color: "#fff" },
+
+  // Home banner slider
+  bannerWrap: { marginHorizontal: 20, marginBottom: 20 },
+  bannerSlide: { width: HOME_BANNER_WIDTH },
+  bannerCard: {
+    height: 150,
+    borderRadius: 24,
+    overflow: "hidden",
+    padding: 18,
+    flexDirection: "row",
+    alignItems: "center",
+    shadowColor: "#123524",
+    shadowOpacity: 0.16,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
+  },
+  bannerTextBox: { flex: 1, zIndex: 2 },
+  bannerKicker: {
+    fontSize: 10,
+    fontWeight: "900",
+    color: "#bbf7d0",
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
+    marginBottom: 6,
+  },
+  bannerTitle: {
+    fontSize: 22,
+    fontWeight: "900",
+    color: "#fff",
+    letterSpacing: -0.6,
+    maxWidth: 190,
+  },
+  bannerSubtitle: {
+    fontSize: 11.5,
+    color: "rgba(255,255,255,0.76)",
+    fontWeight: "600",
+    marginTop: 7,
+    lineHeight: 16,
+    maxWidth: 190,
+  },
+  bannerImage: {
+    width: 135,
+    height: 120,
+    marginRight: -6,
+    zIndex: 2,
+  },
+  bannerGlow: {
+    position: "absolute",
+    right: -35,
+    bottom: -45,
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    backgroundColor: "rgba(187,247,208,0.18)",
+  },
+  bannerDots: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 6,
+    marginTop: 9,
+  },
+  bannerDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#D1D5DB",
+  },
+  bannerDotActive: { width: 18, backgroundColor: Colors.primary },
 
   // Sections
   sectionWrap: { marginHorizontal: 20, marginBottom: 20 },
