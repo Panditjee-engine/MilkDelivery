@@ -21,6 +21,7 @@ import { api } from "../../src/services/api";
 import { Colors } from "../../src/constants/colors";
 import LoadingScreen from "../../src/components/LoadingScreen";
 import { BlurView } from "expo-blur";
+import { Calendar } from "react-native-calendars";
 
 if (
   Platform.OS === "android" &&
@@ -57,6 +58,23 @@ const getPatternLabel = (p: string) => {
   };
   return map[p] || p;
 };
+
+const dateKey = (value?: string) => {
+  if (!value) return "";
+  const match = value.match(/^\d{4}-\d{2}-\d{2}/);
+  if (match) return match[0];
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+};
+
+const formatCalendarDate = (value: string) =>
+  new Date(`${value}T12:00:00`).toLocaleDateString("en-IN", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
 
 const STATUS_META: Record<
   string,
@@ -335,7 +353,7 @@ function ConfirmModal({
           <View style={ms.warningPill}>
             <Ionicons name="warning-outline" size={13} color="#f59e0b" />
             <Text style={ms.warningText}>
-              You won't be charged for future deliveries
+              You will not be charged for future deliveries
             </Text>
           </View>
           <View style={ms.btnRow}>
@@ -764,10 +782,12 @@ const ob = StyleSheet.create({
 // ─── Subscription Card 
 function SubscriptionCard({
   sub,
+  dateOverride,
   onCancelPress,
   onScrollToOTP,
 }: {
   sub: any;
+  dateOverride?: any;
   onCancelPress: (id: string) => void;
   onScrollToOTP: (offsetY: number) => void;
 }) {
@@ -849,6 +869,24 @@ function SubscriptionCard({
               {adminName}
             </Text>
           </View>
+          <View style={cd.patternBadge}>
+            <Ionicons
+              name={sub.pattern === "buy_once" ? "bag-handle-outline" : "repeat"}
+              size={12}
+              color="#b45309"
+            />
+            <Text style={cd.patternBadgeText}>
+              {getPatternLabel(sub.pattern)}
+            </Text>
+          </View>
+          {dateOverride && (
+            <View style={cd.overrideBadge}>
+              <Ionicons name="calendar-number-outline" size={12} color="#15803d" />
+              <Text style={cd.overrideBadgeText}>
+                {dateOverride.date}: Qty {dateOverride.quantity}
+              </Text>
+            </View>
+          )}
           <View
             style={[
               cd.statusBadge,
@@ -899,8 +937,15 @@ function SubscriptionCard({
               <Text style={cd.gridValue}>{getPatternLabel(sub.pattern)}</Text>
             </View>
             <View style={cd.gridCell}>
-              <Text style={cd.gridLabel}>Quantity</Text>
-              <Text style={cd.gridValue}>{sub.quantity}×</Text>
+              <Text style={cd.gridLabel}>
+                {dateOverride ? "Modified Quantity" : "Quantity"}
+              </Text>
+              <Text style={[cd.gridValue, dateOverride && { color: "#15803d" }]}>
+                {dateOverride?.quantity ?? sub.quantity}×
+              </Text>
+              {dateOverride && (
+                <Text style={cd.regularQty}>Regular: {sub.quantity}×</Text>
+              )}
             </View>
             <View style={cd.gridCell}>
               <Text style={cd.gridLabel}>Unit</Text>
@@ -1039,6 +1084,34 @@ const cd = StyleSheet.create({
     color: "#6366f1",
     maxWidth: 160,
   },
+  patternBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "#fffbeb",
+    borderColor: "#fbbf24",
+    borderWidth: 1,
+    borderRadius: 20,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    alignSelf: "flex-start",
+    marginBottom: 6,
+  },
+  patternBadgeText: { fontSize: 11, fontWeight: "900", color: "#b45309" },
+  overrideBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "#f0fdf4",
+    borderColor: "#86efac",
+    borderWidth: 1,
+    borderRadius: 20,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    alignSelf: "flex-start",
+    marginBottom: 6,
+  },
+  overrideBadgeText: { fontSize: 11, fontWeight: "900", color: "#15803d" },
   statusBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -1088,6 +1161,7 @@ const cd = StyleSheet.create({
     marginBottom: 2,
   },
   gridValue: { fontSize: 15, fontWeight: "800", color: "#111" },
+  regularQty: { fontSize: 9.5, color: "#64748b", fontWeight: "700", marginTop: 2 },
   storeRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -1201,6 +1275,15 @@ export default function SubscriptionsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [subscriptions, setSubscriptions] = useState<any[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
+  const [calendarVisible, setCalendarVisible] = useState(false);
+  const [selectedDate, setSelectedDate] = useState("");
+  const [modifyTarget, setModifyTarget] = useState<any>(null);
+  const [modifyQuantity, setModifyQuantity] = useState(1);
+  const [modifying, setModifying] = useState(false);
+  const [modifyError, setModifyError] = useState("");
+  const [quantityOverrides, setQuantityOverrides] = useState<Record<string, any>>({});
+  const [modifySuccess, setModifySuccess] = useState("");
   const [confirmVisible, setConfirmVisible] = useState(false);
   const [successVisible, setSuccessVisible] = useState(false);
   const [pendingSubId, setPendingSubId] = useState<string | null>(null);
@@ -1243,8 +1326,12 @@ useEffect(() => {
 
   const fetchData = async () => {
     try {
-      const data = await api.getSubscriptions();
-      setSubscriptions(data);
+      const [subscriptionData, orderData] = await Promise.all([
+        api.getSubscriptions(),
+        api.getOrders(),
+      ]);
+      setSubscriptions(Array.isArray(subscriptionData) ? subscriptionData : []);
+      setOrders(Array.isArray(orderData) ? orderData : []);
     } catch (error) {
       console.error("Error fetching subscriptions:", error);
     } finally {
@@ -1293,6 +1380,143 @@ useEffect(() => {
     });
   };
 
+  const selectedOrders = orders.filter(
+    (order) => dateKey(order.delivery_date || order.created_at) === selectedDate,
+  );
+  const findSubscriptionForOrder = (order: any, item?: any) =>
+    subscriptions.find(
+      (sub) =>
+        sub.id === order.subscription_id ||
+        sub.id === item?.subscription_id ||
+        sub.product_id === item?.product_id ||
+        sub.product?.id === item?.product_id ||
+        sub.product?.name === item?.product_name,
+    );
+
+  const openQuantityEditor = (order: any, item?: any) => {
+    const subscription = findSubscriptionForOrder(order, item);
+    if (!subscription) return;
+    setModifyError("");
+    setModifySuccess("");
+    setModifyTarget({ order, item, subscription });
+    setModifyQuantity(item?.quantity ?? order.quantity ?? subscription.quantity ?? 1);
+  };
+
+  const openSubscriptionForDate = (subscription: any) => {
+    setModifyError("");
+    setModifySuccess("");
+    setModifyTarget({ subscription });
+    setModifyQuantity(subscription.quantity ?? 1);
+  };
+
+  const saveDateQuantity = async () => {
+    if (!modifyTarget || !selectedDate || modifyQuantity < 1) return;
+    setModifying(true);
+    try {
+      const subscriptionId = modifyTarget.subscription.id;
+      await api.modifySubscriptionDate(
+        subscriptionId,
+        selectedDate,
+        modifyQuantity,
+      );
+      const refreshedOrders = await api.getOrders();
+      const targetProductId =
+        modifyTarget?.item?.product_id ||
+        modifyTarget?.subscription?.product_id ||
+        modifyTarget?.subscription?.product?.id;
+      const targetProductName =
+        modifyTarget?.item?.product_name ||
+        modifyTarget?.subscription?.product?.name;
+      const refreshedOrder = (refreshedOrders || []).find(
+        (order: any) =>
+          dateKey(order.delivery_date || order.created_at) === selectedDate &&
+          (order.subscription_id === subscriptionId ||
+            order.items?.some(
+              (item: any) =>
+                item.subscription_id === subscriptionId ||
+                item.product_id === targetProductId ||
+                item.product_name === targetProductName,
+            )),
+      );
+      const refreshedItem = refreshedOrder?.items?.find(
+        (item: any) =>
+          item.subscription_id === subscriptionId ||
+          item.product_id === targetProductId ||
+          item.product_name === targetProductName,
+      );
+      const persistedQuantity =
+        refreshedItem?.quantity ?? refreshedOrder?.quantity;
+      if (Number(persistedQuantity) !== Number(modifyQuantity)) {
+        throw new Error(
+          "Backend did not persist this change. The /subscriptions/{id}/modify endpoint must update the database and generated admin order.",
+        );
+      }
+      setOrders(refreshedOrders);
+      setQuantityOverrides((current) => ({
+        ...current,
+        [`${subscriptionId}:${selectedDate}`]: {
+          subscription_id: subscriptionId,
+          date: selectedDate,
+          quantity: modifyQuantity,
+        },
+      }));
+      setModifySuccess(`Quantity updated to ${modifyQuantity} for ${formatCalendarDate(selectedDate)}.`);
+      Vibration.vibrate(50);
+    } catch (error: any) {
+      console.error("Date quantity modification failed:", error?.message);
+      setModifyError(error?.message || "Could not update quantity. Please try again.");
+    } finally {
+      setModifying(false);
+    }
+  };
+  const getDisplayedQuantity = (order: any, item?: any) => {
+    const subscription = findSubscriptionForOrder(order, item);
+    const override = subscription
+      ? quantityOverrides[`${subscription.id}:${selectedDate}`]
+      : null;
+    return override?.quantity ?? item?.quantity ?? order?.quantity ?? subscription?.quantity ?? 1;
+  };
+  const getRelevantOverride = (subscriptionId: string) => {
+    const today = new Date().toISOString().split("T")[0];
+    return Object.values(quantityOverrides)
+      .filter(
+        (override: any) =>
+          override.subscription_id === subscriptionId && override.date >= today,
+      )
+      .sort((a: any, b: any) => a.date.localeCompare(b.date))[0];
+  };
+  const markedDates = orders.reduce<Record<string, any>>((marked, order) => {
+    const key = dateKey(order.delivery_date || order.created_at);
+    if (key) {
+      marked[key] = {
+        marked: true,
+        dotColor: Colors.primary,
+        customStyles: {
+          container: {
+            backgroundColor: Colors.primary + "18",
+            borderWidth: 1,
+            borderColor: Colors.primary + "55",
+          },
+          text: { color: Colors.primary, fontWeight: "900" },
+        },
+      };
+    }
+    return marked;
+  }, {});
+  if (selectedDate) {
+    markedDates[selectedDate] = {
+      ...(markedDates[selectedDate] || {}),
+      customStyles: {
+        container: {
+          backgroundColor: Colors.primary,
+          borderRadius: 10,
+          elevation: 3,
+        },
+        text: { color: "#fff", fontWeight: "900" },
+      },
+    };
+  }
+
   if (loading) return <LoadingScreen />;
 
   return (
@@ -1311,9 +1535,14 @@ useEffect(() => {
             {subscriptions.length !== 1 ? "s" : ""}
           </Text>
         </View>
-        <View style={sc.headerIcon}>
-          <Ionicons name="receipt-outline" size={20} color={Colors.primary} />
-        </View>
+        <TouchableOpacity
+          style={sc.headerIcon}
+          activeOpacity={0.8}
+          onPress={() => setCalendarVisible(true)}
+        >
+          <Ionicons name="calendar-outline" size={21} color={Colors.primary} />
+          {orders.length > 0 && <View style={sc.headerIconDot} />}
+        </TouchableOpacity>
       </Animated.View>
 
       {/* Status bar */}
@@ -1352,6 +1581,7 @@ useEffect(() => {
             <CardEntrance key={sub.id} delay={index * 55}>
               <SubscriptionCard
                 sub={sub}
+                dateOverride={getRelevantOverride(sub.id)}
                 onCancelPress={handleCancelPress}
                 onScrollToOTP={handleScrollToOTP}
               />
@@ -1386,6 +1616,185 @@ useEffect(() => {
         visible={successVisible}
         onClose={() => setSuccessVisible(false)}
       />
+
+      <Modal
+        visible={calendarVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setCalendarVisible(false)}
+      >
+        <View style={sc.calendarOverlay}>
+          <View style={sc.calendarSheet}>
+            <View style={sc.calendarHandle} />
+            <View style={sc.calendarHeader}>
+              <View>
+                <Text style={sc.calendarTitle}>Delivery Calendar</Text>
+                <Text style={sc.calendarSubtitle}>
+                  Highlighted dates have orders
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={sc.calendarClose}
+                onPress={() => {
+                  setModifyTarget(null);
+                  setCalendarVisible(false);
+                }}
+              >
+                <Ionicons name="close" size={20} color="#111827" />
+              </TouchableOpacity>
+            </View>
+            <View style={sc.calendarCard}>
+              <Calendar
+                markingType="custom"
+                minDate={new Date().toISOString().split("T")[0]}
+                markedDates={markedDates}
+                onDayPress={(day) => setSelectedDate(day.dateString)}
+                theme={{
+                  todayTextColor: Colors.primary,
+                  arrowColor: Colors.primary,
+                  monthTextColor: "#111827",
+                  textMonthFontWeight: "900",
+                  textDayHeaderFontWeight: "800",
+                }}
+              />
+            </View>
+            <ScrollView style={sc.calendarOrders} showsVerticalScrollIndicator={false}>
+              {!selectedDate ? (
+                <View style={sc.calendarEmpty}>
+                  <Ionicons name="finger-print-outline" size={24} color={Colors.primary} />
+                  <Text style={sc.calendarEmptyText}>Tap a highlighted date to view its products</Text>
+                </View>
+              ) : selectedOrders.length === 0 ? (
+                <View style={sc.calendarEmpty}>
+                  <Ionicons name="options-outline" size={28} color={Colors.primary} />
+                  <Text style={sc.calendarEmptyText}>
+                    Choose a subscription to change quantity for {formatCalendarDate(selectedDate)}
+                  </Text>
+                  {subscriptions
+                    .filter((sub) => !["cancelled", "delivered"].includes(sub.status))
+                    .map((sub) => (
+                      <TouchableOpacity
+                        key={sub.id}
+                        style={sc.emptyModifyOption}
+                        onPress={() => openSubscriptionForDate(sub)}
+                      >
+                        <View style={sc.calendarItemIcon}>
+                          <Ionicons name="repeat" size={14} color={Colors.primary} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={sc.emptyModifyName}>{sub.product?.name || "Subscription product"}</Text>
+                          <Text style={sc.emptyModifyMeta}>{getPatternLabel(sub.pattern)} · Regular qty {sub.quantity ?? 1}</Text>
+                        </View>
+                        <Ionicons name="chevron-forward" size={16} color={Colors.primary} />
+                      </TouchableOpacity>
+                    ))}
+                </View>
+              ) : (
+                <>
+                  <View style={sc.selectedDateRow}>
+                    <Text style={sc.selectedDateText}>{formatCalendarDate(selectedDate)}</Text>
+                    <View style={sc.orderCount}>
+                      <Text style={sc.orderCountText}>{selectedOrders.length}</Text>
+                    </View>
+                  </View>
+                  {selectedOrders.map((order, orderIndex) => (
+                    <View key={order.id || orderIndex} style={sc.calendarOrderCard}>
+                      <View style={sc.calendarOrderTop}>
+                        <Text style={sc.calendarOrderTitle}>Order #{String(order.id || order._id || "").slice(-6)}</Text>
+                        <View style={sc.calendarPattern}>
+                          <Ionicons name={order.pattern === "buy_once" ? "bag-handle-outline" : "repeat"} size={11} color="#b45309" />
+                          <Text style={sc.calendarPatternText}>{getPatternLabel(order.pattern)}</Text>
+                        </View>
+                      </View>
+                      {(order.items || []).map((item: any, index: number) => (
+                        <View key={`${item.product_id || item.product_name}-${index}`} style={sc.calendarItem}>
+                          <View style={sc.calendarItemIcon}>
+                            <Ionicons name="cube-outline" size={14} color={Colors.primary} />
+                          </View>
+                          <Text style={sc.calendarItemName}>{item.product_name || "Product"}</Text>
+                          <Text style={sc.calendarItemQty}>×{getDisplayedQuantity(order, item)}</Text>
+                          <Text style={sc.calendarItemPrice}>₹{item.total ?? item.price ?? 0}</Text>
+                          {findSubscriptionForOrder(order, item) && order.pattern !== "buy_once" && (
+                            <TouchableOpacity
+                              style={sc.modifyQtyBtn}
+                              onPress={() => openQuantityEditor(order, item)}
+                            >
+                              <Ionicons name="create-outline" size={13} color={Colors.primary} />
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      ))}
+                      {(!order.items || order.items.length === 0) &&
+                        findSubscriptionForOrder(order) &&
+                        order.pattern !== "buy_once" && (
+                          <TouchableOpacity
+                            style={sc.modifyDateBtn}
+                            onPress={() => openQuantityEditor(order)}
+                          >
+                            <Ionicons name="options-outline" size={15} color={Colors.primary} />
+                            <Text style={sc.modifyDateBtnText}>Change quantity for this date</Text>
+                          </TouchableOpacity>
+                        )}
+                    </View>
+                  ))}
+                </>
+              )}
+            </ScrollView>
+            {modifyTarget && (
+              <View style={sc.inlineModifyOverlay}>
+                <View style={sc.modifyCard}>
+                  <TouchableOpacity
+                    style={sc.inlineModifyClose}
+                    onPress={() => setModifyTarget(null)}
+                  >
+                    <Ionicons name="close" size={18} color="#64748B" />
+                  </TouchableOpacity>
+                  <View style={sc.modifyIcon}>
+                    <Ionicons name="calendar-number-outline" size={25} color={Colors.primary} />
+                  </View>
+                  <Text style={sc.modifyTitle}>Change delivery quantity</Text>
+                  <Text style={sc.modifySubtitle}>
+                    Only {selectedDate ? formatCalendarDate(selectedDate) : "this date"} will be changed. Your regular subscription stays the same.
+                  </Text>
+                  <Text style={sc.modifyProduct}>
+                    {modifyTarget?.item?.product_name || modifyTarget?.subscription?.product?.name || "Subscription product"}
+                  </Text>
+                  <View style={sc.modifyStepper}>
+                    <TouchableOpacity
+                      style={sc.modifyStepBtn}
+                      onPress={() => setModifyQuantity((value) => Math.max(1, value - 1))}
+                    >
+                      <Ionicons name="remove" size={20} color={Colors.primary} />
+                    </TouchableOpacity>
+                    <View style={sc.modifyValue}>
+                      <Text style={sc.modifyValueText}>{modifyQuantity}</Text>
+                      <Text style={sc.modifyValueLabel}>quantity</Text>
+                    </View>
+                    <TouchableOpacity
+                      style={[sc.modifyStepBtn, sc.modifyStepBtnActive]}
+                      onPress={() => setModifyQuantity((value) => value + 1)}
+                    >
+                      <Ionicons name="add" size={20} color="#fff" />
+                    </TouchableOpacity>
+                  </View>
+                  {modifyError ? <Text style={sc.modifyError}>{modifyError}</Text> : null}
+                  {modifySuccess ? <Text style={sc.modifySuccess}>{modifySuccess}</Text> : null}
+                  <TouchableOpacity
+                    style={[sc.modifySave, modifying && { opacity: 0.6 }]}
+                    onPress={saveDateQuantity}
+                    disabled={modifying}
+                  >
+                    <Text style={sc.modifySaveText}>{modifying ? "Saving..." : modifySuccess ? "Update again" : "Save for this date"}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={sc.modifyCancel} onPress={() => setModifyTarget(null)}>
+                    <Text style={sc.modifyCancelText}>Cancel</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -1416,6 +1825,7 @@ const sc = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  headerIconDot: { position: "absolute", right: 8, top: 7, width: 8, height: 8, borderRadius: 4, backgroundColor: "#f59e0b", borderWidth: 1.5, borderColor: "#fff" },
   hint: {
     flexDirection: "row",
     alignItems: "center",
@@ -1447,4 +1857,54 @@ const sc = StyleSheet.create({
     marginBottom: 6,
   },
   emptyText: { fontSize: 14, color: "#9ca3af", textAlign: "center" },
+  calendarOverlay: { flex: 1, backgroundColor: "rgba(15,23,42,0.5)", justifyContent: "flex-end" },
+  calendarSheet: { backgroundColor: "#F4F6FA", borderTopLeftRadius: 30, borderTopRightRadius: 30, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 24, maxHeight: "94%" },
+  calendarHandle: { width: 42, height: 4, borderRadius: 2, backgroundColor: "#CBD5E1", alignSelf: "center", marginBottom: 14 },
+  calendarHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 4, marginBottom: 12 },
+  calendarTitle: { fontSize: 22, fontWeight: "900", color: "#111827", letterSpacing: -0.4 },
+  calendarSubtitle: { fontSize: 12, color: "#64748B", marginTop: 3, fontWeight: "600" },
+  calendarClose: { width: 40, height: 40, borderRadius: 13, backgroundColor: "#fff", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#E5E7EB" },
+  calendarCard: { backgroundColor: "#fff", borderRadius: 22, padding: 5, overflow: "hidden", borderWidth: 1, borderColor: "#E5E7EB", shadowColor: "#0F172A", shadowOpacity: 0.08, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 3 },
+  calendarOrders: { marginTop: 14, maxHeight: 270 },
+  calendarEmpty: { alignItems: "center", gap: 8, padding: 24, backgroundColor: "#fff", borderRadius: 18 },
+  calendarEmptyText: { color: "#64748B", fontSize: 13, fontWeight: "700", textAlign: "center" },
+  emptyModifyOption: { width: "100%", flexDirection: "row", alignItems: "center", gap: 9, backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 14, padding: 10, marginTop: 4 },
+  emptyModifyName: { fontSize: 12.5, fontWeight: "900", color: "#111827" },
+  emptyModifyMeta: { fontSize: 10.5, color: "#64748B", marginTop: 2, fontWeight: "600" },
+  selectedDateRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10, paddingHorizontal: 2 },
+  selectedDateText: { flex: 1, fontSize: 15, fontWeight: "900", color: "#111827" },
+  orderCount: { minWidth: 25, height: 25, borderRadius: 13, backgroundColor: Colors.primary, alignItems: "center", justifyContent: "center" },
+  orderCountText: { color: "#fff", fontSize: 11, fontWeight: "900" },
+  calendarOrderCard: { backgroundColor: "#fff", borderRadius: 19, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: "#E5E7EB" },
+  calendarOrderTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 },
+  calendarOrderTitle: { fontSize: 14, fontWeight: "900", color: "#111827" },
+  calendarPattern: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#FFFBEB", borderColor: "#FDE68A", borderWidth: 1, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 20 },
+  calendarPatternText: { color: "#b45309", fontSize: 10, fontWeight: "900" },
+  calendarItem: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 8, borderTopWidth: 1, borderTopColor: "#F3F4F6" },
+  calendarItemIcon: { width: 28, height: 28, borderRadius: 9, backgroundColor: Colors.primary + "12", alignItems: "center", justifyContent: "center" },
+  calendarItemName: { flex: 1, fontSize: 13, fontWeight: "800", color: "#374151" },
+  calendarItemQty: { fontSize: 12, color: "#64748B", fontWeight: "700" },
+  calendarItemPrice: { fontSize: 13, color: Colors.primary, fontWeight: "900" },
+  modifyQtyBtn: { width: 30, height: 30, borderRadius: 10, backgroundColor: Colors.primary + "12", alignItems: "center", justifyContent: "center" },
+  modifyDateBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 8, paddingVertical: 10, borderRadius: 12, backgroundColor: Colors.primary + "10" },
+  modifyDateBtnText: { color: Colors.primary, fontSize: 12, fontWeight: "900" },
+  inlineModifyOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(15,23,42,0.5)", justifyContent: "center", padding: 16, zIndex: 20, elevation: 20, borderTopLeftRadius: 30, borderTopRightRadius: 30 },
+  modifyCard: { backgroundColor: "#fff", borderRadius: 28, padding: 24, alignItems: "center", position: "relative" },
+  inlineModifyClose: { position: "absolute", right: 14, top: 14, width: 34, height: 34, borderRadius: 11, backgroundColor: "#F1F5F9", alignItems: "center", justifyContent: "center" },
+  modifyIcon: { width: 58, height: 58, borderRadius: 19, backgroundColor: Colors.primary + "12", alignItems: "center", justifyContent: "center", marginBottom: 13 },
+  modifyTitle: { fontSize: 19, fontWeight: "900", color: "#111827" },
+  modifySubtitle: { fontSize: 12.5, color: "#64748B", textAlign: "center", lineHeight: 19, marginTop: 7 },
+  modifyProduct: { fontSize: 14, color: "#111827", fontWeight: "900", marginTop: 14 },
+  modifyStepper: { flexDirection: "row", alignItems: "center", gap: 14, marginVertical: 20 },
+  modifyStepBtn: { width: 46, height: 46, borderRadius: 15, backgroundColor: Colors.primary + "12", alignItems: "center", justifyContent: "center" },
+  modifyStepBtnActive: { backgroundColor: Colors.primary },
+  modifyValue: { minWidth: 70, alignItems: "center" },
+  modifyValueText: { fontSize: 28, fontWeight: "900", color: "#111827" },
+  modifyValueLabel: { fontSize: 10, color: "#94A3B8", fontWeight: "700" },
+  modifySave: { width: "100%", backgroundColor: Colors.primary, paddingVertical: 14, borderRadius: 15, alignItems: "center" },
+  modifySaveText: { color: "#fff", fontSize: 14, fontWeight: "900" },
+  modifyError: { color: "#dc2626", fontSize: 11.5, fontWeight: "700", textAlign: "center", marginBottom: 10 },
+  modifySuccess: { color: "#15803D", backgroundColor: "#F0FDF4", borderColor: "#BBF7D0", borderWidth: 1, borderRadius: 12, padding: 9, fontSize: 11.5, fontWeight: "800", textAlign: "center", marginBottom: 10 },
+  modifyCancel: { paddingVertical: 13, paddingHorizontal: 20 },
+  modifyCancelText: { color: "#64748B", fontSize: 13, fontWeight: "700" },
 });

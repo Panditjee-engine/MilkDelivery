@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Calendar } from "react-native-calendars";
 import { useAuth } from "../../src/contexts/AuthContext";
@@ -298,6 +298,11 @@ const toastStyles = StyleSheet.create({
 export default function ProfileScreen() {
   const { user, logout, updateUser } = useAuth();
   const router = useRouter();
+  const params = useLocalSearchParams<{
+    openAddress?: string;
+    addressRequired?: string;
+    returnTo?: string;
+  }>();
   const [vacations, setVacations] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
   const [ordersExpanded, setOrdersExpanded] = useState(false);
@@ -316,6 +321,12 @@ export default function ProfileScreen() {
   const [deletePassword, setDeletePassword] = useState("");
   const [deletingAccount, setDeletingAccount] = useState(false);
   const isFocused = useIsFocused();
+
+  useEffect(() => {
+    if (!isFocused || params.openAddress !== "1") return;
+    setEditAddress(user?.address || { tower: "", flat: "", floor: "" });
+    setEditModal(true);
+  }, [isFocused, params.openAddress, user?.address]);
 
   // Custom alert state
   const [alertConfig, setAlertConfig] = useState<AlertConfig>({
@@ -346,6 +357,14 @@ export default function ProfileScreen() {
     setToast({ visible: true, message, type });
     setTimeout(() => setToast((prev) => ({ ...prev, visible: false })), 2800);
   };
+
+  useEffect(() => {
+    if (!isFocused || params.addressRequired !== "1") return;
+    showToast(
+      "Please add your delivery address before placing the order.",
+      "error",
+    );
+  }, [isFocused, params.addressRequired]);
 
 useEffect(() => {
   if (!isFocused) return;
@@ -512,16 +531,31 @@ useEffect(() => {
   };
 
   const handleSaveProfile = async () => {
+    if (!editAddress.tower?.trim() || !editAddress.flat?.trim()) {
+      showToast("Tower / building and flat number are required for delivery.", "error");
+      return;
+    }
+
+    const normalizedAddress = {
+      tower: editAddress.tower.trim(),
+      flat: editAddress.flat.trim(),
+      floor: editAddress.floor?.trim() || "",
+    };
+
     setSaving(true);
     try {
       await api.updateProfile({
         name: editName,
         phone: editPhone,
-        address: editAddress,
+        address: normalizedAddress,
       });
-      updateUser({ name: editName, phone: editPhone, address: editAddress });
+      setEditAddress(normalizedAddress);
+      updateUser({ name: editName, phone: editPhone, address: normalizedAddress });
       setEditModal(false);
       showToast("Profile updated successfully", "success");
+      if (params.returnTo === "catalog") {
+        router.replace("/(customer)/catalog");
+      }
     } catch (error: any) {
       showToast(error.message, "error");
     } finally {
@@ -663,7 +697,7 @@ useEffect(() => {
             </View>
             <Text style={styles.cardTitle}>Delivery Address</Text>
           </View>
-          {user?.address && (user.address.tower || user.address.flat) ? (
+          {user?.address?.tower?.trim?.() && user?.address?.flat?.trim?.() ? (
             <View style={styles.addressGrid}>
               {user.address.tower && (
                 <View style={styles.addressPill}>
@@ -700,7 +734,9 @@ useEffect(() => {
                 size={20}
                 color={Colors.primary}
               />
-              <Text style={styles.emptyAddressText}>Add delivery address</Text>
+              <Text style={styles.emptyAddressText}>
+                {user?.address ? "Complete delivery address" : "Add delivery address"}
+              </Text>
             </TouchableOpacity>
           )}
         </View>
@@ -988,6 +1024,21 @@ useEffect(() => {
               </TouchableOpacity>
             </View>
             <ScrollView showsVerticalScrollIndicator={false}>
+              {params.addressRequired === "1" && (
+                <View style={styles.addressRequiredBanner}>
+                  <View style={styles.addressRequiredIcon}>
+                    <Ionicons name="location" size={18} color="#dc2626" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.addressRequiredTitle}>
+                      Delivery address required
+                    </Text>
+                    <Text style={styles.addressRequiredText}>
+                      Add your address to continue placing the order.
+                    </Text>
+                  </View>
+                </View>
+              )}
               <Input
                 label="Name"
                 value={editName}
@@ -1327,6 +1378,7 @@ const styles = StyleSheet.create({
     paddingBottom: 36,
     maxHeight: "93%",
   },
+  modalBody: { paddingBottom: 4 },
   dragHandle: {
     width: 36,
     height: 4,
@@ -1392,4 +1444,25 @@ const styles = StyleSheet.create({
     marginTop: 12,
     marginBottom: 8,
   },
+  addressRequiredBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "#FEF2F2",
+    borderColor: "#FECACA",
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 16,
+  },
+  addressRequiredIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 11,
+    backgroundColor: "#FEE2E2",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  addressRequiredTitle: { fontSize: 13, fontWeight: "900", color: "#991B1B" },
+  addressRequiredText: { fontSize: 11.5, color: "#B91C1C", marginTop: 2 },
 });

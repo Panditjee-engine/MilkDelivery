@@ -21,6 +21,7 @@ import { Colors } from "../../src/constants/colors";
 import Button from "../../src/components/Button";
 import LoadingScreen from "../../src/components/LoadingScreen";
 import { useAuth } from "../../src/contexts/AuthContext";
+import { useRouter } from "expo-router";
 
 const CARD_WIDTH = 130;
 const SCREEN_WIDTH = Dimensions.get("window").width;
@@ -136,6 +137,10 @@ function patternLabel(pattern: string): string {
       buy_once: "Once",
     }[pattern] ?? pattern
   );
+}
+
+function hasCompleteDeliveryAddress(address?: any): boolean {
+  return Boolean(address?.tower?.trim?.() && address?.flat?.trim?.());
 }
 
 // ─── Add-to-Cart Toast 
@@ -583,12 +588,14 @@ function SubscriptionSheet({
   subscriptions,
   onClose,
   onCancel,
+  onManage,
   cancelling,
 }: {
   visible: boolean;
   subscriptions: any[];
   onClose: () => void;
   onCancel: (id: string) => void;
+  onManage: () => void;
   cancelling: string | null;
 }) {
   return (
@@ -681,6 +688,12 @@ function SubscriptionSheet({
                 );
               })}
             </ScrollView>
+          )}
+          {subscriptions.length > 0 && (
+            <TouchableOpacity style={subStyles.manageBtn} onPress={onManage}>
+              <Ionicons name="calendar-outline" size={16} color="#fff" />
+              <Text style={subStyles.manageBtnText}>Modify delivery by date</Text>
+            </TouchableOpacity>
           )}
           <View style={{ height: 8 }} />
         </View>
@@ -792,6 +805,8 @@ const subStyles = StyleSheet.create({
   empty: { alignItems: "center", paddingVertical: 44, gap: 8 },
   emptyText: { fontSize: 15, fontWeight: "800", color: "#aaa" },
   emptySubtext: { fontSize: 12, color: "#ccc", fontWeight: "500" },
+  manageBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, backgroundColor: Colors.primary, borderRadius: 15, paddingVertical: 13, marginTop: 10 },
+  manageBtnText: { color: "#fff", fontSize: 13, fontWeight: "900" },
 });
 
 // ─── Product Card 
@@ -1471,6 +1486,7 @@ const miniCartStyles = StyleSheet.create({
 // ─── Main Screen 
 export default function CatalogScreen() {
   const { user } = useAuth();
+  const router = useRouter();
   const [linkedAdminId, setLinkedAdminId] = useState<string | null>(null);
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
@@ -1508,6 +1524,27 @@ export default function CatalogScreen() {
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isFocused = useIsFocused();
+
+  const ensureDeliveryAddress = async () => {
+    try {
+      const latestUser = await api.getMe();
+      if (hasCompleteDeliveryAddress(latestUser?.address)) return true;
+    } catch {
+      if (hasCompleteDeliveryAddress(user?.address)) return true;
+    }
+    goToAddAddress();
+    return false;
+  };
+
+  const goToAddAddress = () => {
+    setModalVisible(false);
+    setCartVisible(false);
+    setTimeout(() => {
+      router.replace(
+        "/(customer)/profile?openAddress=1&addressRequired=1&returnTo=catalog" as any,
+      );
+    }, 250);
+  };
 
   const fetchSubscriptions = useCallback(async () => {
     try {
@@ -1613,6 +1650,8 @@ export default function CatalogScreen() {
         return;
       }
 
+      if (!(await ensureDeliveryAddress())) return;
+
       setSubmitting(true);
       try {
         const tomorrow = new Date();
@@ -1702,6 +1741,8 @@ export default function CatalogScreen() {
   );
 
   const handlePlaceOrder = async () => {
+    if (!(await ensureDeliveryAddress())) return;
+
     if (walletBalance < cartTotal) {
       setWalletErrorVisible(true);
       return;
@@ -2182,6 +2223,10 @@ export default function CatalogScreen() {
         subscriptions={activeSubscriptions}
         onClose={() => setSubSheetVisible(false)}
         onCancel={handleCancelSubscription}
+        onManage={() => {
+          setSubSheetVisible(false);
+          router.push("/(customer)/subscriptions");
+        }}
         cancelling={cancelling}
       />
 
@@ -2199,7 +2244,6 @@ export default function CatalogScreen() {
         orderTotal={cartTotal}
         onClose={() => setWalletErrorVisible(false)}
       />
-
       {/* ── Toast ── */}
       <AddedToCartToast
         visible={toastVisible}

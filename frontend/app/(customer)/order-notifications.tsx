@@ -7,12 +7,14 @@ import {
   TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
+  Modal,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors } from "../../src/constants/colors";
 import { api } from "../../src/services/api";
+import { Calendar } from "react-native-calendars";
 
 const statusMeta = (status?: string) => {
   switch (status) {
@@ -37,16 +39,43 @@ function formatDate(value?: string) {
   });
 }
 
+const dateKey = (value?: string) => {
+  if (!value) return "";
+  const match = value.match(/^\d{4}-\d{2}-\d{2}/);
+  if (match) return match[0];
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+};
+
+const patternLabel = (pattern?: string) =>
+  ({
+    daily: "Every day",
+    alternate: "Alternate days",
+    custom: "Custom days",
+    buy_once: "One-time order",
+  })[pattern || ""] || pattern?.replace(/_/g, " ") || "Normal order";
+
 export default function OrderNotificationsScreen() {
   const router = useRouter();
+  const [orders, setOrders] = useState<any[]>([]);
   const [order, setOrder] = useState<any>(null);
+  const [calendarVisible, setCalendarVisible] = useState(false);
+  const [selectedDate, setSelectedDate] = useState("");
+  const [subscriptions, setSubscriptions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const loadLatestOrder = useCallback(async () => {
     try {
-      const orders = await api.getOrders();
-      setOrder(Array.isArray(orders) ? orders[0] || null : null);
+      const [orders, subscriptionData] = await Promise.all([
+        api.getOrders(),
+        api.getSubscriptions(),
+      ]);
+      const list = Array.isArray(orders) ? orders : [];
+      setOrders(list);
+      setOrder(list[0] || null);
+      setSubscriptions(Array.isArray(subscriptionData) ? subscriptionData : []);
     } catch {
       setOrder(null);
     } finally {
@@ -66,6 +95,41 @@ export default function OrderNotificationsScreen() {
 
   const meta = statusMeta(order?.status);
   const items = order?.items ?? [];
+  const selectedOrders = orders.filter((item) => dateKey(item.delivery_date || item.created_at) === selectedDate);
+  const displayedQuantity = (dayOrder: any, item: any) => {
+    const subscription = subscriptions.find(
+      (sub) =>
+        sub.id === dayOrder.subscription_id ||
+        sub.id === item?.subscription_id ||
+        sub.product_id === item?.product_id ||
+        sub.product?.id === item?.product_id ||
+        sub.product?.name === item?.product_name,
+    );
+    return item?.quantity ?? subscription?.quantity ?? 1;
+  };
+  const markedDates = orders.reduce<Record<string, any>>((marked, item) => {
+    const key = dateKey(item.delivery_date || item.created_at);
+    if (key) {
+      marked[key] = {
+        marked: true,
+        dotColor: Colors.primary,
+        customStyles: {
+          container: { backgroundColor: Colors.primary + "18", borderWidth: 1, borderColor: Colors.primary + "55" },
+          text: { color: Colors.primary, fontWeight: "900" },
+        },
+      };
+    }
+    return marked;
+  }, {});
+  if (selectedDate) {
+    markedDates[selectedDate] = {
+      ...(markedDates[selectedDate] || {}),
+      customStyles: {
+        container: { backgroundColor: Colors.primary, borderRadius: 10, elevation: 3 },
+        text: { color: "#fff", fontWeight: "900" },
+      },
+    };
+  }
 
   return (
     <SafeAreaView style={s.container} edges={["top"]}>
@@ -77,6 +141,10 @@ export default function OrderNotificationsScreen() {
           <Text style={s.title}>Notifications</Text>
           <Text style={s.subtitle}>Latest order status and updates</Text>
         </View>
+        <TouchableOpacity style={s.calendarBtn} onPress={() => setCalendarVisible(true)}>
+          <Ionicons name="calendar-outline" size={21} color={Colors.primary} />
+          {orders.length > 0 && <View style={s.calendarDot} />}
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -105,6 +173,10 @@ export default function OrderNotificationsScreen() {
               <Text style={s.statusSub}>
                 Order #{String(order.id || order._id || "").slice(-6) || "Latest"}
               </Text>
+              <View style={s.patternPill}>
+                <Ionicons name={order.pattern === "buy_once" ? "bag-handle-outline" : "repeat"} size={13} color="#b45309" />
+                <Text style={s.patternText}>{patternLabel(order.pattern)}</Text>
+              </View>
               <View style={[s.statusPill, { backgroundColor: meta.bg, borderColor: meta.border }]}>
                 <Text style={[s.statusPillText, { color: meta.color }]}>{meta.label}</Text>
               </View>
@@ -147,9 +219,81 @@ export default function OrderNotificationsScreen() {
                 We will keep this page updated with the latest delivery status, delivery date, amount and item details for your most recent order.
               </Text>
             </View>
+            {order.pattern && order.pattern !== "buy_once" && (
+              <TouchableOpacity
+                style={s.manageSubscriptionBtn}
+                onPress={() => router.push("/(customer)/subscriptions")}
+              >
+                <Ionicons name="calendar-outline" size={17} color="#fff" />
+                <Text style={s.manageSubscriptionText}>Modify subscription by date</Text>
+              </TouchableOpacity>
+            )}
           </>
         )}
       </ScrollView>
+
+      <Modal visible={calendarVisible} transparent animationType="slide" onRequestClose={() => setCalendarVisible(false)}>
+        <View style={s.modalOverlay}>
+          <View style={s.calendarSheet}>
+            <View style={s.sheetHeader}>
+              <View>
+                <Text style={s.sheetTitle}>Order Calendar</Text>
+                <Text style={s.sheetSubtitle}>Tap a highlighted date to see orders</Text>
+              </View>
+              <TouchableOpacity style={s.closeBtn} onPress={() => setCalendarVisible(false)}>
+                <Ionicons name="close" size={20} color="#111827" />
+              </TouchableOpacity>
+            </View>
+            <Calendar
+              markingType="custom"
+              markedDates={markedDates}
+              onDayPress={(day) => setSelectedDate(day.dateString)}
+              theme={{
+                todayTextColor: Colors.primary,
+                arrowColor: Colors.primary,
+                selectedDayBackgroundColor: Colors.primary,
+                dotColor: Colors.primary,
+              }}
+            />
+            <ScrollView style={s.dayOrders} showsVerticalScrollIndicator={false}>
+              {!selectedDate ? (
+                <Text style={s.calendarHint}>Highlighted dates have scheduled or completed orders.</Text>
+              ) : selectedOrders.length === 0 ? (
+                <View style={s.noDayOrder}>
+                  <Ionicons name="calendar-clear-outline" size={28} color="#9CA3AF" />
+                  <Text style={s.noDayOrderText}>No orders on {formatDate(selectedDate)}</Text>
+                </View>
+              ) : (
+                <>
+                  <Text style={s.selectedDateTitle}>{formatDate(selectedDate)}</Text>
+                  {selectedOrders.map((dayOrder, orderIndex) => {
+                    const dayMeta = statusMeta(dayOrder.status);
+                    return (
+                      <View key={dayOrder.id || orderIndex} style={s.dayOrderCard}>
+                        <View style={s.dayOrderTop}>
+                          <Text style={s.dayOrderName}>Order #{String(dayOrder.id || dayOrder._id || "").slice(-6)}</Text>
+                          <Text style={[s.dayOrderStatus, { color: dayMeta.color }]}>{dayMeta.label}</Text>
+                        </View>
+                        <View style={s.dayPattern}>
+                          <Ionicons name={dayOrder.pattern === "buy_once" ? "bag-handle-outline" : "repeat"} size={12} color="#b45309" />
+                          <Text style={s.dayPatternText}>{patternLabel(dayOrder.pattern)}</Text>
+                        </View>
+                        {(dayOrder.items || []).map((item: any, index: number) => (
+                          <View key={`${item.product_id || item.product_name}-${index}`} style={s.dayItemRow}>
+                            <Text style={s.dayItemName}>{item.product_name || "Product"}</Text>
+                            <Text style={s.dayItemQty}>×{displayedQuantity(dayOrder, item)}</Text>
+                            <Text style={s.dayItemPrice}>₹{item.total ?? item.price ?? 0}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    );
+                  })}
+                </>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -174,6 +318,8 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  calendarBtn: { width: 44, height: 44, borderRadius: 14, backgroundColor: Colors.primary + "12", alignItems: "center", justifyContent: "center" },
+  calendarDot: { position: "absolute", right: 9, top: 8, width: 7, height: 7, borderRadius: 4, backgroundColor: "#f59e0b", borderWidth: 1, borderColor: "#fff" },
   title: { fontSize: 22, fontWeight: "900", color: "#111827" },
   subtitle: { fontSize: 13, color: "#6B7280", marginTop: 2 },
   content: { padding: 20, gap: 14, paddingBottom: 36 },
@@ -208,6 +354,8 @@ const s = StyleSheet.create({
   },
   statusTitle: { fontSize: 21, fontWeight: "900", color: "#111827", textTransform: "capitalize" },
   statusSub: { fontSize: 13, color: "#6B7280", marginTop: 4, fontWeight: "700" },
+  patternPill: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "#FFFBEB", borderColor: "#FBBF24", borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, marginTop: 12 },
+  patternText: { fontSize: 12, fontWeight: "900", color: "#b45309", textTransform: "capitalize" },
   statusPill: {
     borderWidth: 1,
     borderRadius: 999,
@@ -249,4 +397,27 @@ const s = StyleSheet.create({
   itemPrice: { fontSize: 14, fontWeight: "900", color: Colors.primary },
   noItems: { fontSize: 13, color: "#6B7280", fontWeight: "600" },
   message: { fontSize: 13.5, color: "#4B5563", lineHeight: 20, fontWeight: "600" },
+  manageSubscriptionBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, backgroundColor: Colors.primary, borderRadius: 17, paddingVertical: 14 },
+  manageSubscriptionText: { color: "#fff", fontSize: 13, fontWeight: "900" },
+  modalOverlay: { flex: 1, backgroundColor: "rgba(17,24,39,0.45)", justifyContent: "flex-end" },
+  calendarSheet: { backgroundColor: "#F8FAFC", borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingTop: 18, paddingHorizontal: 16, paddingBottom: 24, maxHeight: "92%" },
+  sheetHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 4, marginBottom: 10 },
+  sheetTitle: { fontSize: 20, fontWeight: "900", color: "#111827" },
+  sheetSubtitle: { fontSize: 12, color: "#6B7280", marginTop: 3 },
+  closeBtn: { width: 38, height: 38, borderRadius: 12, backgroundColor: "#E5E7EB", alignItems: "center", justifyContent: "center" },
+  dayOrders: { marginTop: 12, maxHeight: 280 },
+  calendarHint: { padding: 18, textAlign: "center", color: "#6B7280", fontWeight: "600" },
+  noDayOrder: { alignItems: "center", padding: 22, gap: 8 },
+  noDayOrderText: { color: "#6B7280", fontWeight: "700" },
+  selectedDateTitle: { fontSize: 15, fontWeight: "900", color: "#111827", marginBottom: 10 },
+  dayOrderCard: { backgroundColor: "#fff", borderWidth: 1, borderColor: "#E5E7EB", borderRadius: 18, padding: 14, marginBottom: 10 },
+  dayOrderTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 },
+  dayOrderName: { fontSize: 14, fontWeight: "900", color: "#111827" },
+  dayOrderStatus: { fontSize: 11, fontWeight: "900", textTransform: "capitalize" },
+  dayPattern: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: 5, backgroundColor: "#FFFBEB", borderRadius: 20, paddingHorizontal: 8, paddingVertical: 4, marginTop: 8, marginBottom: 6 },
+  dayPatternText: { fontSize: 10, fontWeight: "900", color: "#b45309", textTransform: "capitalize" },
+  dayItemRow: { flexDirection: "row", alignItems: "center", paddingTop: 8, borderTopWidth: 1, borderTopColor: "#F3F4F6", marginTop: 5 },
+  dayItemName: { flex: 1, fontSize: 13, fontWeight: "700", color: "#374151" },
+  dayItemQty: { fontSize: 12, color: "#6B7280", marginRight: 12 },
+  dayItemPrice: { fontSize: 13, fontWeight: "900", color: Colors.primary },
 });
