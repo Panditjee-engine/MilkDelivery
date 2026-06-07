@@ -24,11 +24,16 @@ import LoadingScreen from "../../src/components/LoadingScreen";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { useRouter } from "expo-router";
 
-const CARD_WIDTH = 130;
 const SCREEN_WIDTH = Dimensions.get("window").width;
+const PRODUCT_GRID_GAP = 12;
+const PRODUCT_CARD_WIDTH = (SCREEN_WIDTH - 40 - PRODUCT_GRID_GAP) / 2;
 
 // Dairy category key — adjust if your API uses a different value
 const DAIRY_CATEGORIES = ["milk", "dairy"];
+const CATEGORY_PRIORITY: Record<string, number> = {
+  milk: 0,
+  dairy: 1,
+};
 
 // All 4 patterns available for dairy
 const subscriptionPatterns = [
@@ -989,12 +994,7 @@ function CategorySection({
           )}
         </View>
       </View>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.horizontalList}
-        directionalLockEnabled={true}
-      >
+      <View style={styles.productGrid}>
         {items.map((item) => {
           const cartQty = cart
             .filter((c) => c.product.id === item.id)
@@ -1008,7 +1008,7 @@ function CategorySection({
             />
           );
         })}
-      </ScrollView>
+      </View>
     </View>
   );
 }
@@ -1833,9 +1833,6 @@ export default function CatalogScreen() {
           })
         )
       )
-
-
-      const itemCount = cart.length;
       setCart([]);
       setCartVisible(false);
       setSuccessIsSubscription(false);
@@ -1870,7 +1867,7 @@ export default function CatalogScreen() {
       const label =
         categories.find((c) => c.value === selectedCategory)?.label ||
         selectedCategory;
-      return [{ value: selectedCategory, label, items: products }];
+      return [{ value: selectedCategory, label, items: [...products] }];
     }
     const map: Record<string, any[]> = {};
     products.forEach((p) => {
@@ -1878,12 +1875,19 @@ export default function CatalogScreen() {
       if (!map[cat]) map[cat] = [];
       map[cat].push(p);
     });
-    return Object.entries(map).map(([catValue, items]) => ({
-      value: catValue,
-      label:
-        categories.find((c) => c.value === catValue)?.label || catValue,
-      items,
-    }));
+    return Object.entries(map)
+      .map(([catValue, items]) => ({
+        value: catValue,
+        label:
+          categories.find((c) => c.value === catValue)?.label || catValue,
+        items,
+      }))
+      .sort((a, b) => {
+        const aPriority = CATEGORY_PRIORITY[a.value.toLowerCase()] ?? 99;
+        const bPriority = CATEGORY_PRIORITY[b.value.toLowerCase()] ?? 99;
+        if (aPriority !== bPriority) return aPriority - bPriority;
+        return a.label.localeCompare(b.label);
+      });
   }, [products, selectedCategory, categories]);
 
   if (loading) return <LoadingScreen />;
@@ -1906,6 +1910,13 @@ export default function CatalogScreen() {
           <Text style={styles.pageTitle}>Shop</Text>
 
           <View style={styles.headerButtons}>
+            <TouchableOpacity
+              style={styles.searchBtn}
+              onPress={() => router.push("/(customer)/product-search" as any)}
+            >
+              <Ionicons name="search-outline" size={19} color="#111827" />
+            </TouchableOpacity>
+
             {/* Subscription details button */}
             <TouchableOpacity
               style={styles.subBtn}
@@ -2340,6 +2351,17 @@ const styles = StyleSheet.create({
 
   headerButtons: { flexDirection: "row", alignItems: "center", gap: 10 },
 
+  searchBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#EEF2F7",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
   subBtn: {
     width: 40,
     height: 40,
@@ -2540,12 +2562,17 @@ const styles = StyleSheet.create({
     borderColor: "#fde68a",
   },
   dairySubBadgeText: { fontSize: 9, fontWeight: "700", color: "#b45309" },
-  horizontalList: { paddingLeft: 20, paddingRight: 8, gap: 10 },
+  productGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: PRODUCT_GRID_GAP,
+    paddingHorizontal: 20,
+  },
 
   card: {
-    width: CARD_WIDTH,
+    width: PRODUCT_CARD_WIDTH,
     backgroundColor: "#fff",
-    borderRadius: 16,
+    borderRadius: 18,
     overflow: "hidden",
     shadowColor: "#000",
     shadowOpacity: 0.06,
@@ -2554,7 +2581,7 @@ const styles = StyleSheet.create({
     elevation: 2,
     alignSelf: "flex-start",
   },
-  cardImageBox: { height: 88, justifyContent: "center", alignItems: "center" },
+  cardImageBox: { height: 112, justifyContent: "center", alignItems: "center" },
   cardImage: { width: "100%", height: "100%" },
   cardIconCircle: {
     width: 48,
@@ -2596,20 +2623,20 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   cartQtyBadgeText: { fontSize: 10, fontWeight: "800", color: "#fff" },
-  cardBody: { padding: 8, paddingBottom: 10 },
+  cardBody: { padding: 10, paddingBottom: 12 },
   cardName: {
-    fontSize: 12,
-    fontWeight: "700",
+    fontSize: 13,
+    fontWeight: "800",
     color: "#1A1A1A",
-    marginBottom: 4,
+    marginBottom: 6,
   },
   cardFooter: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
-  cardPrice: { fontSize: 14, fontWeight: "800" },
-  cardUnit: { fontSize: 10, fontWeight: "600" },
+  cardPrice: { fontSize: 15, fontWeight: "900" },
+  cardUnit: { fontSize: 10.5, fontWeight: "700" },
 
   emptyState: { alignItems: "center", paddingTop: 70, gap: 10 },
   emptyIconWrap: {

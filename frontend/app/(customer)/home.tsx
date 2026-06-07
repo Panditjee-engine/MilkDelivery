@@ -322,8 +322,11 @@ const brandStyles = StyleSheet.create({
   },
 });
 
-// ─── Product row item 
-function ProductRow({
+const POPULAR_GRID_GAP = 12;
+const POPULAR_CARD_WIDTH = (SCREEN_WIDTH - 40 - POPULAR_GRID_GAP) / 2;
+
+// ─── Product grid item
+function ProductGridCard({
   product,
   index,
   onPress,
@@ -358,77 +361,112 @@ function ProductRow({
 
   return (
     <Animated.View style={{ opacity: opacityAnim, transform: [{ translateY: slideAnim }] }}>
-      <TouchableOpacity style={productRowStyles.row} onPress={onPress} activeOpacity={0.82}>
-        {/* Icon / Image */}
-        <View style={[productRowStyles.imgBox, { backgroundColor: theme.bg }]}>
+      <TouchableOpacity style={productGridStyles.card} onPress={onPress} activeOpacity={0.86}>
+        <View style={[productGridStyles.imgBox, { backgroundColor: theme.bg }]}>
           {product?.image ? (
-            <Image source={{ uri: product.image }} style={productRowStyles.img} />
+            <Image source={{ uri: product.image }} style={productGridStyles.img} />
           ) : (
-            <Ionicons name={theme.icon as any} size={20} color={theme.accent} />
+            <Ionicons name={theme.icon as any} size={26} color={theme.accent} />
           )}
+          <TouchableOpacity style={productGridStyles.addBtn} onPress={onPress}>
+            <Ionicons name="add" size={15} color={Colors.primary} />
+          </TouchableOpacity>
         </View>
-
-        {/* Info */}
-        <View style={productRowStyles.info}>
+        <View style={productGridStyles.info}>
           {adminName && (
-            <View style={productRowStyles.adminBadge}>
+            <View style={productGridStyles.adminBadge}>
               <Ionicons name="storefront-outline" size={10} color="#16a34a" />
-              <Text style={productRowStyles.adminName}>{adminName}</Text>
+              <Text style={productGridStyles.adminName} numberOfLines={1}>{adminName}</Text>
             </View>
           )}
-          <Text style={productRowStyles.name} numberOfLines={1}>{product.name}</Text>
-          <Text style={productRowStyles.unit}>{product.unit}</Text>
-        </View>
-        <View style={productRowStyles.right}>
-          <Text style={productRowStyles.price}>₹{product.price}</Text>
-          <TouchableOpacity style={productRowStyles.addBtn} onPress={onPress}>
-            <Ionicons name="add" size={16} color={Colors.primary} />
-          </TouchableOpacity>
+          <Text style={productGridStyles.name} numberOfLines={2}>{product.name}</Text>
+          <View style={productGridStyles.footer}>
+            <Text style={productGridStyles.price}>₹{product.price}</Text>
+            <Text style={productGridStyles.unit} numberOfLines={1}>{product.unit}</Text>
+          </View>
         </View>
       </TouchableOpacity>
     </Animated.View>
   );
 }
 
-const productRowStyles = StyleSheet.create({
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 13,
-    gap: 12,
+function ExploreAllProductsCard({ onPress }: { onPress: () => void }) {
+  return (
+    <TouchableOpacity style={productGridStyles.exploreCard} onPress={onPress} activeOpacity={0.86}>
+      <LinearGradient
+        colors={[Colors.primary, Colors.primary + "D9"]}
+        style={productGridStyles.exploreGrad}
+      >
+        <Ionicons name="storefront-outline" size={30} color="#fff" />
+        <Text style={productGridStyles.exploreTitle}>Explore All Product</Text>
+        <Text style={productGridStyles.exploreSub}>Browse full catalog</Text>
+        <View style={productGridStyles.exploreArrow}>
+          <Ionicons name="arrow-forward" size={16} color={Colors.primary} />
+        </View>
+      </LinearGradient>
+    </TouchableOpacity>
+  );
+}
+
+const productGridStyles = StyleSheet.create({
+  card: {
+    width: POPULAR_CARD_WIDTH,
+    backgroundColor: "#fff",
+    borderRadius: 18,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
-  rowBorder: { borderBottomWidth: 1, borderBottomColor: "#F3F4F6" },
   imgBox: {
-    width: 46,
-    height: 46,
-    borderRadius: 14,
+    height: 105,
     justifyContent: "center",
     alignItems: "center",
     overflow: "hidden",
   },
+  img: { width: "100%", height: "100%" },
+  info: { padding: 10, paddingBottom: 12 },
   adminBadge: {
     flexDirection: "row",
     alignItems: "center",
     gap: 3,
-    marginBottom: 2,
+    marginBottom: 5,
   },
   adminName: {
     fontSize: 10,
     fontWeight: "700",
     color: "#16a34a",
+    maxWidth: 110,
   },
-  img: { width: "100%", height: "100%" },
-  info: { flex: 1 },
-  name: { fontSize: 14, fontWeight: "700", color: "#111", marginBottom: 2 },
-  unit: { fontSize: 12, color: "#bbb", fontWeight: "500" },
-  right: { alignItems: "flex-end", gap: 6 },
-  price: { fontSize: 15, fontWeight: "800" },
+  name: { fontSize: 13, fontWeight: "800", color: "#111", minHeight: 34 },
+  footer: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 8 },
+  unit: { fontSize: 10.5, color: "#aaa", fontWeight: "700", maxWidth: 58 },
+  price: { fontSize: 15, fontWeight: "900", color: Colors.primary },
   addBtn: {
-    width: 26,
-    height: 26,
-    borderRadius: 8,
+    position: "absolute",
+    top: 8,
+    right: 8,
+    width: 28,
+    height: 28,
+    borderRadius: 10,
+    backgroundColor: "#fff",
     justifyContent: "center",
     alignItems: "center",
+  },
+  exploreCard: { width: POPULAR_CARD_WIDTH, borderRadius: 18, overflow: "hidden" },
+  exploreGrad: { minHeight: 176, padding: 16, justifyContent: "space-between" },
+  exploreTitle: { color: "#fff", fontSize: 18, fontWeight: "900", letterSpacing: -0.5 },
+  exploreSub: { color: "rgba(255,255,255,0.78)", fontSize: 12, fontWeight: "700" },
+  exploreArrow: {
+    width: 32,
+    height: 32,
+    borderRadius: 12,
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+    alignSelf: "flex-end",
   },
 });
 
@@ -730,12 +768,12 @@ export default function CustomerHome() {
         {featuredProducts.length > 0 && (
           <View style={s.sectionWrap}>
             <Text style={s.sectionTitle}>Popular Items</Text>
-            <View style={s.card}>
+            <View style={s.popularGrid}>
               {featuredProducts.map((product, i) => {
                 const admin = adminsList.find((a) => a.id === product.admin_id);
                 const adminName = admin?.shop_name || admin?.name || undefined;
                 return (
-                  <ProductRow
+                  <ProductGridCard
                     key={product.id}
                     product={product}
                     index={i}
@@ -744,43 +782,7 @@ export default function CustomerHome() {
                   />
                 );
               })}
-
-              {/* Explore More button */}
-              <TouchableOpacity
-                style={s.exploreBtn}
-                onPress={() => router.push("/(customer)/catalog")}
-                activeOpacity={0.85}
-              >
-                <LinearGradient
-                  colors={[Colors.primary + "18", Colors.primary + "08"]}
-                  style={s.exploreBtnGrad}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                >
-                  <View style={s.exploreBtnLeft}>
-                    <View style={s.exploreBtnIcon}>
-                      <Ionicons
-                        name="storefront-outline"
-                        size={16}
-                        color={Colors.primary}
-                      />
-                    </View>
-                    <View>
-                      <Text style={s.exploreBtnTitle}>
-                        Explore All Products
-                      </Text>
-                      <Text style={s.exploreBtnSub}>
-                        Browse the full catalogue →
-                      </Text>
-                    </View>
-                  </View>
-                  <Ionicons
-                    name="chevron-forward"
-                    size={16}
-                    color={Colors.primary}
-                  />
-                </LinearGradient>
-              </TouchableOpacity>
+              <ExploreAllProductsCard onPress={() => router.push("/(customer)/catalog")} />
             </View>
           </View>
         )}
@@ -1548,6 +1550,7 @@ const s = StyleSheet.create({
     marginBottom: 12,
     letterSpacing: -0.3,
   },
+  popularGrid: { flexDirection: "row", flexWrap: "wrap", gap: POPULAR_GRID_GAP },
 
   // Generic card
   card: {

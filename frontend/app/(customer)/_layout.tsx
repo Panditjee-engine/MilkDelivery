@@ -2,7 +2,7 @@ import React from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../src/constants/colors';
-import { Platform, View } from 'react-native';
+import { Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function CustomerLayout() {
@@ -63,6 +63,7 @@ export default function CustomerLayout() {
         }}
       />
       <Tabs.Screen name="order-notifications" options={{ href: null }} />
+      <Tabs.Screen name="product-search" options={{ href: null }} />
     </Tabs>
   );
 }
