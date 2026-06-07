@@ -571,6 +571,15 @@ async cancelOrder(orderId: string) {
   });
 }
 
+// anurag 
+// Fetch ONLY subscriptions that belong to this logged-in admin
+async getAdminSubscriptionsAll(): Promise<any[]> {
+  // hits GET /subscriptions/admin/all (the new backend route)
+  return this.request<any[]>(`/subscriptions/admin/all`);
+}
+
+//----
+
   async getVacations() {
     return this.request<any[]>("/vacations");
   }
@@ -658,14 +667,20 @@ async cancelOrder(orderId: string) {
     return data;
   }
 
-  async updateOrderStatus(orderId: string, status: string) {
-    return this.request<any>("/delivery/status-update", {
+async updateOrderStatus(orderId: string, status: string) {
+    const response = await fetch(`${API_BASE}/api/delivery/status-update`, {
       method: "POST",
-      body: JSON.stringify({
-        order_id: orderId,
-        status,
-      }),
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${await AsyncStorage.getItem("access_token")}`,
+      },
+      body: JSON.stringify({ order_id: orderId, status }),
     });
+
+    const text = await response.text();
+    const data = text ? JSON.parse(text) : {};
+    if (!response.ok) throw new Error(data.detail || "Status update failed");
+    return data;
   }
 
   async verifyPickupOtp(orderId: string, otp: string) {
@@ -1674,10 +1689,6 @@ async adminMarkFed(data: {
       body: JSON.stringify(data),
     });
   }
-
-  // ─────────────────────────────────────────────────────────
-  // ADD THESE TO api.ts  (inside the ApiService class)
-  // ─────────────────────────────────────────────────────────
 
   // ── Bank Account ─────────────────────────────────────────
 

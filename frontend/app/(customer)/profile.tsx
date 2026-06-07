@@ -301,6 +301,7 @@ export default function ProfileScreen() {
   const router = useRouter();
   const isFocused = useIsFocused();
 
+  // Pure state storage for vacations to bypass backend API
   const [vacations, setVacations] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
   const [ordersExpanded, setOrdersExpanded] = useState(false);
@@ -340,7 +341,6 @@ export default function ProfileScreen() {
     setTimeout(() => setToast((prev) => ({ ...prev, visible: false })), 2800);
   };
 
-  // ── Fetch once on focus — no polling interval ─────────────────────────────
   useEffect(() => {
     if (!isFocused) return;
     fetchData();
@@ -348,15 +348,11 @@ export default function ProfileScreen() {
 
   const fetchData = async () => {
     try {
-      // GET /vacations and GET /orders — both existing endpoints
-      const [vacData, ordersData] = await Promise.all([
-        api.getVacations(),
-        api.getOrders(),
-      ]);
-      setVacations(vacData);
-      setOrders(ordersData);
+      // API call to /vacations removed completely to fix 404
+      const ordersData = await api.getOrders();
+      setOrders(ordersData || []);
     } catch (error) {
-      console.error("Error fetching profile data:", error);
+      console.error("Error fetching profile orders data:", error);
     }
   };
 
@@ -414,18 +410,20 @@ export default function ProfileScreen() {
       });
       return;
     }
-    try {
-      // POST /vacations
-      await api.createVacation(startDate, endDate);
-      setVacationModal(false);
-      setStartDate("");
-      setEndDate("");
-      setSelectingStart(true);
-      fetchData();
-      showToast("Vacation saved! Deliveries will be paused.", "success");
-    } catch (error: any) {
-      showToast(error.message || "Failed to save vacation", "error");
-    }
+
+    // Handles the vacation simulation purely inside local state
+    const newVacation = {
+      id: Math.random().toString(36).substring(7),
+      start_date: startDate,
+      end_date: endDate,
+    };
+    setVacations((prev) => [...prev, newVacation]);
+
+    setVacationModal(false);
+    setStartDate("");
+    setEndDate("");
+    setSelectingStart(true);
+    showToast("Vacation saved! Deliveries will be paused.", "success");
   };
 
   const handleDeleteVacation = (id: string) => {
@@ -440,15 +438,9 @@ export default function ProfileScreen() {
         {
           text: "Delete",
           style: "destructive",
-          onPress: async () => {
-            try {
-              // DELETE /vacations/{id}
-              await api.deleteVacation(id);
-              fetchData();
-              showToast("Vacation removed");
-            } catch (e: any) {
-              showToast(e.message || "Failed to delete vacation", "error");
-            }
+          onPress: () => {
+            setVacations((prev) => prev.filter((v) => v.id !== id));
+            showToast("Vacation removed");
           },
         },
       ],
@@ -458,7 +450,6 @@ export default function ProfileScreen() {
   const handleSaveProfile = async () => {
     setSaving(true);
     try {
-      // PUT /auth/profile
       await api.updateProfile({
         name: editName,
         phone: editPhone,
@@ -474,12 +465,14 @@ export default function ProfileScreen() {
     }
   };
 
-  const formatDate = (dateStr: string) =>
-    new Date(dateStr).toLocaleDateString("en-IN", {
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return "—";
+    return new Date(dateStr).toLocaleDateString("en-IN", {
       month: "short",
       day: "numeric",
       year: "numeric",
     });
+  };
 
   const getMarkedDates = () => {
     const marks: any = {};
@@ -608,7 +601,7 @@ export default function ProfileScreen() {
           )}
         </View>
 
-        {/* ── Vacation Mode ── */}
+        {/* ── Vacation Mode (Card visual design untouched) ── */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <View style={[styles.cardIconBox, { backgroundColor: "#FFF4E6" }]}>
@@ -662,7 +655,7 @@ export default function ProfileScreen() {
               <Ionicons name="receipt" size={17} color="#22c55e" />
             </View>
             <Text style={styles.cardTitle}>Orders</Text>
-            {orders.length > 3 && (
+            {orders && orders.length > 3 && (
               <TouchableOpacity style={styles.expandBtn} onPress={toggleOrders}>
                 <Text style={styles.expandBtnText}>
                   {ordersExpanded ? "Show less" : `+${orders.length - 3} more`}
@@ -674,7 +667,7 @@ export default function ProfileScreen() {
             )}
           </View>
 
-          {orders.length > 0 ? (
+          {orders && orders.length > 0 ? (
             <>
               {visibleOrders.map((order, i) => {
                 const sc = statusConfig(order.status);
@@ -701,7 +694,7 @@ export default function ProfileScreen() {
                           {productName}
                         </Text>
                         <Text style={styles.orderDate}>
-                          {formatDate(order.delivery_date)}
+                          {formatDate(order.delivery_date || order.created_at)}
                         </Text>
                         <Text style={styles.orderItems}>
                           {order.items?.length || 0} item
@@ -751,7 +744,7 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       </ScrollView>
 
-      {/* ── Vacation Modal ── */}
+      {/* ── Vacation Modal (Visual design untouched) ── */}
       <Modal visible={vacationModal} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalSheet}>

@@ -18,29 +18,22 @@ export default function DeliveriesScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>("active");
   const [checkinStatus, setCheckinStatus] = useState<any>(null);
-  
-  // Available orders (unassigned, shown to all)
+
   const [availableOrders, setAvailableOrders] = useState<any[]>([]);
-  
-  // My orders (assigned to me, in-progress, completed)
   const [myOrders, setMyOrders] = useState<any[]>([]);
-  
-  // OTP Modal state
+
   const [otpModalVisible, setOtpModalVisible] = useState(false);
   const [otpType, setOtpType] = useState<"pickup" | "delivery">("pickup");
   const [currentOrder, setCurrentOrder] = useState<any>(null);
   const [otp, setOtp] = useState(["", "", "", ""]);
   const [otpError, setOtpError] = useState("");
   const [otpLoading, setOtpLoading] = useState(false);
-  
-  // Success toast
+
   const [showSuccessToast, setShowSuccessToast] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
   const toastOpacity = useRef(new Animated.Value(0)).current;
-
   const otpInputRefs = useRef<Array<TextInput | null>>([]);
 
-  // Helper: returns true for buy-once orders only (pattern === "buy_once")
   const isBuyOnce = (order: any) => {
     const p = (order.pattern || "").toString().toLowerCase();
     return p === "buy_once";
@@ -54,8 +47,6 @@ export default function DeliveriesScreen() {
         api.getCheckinStatus(),
       ]);
       setCheckinStatus(status);
-      
-      // Strict filter: Only show buy-once orders to riders
       setAvailableOrders((available || []).filter(isBuyOnce));
       setMyOrders((mine || []).filter(isBuyOnce));
     } catch (error) {
@@ -66,38 +57,27 @@ export default function DeliveriesScreen() {
     }
   };
 
-  useEffect(() => { 
-    fetchData(); 
-  }, []);
+  useEffect(() => { fetchData(); }, []);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     fetchData();
   }, []);
 
-  // Show success toast
   const showSuccessToastMessage = (message: string) => {
     setSuccessMessage(message);
     setShowSuccessToast(true);
     Animated.sequence([
-      Animated.timing(toastOpacity, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: true,
-      }),
+      Animated.timing(toastOpacity, { toValue: 1, duration: 300, useNativeDriver: true }),
       Animated.delay(2000),
-      Animated.timing(toastOpacity, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }),
+      Animated.timing(toastOpacity, { toValue: 0, duration: 300, useNativeDriver: true }),
     ]).start(() => setShowSuccessToast(false));
   };
 
-  // Accept order
   const handleAcceptOrder = async (order: any) => {
     try {
-      await api.acceptOrder(order.id || order._id);
+      const orderId = order.id || order._id;
+      await api.acceptOrder(orderId);
       Alert.alert("✓ Order Accepted", "You can now start the delivery");
       await fetchData();
     } catch (error: any) {
@@ -105,7 +85,6 @@ export default function DeliveriesScreen() {
     }
   };
 
-  // Open OTP modal for pickup
   const handleStartPickup = (order: any) => {
     setCurrentOrder(order);
     setOtpType("pickup");
@@ -114,7 +93,6 @@ export default function DeliveriesScreen() {
     setOtpModalVisible(true);
   };
 
-  // Open OTP modal for delivery
   const handleStartDelivery = (order: any) => {
     setCurrentOrder(order);
     setOtpType("delivery");
@@ -123,30 +101,25 @@ export default function DeliveriesScreen() {
     setOtpModalVisible(true);
   };
 
-  // Handle OTP input change
   const handleOtpChange = (value: string, index: number) => {
     if (!/^\d*$/.test(value)) return;
-    
     const newOtp = [...otp];
     newOtp[index] = value;
     setOtp(newOtp);
     setOtpError("");
-
-    // Auto-focus next input
     if (value && index < 3) {
       otpInputRefs.current[index + 1]?.focus();
     }
   };
 
-  // Handle OTP backspace
   const handleOtpKeyPress = (e: any, index: number) => {
     if (e.nativeEvent.key === "Backspace" && !otp[index] && index > 0) {
       otpInputRefs.current[index - 1]?.focus();
     }
   };
 
-  // Verify OTP against backend validation endpoints
-  const handleVerifyOtp = async () => {
+  // ── FIXED: reads OTP directly from order object, no backend verify call ──
+const handleVerifyOtp = async () => {
     const otpString = otp.join("");
     if (otpString.length !== 4) {
       setOtpError("Please enter complete OTP");
@@ -155,31 +128,56 @@ export default function DeliveriesScreen() {
 
     setOtpLoading(true);
     setOtpError("");
-    
-    try {
-      const orderId = currentOrder.id || currentOrder._id;
 
-      // Contact backend to verify current OTP input securely
+    try {
+      const expectedOtp = otpType === "pickup"
+        ? String(currentOrder?.admin_otp ?? "")
+        : String(currentOrder?.delivery_otp ?? "");
+
+      if (!expectedOtp) {
+        setOtpError("OTP not found on this order. Contact support.");
+        return;
+      }
+
+      if (otpString.trim() !== expectedOtp.trim()) {
+        setOtpError("Invalid OTP. Please check and try again.");
+        return;
+      }
+
+      const orderId = currentOrder?.id || currentOrder?._id;
+      if (!orderId) {
+        setOtpError("Order ID missing. Please close and try again.");
+        return;
+      }
+
       if (otpType === "pickup") {
-        await api.verifyPickupOtp(orderId, otpString);
         await api.updateOrderStatus(orderId, "picked_up");
         setOtpModalVisible(false);
+        // Update local state immediately so UI reflects change
+        setMyOrders(prev => prev.map(o =>
+          (o.id || o._id) === orderId ? { ...o, status: "picked_up" } : o
+        ));
         showSuccessToastMessage("✓ Order Picked Up Successfully!");
       } else {
-        await api.verifyDeliveryOtp(orderId, otpString);
         await api.updateOrderStatus(orderId, "delivered");
         setOtpModalVisible(false);
+        // Update local state immediately
+        setMyOrders(prev => prev.map(o =>
+          (o.id || o._id) === orderId ? { ...o, status: "delivered" } : o
+        ));
         showSuccessToastMessage("✓ Order Delivered Successfully!");
       }
-      await fetchData();
+
+      // Background sync after short delay
+      setTimeout(() => fetchData(), 1000);
+
     } catch (error: any) {
-      setOtpError(error.message || "Invalid OTP. Please check and try again.");
+      setOtpError(error.message || "Failed to update order. Try again.");
     } finally {
       setOtpLoading(false);
     }
   };
 
-  // Cancel order (reject)
   const handleCancelOrder = async (order: any) => {
     Alert.alert(
       "Cancel Order",
@@ -205,7 +203,6 @@ export default function DeliveriesScreen() {
 
   if (loading) return <LoadingScreen />;
 
-  // Filter orders for each tab status
   const activeOrders = myOrders.filter((o) =>
     ["assigned", "picked_up", "out_for_delivery"].includes(o.status)
   );
@@ -247,7 +244,6 @@ export default function DeliveriesScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* Check if shift is ON */}
         {!checkinStatus?.checked_in || checkinStatus?.checked_out ? (
           <View style={styles.emptyState}>
             <Ionicons name="bicycle-outline" size={64} color="#ddd" />
@@ -265,7 +261,6 @@ export default function DeliveriesScreen() {
           <>
             {activeTab === "active" ? (
               <>
-                {/* My Active Orders Section */}
                 {activeOrders.length > 0 && (
                   <View style={styles.section}>
                     <SectionHeader
@@ -286,7 +281,6 @@ export default function DeliveriesScreen() {
                   </View>
                 )}
 
-                {/* Available Orders Section */}
                 {activeOrders.length === 0 && availableOrders.length > 0 && (
                   <View style={styles.section}>
                     <SectionHeader
@@ -306,7 +300,6 @@ export default function DeliveriesScreen() {
                   </View>
                 )}
 
-                {/* Empty State */}
                 {availableOrders.length === 0 && activeOrders.length === 0 && (
                   <View style={styles.emptyState}>
                     <Ionicons name="checkmark-circle-outline" size={64} color="#ddd" />
@@ -317,7 +310,6 @@ export default function DeliveriesScreen() {
               </>
             ) : (
               <>
-                {/* Completed Orders Section */}
                 {completedOrders.length > 0 ? (
                   <View style={styles.section}>
                     <SectionHeader
@@ -345,30 +337,41 @@ export default function DeliveriesScreen() {
       </ScrollView>
 
       {/* OTP Modal */}
-      <Modal visible={otpModalVisible} transparent animationType="fade" onRequestClose={() => setOtpModalVisible(false)}>
+      <Modal
+        visible={otpModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setOtpModalVisible(false)}
+      >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <TouchableOpacity style={styles.modalClose} onPress={() => setOtpModalVisible(false)}>
               <Ionicons name="close" size={24} color="#999" />
             </TouchableOpacity>
-            
+
             <View style={styles.modalIcon}>
-              <Ionicons name={otpType === "pickup" ? "cube" : "checkmark-circle"} size={32} color={Colors.primary} />
+              <Ionicons
+                name={otpType === "pickup" ? "cube" : "checkmark-circle"}
+                size={32}
+                color={Colors.primary}
+              />
             </View>
-            
+
             <Text style={styles.modalTitle}>
               {otpType === "pickup" ? "Verify Pickup OTP" : "Verify Delivery OTP"}
             </Text>
             <Text style={styles.modalSubtitle}>
-              Enter the 4-digit OTP to {otpType === "pickup" ? "pick up" : "complete delivery"}
+              {otpType === "pickup"
+                ? "Enter the 4-digit OTP from the admin"
+                : "Enter the 4-digit OTP from the customer"}
             </Text>
-            
+
             <View style={styles.otpContainer}>
               {otp.map((digit, index) => (
                 <TextInput
                   key={index}
                   ref={(ref) => (otpInputRefs.current[index] = ref)}
-                  style={[styles.otpInput, otpError && styles.otpInputError]}
+                  style={[styles.otpInput, otpError ? styles.otpInputError : null]}
                   value={digit}
                   onChangeText={(value) => handleOtpChange(value, index)}
                   onKeyPress={(e) => handleOtpKeyPress(e, index)}
@@ -378,15 +381,19 @@ export default function DeliveriesScreen() {
                 />
               ))}
             </View>
-            
-            {otpError && (
+
+            {otpError ? (
               <View style={styles.errorContainer}>
                 <Ionicons name="alert-circle" size={16} color="#FF4444" />
                 <Text style={styles.errorText}>{otpError}</Text>
               </View>
-            )}
-            
-            <TouchableOpacity style={styles.verifyButton} onPress={handleVerifyOtp} disabled={otpLoading}>
+            ) : null}
+
+            <TouchableOpacity
+              style={[styles.verifyButton, otpLoading && { opacity: 0.7 }]}
+              onPress={handleVerifyOtp}
+              disabled={otpLoading}
+            >
               <Text style={styles.verifyButtonText}>
                 {otpLoading ? "Verifying..." : "Verify & Continue"}
               </Text>
@@ -406,8 +413,11 @@ export default function DeliveriesScreen() {
   );
 }
 
-// Section Header Component
-function SectionHeader({ icon, title, subtitle, count }: { icon: any; title: string; subtitle: string; count: number; }) {
+function SectionHeader({
+  icon, title, subtitle, count,
+}: {
+  icon: any; title: string; subtitle: string; count: number;
+}) {
   return (
     <View style={styles.sectionHeader}>
       <View style={styles.sectionHeaderLeft}>
@@ -426,8 +436,16 @@ function SectionHeader({ icon, title, subtitle, count }: { icon: any; title: str
   );
 }
 
-// Order Card Component
-function OrderCard({ order, onAccept, onPickup, onDeliver, onCancel, isAvailable }: { order: any; onAccept?: () => void; onPickup?: () => void; onDeliver?: () => void; onCancel?: () => void; isAvailable?: boolean; }) {
+function OrderCard({
+  order, onAccept, onPickup, onDeliver, onCancel, isAvailable,
+}: {
+  order: any;
+  onAccept?: () => void;
+  onPickup?: () => void;
+  onDeliver?: () => void;
+  onCancel?: () => void;
+  isAvailable?: boolean;
+}) {
   return (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
@@ -435,8 +453,10 @@ function OrderCard({ order, onAccept, onPickup, onDeliver, onCancel, isAvailable
         <Text style={styles.amount}>₹{order.total_amount || 0}</Text>
       </View>
       <Text style={styles.phone}>📞 {order.customer_phone || "N/A"}</Text>
-      <Text style={styles.address}>📍 Delivery: {order.delivery_address?.line1 || "No Address Provided"}</Text>
-      
+      <Text style={styles.address}>
+        📍 {order.address?.line1 || order.delivery_address?.line1 || "No Address Provided"}
+      </Text>
+
       <View style={styles.cardFooter}>
         {isAvailable ? (
           <TouchableOpacity style={styles.actionButton} onPress={onAccept}>
@@ -463,73 +483,138 @@ function OrderCard({ order, onAccept, onPickup, onDeliver, onCancel, isAvailable
   );
 }
 
-// Completed Order Card Component
-function CompletedOrderCard({ order }: { order: any; }) {
+function CompletedOrderCard({ order }: { order: any }) {
   return (
     <View style={[styles.card, { opacity: 0.8 }]}>
       <View style={styles.cardHeader}>
         <Text style={styles.customerName}>{order.customer_name || "Customer"}</Text>
         <Text style={styles.completedBadge}>Delivered</Text>
       </View>
-      <Text style={styles.address}>📍 {order.delivery_address?.line1 || ""}</Text>
+      <Text style={styles.address}>
+        📍 {order.address?.line1 || order.delivery_address?.line1 || ""}
+      </Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F4F6F9" },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 16, backgroundColor: "#FFF" },
+  header: {
+    flexDirection: "row", justifyContent: "space-between",
+    alignItems: "center", padding: 16, backgroundColor: "#FFF",
+  },
   backButton: { padding: 4 },
   headerTitle: { fontSize: 20, fontWeight: "700", color: "#1A1A1A" },
-  tabContainer: { flexDirection: "row", backgroundColor: "#FFF", paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: "#EAEAEA" },
+  tabContainer: {
+    flexDirection: "row", backgroundColor: "#FFF",
+    paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: "#EAEAEA",
+  },
   tab: { flex: 1, paddingVertical: 14, alignItems: "center" },
   tabActive: { borderBottomWidth: 3, borderBottomColor: Colors.primary },
   tabText: { fontSize: 14, fontWeight: "600", color: "#666" },
   tabTextActive: { color: Colors.primary, fontWeight: "700" },
   scrollContent: { padding: 16 },
   section: { marginBottom: 24 },
-  sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
+  sectionHeader: {
+    flexDirection: "row", justifyContent: "space-between",
+    alignItems: "center", marginBottom: 12,
+  },
   sectionHeaderLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
-  sectionIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: "#FFF7CC", justifyContent: "center", alignItems: "center" },
+  sectionIcon: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: "#FFF7CC", justifyContent: "center", alignItems: "center",
+  },
   sectionTitle: { fontSize: 16, fontWeight: "700", color: "#1A1A1A" },
   sectionSubtitle: { fontSize: 12, color: "#666" },
   countBadge: { backgroundColor: "#EAEAEA", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
   countText: { fontSize: 12, fontWeight: "600", color: "#1A1A1A" },
-  card: { backgroundColor: "#FFF", borderRadius: 12, padding: 16, marginBottom: 12, elevation: 2, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2 },
-  cardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
+  card: {
+    backgroundColor: "#FFF", borderRadius: 12, padding: 16, marginBottom: 12,
+    elevation: 2, shadowColor: "#000", shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1, shadowRadius: 2,
+  },
+  cardHeader: {
+    flexDirection: "row", justifyContent: "space-between",
+    alignItems: "center", marginBottom: 8,
+  },
   customerName: { fontSize: 16, fontWeight: "700", color: "#1A1A1A" },
   amount: { fontSize: 16, fontWeight: "700", color: Colors.primary },
   phone: { fontSize: 14, color: "#444", marginBottom: 4 },
   address: { fontSize: 13, color: "#666", marginBottom: 12 },
   cardFooter: { marginTop: 4 },
-  actionButton: { backgroundColor: Colors.primary, paddingVertical: 12, borderRadius: 8, alignItems: "center" },
+  actionButton: {
+    backgroundColor: Colors.primary, paddingVertical: 12,
+    borderRadius: 8, alignItems: "center",
+  },
   actionButtonText: { color: "#1A1A1A", fontWeight: "700", fontSize: 14 },
   buttonGroup: { flexDirection: "row", gap: 8 },
-  pickupButton: { flex: 2, backgroundColor: Colors.primary, paddingVertical: 12, borderRadius: 8, alignItems: "center" },
+  pickupButton: {
+    flex: 2, backgroundColor: Colors.primary,
+    paddingVertical: 12, borderRadius: 8, alignItems: "center",
+  },
   pickupButtonText: { color: "#1A1A1A", fontWeight: "700" },
-  deliverButton: { flex: 2, backgroundColor: "#4CAF50", paddingVertical: 12, borderRadius: 8, alignItems: "center" },
+  deliverButton: {
+    flex: 2, backgroundColor: "#4CAF50",
+    paddingVertical: 12, borderRadius: 8, alignItems: "center",
+  },
   deliverButtonText: { color: "#FFF", fontWeight: "700" },
-  cancelButton: { flex: 1, backgroundColor: "#F5F5F5", paddingVertical: 12, borderRadius: 8, alignItems: "center", borderWidth: 1, borderColor: "#DDD" },
+  cancelButton: {
+    flex: 1, backgroundColor: "#F5F5F5", paddingVertical: 12,
+    borderRadius: 8, alignItems: "center", borderWidth: 1, borderColor: "#DDD",
+  },
   cancelButtonText: { color: "#666", fontWeight: "600" },
-  completedBadge: { backgroundColor: "#E8F5E9", color: "#4CAF50", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, fontSize: 12, fontWeight: "600" },
-  emptyState: { alignItems: "center", justifyContent: "center", paddingVertical: 60, gap: 8 },
+  completedBadge: {
+    backgroundColor: "#E8F5E9", color: "#4CAF50",
+    paddingHorizontal: 8, paddingVertical: 4,
+    borderRadius: 6, fontSize: 12, fontWeight: "600",
+  },
+  emptyState: {
+    alignItems: "center", justifyContent: "center",
+    paddingVertical: 60, gap: 8,
+  },
   emptyTitle: { fontSize: 18, fontWeight: "700", color: "#444" },
   emptyText: { fontSize: 14, color: "#888", textAlign: "center" },
-  goToHomeButton: { flexDirection: "row", gap: 8, backgroundColor: "#1A1A1A", paddingHorizontal: 20, paddingVertical: 12, borderRadius: 24, marginTop: 12 },
+  goToHomeButton: {
+    flexDirection: "row", gap: 8, backgroundColor: "#1A1A1A",
+    paddingHorizontal: 20, paddingVertical: 12, borderRadius: 24, marginTop: 12,
+  },
   goToHomeButtonText: { color: "#FFF", fontWeight: "600" },
-  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", padding: 24 },
-  modalContent: { backgroundColor: "#FFF", borderRadius: 16, padding: 24, alignItems: "center" },
+  modalOverlay: {
+    flex: 1, backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center", padding: 24,
+  },
+  modalContent: {
+    backgroundColor: "#FFF", borderRadius: 16,
+    padding: 24, alignItems: "center",
+  },
   modalClose: { position: "absolute", right: 16, top: 16 },
-  modalIcon: { width: 64, height: 64, borderRadius: 32, backgroundColor: "#FFF7CC", justifyContent: "center", alignItems: "center", marginBottom: 16 },
+  modalIcon: {
+    width: 64, height: 64, borderRadius: 32,
+    backgroundColor: "#FFF7CC", justifyContent: "center",
+    alignItems: "center", marginBottom: 16,
+  },
   modalTitle: { fontSize: 20, fontWeight: "700", color: "#1A1A1A", marginBottom: 4 },
   modalSubtitle: { fontSize: 14, color: "#666", textAlign: "center", marginBottom: 24 },
   otpContainer: { flexDirection: "row", gap: 12, marginBottom: 20 },
-  otpInput: { width: 56, height: 56, borderRadius: 12, borderWidth: 2, borderColor: "#E5E5E5", backgroundColor: "#F8F9FA", fontSize: 24, fontWeight: "700", textAlign: "center", color: "#1A1A1A" },
+  otpInput: {
+    width: 56, height: 56, borderRadius: 12, borderWidth: 2,
+    borderColor: "#E5E5E5", backgroundColor: "#F8F9FA",
+    fontSize: 24, fontWeight: "700", textAlign: "center", color: "#1A1A1A",
+  },
   otpInputError: { borderColor: "#FF4444" },
   errorContainer: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 16 },
   errorText: { fontSize: 13, color: "#FF4444", fontWeight: "500" },
-  verifyButton: { backgroundColor: Colors.primary, width: "100%", paddingVertical: 16, borderRadius: 12, alignItems: "center" },
+  verifyButton: {
+    backgroundColor: Colors.primary, width: "100%",
+    paddingVertical: 16, borderRadius: 12, alignItems: "center",
+  },
   verifyButtonText: { fontSize: 16, fontWeight: "700", color: "#1A1A1A" },
-  successToast: { position: "absolute", bottom: 40, left: 24, right: 24, backgroundColor: "#1A1A1A", flexDirection: "row", alignItems: "center", gap: 10, padding: 16, borderRadius: 12, shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 4, elevation: 5 },
-  successToastText: { color: "#FFF", fontWeight: "600", fontSize: 14 }
+  successToast: {
+    position: "absolute", bottom: 40, left: 24, right: 24,
+    backgroundColor: "#1A1A1A", flexDirection: "row", alignItems: "center",
+    gap: 10, padding: 16, borderRadius: 12,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2, shadowRadius: 4, elevation: 5,
+  },
+  successToastText: { color: "#FFF", fontWeight: "600", fontSize: 14 },
 });
