@@ -1,18 +1,10 @@
+// orders.tsx — fixed: cancel now uses DELETE /orders/{order_id} directly
+
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  RefreshControl,
-  TouchableOpacity,
-  Modal,
-  Animated,
-  Vibration,
-  LayoutAnimation,
-  Platform,
-  UIManager,
-  Easing,
+  View, Text, StyleSheet, ScrollView, RefreshControl,
+  TouchableOpacity, Modal, Animated, Vibration, Easing,
+  Platform, UIManager, LayoutAnimation, Alert, FlatList,
 } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -20,215 +12,233 @@ import { Ionicons } from "@expo/vector-icons";
 import { api } from "../../src/services/api";
 import { Colors } from "../../src/constants/colors";
 import LoadingScreen from "../../src/components/LoadingScreen";
-import { BlurView } from "expo-blur";
 
-if (
-  Platform.OS === "android" &&
-  UIManager.setLayoutAnimationEnabledExperimental
-) {
+if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-// ─── Helpers 
-const formatTime = (iso: string) => {
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface OrderItem {
+  product_id: string;
+  name?: string;
+  quantity: number;
+  price: number;
+  amount: number;
+}
+
+interface Order {
+  id: string;
+  subscription_id?: string;
+  user_id: string;
+  admin_id?: string;
+  admin_name?: string;
+  items: OrderItem[];
+  delivery_otp?: string;
+  total_amount: number;
+  status: string;
+  delivery_date: string;
+  pattern?: string;
+  created_at?: string;
+  updated_at?: string;
+  assigned_at?: string;
+  product?: { id: string; name: string; price: number; unit: string };
+  quantity?: number;
+  product_name?: string;
+}
+
+interface ProductMap {
+  [productId: string]: { name: string; unit: string };
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+function formatDate(s: string): string {
+  if (!s) return "—";
+  const d = new Date(s + "T00:00:00");
+  return `${d.getDate()} ${MONTH_SHORT[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+function formatTime(iso: string): string {
   if (!iso) return "";
   try {
-    const dateStr = iso.endsWith("Z") || iso.includes("+") ? iso : iso + "Z";
-    return new Date(dateStr).toLocaleString("en-IN", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
-      timeZone: "Asia/Kolkata",
+    const s = iso.endsWith("Z") || iso.includes("+") ? iso : iso + "Z";
+    return new Date(s).toLocaleString("en-IN", {
+      day: "2-digit", month: "short",
+      hour: "2-digit", minute: "2-digit",
+      hour12: true, timeZone: "Asia/Kolkata",
     });
-  } catch {
-    return "";
+  } catch { return ""; }
+}
+
+function getProductName(order: Order, productMap: ProductMap): string {
+  if (order.product_name) return order.product_name;
+  if (order.product?.name) return order.product.name;
+  if (order.items?.length > 0) {
+    const first = order.items[0];
+    if (first.name) {
+      return order.items.length === 1
+        ? first.name
+        : `${first.name} +${order.items.length - 1} more`;
+    }
+    if (productMap[first.product_id]?.name) {
+      return order.items.length === 1
+        ? productMap[first.product_id].name
+        : `${productMap[first.product_id].name} +${order.items.length - 1} more`;
+    }
+    return order.items.length === 1 ? "Order Item" : `${order.items.length} Items`;
   }
+  return "Order";
+}
+
+function getTotalQty(order: Order): number {
+  if (order.items?.length > 0) return order.items.reduce((s, i) => s + i.quantity, 0);
+  return order.quantity ?? 1;
+}
+
+// ─── Delivery badge ───────────────────────────────────────────────────────────
+
+interface DeliveryBadge {
+  text: string; icon: string; color: string; bg: string; borderColor: string;
+}
+
+function getDeliveryBadge(order: Order): DeliveryBadge | null {
+  const refTime = order.updated_at || order.assigned_at || order.created_at;
+  if (order.status === "assigned") {
+    const assignedAt = refTime ? new Date(refTime).getTime() : Date.now();
+    const remaining = Math.max(0, Math.round((assignedAt + 15 * 60 * 1000 - Date.now()) / 60000));
+    return { text: remaining <= 0 ? "Arriving now" : `~${remaining} min`, icon: "bicycle-outline", color: "#2563EB", bg: "#EFF6FF", borderColor: "#BFDBFE" };
+  }
+  if (order.status === "out_for_delivery") {
+    const startedAt = refTime ? new Date(refTime).getTime() : Date.now();
+    const remaining = Math.max(0, Math.round((startedAt + 10 * 60 * 1000 - Date.now()) / 60000));
+    return { text: remaining <= 0 ? "Arriving now" : `~${remaining} min`, icon: "navigate-outline", color: "#7C3AED", bg: "#F5F3FF", borderColor: "#DDD6FE" };
+  }
+  if (order.status === "delivered") {
+    const t = refTime ? formatTime(refTime) : "";
+    return { text: t ? `Delivered ${t}` : "Delivered", icon: "checkmark-circle-outline", color: "#16A34A", bg: "#F0FDF4", borderColor: "#BBF7D0" };
+  }
+  return null;
+}
+
+// ─── Status config ────────────────────────────────────────────────────────────
+
+const STATUS_META: Record<string, { label: string; color: string; bg: string; icon: string; step: number }> = {
+  unassigned:       { label: "Pending",        color: "#D97706", bg: "#FEF3C7", icon: "time-outline",              step: 1 },
+  assigned:         { label: "Rider Assigned", color: "#2563EB", bg: "#EFF6FF", icon: "bicycle-outline",           step: 2 },
+  out_for_delivery: { label: "On the Way",     color: "#7C3AED", bg: "#F5F3FF", icon: "navigate-outline",          step: 3 },
+  delivered:        { label: "Delivered",      color: "#16A34A", bg: "#F0FDF4", icon: "checkmark-circle",          step: 4 },
+  cancelled:        { label: "Cancelled",      color: "#DC2626", bg: "#FEF2F2", icon: "close-circle-outline",      step: 0 },
+  skipped:          { label: "Skipped",        color: "#9CA3AF", bg: "#F3F4F6", icon: "play-skip-forward-outline", step: 0 },
 };
+function getMeta(status: string) { return STATUS_META[status] ?? STATUS_META.unassigned; }
 
-const getPatternLabel = (p: string) => {
-  const map: Record<string, string> = {
-    daily: "Every day",
-    alternate: "Alternate days",
-    custom: "Custom days",
-    buy_once: "One-time",
-  };
-  return map[p] || p;
-};
+// ─── Summary bar ──────────────────────────────────────────────────────────────
 
-const STATUS_META: Record<
-  string,
-  { label: string; color: string; icon: string; step: number }
-> = {
-  no_order: {
-    label: "Not scheduled",
-    color: "#9ca3af",
-    icon: "ellipse-outline",
-    step: 0,
-  },
-  unassigned: {
-    label: "Pending",
-    color: "#f59e0b",
-    icon: "time-outline",
-    step: 1,
-  },
-  assigned: {
-    label: "Rider assigned",
-    color: "#3b82f6",
-    icon: "bicycle-outline",
-    step: 2,
-  },
-  out_for_delivery: {
-    label: "On the way",
-    color: "#8b5cf6",
-    icon: "navigate-outline",
-    step: 3,
-  },
-  delivered: {
-    label: "Delivered",
-    color: "#22c55e",
-    icon: "checkmark-circle",
-    step: 4,
-  },
-  cancelled: {
-    label: "Cancelled",
-    color: "#ef4444",
-    icon: "close-circle-outline",
-    step: 0,
-  },
-  skipped: {
-    label: "Skipped",
-    color: "#9ca3af",
-    icon: "skip-forward-outline",
-    step: 0,
-  },
-};
-
-const getMeta = (status: string) =>
-  STATUS_META[status] || STATUS_META["unassigned"];
-
-// ─── Status Summary Bar 
-function StatusSummaryBar({ subscriptions }: { subscriptions: any[] }) {
-  const counts: Record<string, number> = {};
-  subscriptions.forEach((s) => {
-    const key = s.status || "unassigned";
-    counts[key] = (counts[key] || 0) + 1;
-  });
-
-  const pills = Object.entries(counts).map(([status, count]) => ({
-    status,
-    count,
-    ...getMeta(status),
-  }));
-
-  if (pills.length === 0) return null;
-
+function SummaryBar({ orders }: { orders: Order[] }) {
+  const active    = orders.filter(o => !["delivered","cancelled","skipped"].includes(o.status)).length;
+  const delivered = orders.filter(o => o.status === "delivered").length;
+  const cancelled = orders.filter(o => ["cancelled","skipped"].includes(o.status)).length;
   return (
-    <View style={sb.wrap}>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={sb.row}
-      >
-        <View
-          style={[
-            sb.pill,
-            { backgroundColor: "#f3f4f6", borderColor: "#e5e7eb" },
-          ]}
-        >
-          <Ionicons name="layers-outline" size={13} color="#374151" />
-          <Text style={[sb.pillCount, { color: "#374151" }]}>
-            {subscriptions.length}
-          </Text>
-          <Text style={[sb.pillLabel, { color: "#6b7280" }]}>Total</Text>
+    <View style={smS.wrap}>
+      <View style={smS.row}>
+        <View style={smS.pill}>
+          <Text style={smS.n}>{orders.length}</Text>
+          <Text style={smS.l}> Total</Text>
         </View>
-        {pills.map(({ status, count, label, color, icon }) => (
-          <View
-            key={status}
-            style={[
-              sb.pill,
-              { backgroundColor: color + "14", borderColor: color + "40" },
-            ]}
-          >
-            <Ionicons name={icon as any} size={13} color={color} />
-            <Text style={[sb.pillCount, { color }]}>{count}</Text>
-            <Text style={[sb.pillLabel, { color: color + "cc" }]}>{label}</Text>
+        {active > 0 && (
+          <View style={[smS.pill, { backgroundColor: "#EFF6FF", borderColor: "#2563EB40" }]}>
+            <View style={[smS.dot, { backgroundColor: "#2563EB" }]} />
+            <Text style={[smS.n, { color: "#2563EB" }]}> {active}</Text>
+            <Text style={[smS.l, { color: "#2563EBCC" }]}> Active</Text>
           </View>
-        ))}
-      </ScrollView>
+        )}
+        {delivered > 0 && (
+          <View style={[smS.pill, { backgroundColor: "#F0FDF4", borderColor: "#16A34A40" }]}>
+            <View style={[smS.dot, { backgroundColor: "#16A34A" }]} />
+            <Text style={[smS.n, { color: "#16A34A" }]}> {delivered}</Text>
+            <Text style={[smS.l, { color: "#16A34ACC" }]}> Delivered</Text>
+          </View>
+        )}
+        {cancelled > 0 && (
+          <View style={[smS.pill, { backgroundColor: "#FEF2F2", borderColor: "#DC262640" }]}>
+            <View style={[smS.dot, { backgroundColor: "#DC2626" }]} />
+            <Text style={[smS.n, { color: "#DC2626" }]}> {cancelled}</Text>
+            <Text style={[smS.l, { color: "#DC2626CC" }]}> Cancelled</Text>
+          </View>
+        )}
+      </View>
     </View>
   );
 }
 
-const sb = StyleSheet.create({
-  wrap: {
-    backgroundColor: "#fff",
-    borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0",
-    paddingVertical: 10,
-  },
-  row: {
-    paddingHorizontal: 16,
-    gap: 8,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  pill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    borderWidth: 1,
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-  },
-  pillCount: { fontSize: 14, fontWeight: "800" },
-  pillLabel: { fontSize: 11, fontWeight: "600" },
+const smS = StyleSheet.create({
+  wrap: { borderBottomWidth: 1, borderBottomColor: "#EBEBEB", backgroundColor: "#fff" },
+  row:  { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 14, paddingVertical: 7, gap: 6, alignItems: "center" },
+  pill: { flexDirection: "row", alignItems: "center", backgroundColor: "#F3F4F6", borderColor: "#E5E7EB", borderWidth: 1, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 },
+  dot:  { width: 5, height: 5, borderRadius: 3 },
+  n:    { fontSize: 12, fontWeight: "800", color: "#374151" },
+  l:    { fontSize: 11, fontWeight: "600", color: "#6B7280" },
 });
 
-// ─── Progress Steps 
-const STEPS = ["Placed", "Assigned", "On way", "Delivered"];
+// ─── Section header ───────────────────────────────────────────────────────────
+
+function SectionHeader({ label }: { label: string }) {
+  return (
+    <View style={sh.wrap}>
+      <View style={sh.line} />
+      <Text style={sh.label}>{label}</Text>
+      <View style={sh.line} />
+    </View>
+  );
+}
+const sh = StyleSheet.create({
+  wrap:  { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 },
+  line:  { flex: 1, height: 1, backgroundColor: "#E5E7EB" },
+  label: { fontSize: 10, fontWeight: "800", color: "#9CA3AF", textTransform: "uppercase", letterSpacing: 1 },
+});
+
+// ─── Delivery badge view ──────────────────────────────────────────────────────
+
+function DeliveryBadgeView({ badge }: { badge: DeliveryBadge }) {
+  return (
+    <View style={[db.wrap, { backgroundColor: badge.bg, borderColor: badge.borderColor }]}>
+      <Ionicons name={badge.icon as any} size={10} color={badge.color} />
+      <Text style={[db.txt, { color: badge.color }]}>{badge.text}</Text>
+    </View>
+  );
+}
+const db = StyleSheet.create({
+  wrap: { flexDirection: "row", alignItems: "center", gap: 3, borderWidth: 1, borderRadius: 8, paddingHorizontal: 7, paddingVertical: 3 },
+  txt:  { fontSize: 10, fontWeight: "700" },
+});
+
+// ─── Progress bar ─────────────────────────────────────────────────────────────
+
+const STEPS = ["Placed", "Assigned", "On Way", "Delivered"];
 
 function DeliveryProgress({ status }: { status: string }) {
   const meta = getMeta(status);
-  if (["no_order", "cancelled", "skipped"].includes(status)) return null;
-
+  if (["cancelled", "skipped"].includes(status)) return null;
   return (
     <View style={pg.wrap}>
       {STEPS.map((label, i) => {
-        const done = meta.step > i;
+        const done   = meta.step > i + 1;
         const active = meta.step === i + 1;
-        const dotColor = done || active ? meta.color : "#e5e7eb";
+        const dotBg  = (done || active) ? meta.color : "#E5E7EB";
         return (
           <React.Fragment key={label}>
             <View style={pg.step}>
-              <View
-                style={[
-                  pg.dot,
-                  { backgroundColor: dotColor, borderColor: dotColor },
-                ]}
-              >
-                {done && <Ionicons name="checkmark" size={9} color="#fff" />}
-                {active && <View style={pg.activePulse} />}
+              <View style={[pg.dot, { backgroundColor: dotBg, borderColor: dotBg }]}>
+                {done   && <Ionicons name="checkmark" size={9} color="#fff" />}
+                {active && <View style={pg.pulse} />}
               </View>
-              <Text
-                style={[
-                  pg.label,
-                  (done || active) && { color: meta.color, fontWeight: "700" },
-                ]}
-              >
-                {label}
-              </Text>
+              <Text style={[pg.label, (done || active) && { color: meta.color, fontWeight: "700" }]}>{label}</Text>
             </View>
             {i < STEPS.length - 1 && (
-              <View
-                style={[
-                  pg.line,
-                  { backgroundColor: done ? meta.color : "#e5e7eb" },
-                ]}
-              />
+              <View style={[pg.line, { backgroundColor: done ? meta.color : "#E5E7EB" }]} />
             )}
           </React.Fragment>
         );
@@ -236,1217 +246,512 @@ function DeliveryProgress({ status }: { status: string }) {
     </View>
   );
 }
-
 const pg = StyleSheet.create({
-  wrap: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    marginTop: 12,
-    marginBottom: 4,
-  },
-  step: { alignItems: "center", gap: 4 },
-  dot: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  activePulse: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#fff",
-  },
-  label: {
-    fontSize: 9,
-    color: "#9ca3af",
-    fontWeight: "500",
-    textAlign: "center",
-    width: 46,
-  },
-  line: { flex: 1, height: 2, marginTop: 9, borderRadius: 2 },
+  wrap:  { flexDirection: "row", alignItems: "flex-start", marginTop: 8, marginBottom: 4 },
+  step:  { alignItems: "center", gap: 4 },
+  dot:   { width: 20, height: 20, borderRadius: 10, borderWidth: 2, justifyContent: "center", alignItems: "center" },
+  pulse: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#fff" },
+  label: { fontSize: 9, color: "#9CA3AF", fontWeight: "500", textAlign: "center", width: 48 },
+  line:  { flex: 1, height: 2, marginTop: 9, borderRadius: 2 },
 });
 
-// ─── Confirm Modal 
-function ConfirmModal({
-  visible,
-  onConfirm,
-  onCancel,
-}: {
-  visible: boolean;
-  onConfirm: () => void;
-  onCancel: () => void;
-}) {
-  const scaleAnim = useRef(new Animated.Value(0.85)).current;
-  const opacityAnim = useRef(new Animated.Value(0)).current;
-  const iconAnim = useRef(new Animated.Value(0)).current;
+// ─── OTP block ────────────────────────────────────────────────────────────────
 
+function OTPBlock({ otp }: { otp: string }) {
+  const pulse  = useRef(new Animated.Value(1)).current;
+  const fadeIn = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    if (visible) {
-      scaleAnim.setValue(0.85);
-      opacityAnim.setValue(0);
-      iconAnim.setValue(0);
-      Animated.parallel([
-        Animated.spring(scaleAnim, {
-          toValue: 1,
-          useNativeDriver: true,
-          damping: 15,
-          stiffness: 200,
-        }),
-        Animated.timing(opacityAnim, {
-          toValue: 1,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-      ]).start(() =>
-        Animated.spring(iconAnim, {
-          toValue: 1,
-          useNativeDriver: true,
-          damping: 8,
-          stiffness: 180,
-        }).start(),
-      );
-    }
-  }, [visible]);
-
-  return (
-    <Modal visible={visible} transparent animationType="fade">
-      <View style={ms.overlay}>
-        <Animated.View
-          style={[
-            ms.card,
-            { opacity: opacityAnim, transform: [{ scale: scaleAnim }] },
-          ]}
-        >
-          <Animated.View
-            style={[ms.iconWrap, { transform: [{ scale: iconAnim }] }]}
-          >
-            <View style={ms.iconCircleRed}>
-              <Ionicons name="close" size={30} color="#ef4444" />
-            </View>
-          </Animated.View>
-          <Text style={ms.title}>Cancel Subscription?</Text>
-          <Text style={ms.subtitle}>
-            This will stop your daily delivery.{"\n"}This action cannot be
-            undone.
-          </Text>
-          <View style={ms.warningPill}>
-            <Ionicons name="warning-outline" size={13} color="#f59e0b" />
-            <Text style={ms.warningText}>
-              You won't be charged for future deliveries
-            </Text>
-          </View>
-          <View style={ms.btnRow}>
-            <TouchableOpacity
-              style={ms.btnSecondary}
-              onPress={onCancel}
-              activeOpacity={0.8}
-            >
-              <Text style={ms.btnSecondaryText}>Keep it</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={ms.btnDanger}
-              onPress={onConfirm}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="trash-outline" size={15} color="#fff" />
-              <Text style={ms.btnDangerText}>Yes, Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </Animated.View>
-      </View>
-    </Modal>
-  );
-}
-
-// ─── Success Modal 
-function SuccessModal({
-  visible,
-  onClose,
-}: {
-  visible: boolean;
-  onClose: () => void;
-}) {
-  const scaleAnim = useRef(new Animated.Value(0.8)).current;
-  const opacityAnim = useRef(new Animated.Value(0)).current;
-  const checkScale = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(20)).current;
-
-  useEffect(() => {
-    if (visible) {
-      scaleAnim.setValue(0.8);
-      opacityAnim.setValue(0);
-      checkScale.setValue(0);
-      slideAnim.setValue(20);
-      Animated.parallel([
-        Animated.spring(scaleAnim, {
-          toValue: 1,
-          useNativeDriver: true,
-          damping: 14,
-          stiffness: 180,
-        }),
-        Animated.timing(opacityAnim, {
-          toValue: 1,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-      ]).start(() => {
-        Animated.spring(checkScale, {
-          toValue: 1,
-          useNativeDriver: true,
-          damping: 8,
-          stiffness: 220,
-        }).start();
-        Animated.spring(slideAnim, {
-          toValue: 0,
-          useNativeDriver: true,
-          damping: 16,
-          stiffness: 160,
-        }).start();
-      });
-    }
-  }, [visible]);
-
-  return (
-    <Modal visible={visible} transparent animationType="fade">
-      <View style={ms.overlay}>
-        <Animated.View
-          style={[
-            ms.card,
-            { opacity: opacityAnim, transform: [{ scale: scaleAnim }] },
-          ]}
-        >
-          <Animated.View
-            style={[ms.iconWrap, { transform: [{ scale: checkScale }] }]}
-          >
-            <View style={ms.iconCircleGreen}>
-              <Ionicons name="checkmark" size={30} color="#22c55e" />
-            </View>
-          </Animated.View>
-          <Text style={ms.title}>Subscription Cancelled</Text>
-          <Animated.View
-            style={{
-              opacity: opacityAnim,
-              transform: [{ translateY: slideAnim }],
-            }}
-          >
-            <Text style={ms.subtitle}>
-              Your subscription has been{"\n"}successfully cancelled.
-            </Text>
-            <View style={ms.infoPill}>
-              <Ionicons
-                name="information-circle-outline"
-                size={13}
-                color={Colors.primary}
-              />
-              <Text style={ms.infoText}>
-                No further deliveries will be scheduled
-              </Text>
-            </View>
-          </Animated.View>
-          <TouchableOpacity
-            style={ms.btnPrimary}
-            onPress={onClose}
-            activeOpacity={0.85}
-          >
-            <Text style={ms.btnPrimaryText}>Got it</Text>
-          </TouchableOpacity>
-        </Animated.View>
-      </View>
-    </Modal>
-  );
-}
-
-const ms = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.55)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 32,
-  },
-  card: {
-    backgroundColor: "#fff",
-    borderRadius: 28,
-    paddingHorizontal: 24,
-    paddingTop: 32,
-    paddingBottom: 24,
-    width: "100%",
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.16,
-    shadowRadius: 28,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 14,
-  },
-  iconWrap: { marginBottom: 20 },
-  iconCircleRed: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: "#fef2f2",
-    borderWidth: 2,
-    borderColor: "#fecaca",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  iconCircleGreen: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: "#f0fdf4",
-    borderWidth: 2,
-    borderColor: "#bbf7d0",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#111",
-    marginBottom: 8,
-    letterSpacing: -0.4,
-    textAlign: "center",
-  },
-  subtitle: {
-    fontSize: 13,
-    color: "#888",
-    textAlign: "center",
-    lineHeight: 20,
-    marginBottom: 18,
-  },
-  warningPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: "#fffbeb",
-    borderWidth: 1,
-    borderColor: "#fde68a",
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    marginBottom: 24,
-  },
-  warningText: { fontSize: 11, color: "#92400e", fontWeight: "600" },
-  infoPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: "#f0f9ff",
-    borderWidth: 1,
-    borderColor: "#bae6fd",
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    marginBottom: 24,
-  },
-  infoText: { fontSize: 11, color: "#0369a1", fontWeight: "600" },
-  btnRow: { flexDirection: "row", gap: 10, width: "100%" },
-  btnSecondary: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 16,
-    backgroundColor: "#F5F5F5",
-    alignItems: "center",
-  },
-  btnSecondaryText: { fontSize: 15, fontWeight: "700", color: "#555" },
-  btnDanger: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    paddingVertical: 14,
-    borderRadius: 16,
-    backgroundColor: "#ef4444",
-    shadowColor: "#ef4444",
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 5,
-  },
-  btnDangerText: { fontSize: 15, fontWeight: "700", color: "#fff" },
-  btnPrimary: {
-    width: "100%",
-    paddingVertical: 15,
-    borderRadius: 16,
-    backgroundColor: Colors.primary,
-    alignItems: "center",
-    shadowColor: Colors.primary,
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 5,
-  },
-  btnPrimaryText: { fontSize: 16, fontWeight: "800", color: "#fff" },
-});
-
-// ─── Floating OTP Pill 
-// Tapping it animates "flying down" then scrolls to the large OTP block
-function FloatingOTPPill({
-  otp,
-  color,
-  onPress,
-}: {
-  otp: string;
-  color: string;
-  onPress: () => void;
-}) {
-  const translateY = useRef(new Animated.Value(0)).current;
-  const scale = useRef(new Animated.Value(1)).current;
-  const opacity = useRef(new Animated.Value(1)).current;
-
-  const handlePress = () => {
-    Vibration.vibrate(30);
-    Animated.sequence([
-      Animated.parallel([
-        Animated.timing(translateY, {
-          toValue: 60,
-          duration: 260,
-          easing: Easing.out(Easing.back(1.4)),
-          useNativeDriver: true,
-        }),
-        Animated.timing(scale, {
-          toValue: 1.18,
-          duration: 130,
-          useNativeDriver: true,
-        }),
-        Animated.timing(opacity, {
-          toValue: 0.6,
-          duration: 130,
-          useNativeDriver: true,
-        }),
-      ]),
-      Animated.parallel([
-        Animated.spring(translateY, {
-          toValue: 0,
-          useNativeDriver: true,
-          damping: 12,
-          stiffness: 200,
-        }),
-        Animated.spring(scale, {
-          toValue: 1,
-          useNativeDriver: true,
-          damping: 12,
-          stiffness: 200,
-        }),
-        Animated.timing(opacity, {
-          toValue: 1,
-          duration: 120,
-          useNativeDriver: true,
-        }),
-      ]),
-    ]).start();
-    // Call parent scroll handler
-    setTimeout(onPress, 180);
-  };
-
-  return (
-    <Animated.View
-      style={[
-        fp.container,
-        {
-          borderColor: color + "40",
-          backgroundColor: color + "10",
-          transform: [{ translateY }, { scale }],
-          opacity,
-        },
-      ]}
-    >
-      <TouchableOpacity
-        activeOpacity={0.85}
-        onPress={handlePress}
-        style={fp.inner}
-      >
-        <Ionicons name="lock-closed-outline" size={11} color={color} />
-        <Text style={[fp.label, { color }]}>OTP</Text>
-        <Text style={[fp.value, { color }]}>{otp}</Text>
-        <Ionicons name="arrow-down-outline" size={11} color={color} />
-      </TouchableOpacity>
-    </Animated.View>
-  );
-}
-
-const fp = StyleSheet.create({
-  container: { borderWidth: 1.5, borderRadius: 14, overflow: "hidden" },
-  inner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  label: { fontSize: 9, fontWeight: "800", letterSpacing: 0.5 },
-  value: { fontSize: 18, fontWeight: "900", letterSpacing: 3 },
-});
-
-// ─── OTP Block with entrance animation 
-function OTPBlockAnimated({ otp, color }: { otp: string; color: string }) {
-  const scaleAnim = useRef(new Animated.Value(0.8)).current;
-  const opacityAnim = useRef(new Animated.Value(0)).current;
-  const glowAnim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        useNativeDriver: true,
-        damping: 10,
-        stiffness: 200,
-      }),
-      Animated.timing(opacityAnim, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(glowAnim, {
-            toValue: 1,
-            duration: 900,
-            useNativeDriver: true,
-          }),
-          Animated.timing(glowAnim, {
-            toValue: 0,
-            duration: 900,
-            useNativeDriver: true,
-          }),
-        ]),
-      ).start();
-    });
+    Animated.timing(fadeIn, { toValue: 1, duration: 350, useNativeDriver: true }).start();
+    Animated.loop(Animated.sequence([
+      Animated.timing(pulse, { toValue: 1.04, duration: 850, useNativeDriver: true }),
+      Animated.timing(pulse, { toValue: 1,    duration: 850, useNativeDriver: true }),
+    ])).start();
   }, []);
-
-  const digitScale = glowAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [1, 1.05],
-  });
-
   return (
-    <Animated.View
-      style={[
-        ob.wrap,
-        {
-          borderColor: color + "30",
-          backgroundColor: color + "08",
-          opacity: opacityAnim,
-          transform: [{ scale: scaleAnim }],
-        },
-      ]}
-    >
-      <Text style={[ob.label, { color }]}>🔐 Delivery OTP</Text>
-      <Animated.Text
-        style={[ob.value, { color, transform: [{ scale: digitScale }] }]}
-      >
-        {otp}
-      </Animated.Text>
-      <Text style={ob.hint}>Share this with your delivery partner</Text>
+    <Animated.View style={[oS.wrap, { opacity: fadeIn }]}>
+      <View style={oS.header}>
+        <Ionicons name="shield-checkmark-outline" size={13} color={Colors.primary} />
+        <Text style={oS.headerTxt}>Delivery OTP</Text>
+        <Text style={oS.headerSub}>Share with rider</Text>
+      </View>
+      <Animated.Text style={[oS.otp, { transform: [{ scale: pulse }] }]}>{otp}</Animated.Text>
     </Animated.View>
   );
 }
-
-const ob = StyleSheet.create({
-  wrap: {
-    borderWidth: 1.5,
-    borderRadius: 16,
-    alignItems: "center",
-    paddingVertical: 16,
-    marginTop: 10,
-    marginBottom: 12,
-  },
-  label: { fontSize: 12, fontWeight: "700", marginBottom: 6 },
-  value: { fontSize: 38, fontWeight: "900", letterSpacing: 8 },
-  hint: { fontSize: 11, color: "#9ca3af", marginTop: 6 },
+const oS = StyleSheet.create({
+  wrap:      { backgroundColor: Colors.primary + "0C", borderWidth: 1.5, borderColor: Colors.primary + "30", borderRadius: 14, alignItems: "center", paddingVertical: 14, paddingHorizontal: 14, marginTop: 10, marginBottom: 4 },
+  header:    { flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 6 },
+  headerTxt: { fontSize: 11, fontWeight: "800", color: Colors.primary, letterSpacing: 0.5 },
+  headerSub: { fontSize: 10, color: Colors.primary + "99", fontWeight: "500", marginLeft: 4 },
+  otp:       { fontSize: 40, fontWeight: "900", color: Colors.primary, letterSpacing: 10 },
 });
 
-// ─── Subscription Card 
-function SubscriptionCard({
-  sub,
-  onCancelPress,
-  onScrollToOTP,
-}: {
-  sub: any;
-  onCancelPress: (id: string) => void;
-  onScrollToOTP: (offsetY: number) => void;
+// ─── Detail cell ──────────────────────────────────────────────────────────────
+
+function DetailCell({ label, value, accent, mono }: { label: string; value: string; accent?: boolean; mono?: boolean }) {
+  return (
+    <View style={dc.cell}>
+      <Text style={dc.label}>{label}</Text>
+      <Text style={[dc.value, accent && { color: Colors.primary }, mono && { fontFamily: Platform.OS === "ios" ? "Courier New" : "monospace" }]}>
+        {value}
+      </Text>
+    </View>
+  );
+}
+const dc = StyleSheet.create({
+  cell:  { width: "48%", backgroundColor: "#F9FAFB", borderRadius: 10, padding: 10 },
+  label: { fontSize: 9, color: "#9CA3AF", fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 3 },
+  value: { fontSize: 13, fontWeight: "800", color: "#111" },
+});
+
+// ─── Order Card ───────────────────────────────────────────────────────────────
+
+function OrderCard({ order, index, productMap, onCancelPress }: {
+  order: Order; index: number; productMap: ProductMap; onCancelPress: (order: Order) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const chevronAnim = useRef(new Animated.Value(0)).current;
-  const cardScaleAnim = useRef(new Animated.Value(1)).current;
-  const cardRef = useRef<View>(null);
-  const otpBlockRef = useRef<View>(null);
-  const [otpLocalY, setOtpLocalY] = useState(0);
+  const [badge, setBadge]       = useState<DeliveryBadge | null>(() => getDeliveryBadge(order));
+  const chevron    = useRef(new Animated.Value(0)).current;
+  const cardScale  = useRef(new Animated.Value(1)).current;
+  const translateY = useRef(new Animated.Value(24)).current;
+  const opacity    = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      Animated.parallel([
+        Animated.spring(translateY, { toValue: 0, useNativeDriver: true, damping: 14, stiffness: 140 }),
+        Animated.timing(opacity,    { toValue: 1, duration: 260, useNativeDriver: true }),
+      ]).start();
+    }, index * 60);
+    return () => clearTimeout(t);
+  }, []);
+
+  useEffect(() => {
+    if (!["assigned", "out_for_delivery"].includes(order.status)) return;
+    const iv = setInterval(() => setBadge(getDeliveryBadge(order)), 30_000);
+    return () => clearInterval(iv);
+  }, [order.status, order.updated_at]);
 
   const toggle = () => {
-    const toValue = expanded ? 0 : 1;
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-
-    // Card press bounce
     Animated.sequence([
-      Animated.timing(cardScaleAnim, {
-        toValue: 0.985,
-        duration: 80,
-        useNativeDriver: true,
-        easing: Easing.out(Easing.ease),
-      }),
-      Animated.spring(cardScaleAnim, {
-        toValue: 1,
-        useNativeDriver: true,
-        damping: 12,
-        stiffness: 300,
-      }),
+      Animated.timing(cardScale, { toValue: 0.987, duration: 80, useNativeDriver: true, easing: Easing.out(Easing.ease) }),
+      Animated.spring(cardScale, { toValue: 1, useNativeDriver: true, damping: 12, stiffness: 300 }),
     ]).start();
-
-    setExpanded((prev) => !prev);
-    Animated.timing(chevronAnim, {
-      toValue,
-      duration: 220,
-      useNativeDriver: true,
-    }).start();
+    Animated.timing(chevron, { toValue: expanded ? 0 : 1, duration: 200, useNativeDriver: true }).start();
+    setExpanded(e => !e);
   };
 
-  const isDelivered = sub.status === "delivered";
-  const isCancelled = sub.status === "cancelled";
-  const meta = getMeta(sub.status);
-
-  // ── Admin name — now populated by backend fix 
-  const adminName = sub.admin_name || `Store ${sub.admin_id?.slice(-4) || ""}`;
-
-  const chevronRotate = chevronAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ["0deg", "180deg"],
-  });
-
-  const handleOTPPillPress = () => {
-    // Measure the card's position in the scroll view, add local OTP block offset
-    if (cardRef.current) {
-      cardRef.current.measureInWindow((_x, y) => {
-        // otpLocalY is the OTP block's Y inside the card
-        onScrollToOTP(y + otpLocalY - 100);
-      });
-    }
-  };
+  const meta        = getMeta(order.status);
+  const isActive    = !["delivered","cancelled","skipped"].includes(order.status);
+  const isCancelled = ["cancelled","skipped"].includes(order.status);
+  const productName = getProductName(order, productMap);
+  const totalQty    = getTotalQty(order);
+  const adminName   = order.admin_name || (order.admin_id ? `Store ${order.admin_id.slice(-4)}` : "");
+  const pattern     = order.pattern === "buy_once" ? "One-time" : order.pattern ?? "";
+  const chevronRot  = chevron.interpolate({ inputRange: [0,1], outputRange: ["0deg","180deg"] });
 
   return (
-    <Animated.View
-      ref={cardRef as any}
-      style={[
-        cd.wrapper,
-        isCancelled && { opacity: 0.65 },
-        { transform: [{ scale: cardScaleAnim }] },
-      ]}
-    >
-      {/* ── Top row ── */}
-      <TouchableOpacity activeOpacity={0.9} onPress={toggle} style={cd.top}>
-        <View style={{ flex: 1, marginRight: 10 }}>
-          <Text style={cd.productName} numberOfLines={1}>
-            {sub.product?.name || "Product"}
-          </Text>
-          <View style={cd.storePill}>
-            <Ionicons name="storefront-outline" size={12} color="#6366f1" />
-            <Text style={cd.storeName} numberOfLines={1}>
-              {adminName}
-            </Text>
+    <Animated.View style={[cd.wrapper, isCancelled && { opacity: 0.6 }, { opacity, transform: [{ translateY }, { scale: cardScale }] }]}>
+      <View style={[cd.stripe, { backgroundColor: meta.color }]} />
+
+      <TouchableOpacity style={cd.top} onPress={toggle} activeOpacity={0.88}>
+        <View style={[cd.iconBox, { backgroundColor: meta.bg }]}>
+          <Ionicons name={meta.icon as any} size={20} color={meta.color} />
+        </View>
+
+        <View style={{ flex: 1, marginLeft: 12 }}>
+          <Text style={cd.productName} numberOfLines={1}>{productName}</Text>
+          <View style={cd.metaRow}>
+            <Text style={cd.dateText}>{formatDate(order.delivery_date)}</Text>
+            {badge && <><View style={cd.dotSep} /><DeliveryBadgeView badge={badge} /></>}
           </View>
-          <View
-            style={[
-              cd.statusBadge,
-              {
-                backgroundColor: meta.color + "15",
-                borderColor: meta.color + "40",
-              },
-            ]}
-          >
+          <View style={[cd.statusBadge, { backgroundColor: meta.bg, borderColor: meta.color + "40" }]}>
             <View style={[cd.statusDot, { backgroundColor: meta.color }]} />
-            <Text style={[cd.statusText, { color: meta.color }]}>
-              {meta.label}
-            </Text>
+            <Text style={[cd.statusTxt, { color: meta.color }]}>{meta.label}</Text>
           </View>
         </View>
 
-        <View style={{ alignItems: "flex-end", gap: 8 }}>
-          {sub.delivery_otp && !isDelivered && !isCancelled ? (
-            <FloatingOTPPill
-              otp={sub.delivery_otp}
-              color={Colors.primary}
-              onPress={handleOTPPillPress}
-            />
-          ) : isDelivered ? (
-            <View style={cd.deliveredBadge}>
-              <Ionicons name="checkmark-circle" size={14} color="#22c55e" />
-              <Text style={cd.deliveredBadgeText}>Done</Text>
+        <View style={{ alignItems: "flex-end", gap: 6 }}>
+          <Text style={cd.amount}>₹{order.total_amount?.toFixed(2)}</Text>
+          {order.delivery_otp && isActive && (
+            <View style={[cd.otpPill, { borderColor: Colors.primary + "40", backgroundColor: Colors.primary + "0F" }]}>
+              <Ionicons name="lock-closed-outline" size={9} color={Colors.primary} />
+              <Text style={[cd.otpPillTxt, { color: Colors.primary }]}>{order.delivery_otp}</Text>
             </View>
-          ) : null}
-
-          <Animated.View style={{ transform: [{ rotate: chevronRotate }] }}>
-            <Ionicons name="chevron-down" size={18} color="#9ca3af" />
+          )}
+          <Animated.View style={{ transform: [{ rotate: chevronRot }] }}>
+            <Ionicons name="chevron-down" size={17} color="#C4C4C4" />
           </Animated.View>
         </View>
       </TouchableOpacity>
 
-      {/* Dashed separator */}
-      <View style={cd.dashed} />
+      <View style={cd.divider} />
 
-      {/* ── Expanded ── */}
       {expanded && (
         <View style={cd.expanded}>
-          <DeliveryProgress status={sub.status} />
+          <DeliveryProgress status={order.status} />
 
-          <View style={cd.grid}>
-            <View style={cd.gridCell}>
-              <Text style={cd.gridLabel}>Pattern</Text>
-              <Text style={cd.gridValue}>{getPatternLabel(sub.pattern)}</Text>
-            </View>
-            <View style={cd.gridCell}>
-              <Text style={cd.gridLabel}>Quantity</Text>
-              <Text style={cd.gridValue}>{sub.quantity}×</Text>
-            </View>
-            <View style={cd.gridCell}>
-              <Text style={cd.gridLabel}>Unit</Text>
-              <Text style={cd.gridValue}>{sub.product?.unit || "—"}</Text>
-            </View>
-            <View style={cd.gridCell}>
-              <Text style={cd.gridLabel}>Price</Text>
-              <Text style={[cd.gridValue, { color: Colors.primary }]}>
-                ₹{sub.product?.price}
-              </Text>
-            </View>
+          <View style={cd.sectionLabel}>
+            <Ionicons name="cube-outline" size={11} color="#9CA3AF" />
+            <Text style={cd.sectionLabelTxt}>Order Details</Text>
           </View>
 
-          <View style={cd.storeRow}>
-            <View style={cd.storeRowLeft}>
-              <View style={cd.storeIconWrap}>
-                <Ionicons name="storefront" size={16} color="#6366f1" />
-              </View>
-              <View>
-                <Text style={cd.storeRowLabel}>Fulfilled by</Text>
-                <Text style={cd.storeRowValue}>{adminName}</Text>
-              </View>
-            </View>
-            {sub.created_at ? (
-              <View style={{ alignItems: "flex-end" }}>
-                <Text style={cd.storeRowLabel}>Ordered</Text>
-                <Text style={cd.storeRowValue}>
-                  {formatTime(sub.created_at)}
-                </Text>
-              </View>
-            ) : null}
+          <View style={cd.detailGrid}>
+            <DetailCell label="Total Qty" value={`${totalQty} unit${totalQty !== 1 ? "s" : ""}`} />
+            <DetailCell label="Amount"    value={`₹${order.total_amount?.toFixed(2)}`} accent />
+            <DetailCell label="Delivery"  value={formatDate(order.delivery_date)} />
+            {pattern !== "" && <DetailCell label="Type" value={pattern} />}
+            <DetailCell label="Order #" value={`#${order.id.slice(-8).toUpperCase()}`} mono />
+            {order.created_at && <DetailCell label="Placed" value={formatTime(order.created_at)} />}
           </View>
 
-          {sub.start_date && (
-            <View style={cd.dateRow}>
-              <Ionicons name="calendar-outline" size={13} color="#9ca3af" />
-              <Text style={cd.dateText}>
-                Starts {sub.start_date}
-                {sub.end_date && sub.end_date !== sub.start_date
-                  ? `  →  Ends ${sub.end_date}`
-                  : ""}
-              </Text>
+          {order.items?.length > 1 && (
+            <>
+              <View style={cd.sectionLabel}>
+                <Ionicons name="list-outline" size={11} color="#9CA3AF" />
+                <Text style={cd.sectionLabelTxt}>Items</Text>
+              </View>
+              <View style={cd.itemsList}>
+                {order.items.map((item, idx) => (
+                  <View key={idx} style={cd.itemRow}>
+                    <Text style={cd.itemQty}>{item.quantity}×</Text>
+                    <Text style={cd.itemName} numberOfLines={1}>
+                      {item.name || productMap[item.product_id]?.name || `Item ${idx + 1}`}
+                    </Text>
+                    <Text style={cd.itemAmt}>₹{item.amount?.toFixed(2)}</Text>
+                  </View>
+                ))}
+              </View>
+            </>
+          )}
+
+          {adminName !== "" && (
+            <View style={cd.storeRow}>
+              <View style={cd.storeIcon}>
+                <Ionicons name="storefront-outline" size={14} color="#6366F1" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={cd.storeLabel}>Fulfilled by</Text>
+                <Text style={cd.storeName}>{adminName}</Text>
+              </View>
+              {order.created_at && (
+                <View style={{ alignItems: "flex-end" }}>
+                  <Text style={cd.storeLabel}>Ordered</Text>
+                  <Text style={cd.storeTime}>{formatTime(order.created_at)}</Text>
+                </View>
+              )}
             </View>
           )}
 
-          <View style={cd.dateRow}>
-            <Ionicons name="receipt-outline" size={13} color="#9ca3af" />
-            <Text style={cd.dateText}>Order #{sub.id?.slice(-8)}</Text>
-          </View>
+          {order.delivery_otp && isActive && <OTPBlock otp={order.delivery_otp} />}
 
-          {/* ── Large OTP block — scroll target ── */}
-          {sub.delivery_otp && !isDelivered && !isCancelled && (
-            <View
-              ref={otpBlockRef}
-              onLayout={(e) => {
-                // Safe null check for New Architecture (Fabric)
-                const layout = e?.nativeEvent?.layout;
-                if (layout) setOtpLocalY(layout.y);
-              }}
-            >
-              <OTPBlockAnimated otp={sub.delivery_otp} color={Colors.primary} />
-            </View>
-          )}
-
-          {!isDelivered && !isCancelled && (
-            <TouchableOpacity
-              style={cd.cancelBtn}
-              onPress={() => onCancelPress(sub.id)}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="close-circle-outline" size={15} color="#ef4444" />
-              <Text style={cd.cancelText}>Cancel Subscription</Text>
+          {isActive && (
+            <TouchableOpacity style={cd.cancelBtn} onPress={() => onCancelPress(order)} activeOpacity={0.8}>
+              <Ionicons name="close-circle-outline" size={14} color="#EF4444" />
+              <Text style={cd.cancelBtnTxt}>Cancel Order</Text>
             </TouchableOpacity>
           )}
         </View>
-      )}
-
-      {isDelivered && (
-        <>
-          <BlurView
-            intensity={8}
-            tint="light"
-            style={StyleSheet.absoluteFill}
-            pointerEvents="none"
-          />
-          <View style={cd.deliveredStamp} pointerEvents="none">
-            <Ionicons name="checkmark-circle" size={15} color="#fff" />
-            <Text style={cd.deliveredStampText}>DELIVERED</Text>
-          </View>
-        </>
       )}
     </Animated.View>
   );
 }
 
 const cd = StyleSheet.create({
-  wrapper: {
-    backgroundColor: "#fff",
-    borderRadius: 20,
-    marginBottom: 14,
-    overflow: "hidden",
-    shadowColor: "#000",
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 3,
-    position: "relative",
-  },
-  top: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-  },
-  productName: {
-    fontSize: 17,
-    fontWeight: "800",
-    color: "#111",
-    letterSpacing: -0.3,
-    marginBottom: 6,
-  },
-  storePill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "#eef2ff",
-    borderRadius: 20,
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    alignSelf: "flex-start",
-    marginBottom: 6,
-  },
-  storeName: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#6366f1",
-    maxWidth: 160,
-  },
-  statusBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    borderWidth: 1,
-    borderRadius: 20,
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    alignSelf: "flex-start",
-  },
-  statusDot: { width: 6, height: 6, borderRadius: 3 },
-  statusText: { fontSize: 11, fontWeight: "700" },
-  deliveredBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "#f0fdf4",
-    borderRadius: 20,
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    borderWidth: 1,
-    borderColor: "#bbf7d0",
-  },
-  deliveredBadgeText: { fontSize: 11, fontWeight: "700", color: "#22c55e" },
-  dashed: {
-    height: 1,
-    borderStyle: "dashed",
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    marginHorizontal: 16,
-  },
-  expanded: { paddingHorizontal: 16, paddingBottom: 16, paddingTop: 12 },
-  grid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    backgroundColor: "#f9fafb",
-    borderRadius: 14,
-    padding: 12,
-    marginTop: 14,
-    marginBottom: 12,
-  },
-  gridCell: { width: "50%", paddingVertical: 6, paddingHorizontal: 4 },
-  gridLabel: {
-    fontSize: 10,
-    color: "#9ca3af",
-    fontWeight: "600",
-    marginBottom: 2,
-  },
-  gridValue: { fontSize: 15, fontWeight: "800", color: "#111" },
-  storeRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: "#f5f3ff",
-    borderRadius: 14,
-    padding: 12,
-    marginBottom: 10,
-  },
-  storeRowLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    flex: 1,
-    marginRight: 8,
-  },
-  storeIconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    backgroundColor: "#ede9fe",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  storeRowLabel: { fontSize: 10, color: "#9ca3af", fontWeight: "600" },
-  storeRowValue: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#111",
-    marginTop: 1,
-  },
-  dateRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginBottom: 6,
-  },
-  dateText: { fontSize: 12, color: "#6b7280" },
-  cancelBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    backgroundColor: "#fef2f2",
-    paddingVertical: 13,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#fecaca",
-    marginTop: 4,
-  },
-  cancelText: { color: "#ef4444", fontWeight: "700", fontSize: 14 },
-  deliveredStamp: {
-    position: "absolute",
-    top: 12,
-    right: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    backgroundColor: "#22c55e",
-    paddingVertical: 5,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-  },
-  deliveredStampText: {
-    color: "#fff",
-    fontWeight: "800",
-    fontSize: 11,
-    letterSpacing: 0.8,
-  },
+  wrapper:         { backgroundColor: "#fff", borderRadius: 18, marginBottom: 10, overflow: "hidden", shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 10, shadowOffset: { width: 0, height: 3 }, elevation: 3 },
+  stripe:          { height: 3 },
+  top:             { flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 12 },
+  iconBox:         { width: 42, height: 42, borderRadius: 12, justifyContent: "center", alignItems: "center" },
+  productName:     { fontSize: 15, fontWeight: "800", color: "#111", marginBottom: 3, letterSpacing: -0.2 },
+  metaRow:         { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4, flexWrap: "wrap" },
+  dateText:        { fontSize: 11, color: "#9CA3AF", fontWeight: "600" },
+  dotSep:          { width: 3, height: 3, borderRadius: 2, backgroundColor: "#D1D5DB" },
+  statusBadge:     { flexDirection: "row", alignItems: "center", gap: 5, borderWidth: 1, borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3, alignSelf: "flex-start" },
+  statusDot:       { width: 6, height: 6, borderRadius: 3 },
+  statusTxt:       { fontSize: 10, fontWeight: "700" },
+  amount:          { fontSize: 15, fontWeight: "900", color: "#111" },
+  otpPill:         { flexDirection: "row", alignItems: "center", gap: 4, borderWidth: 1.5, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 4 },
+  otpPillTxt:      { fontSize: 14, fontWeight: "900", letterSpacing: 3 },
+  divider:         { height: 1, backgroundColor: "#F5F5F5", marginHorizontal: 14 },
+  expanded:        { paddingHorizontal: 14, paddingBottom: 12, paddingTop: 8 },
+  sectionLabel:    { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 10, marginBottom: 6 },
+  sectionLabelTxt: { fontSize: 9, fontWeight: "800", color: "#9CA3AF", textTransform: "uppercase", letterSpacing: 0.8 },
+  detailGrid:      { flexDirection: "row", flexWrap: "wrap", gap: 7, marginBottom: 2 },
+  itemsList:       { backgroundColor: "#F9FAFB", borderRadius: 10, paddingVertical: 4, marginBottom: 6 },
+  itemRow:         { flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: "#F0F0F0" },
+  itemQty:         { fontSize: 12, fontWeight: "800", color: "#6B7280", width: 28 },
+  itemName:        { flex: 1, fontSize: 12, fontWeight: "700", color: "#111" },
+  itemAmt:         { fontSize: 12, fontWeight: "800", color: Colors.primary },
+  storeRow:        { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#F5F3FF", borderRadius: 12, padding: 10, marginTop: 8 },
+  storeIcon:       { width: 32, height: 32, borderRadius: 10, backgroundColor: "#EDE9FE", justifyContent: "center", alignItems: "center" },
+  storeLabel:      { fontSize: 9, color: "#9CA3AF", fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.3 },
+  storeName:       { fontSize: 13, fontWeight: "700", color: "#111", marginTop: 1 },
+  storeTime:       { fontSize: 11, fontWeight: "600", color: "#6B7280", marginTop: 1 },
+  cancelBtn:       { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: "#FEF2F2", paddingVertical: 11, borderRadius: 12, borderWidth: 1, borderColor: "#FECACA", marginTop: 8 },
+  cancelBtnTxt:    { fontSize: 13, fontWeight: "700", color: "#EF4444" },
 });
 
-// ─── Card entrance animation wrapper 
-function CardEntrance({
-  children,
-  delay,
-}: {
-  children: React.ReactNode;
-  delay: number;
-}) {
-  const translateY = useRef(new Animated.Value(28)).current;
-  const opacity = useRef(new Animated.Value(0)).current;
+// ─── Cancel Modal ─────────────────────────────────────────────────────────────
 
+function CancelModal({ visible, order, onConfirm, onCancel }: {
+  visible: boolean; order: Order | null; onConfirm: () => void; onCancel: () => void;
+}) {
+  const scale   = useRef(new Animated.Value(0.85)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    const timer = setTimeout(() => {
+    if (visible) {
+      scale.setValue(0.85); opacity.setValue(0);
       Animated.parallel([
-        Animated.spring(translateY, {
-          toValue: 0,
-          useNativeDriver: true,
-          damping: 14,
-          stiffness: 140,
-        }),
-        Animated.timing(opacity, {
-          toValue: 1,
-          duration: 280,
-          useNativeDriver: true,
-        }),
+        Animated.spring(scale,   { toValue: 1, useNativeDriver: true, damping: 14, stiffness: 200 }),
+        Animated.timing(opacity, { toValue: 1, duration: 180, useNativeDriver: true }),
       ]).start();
-    }, delay);
-    return () => clearTimeout(timer);
-  }, []);
+    }
+  }, [visible]);
+
+  const isBuyOnce = order?.pattern === "buy_once" || !order?.subscription_id;
+  const bodyText  = isBuyOnce
+    ? "This will cancel the order and any charged amount will be refunded to your wallet."
+    : "This cancels today's delivery. Your subscription continues for future dates.";
 
   return (
-    <Animated.View style={{ opacity, transform: [{ translateY }] }}>
-      {children}
-    </Animated.View>
+    <Modal visible={visible} transparent animationType="fade">
+      <View style={cm.overlay}>
+        <Animated.View style={[cm.card, { opacity, transform: [{ scale }] }]}>
+          <View style={cm.iconCircle}>
+            <Ionicons name="alert-circle-outline" size={32} color="#EF4444" />
+          </View>
+          <Text style={cm.title}>Cancel Order?</Text>
+          <Text style={cm.body}>{bodyText}</Text>
+          <View style={cm.btnRow}>
+            <TouchableOpacity style={cm.keepBtn} onPress={onCancel} activeOpacity={0.8}>
+              <Text style={cm.keepTxt}>Keep it</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={cm.cancelBtn} onPress={onConfirm} activeOpacity={0.8}>
+              <Text style={cm.cancelTxt}>Yes, Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
+      </View>
+    </Modal>
   );
 }
+const cm = StyleSheet.create({
+  overlay:    { flex: 1, backgroundColor: "rgba(0,0,0,0.52)", justifyContent: "center", alignItems: "center", padding: 32 },
+  card:       { backgroundColor: "#fff", borderRadius: 24, padding: 26, width: "100%", alignItems: "center", shadowColor: "#000", shadowOpacity: 0.14, shadowRadius: 24, elevation: 12 },
+  iconCircle: { width: 60, height: 60, borderRadius: 30, backgroundColor: "#FEF2F2", borderWidth: 2, borderColor: "#FECACA", justifyContent: "center", alignItems: "center", marginBottom: 16 },
+  title:      { fontSize: 18, fontWeight: "800", color: "#111", marginBottom: 8, textAlign: "center" },
+  body:       { fontSize: 13, color: "#6B7280", textAlign: "center", lineHeight: 20, marginBottom: 22 },
+  btnRow:     { flexDirection: "row", gap: 10, width: "100%" },
+  keepBtn:    { flex: 1, paddingVertical: 13, borderRadius: 14, backgroundColor: "#F3F4F6", alignItems: "center" },
+  keepTxt:    { fontSize: 14, fontWeight: "700", color: "#374151" },
+  cancelBtn:  { flex: 1, paddingVertical: 13, borderRadius: 14, backgroundColor: "#EF4444", alignItems: "center" },
+  cancelTxt:  { fontSize: 14, fontWeight: "800", color: "#fff" },
+});
 
-// ─── Main Screen 
-export default function SubscriptionsScreen() {
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [subscriptions, setSubscriptions] = useState<any[]>([]);
-  const [confirmVisible, setConfirmVisible] = useState(false);
-  const [successVisible, setSuccessVisible] = useState(false);
-  const [pendingSubId, setPendingSubId] = useState<string | null>(null);
+// ─── Empty state ──────────────────────────────────────────────────────────────
+
+function EmptyState() {
+  return (
+    <View style={em.wrap}>
+      <View style={em.iconBox}>
+        <Ionicons name="receipt-outline" size={36} color={Colors.primary} />
+      </View>
+      <Text style={em.title}>No orders yet</Text>
+      <Text style={em.body}>Your order history will appear here.</Text>
+    </View>
+  );
+}
+const em = StyleSheet.create({
+  wrap:    { alignItems: "center", paddingTop: 64, paddingHorizontal: 32 },
+  iconBox: { width: 76, height: 76, borderRadius: 22, backgroundColor: Colors.primary + "12", justifyContent: "center", alignItems: "center", marginBottom: 16 },
+  title:   { fontSize: 17, fontWeight: "800", color: "#374151", marginBottom: 6, textAlign: "center" },
+  body:    { fontSize: 13, color: "#9CA3AF", textAlign: "center", lineHeight: 20 },
+});
+
+// ─── Main Screen ──────────────────────────────────────────────────────────────
+
+export default function OrdersScreen() {
   const isFocused = useIsFocused();
+  const [loading,     setLoading]     = useState(true);
+  const [refreshing,  setRefreshing]  = useState(false);
+  const [orders,      setOrders]      = useState<Order[]>([]);
+  const [productMap,  setProductMap]  = useState<ProductMap>({});
+  const [cancelOrder, setCancelOrder] = useState<Order | null>(null);
+  const [cancelModal, setCancelModal] = useState(false);
+  const [cancelling,  setCancelling]  = useState(false);
 
-  const scrollRef = useRef<ScrollView>(null);
+  const headerY  = useRef(new Animated.Value(-20)).current;
+  const headerOp = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(headerY,  { toValue: 0, useNativeDriver: true, damping: 14, stiffness: 160 }),
+      Animated.timing(headerOp, { toValue: 1, duration: 320, useNativeDriver: true }),
+    ]).start();
+  }, []);
 
-  // Header entrance
-  const headerAnim = useRef(new Animated.Value(-24)).current;
-  const headerOpacity = useRef(new Animated.Value(0)).current;
-
-// Animation — runs once on mount (keep as-is)
-useEffect(() => {
-  Animated.parallel([
-    Animated.spring(headerAnim, {
-      toValue: 0,
-      useNativeDriver: true,
-      damping: 14,
-      stiffness: 160,
-    }),
-    Animated.timing(headerOpacity, {
-      toValue: 1,
-      duration: 350,
-      useNativeDriver: true,
-    }),
-  ]).start();
-}, []);
-
-// Auto-refresh — separate effect
-useEffect(() => {
-  if (!isFocused) return;
-
-  fetchData();
-  const interval = setInterval(() => {
-    fetchData();
-  }, 2000);
-
-  return () => clearInterval(interval);
-}, [isFocused]);
-
-  const fetchData = async () => {
+  const loadProductMap = useCallback(async () => {
     try {
-      const data = await api.getSubscriptions();
-      // Filter to show only "buy once" orders
-      const buyOnceOrders = data.filter((sub: any) => sub.pattern === "buy_once");
-      setSubscriptions(buyOnceOrders);
-    } catch (error) {
-      console.error("Error fetching subscriptions:", error);
+      const products = await api.getCatalogProducts();
+      const map: ProductMap = {};
+      for (const p of products) {
+        if (p.id) map[p.id] = { name: p.name, unit: p.unit ?? "unit" };
+      }
+      setProductMap(map);
+    } catch { /* non-fatal */ }
+  }, []);
+
+  const fetchData = useCallback(async () => {
+    try {
+      const data = await api.getOrders();
+      const sorted = [...data].sort((a: Order, b: Order) => {
+        const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return tb - ta;
+      });
+      setOrders(sorted);
+    } catch (err) {
+      console.error("Failed to fetch orders:", err);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
+    if (!isFocused) return;
+    loadProductMap();
     fetchData();
-  }, []);
+    const iv = setInterval(fetchData, 5000);
+    return () => clearInterval(iv);
+  }, [isFocused, fetchData, loadProductMap]);
 
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    fetchData();
-  }, []);
+  const onRefresh = () => { setRefreshing(true); fetchData(); };
 
-  const handleCancelPress = (subId: string) => {
-    setPendingSubId(subId);
-    setConfirmVisible(true);
+  const handleCancelPress = (order: Order) => {
+    setCancelOrder(order);
+    setCancelModal(true);
     Vibration.vibrate(40);
   };
 
+  // ── FIX: Always cancel by order ID via DELETE /orders/{id} ─────────────────
+  // This single endpoint on the backend:
+  //   1. Looks up the order by order ID in the orders collection (always correct)
+  //   2. Sets order status = "cancelled"
+  //   3. Also deactivates the linked subscription if any (handles both buy_once and recurring)
+  //
+  // Previous approach used subscription_id → always 404'd for buy_once because
+  // those subscriptions are deactivated immediately after order generation.
+  // The fallback then tried order.id at the subscriptions endpoint → wrong collection → 404.
   const handleConfirmCancel = async () => {
-    if (!pendingSubId) return;
-    setConfirmVisible(false);
+    if (!cancelOrder || cancelling) return;
+    setCancelling(true);
+    setCancelModal(false);
+
     try {
-      await api.cancelSubscription(pendingSubId);
+      // Single call — no fallback loop needed
+      await api.cancelOrder(cancelOrder.id);
       await fetchData();
-      setSuccessVisible(true);
-      Vibration.vibrate([0, 60, 40, 80]);
     } catch (err: any) {
       console.error("Cancel failed:", err.message);
+      Alert.alert(
+        "Cancel Failed",
+        err.message || "Something went wrong. Please try again.",
+        [{ text: "OK" }]
+      );
     } finally {
-      setPendingSubId(null);
+      setCancelling(false);
+      setCancelOrder(null);
     }
   };
 
-  // Called by OTP pill — scroll to the OTP block position in the window
-  const handleScrollToOTP = (windowY: number) => {
-    // windowY is already the absolute screen Y of the OTP block
-    // We convert to scroll offset by using the scroll view's own position
-    scrollRef.current?.scrollTo({
-      y: Math.max(0, windowY - 80),
-      animated: true,
-    });
-  };
+  const active    = orders.filter(o => !["delivered","cancelled","skipped"].includes(o.status));
+  const delivered = orders.filter(o => o.status === "delivered");
+  const cancelled = orders.filter(o => ["cancelled","skipped"].includes(o.status));
+
+  type ListItem =
+    | { type: "header"; key: string; label: string }
+    | { type: "order";  key: string; order: Order; sectionIndex: number };
+
+  const listData: ListItem[] = [];
+  if (active.length > 0) {
+    listData.push({ type: "header", key: "h-active", label: "Active" });
+    active.forEach((o, i) => listData.push({ type: "order", key: o.id, order: o, sectionIndex: i }));
+  }
+  if (delivered.length > 0) {
+    listData.push({ type: "header", key: "h-delivered", label: "Delivered" });
+    delivered.forEach((o, i) => listData.push({ type: "order", key: o.id + "-d", order: o, sectionIndex: i }));
+  }
+  if (cancelled.length > 0) {
+    listData.push({ type: "header", key: "h-cancelled", label: "Cancelled" });
+    cancelled.forEach((o, i) => listData.push({ type: "order", key: o.id + "-c", order: o, sectionIndex: i }));
+  }
 
   if (loading) return <LoadingScreen />;
 
   return (
     <SafeAreaView style={sc.container} edges={["top"]}>
       {/* Header */}
-      <Animated.View
-        style={[
-          sc.header,
-          { transform: [{ translateY: headerAnim }], opacity: headerOpacity },
-        ]}
-      >
+      <Animated.View style={[sc.header, { transform: [{ translateY: headerY }], opacity: headerOp }]}>
         <View>
           <Text style={sc.title}>My Orders</Text>
-          <Text style={sc.subtitle}>
-            {subscriptions.length} subscription
-            {subscriptions.length !== 1 ? "s" : ""}
-          </Text>
+          <Text style={sc.subtitle}>{orders.length} order{orders.length !== 1 ? "s" : ""} total</Text>
         </View>
-        <View style={sc.headerIcon}>
-          <Ionicons name="receipt-outline" size={20} color={Colors.primary} />
+        <View style={sc.headerBadge}>
+          <Ionicons name="receipt-outline" size={19} color={Colors.primary} />
         </View>
       </Animated.View>
 
-      {/* Status bar */}
-      <StatusSummaryBar subscriptions={subscriptions} />
-
-      {/* Hint */}
-      {subscriptions.length > 0 && (
-        <View style={sc.hint}>
-          <Ionicons name="hand-right-outline" size={12} color="#9ca3af" />
-          <Text style={sc.hintText}>
-            Tap OTP badge to jump to it • Tap card for details
-          </Text>
-        </View>
-      )}
+      {/* Summary pills */}
+      <SummaryBar orders={orders} />
 
       {/* List */}
-      <ScrollView
-        ref={scrollRef}
-        style={sc.scroll}
-        contentContainerStyle={{
-          paddingHorizontal: 16,
-          paddingBottom: 40,
-          paddingTop: 8,
-        }}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={Colors.primary}
-          />
-        }
-        showsVerticalScrollIndicator={false}
-      >
-        {subscriptions.length > 0 ? (
-          subscriptions.map((sub, index) => (
-            <CardEntrance key={sub.id} delay={index * 55}>
-              <SubscriptionCard
-                sub={sub}
+      {orders.length === 0 ? (
+        <ScrollView
+          contentContainerStyle={sc.emptyContent}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
+        >
+          <EmptyState />
+        </ScrollView>
+      ) : (
+        <FlatList
+          data={listData}
+          keyExtractor={item => item.key}
+          contentContainerStyle={sc.listContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
+          renderItem={({ item }) => {
+            if (item.type === "header") {
+              return <SectionHeader label={item.label} />;
+            }
+            return (
+              <OrderCard
+                order={item.order}
+                index={item.sectionIndex}
+                productMap={productMap}
                 onCancelPress={handleCancelPress}
-                onScrollToOTP={handleScrollToOTP}
               />
-            </CardEntrance>
-          ))
-        ) : (
-          <View style={sc.empty}>
-            <View style={sc.emptyIcon}>
-              <Ionicons
-                name="calendar-outline"
-                size={40}
-                color={Colors.primary}
-              />
-            </View>
-            <Text style={sc.emptyTitle}>No Active Subscriptions</Text>
-            <Text style={sc.emptyText}>
-              Start by adding products from the catalog
-            </Text>
-          </View>
-        )}
-      </ScrollView>
+            );
+          }}
+        />
+      )}
 
-      <ConfirmModal
-        visible={confirmVisible}
+      <CancelModal
+        visible={cancelModal}
+        order={cancelOrder}
         onConfirm={handleConfirmCancel}
-        onCancel={() => {
-          setConfirmVisible(false);
-          setPendingSubId(null);
-        }}
-      />
-      <SuccessModal
-        visible={successVisible}
-        onClose={() => setSuccessVisible(false)}
+        onCancel={() => { setCancelModal(false); setCancelOrder(null); }}
       />
     </SafeAreaView>
   );
 }
 
 const sc = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F4F6FA" },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingTop: 14,
-    paddingBottom: 10,
-    backgroundColor: "#F4F6FA",
-  },
-  title: {
-    fontSize: 26,
-    fontWeight: "800",
-    color: "#111",
-    letterSpacing: -0.5,
-  },
-  subtitle: { fontSize: 13, color: "#9ca3af", marginTop: 2, fontWeight: "500" },
-  headerIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: Colors.primary + "15",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  hint: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-    backgroundColor: "#F4F6FA",
-  },
-  hintText: { fontSize: 12, color: "#9ca3af" },
-  scroll: { flex: 1 },
-  empty: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 80,
-  },
-  emptyIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 24,
-    backgroundColor: Colors.primary + "12",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#111",
-    marginBottom: 6,
-  },
-  emptyText: { fontSize: 14, color: "#9ca3af", textAlign: "center" },
+  container:    { flex: 1, backgroundColor: "#F2F3F8" },
+  header:       { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 18, paddingTop: 10, paddingBottom: 8, backgroundColor: "#F2F3F8" },
+  title:        { fontSize: 25, fontWeight: "800", color: "#111", letterSpacing: -0.5 },
+  subtitle:     { fontSize: 12, color: "#9CA3AF", marginTop: 1, fontWeight: "500" },
+  headerBadge:  { width: 42, height: 42, borderRadius: 13, backgroundColor: Colors.primary + "15", justifyContent: "center", alignItems: "center" },
+  listContent:  { paddingHorizontal: 13, paddingTop: 8, paddingBottom: 40 },
+  emptyContent: { flexGrow: 1 },
 });

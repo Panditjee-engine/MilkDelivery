@@ -477,20 +477,72 @@ class ApiService {
   }
 
 async createSubscription(data: {
+  items: Array<{
     product_id: string;
     quantity: number;
-    pattern: string;
-    custom_days: number[] | null;
-    start_date: string;
-    end_date?: string | null;
+    price: number;
     amount: number;
-    delivery_slot: string; // Added to match the backend field addition
-  }) {
-    return this.request<any>("/subscriptions", {
-      method: "POST",
-      body: JSON.stringify(data),
+  }>;
+  pattern: string;
+  custom_days: number[] | null;
+  start_date: string;
+  end_date?: string | null;
+  delivery_slot: string;
+}) {
+  const payload = {
+    ...data,
+    end_date: data.end_date ?? null,  // ← FIX: always null, never undefined
+  };
+  return this.request<any>("/subscriptions", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+async placeCartOrders(
+  items: Array<{
+    product_id: string;
+    quantity: number;
+    price: number;
+    amount: number;
+  }>,
+  deliveryDate: string,
+  deliverySlot: string = "morning",
+): Promise<number> {
+  let placed = 0;
+  for (const item of items) {
+    await this.createSubscription({
+      items: [item],
+      pattern: "buy_once",
+      custom_days: null,
+      start_date: deliveryDate,
+      end_date: deliveryDate,       // explicit — never undefined
+      delivery_slot: deliverySlot,
     });
+    placed++;
   }
+  return placed;
+}
+
+async placeCartAsSingleOrder(
+  items: Array<{
+    product_id: string;
+    quantity: number;
+    price: number;
+    amount: number;
+  }>,
+  deliveryDate: string,
+  deliverySlot: string = "morning",
+): Promise<any> {
+  return this.createSubscription({
+    items,
+    pattern: "buy_once",
+    custom_days: null,
+    start_date: deliveryDate,
+    end_date: deliveryDate,
+    delivery_slot: deliverySlot,
+  });
+}
 
   async updateSubscription(id: string, data: any) {
     return this.request<any>(`/subscriptions/${id}`, {
@@ -506,11 +558,18 @@ async createSubscription(data: {
   });
 }
 
-  async cancelSubscription(id: string) {
-    return this.request<any>(`/subscriptions/${id}`, {
-      method: "DELETE",
-    });
-  }
+async cancelSubscription(id: string) {
+  return this.request<any>(`/subscriptions/${id}`, {
+    method: "DELETE",
+  });
+}
+
+//added by anurag
+async cancelOrder(orderId: string) {
+  return this.request<any>(`/orders/${orderId}`, {
+    method: "DELETE",
+  });
+}
 
   async getVacations() {
     return this.request<any[]>("/vacations");
@@ -580,12 +639,6 @@ async createSubscription(data: {
 
   async acceptOrder(orderId: string) {
     return this.request<any>(`/delivery/orders/${orderId}/accept`, {
-      method: "POST",
-    });
-  }
-
-  async cancelOrder(orderId: string) {
-    return this.request<any>(`/delivery/orders/${orderId}/reject`, {
       method: "POST",
     });
   }
@@ -689,6 +742,13 @@ async createSubscription(data: {
       },
     );
   }
+
+async cancelUserOrder(orderId: string) {
+  return this.request<{ success: boolean; message: string; order_id: string }>(
+    `/orders/${orderId}`,
+    { method: "DELETE" }
+  );
+}
 
   async getFinanceReport(startDate?: string, endDate?: string) {
     const params = new URLSearchParams();
@@ -2288,16 +2348,20 @@ async createFeedStock(data: FeedStockCreate): Promise<FeedStock> {
     );
   }
  
-  async editSubscription(
+async editSubscription(
   id: string,
   data: {
-    product_id?: string;
-    quantity?: number;
-    amount?: number;
     pattern?: string;
     custom_days?: number[] | null;
-    start_date?: string;   // YYYY-MM-DD
-    end_date?: string | null;  // YYYY-MM-DD or null to clear
+    end_date?: string | null;
+    items?: Array<{
+      product_id: string;
+      quantity: number;
+      price: number;
+      amount: number;
+    }>;
+    total_quantity?: number;
+    total_amount?: number;
   }
 ) {
   return this.request<any>(`/subscriptions/${id}`, {

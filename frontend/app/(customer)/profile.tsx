@@ -22,7 +22,8 @@ import Input from "../../src/components/Input";
 
 const { width } = Dimensions.get("window");
 
-// ─── Custom Alert Component 
+// ─── Custom Alert ─────────────────────────────────────────────────────────────
+
 type AlertAction = {
   text: string;
   style?: "default" | "cancel" | "destructive";
@@ -99,8 +100,7 @@ function CustomAlert({
                 key={i}
                 style={[
                   alertStyles.actionBtn,
-                  action.style === "destructive" &&
-                    alertStyles.actionDestructive,
+                  action.style === "destructive" && alertStyles.actionDestructive,
                   action.style === "cancel" && alertStyles.actionCancel,
                   action.style === "default" && alertStyles.actionDefault,
                 ]}
@@ -112,8 +112,7 @@ function CustomAlert({
                 <Text
                   style={[
                     alertStyles.actionText,
-                    action.style === "destructive" &&
-                      alertStyles.actionTextDestructive,
+                    action.style === "destructive" && alertStyles.actionTextDestructive,
                     action.style === "cancel" && alertStyles.actionTextCancel,
                     action.style === "default" && alertStyles.actionTextDefault,
                   ]}
@@ -191,7 +190,8 @@ const alertStyles = StyleSheet.create({
   actionTextCancel: { color: "#666" },
 });
 
-// ─── Toast Notification 
+// ─── Toast ────────────────────────────────────────────────────────────────────
+
 function Toast({
   visible,
   message,
@@ -294,10 +294,13 @@ const toastStyles = StyleSheet.create({
   text: { fontSize: 14, fontWeight: "600", color: "#16a34a" },
 });
 
-// ─── Main Screen 
+// ─── Main Screen ──────────────────────────────────────────────────────────────
+
 export default function ProfileScreen() {
   const { user, logout, updateUser } = useAuth();
   const router = useRouter();
+  const isFocused = useIsFocused();
+
   const [vacations, setVacations] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
   const [ordersExpanded, setOrdersExpanded] = useState(false);
@@ -309,12 +312,10 @@ export default function ProfileScreen() {
   const [editName, setEditName] = useState(user?.name || "");
   const [editPhone, setEditPhone] = useState(user?.phone || "");
   const [editAddress, setEditAddress] = useState(
-    user?.address || { tower: "", flat: "", floor: "" },
+    user?.address || { tower: "", flat: "", floor: "" }
   );
   const [saving, setSaving] = useState(false);
-  const isFocused = useIsFocused();
 
-  // Custom alert state
   const [alertConfig, setAlertConfig] = useState<AlertConfig>({
     visible: false,
     title: "",
@@ -327,8 +328,6 @@ export default function ProfileScreen() {
     type: "success" as "success" | "error",
   });
 
-  // Orders expand animation
-  const expandAnim = useRef(new Animated.Value(0)).current;
   const chevronAnim = useRef(new Animated.Value(0)).current;
 
   const showAlert = (config: Omit<AlertConfig, "visible">) =>
@@ -336,27 +335,20 @@ export default function ProfileScreen() {
   const hideAlert = () =>
     setAlertConfig((prev) => ({ ...prev, visible: false }));
 
-  const showToast = (
-    message: string,
-    type: "success" | "error" = "success",
-  ) => {
+  const showToast = (message: string, type: "success" | "error" = "success") => {
     setToast({ visible: true, message, type });
     setTimeout(() => setToast((prev) => ({ ...prev, visible: false })), 2800);
   };
 
-useEffect(() => {
-  if (!isFocused) return;
-
-  fetchData();
-  const interval = setInterval(() => {
+  // ── Fetch once on focus — no polling interval ─────────────────────────────
+  useEffect(() => {
+    if (!isFocused) return;
     fetchData();
-  }, 2000);
-
-  return () => clearInterval(interval);
-}, [isFocused]);
+  }, [isFocused]);
 
   const fetchData = async () => {
     try {
+      // GET /vacations and GET /orders — both existing endpoints
       const [vacData, ordersData] = await Promise.all([
         api.getVacations(),
         api.getOrders(),
@@ -364,26 +356,18 @@ useEffect(() => {
       setVacations(vacData);
       setOrders(ordersData);
     } catch (error) {
-      console.error("Error fetching data:", error);
+      console.error("Error fetching profile data:", error);
     }
   };
 
   const toggleOrders = () => {
     const toValue = ordersExpanded ? 0 : 1;
     setOrdersExpanded(!ordersExpanded);
-    Animated.parallel([
-      Animated.spring(expandAnim, {
-        toValue,
-        useNativeDriver: false,
-        tension: 60,
-        friction: 10,
-      }),
-      Animated.timing(chevronAnim, {
-        toValue,
-        duration: 250,
-        useNativeDriver: true,
-      }),
-    ]).start();
+    Animated.timing(chevronAnim, {
+      toValue,
+      duration: 250,
+      useNativeDriver: true,
+    }).start();
   };
 
   const handleLogout = () => {
@@ -431,14 +415,16 @@ useEffect(() => {
       return;
     }
     try {
+      // POST /vacations
       await api.createVacation(startDate, endDate);
       setVacationModal(false);
       setStartDate("");
       setEndDate("");
+      setSelectingStart(true);
       fetchData();
       showToast("Vacation saved! Deliveries will be paused.", "success");
     } catch (error: any) {
-      showToast(error.message, "error");
+      showToast(error.message || "Failed to save vacation", "error");
     }
   };
 
@@ -448,8 +434,7 @@ useEffect(() => {
       iconColor: "#EF4444",
       iconBg: "#FEF2F2",
       title: "Remove Vacation",
-      message:
-        "This vacation period will be deleted and deliveries will resume.",
+      message: "This vacation period will be deleted and deliveries will resume.",
       actions: [
         { text: "Cancel", style: "cancel" },
         {
@@ -457,11 +442,12 @@ useEffect(() => {
           style: "destructive",
           onPress: async () => {
             try {
+              // DELETE /vacations/{id}
               await api.deleteVacation(id);
               fetchData();
               showToast("Vacation removed");
             } catch (e: any) {
-              showToast(e.message, "error");
+              showToast(e.message || "Failed to delete vacation", "error");
             }
           },
         },
@@ -472,6 +458,7 @@ useEffect(() => {
   const handleSaveProfile = async () => {
     setSaving(true);
     try {
+      // PUT /auth/profile
       await api.updateProfile({
         name: editName,
         phone: editPhone,
@@ -481,7 +468,7 @@ useEffect(() => {
       setEditModal(false);
       showToast("Profile updated successfully", "success");
     } catch (error: any) {
-      showToast(error.message, "error");
+      showToast(error.message || "Failed to update profile", "error");
     } finally {
       setSaving(false);
     }
@@ -497,17 +484,9 @@ useEffect(() => {
   const getMarkedDates = () => {
     const marks: any = {};
     if (startDate)
-      marks[startDate] = {
-        selected: true,
-        startingDay: true,
-        color: Colors.primary,
-      };
+      marks[startDate] = { selected: true, startingDay: true, color: Colors.primary };
     if (endDate)
-      marks[endDate] = {
-        selected: true,
-        endingDay: true,
-        color: Colors.primary,
-      };
+      marks[endDate] = { selected: true, endingDay: true, color: Colors.primary };
     if (startDate && endDate) {
       let current = new Date(startDate);
       const end = new Date(endDate);
@@ -530,37 +509,17 @@ useEffect(() => {
   const statusConfig = (status: string) => {
     switch (status) {
       case "delivered":
-        return {
-          color: "#16a34a",
-          bg: "#F0FDF4",
-          border: "#BBF7D0",
-          label: "Delivered",
-          icon: "checkmark-circle",
-        };
+        return { color: "#16a34a", bg: "#F0FDF4", border: "#BBF7D0", label: "Delivered",        icon: "checkmark-circle" };
       case "out_for_delivery":
-        return {
-          color: "#d97706",
-          bg: "#FFFBEB",
-          border: "#FDE68A",
-          label: "Out for Delivery",
-          icon: "bicycle",
-        };
+        return { color: "#d97706", bg: "#FFFBEB", border: "#FDE68A", label: "Out for Delivery", icon: "bicycle"          };
+      case "assigned":
+        return { color: "#2563EB", bg: "#EFF6FF", border: "#BFDBFE", label: "Rider Assigned",   icon: "bicycle-outline"  };
       case "cancelled":
-        return {
-          color: "#dc2626",
-          bg: "#FEF2F2",
-          border: "#FECACA",
-          label: "Cancelled",
-          icon: "close-circle",
-        };
+        return { color: "#dc2626", bg: "#FEF2F2", border: "#FECACA", label: "Cancelled",        icon: "close-circle"     };
+      case "skipped":
+        return { color: "#9CA3AF", bg: "#F3F4F6", border: "#E5E7EB", label: "Skipped",          icon: "play-skip-forward-outline" };
       default:
-        return {
-          color: "#6366f1",
-          bg: "#EEF2FF",
-          border: "#C7D2FE",
-          label: status?.replace(/_/g, " ") || "Pending",
-          icon: "time",
-        };
+        return { color: "#6366f1", bg: "#EEF2FF", border: "#C7D2FE", label: status?.replace(/_/g, " ") || "Pending", icon: "time" };
     }
   };
 
@@ -572,11 +531,7 @@ useEffect(() => {
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      <Toast
-        visible={toast.visible}
-        message={toast.message}
-        type={toast.type}
-      />
+      <Toast visible={toast.visible} message={toast.message} type={toast.type} />
       <CustomAlert config={alertConfig} onDismiss={hideAlert} />
 
       <ScrollView
@@ -626,25 +581,19 @@ useEffect(() => {
               {user.address.tower && (
                 <View style={styles.addressPill}>
                   <Text style={styles.addressPillLabel}>Tower</Text>
-                  <Text style={styles.addressPillValue}>
-                    {user.address.tower}
-                  </Text>
+                  <Text style={styles.addressPillValue}>{user.address.tower}</Text>
                 </View>
               )}
               {user.address.flat && (
                 <View style={styles.addressPill}>
                   <Text style={styles.addressPillLabel}>Flat</Text>
-                  <Text style={styles.addressPillValue}>
-                    {user.address.flat}
-                  </Text>
+                  <Text style={styles.addressPillValue}>{user.address.flat}</Text>
                 </View>
               )}
               {user.address.floor && (
                 <View style={styles.addressPill}>
                   <Text style={styles.addressPillLabel}>Floor</Text>
-                  <Text style={styles.addressPillValue}>
-                    {user.address.floor}
-                  </Text>
+                  <Text style={styles.addressPillValue}>{user.address.floor}</Text>
                 </View>
               )}
             </View>
@@ -653,11 +602,7 @@ useEffect(() => {
               style={styles.emptyAddress}
               onPress={() => setEditModal(true)}
             >
-              <Ionicons
-                name="add-circle-outline"
-                size={20}
-                color={Colors.primary}
-              />
+              <Ionicons name="add-circle-outline" size={20} color={Colors.primary} />
               <Text style={styles.emptyAddressText}>Add delivery address</Text>
             </TouchableOpacity>
           )}
@@ -672,7 +617,12 @@ useEffect(() => {
             <Text style={styles.cardTitle}>Vacation Mode</Text>
             <TouchableOpacity
               style={styles.addIconBtn}
-              onPress={() => setVacationModal(true)}
+              onPress={() => {
+                setStartDate("");
+                setEndDate("");
+                setSelectingStart(true);
+                setVacationModal(true);
+              }}
             >
               <Ionicons name="add" size={17} color={Colors.primary} />
             </TouchableOpacity>
@@ -717,14 +667,8 @@ useEffect(() => {
                 <Text style={styles.expandBtnText}>
                   {ordersExpanded ? "Show less" : `+${orders.length - 3} more`}
                 </Text>
-                <Animated.View
-                  style={{ transform: [{ rotate: chevronRotate }] }}
-                >
-                  <Ionicons
-                    name="chevron-down"
-                    size={14}
-                    color={Colors.primary}
-                  />
+                <Animated.View style={{ transform: [{ rotate: chevronRotate }] }}>
+                  <Ionicons name="chevron-down" size={14} color={Colors.primary} />
                 </Animated.View>
               </TouchableOpacity>
             )}
@@ -734,6 +678,12 @@ useEffect(() => {
             <>
               {visibleOrders.map((order, i) => {
                 const sc = statusConfig(order.status);
+                const productName =
+                  order.product_name ||
+                  order.product?.name ||
+                  (order.items?.length > 0
+                    ? order.items[0]?.name || `Order #${String(order.id).slice(-4)}`
+                    : `Order #${String(order.id).slice(-4)}`);
                 return (
                   <View
                     key={order.id}
@@ -743,21 +693,12 @@ useEffect(() => {
                     ]}
                   >
                     <View style={styles.orderLeft}>
-                      <View
-                        style={[
-                          styles.orderIconBox,
-                          { backgroundColor: sc.bg },
-                        ]}
-                      >
-                        <Ionicons
-                          name={sc.icon as any}
-                          size={16}
-                          color={sc.color}
-                        />
+                      <View style={[styles.orderIconBox, { backgroundColor: sc.bg }]}>
+                        <Ionicons name={sc.icon as any} size={16} color={sc.color} />
                       </View>
-                      <View>
-                        <Text style={styles.orderName}>
-                          {order.name || `Order #${String(order.id).slice(-4)}`}
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.orderName} numberOfLines={1}>
+                          {productName}
                         </Text>
                         <Text style={styles.orderDate}>
                           {formatDate(order.delivery_date)}
@@ -779,7 +720,9 @@ useEffect(() => {
                           {sc.label}
                         </Text>
                       </View>
-                      <Text style={styles.orderAmt}>₹{order.total_amount}</Text>
+                      <Text style={styles.orderAmt}>
+                        ₹{order.total_amount?.toFixed(2) ?? "0.00"}
+                      </Text>
                     </View>
                   </View>
                 );
@@ -841,10 +784,7 @@ useEffect(() => {
                 <Ionicons name="arrow-forward" size={14} color="#ccc" />
               </View>
               <TouchableOpacity
-                style={[
-                  styles.dateTab,
-                  !selectingStart && styles.dateTabActive,
-                ]}
+                style={[styles.dateTab, !selectingStart && styles.dateTabActive]}
                 onPress={() => setSelectingStart(false)}
               >
                 <Text style={styles.dateTabLabel}>TO</Text>
@@ -919,25 +859,19 @@ useEffect(() => {
               <Input
                 label="Tower / Building"
                 value={editAddress.tower || ""}
-                onChangeText={(t) =>
-                  setEditAddress({ ...editAddress, tower: t })
-                }
+                onChangeText={(t) => setEditAddress({ ...editAddress, tower: t })}
                 placeholder="Tower name or number"
               />
               <Input
                 label="Flat Number"
                 value={editAddress.flat || ""}
-                onChangeText={(t) =>
-                  setEditAddress({ ...editAddress, flat: t })
-                }
+                onChangeText={(t) => setEditAddress({ ...editAddress, flat: t })}
                 placeholder="Flat / Apartment number"
               />
               <Input
                 label="Floor"
                 value={editAddress.floor || ""}
-                onChangeText={(t) =>
-                  setEditAddress({ ...editAddress, floor: t })
-                }
+                onChangeText={(t) => setEditAddress({ ...editAddress, floor: t })}
                 placeholder="Floor number"
               />
               <Button
@@ -953,6 +887,8 @@ useEffect(() => {
     </SafeAreaView>
   );
 }
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F4F4F6" },
@@ -1008,12 +944,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  userName: {
-    fontSize: 22,
-    fontWeight: "800",
-    color: "#111",
-    letterSpacing: -0.5,
-  },
+  userName: { fontSize: 22, fontWeight: "800", color: "#111", letterSpacing: -0.5 },
   userEmail: { fontSize: 13, color: "#aaa", marginTop: 3, fontWeight: "400" },
   phoneBadge: {
     flexDirection: "row",
@@ -1119,12 +1050,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 13,
     paddingVertical: 10,
   },
-  vacationChipText: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#92400e",
-  },
+  vacationChipText: { flex: 1, fontSize: 13, fontWeight: "600", color: "#92400e" },
   vacationDeleteBtn: {
     width: 22,
     height: 22,
@@ -1167,12 +1093,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  orderName: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#111",
-    marginBottom: 1,
-  },
+  orderName: { fontSize: 14, fontWeight: "700", color: "#111", marginBottom: 1 },
   orderDate: { fontSize: 12, color: "#aaa", marginBottom: 1 },
   orderItems: { fontSize: 11, color: "#bbb" },
   orderRight: { alignItems: "flex-end", gap: 5 },
@@ -1271,12 +1192,7 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
-  dateTabValue: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#111",
-    marginTop: 4,
-  },
+  dateTabValue: { fontSize: 15, fontWeight: "700", color: "#111", marginTop: 4 },
   dateTabValueActive: { color: Colors.primary },
   addressSectionLabel: {
     fontSize: 11,
