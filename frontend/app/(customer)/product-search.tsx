@@ -75,9 +75,11 @@ function formatUnit(unit?: string) {
 function ProductSearchCard({
   product,
   onPress,
+  onBuyNow,
 }: {
   product: any;
   onPress: () => void;
+  onBuyNow: () => void;
 }) {
   const theme = getCategoryTheme(product.category);
   const isDairy = DAIRY_CATEGORIES.includes(product.category?.toLowerCase());
@@ -105,6 +107,16 @@ function ProductSearchCard({
           <Text style={[s.price, { color: theme.accent }]}>₹{product.price}</Text>
           <Text style={[s.unit, { color: theme.accent + "99" }]}>{formatUnit(product.unit)}</Text>
         </View>
+        <TouchableOpacity
+          style={[s.buyNowBtn, { backgroundColor: theme.accent }]}
+          onPress={(event) => {
+            event.stopPropagation?.();
+            onBuyNow();
+          }}
+          activeOpacity={0.86}
+        >
+          <Text style={s.buyNowText}>Buy Now</Text>
+        </TouchableOpacity>
       </View>
     </TouchableOpacity>
   );
@@ -206,6 +218,15 @@ export default function ProductSearchScreen() {
     setPattern(isDairyProduct(product) ? "daily" : "buy_once");
     setCustomDays([]);
     setFeedback("");
+  };
+  const openProductDetails = (product: any) => {
+    router.push({
+      pathname: "/(customer)/product-details",
+      params: {
+        id: product.id || product._id,
+        product: encodeURIComponent(JSON.stringify(product)),
+      },
+    } as any);
   };
   const closeProduct = () => {
     if (submitting) return;
@@ -357,7 +378,8 @@ export default function ProductSearchScreen() {
                 <ProductSearchCard
                   key={product.id?.toString()}
                   product={product}
-                  onPress={() => openProduct(product)}
+                  onPress={() => openProductDetails(product)}
+                  onBuyNow={() => openProduct(product)}
                 />
               ))}
             </View>
@@ -569,6 +591,14 @@ const s = StyleSheet.create({
   productFooter: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 8 },
   price: { fontSize: 15, fontWeight: "900" },
   unit: { fontSize: 10.5, fontWeight: "800" },
+  buyNowBtn: {
+    marginTop: 9,
+    borderRadius: 12,
+    paddingVertical: 9,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  buyNowText: { fontSize: 12, fontWeight: "900", color: "#fff" },
   emptyState: { alignItems: "center", paddingTop: 70, gap: 8 },
   emptyTitle: { fontSize: 16, fontWeight: "900", color: "#111827" },
   emptySubtitle: { fontSize: 13, color: "#94A3B8", fontWeight: "600" },

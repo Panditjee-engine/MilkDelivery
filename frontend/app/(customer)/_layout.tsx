@@ -64,6 +64,7 @@ export default function CustomerLayout() {
       />
       <Tabs.Screen name="order-notifications" options={{ href: null }} />
       <Tabs.Screen name="product-search" options={{ href: null }} />
+      <Tabs.Screen name="product-details" options={{ href: null }} />
     </Tabs>
   );
 }

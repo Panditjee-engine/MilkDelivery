@@ -330,11 +330,13 @@ function ProductGridCard({
   product,
   index,
   onPress,
+  onBuyNow,
   adminName,
 }: {
   product: any;
   index: number;
   onPress: () => void;
+  onBuyNow: () => void;
   adminName?: string;
 }) {
   const theme = getCategoryTheme(product.category);
@@ -384,6 +386,16 @@ function ProductGridCard({
             <Text style={productGridStyles.price}>₹{product.price}</Text>
             <Text style={productGridStyles.unit} numberOfLines={1}>{product.unit}</Text>
           </View>
+          <TouchableOpacity
+            style={[productGridStyles.buyNowBtn, { backgroundColor: theme.accent }]}
+            onPress={(event) => {
+              event.stopPropagation?.();
+              onBuyNow();
+            }}
+            activeOpacity={0.86}
+          >
+            <Text style={productGridStyles.buyNowText}>Buy Now</Text>
+          </TouchableOpacity>
         </View>
       </TouchableOpacity>
     </Animated.View>
@@ -444,6 +456,14 @@ const productGridStyles = StyleSheet.create({
   footer: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 8 },
   unit: { fontSize: 10.5, color: "#aaa", fontWeight: "700", maxWidth: 58 },
   price: { fontSize: 15, fontWeight: "900", color: Colors.primary },
+  buyNowBtn: {
+    marginTop: 9,
+    borderRadius: 12,
+    paddingVertical: 9,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  buyNowText: { fontSize: 12, fontWeight: "900", color: "#fff" },
   addBtn: {
     position: "absolute",
     top: 8,
@@ -544,6 +564,16 @@ export default function CustomerHome() {
     setPattern("daily");
     setCustomDays([]);
     setModalVisible(true);
+  };
+
+  const openProductDetails = (product: any) => {
+    router.push({
+      pathname: "/(customer)/product-details",
+      params: {
+        id: product.id || product._id,
+        product: encodeURIComponent(JSON.stringify(product)),
+      },
+    } as any);
   };
 
   const toggleCustomDay = (day: number) =>
@@ -778,7 +808,8 @@ export default function CustomerHome() {
                     product={product}
                     index={i}
                     adminName={adminName}
-                    onPress={() => openModal(product)}
+                    onPress={() => openProductDetails(product)}
+                    onBuyNow={() => openModal(product)}
                   />
                 );
               })}

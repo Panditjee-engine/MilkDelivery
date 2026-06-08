@@ -22,7 +22,7 @@ import { Colors } from "../../src/constants/colors";
 import Button from "../../src/components/Button";
 import LoadingScreen from "../../src/components/LoadingScreen";
 import { useAuth } from "../../src/contexts/AuthContext";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const PRODUCT_GRID_GAP = 12;
@@ -884,10 +884,12 @@ const subStyles = StyleSheet.create({
 function ModernProductCard({
   product,
   onPress,
+  onBuyNow,
   cartQty,
 }: {
   product: any;
   onPress: () => void;
+  onBuyNow: () => void;
   cartQty: number;
 }) {
   const theme = getCategoryTheme(product.category);
@@ -947,6 +949,16 @@ function ModernProductCard({
             {formatUnit(product.unit)}
           </Text>
         </View>
+        <TouchableOpacity
+          style={[styles.cardBuyBtn, { backgroundColor: theme.accent }]}
+          onPress={(event) => {
+            event.stopPropagation?.();
+            onBuyNow();
+          }}
+          activeOpacity={0.86}
+        >
+          <Text style={styles.cardBuyText}>Buy Now</Text>
+        </TouchableOpacity>
       </View>
     </TouchableOpacity>
   );
@@ -958,12 +970,14 @@ function CategorySection({
   label,
   items,
   onPress,
+  onBuyNow,
   cart,
 }: {
   value: string;
   label: string;
   items: any[];
   onPress: (item: any) => void;
+  onBuyNow: (item: any) => void;
   cart: CartItem[];
 }) {
   const theme = getCategoryTheme(value);
@@ -1005,6 +1019,7 @@ function CategorySection({
               product={item}
               cartQty={cartQty}
               onPress={() => onPress(item)}
+              onBuyNow={() => onBuyNow(item)}
             />
           );
         })}
@@ -1553,6 +1568,7 @@ const miniCartStyles = StyleSheet.create({
 export default function CatalogScreen() {
   const { user } = useAuth();
   const router = useRouter();
+  const params = useLocalSearchParams<{ buyNowProductId?: string; buyNowToken?: string }>();
   const [linkedAdminId, setLinkedAdminId] = useState<string | null>(null);
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
@@ -1588,6 +1604,7 @@ export default function CatalogScreen() {
   const [toastProduct, setToastProduct] = useState("");
   const [toastIsSubscription, setToastIsSubscription] = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoOpenKey = useRef<string | null>(null);
 
   const isFocused = useIsFocused();
 
@@ -1694,6 +1711,27 @@ export default function CatalogScreen() {
     setCustomDays([]);
     setModalVisible(true);
   };
+
+  const openProductDetails = (product: any) => {
+    router.push({
+      pathname: "/(customer)/product-details",
+      params: {
+        id: product.id || product._id,
+        product: encodeURIComponent(JSON.stringify(product)),
+      },
+    } as any);
+  };
+
+  useEffect(() => {
+    const productId = params.buyNowProductId?.toString();
+    if (!productId || products.length === 0) return;
+    const key = `${productId}:${params.buyNowToken?.toString() || ""}`;
+    if (autoOpenKey.current === key) return;
+    const product = products.find((p) => String(p.id || p._id) === productId);
+    if (!product) return;
+    autoOpenKey.current = key;
+    openModal(product);
+  }, [params.buyNowProductId, params.buyNowToken, products]);
 
   const toggleCustomDay = (day: number) => {
     setCustomDays((prev) =>
@@ -2025,7 +2063,8 @@ export default function CatalogScreen() {
             label={item.label}
             items={item.items}
             cart={cart}
-            onPress={openModal}
+            onPress={openProductDetails}
+            onBuyNow={openModal}
           />
         )}
       />
@@ -2637,6 +2676,14 @@ const styles = StyleSheet.create({
   },
   cardPrice: { fontSize: 15, fontWeight: "900" },
   cardUnit: { fontSize: 10.5, fontWeight: "700" },
+  cardBuyBtn: {
+    marginTop: 9,
+    borderRadius: 12,
+    paddingVertical: 9,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cardBuyText: { fontSize: 12, fontWeight: "900", color: "#fff" },
 
   emptyState: { alignItems: "center", paddingTop: 70, gap: 10 },
   emptyIconWrap: {
