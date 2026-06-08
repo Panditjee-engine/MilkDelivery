@@ -289,16 +289,16 @@ const brandStyles = StyleSheet.create({
 const POPULAR_GRID_GAP = 12;
 const POPULAR_CARD_WIDTH = (SCREEN_WIDTH - 40 - POPULAR_GRID_GAP) / 2;
 
-// ─── Product grid — tapping ANYWHERE navigates to catalog (no buying on home)
+// ─── Product grid — tapping ANYWHERE opens product details
 function ProductGridCard({
   product,
   index,
-  onOpenCatalog,
+  onOpenDetails,
   adminName,
 }: {
   product: any;
   index: number;
-  onOpenCatalog: () => void;
+  onOpenDetails: () => void;
   adminName?: string;
 }) {
   const theme = getCategoryTheme(product.category);
@@ -329,7 +329,7 @@ function ProductGridCard({
     >
       <TouchableOpacity
         style={productGridStyles.card}
-        onPress={onOpenCatalog}
+        onPress={onOpenDetails}
         activeOpacity={0.86}
       >
         <View style={[productGridStyles.imgBox, { backgroundColor: theme.bg }]}>
@@ -369,7 +369,7 @@ function ProductGridCard({
               { backgroundColor: theme.accent },
             ]}
           >
-            <Text style={productGridStyles.buyNowText}>View in Catalog</Text>
+            <Text style={productGridStyles.buyNowText}>View Details</Text>
           </View>
         </View>
       </TouchableOpacity>
@@ -558,8 +558,16 @@ export default function CustomerHome() {
     return () => clearInterval(interval);
   }, [isFocused]);
 
-  // ✅ Home is browse-only — every product tap goes to the catalog (no buying here)
   const goToCatalog = () => router.push("/(customer)/catalog");
+  const openProductDetails = (product: any) => {
+    router.push({
+      pathname: "/(customer)/product-details",
+      params: {
+        id: product.id || product._id,
+        product: encodeURIComponent(JSON.stringify(product)),
+      },
+    } as any);
+  };
 
   if (loading) return <LoadingScreen />;
 
@@ -741,7 +749,7 @@ export default function CustomerHome() {
           </View>
         </View>
 
-        {/* ── Popular Items (browse-only → catalog) ── */}
+        {/* ── Popular Items ── */}
         {featuredProducts.length > 0 && (
           <View style={s.sectionWrap}>
             <View style={s.sectionHeaderRow}>
@@ -760,7 +768,7 @@ export default function CustomerHome() {
                     product={product}
                     index={i}
                     adminName={adminName}
-                    onOpenCatalog={goToCatalog}
+                    onOpenDetails={() => openProductDetails(product)}
                   />
                 );
               })}

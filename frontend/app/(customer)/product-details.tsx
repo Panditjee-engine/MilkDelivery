@@ -160,13 +160,19 @@ export default function ProductDetailsScreen() {
       tomorrow.setDate(tomorrow.getDate() + 1);
       const startDate = tomorrow.toISOString().split("T")[0];
       await api.createSubscription({
-        product_id: productId,
-        quantity,
+        items: [
+          {
+            product_id: productId,
+            quantity,
+            price: Number(product.price) || 0,
+            amount: orderTotal,
+          },
+        ],
         pattern,
         custom_days: pattern === "custom" ? customDays : null,
         start_date: startDate,
         end_date: pattern === "buy_once" ? startDate : null,
-        amount: orderTotal,
+        delivery_slot: "morning",
       });
       setFeedback(pattern === "buy_once" ? "Added successfully." : "Subscription activated.");
       setTimeout(() => setBuySheetVisible(false), 700);
