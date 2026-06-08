@@ -9,6 +9,7 @@ import {
   Image,
   Animated,
   Easing,
+  Dimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -29,7 +30,9 @@ import { api } from "../../src/services/api";
 import { Colors } from "../../src/constants/colors";
 import LoadingScreen from "../../src/components/LoadingScreen";
 
-// ─── Category config 
+const SCREEN_WIDTH = Dimensions.get("window").width;
+
+// ─── Category config
 const CATEGORY_THEMES: Record<
   string,
   { bg: string; accent: string; icon: string }
@@ -45,7 +48,17 @@ const CATEGORY_THEMES: Record<
 const getCategoryTheme = (cat: string) =>
   CATEGORY_THEMES[cat?.toLowerCase()] || CATEGORY_THEMES.other;
 
-// ─── Status helpers 
+const homeBanners = [
+  {
+    id: "bull-cow",
+    image: require("../../assets/images/bull-cow.png"),
+    title: "Fresh dairy, every day",
+    subtitle: "Manage subscriptions and deliveries in one place",
+  },
+];
+const HOME_BANNER_WIDTH = Math.max(0, SCREEN_WIDTH - 40);
+
+// ─── Status helpers
 const statusConfig = (status: string) => {
   switch (status) {
     case "delivered":
@@ -83,7 +96,7 @@ const statusConfig = (status: string) => {
   }
 };
 
-// ─── Animated brand logo 
+// ─── Animated brand logo
 function BrandHeader() {
   const leafRotate = useRef(new Animated.Value(0)).current;
   const leafScale = useRef(new Animated.Value(0.7)).current;
@@ -184,6 +197,57 @@ function BrandHeader() {
   );
 }
 
+function HomeBannerSlider() {
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  return (
+    <View style={s.bannerWrap}>
+      <ScrollView
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        onMomentumScrollEnd={(event) => {
+          const index = Math.round(
+            event.nativeEvent.contentOffset.x / HOME_BANNER_WIDTH,
+          );
+          setActiveIndex(index);
+        }}
+      >
+        {homeBanners.map((banner) => (
+          <View key={banner.id} style={s.bannerSlide}>
+            <LinearGradient
+              colors={["#123524", "#1f6f43"]}
+              style={s.bannerCard}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <View style={s.bannerTextBox}>
+                <Text style={s.bannerKicker}>Gau Satva</Text>
+                <Text style={s.bannerTitle}>{banner.title}</Text>
+                <Text style={s.bannerSubtitle}>{banner.subtitle}</Text>
+              </View>
+              <Image
+                source={banner.image}
+                style={s.bannerImage}
+                resizeMode="contain"
+              />
+              <View style={s.bannerGlow} />
+            </LinearGradient>
+          </View>
+        ))}
+      </ScrollView>
+      <View style={s.bannerDots}>
+        {homeBanners.map((banner, index) => (
+          <View
+            key={banner.id}
+            style={[s.bannerDot, activeIndex === index && s.bannerDotActive]}
+          />
+        ))}
+      </View>
+    </View>
+  );
+}
+
 const brandStyles = StyleSheet.create({
   wrap: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8 },
   logoRow: { flexDirection: "row", alignItems: "center", gap: 8 },
@@ -222,15 +286,20 @@ const brandStyles = StyleSheet.create({
   },
 });
 
-// ─── Product row — tapping navigates to catalog 
-function ProductRow({
+const POPULAR_GRID_GAP = 12;
+const POPULAR_CARD_WIDTH = (SCREEN_WIDTH - 40 - POPULAR_GRID_GAP) / 2;
+
+// ─── Product grid — tapping ANYWHERE navigates to catalog (no buying on home)
+function ProductGridCard({
   product,
   index,
-  onPress,
+  onOpenCatalog,
+  adminName,
 }: {
   product: any;
   index: number;
-  onPress: () => void;
+  onOpenCatalog: () => void;
+  adminName?: string;
 }) {
   const theme = getCategoryTheme(product.category);
   const slideAnim = useRef(new Animated.Value(40)).current;
@@ -259,40 +328,48 @@ function ProductRow({
       style={{ opacity: opacityAnim, transform: [{ translateY: slideAnim }] }}
     >
       <TouchableOpacity
-        style={[productRowStyles.row, index < 2 && productRowStyles.rowBorder]}
-        onPress={onPress}
-        activeOpacity={0.82}
+        style={productGridStyles.card}
+        onPress={onOpenCatalog}
+        activeOpacity={0.86}
       >
-        {/* Icon / Image */}
-        <View style={[productRowStyles.imgBox, { backgroundColor: theme.bg }]}>
-          {product.image ? (
+        <View style={[productGridStyles.imgBox, { backgroundColor: theme.bg }]}>
+          {product?.image ? (
             <Image
               source={{ uri: product.image }}
-              style={productRowStyles.img}
-              resizeMode="cover"
+              style={productGridStyles.img}
             />
           ) : (
-            <Ionicons name={theme.icon as any} size={22} color={theme.accent} />
+            <Ionicons name={theme.icon as any} size={26} color={theme.accent} />
           )}
+          <View style={productGridStyles.addBtn}>
+            <Ionicons name="arrow-forward" size={14} color={Colors.primary} />
+          </View>
         </View>
-
-        {/* Info */}
-        <View style={productRowStyles.info}>
-          <Text style={productRowStyles.name} numberOfLines={1}>
+        <View style={productGridStyles.info}>
+          {adminName && (
+            <View style={productGridStyles.adminBadge}>
+              <Ionicons name="storefront-outline" size={10} color="#16a34a" />
+              <Text style={productGridStyles.adminName} numberOfLines={1}>
+                {adminName}
+              </Text>
+            </View>
+          )}
+          <Text style={productGridStyles.name} numberOfLines={2}>
             {product.name}
           </Text>
-          <Text style={productRowStyles.unit}>{product.unit}</Text>
-        </View>
-
-        {/* Price + arrow (no add button — navigates to catalog) */}
-        <View style={productRowStyles.right}>
-          <Text style={[productRowStyles.price, { color: theme.accent }]}>
-            ₹{product.price}
-          </Text>
+          <View style={productGridStyles.footer}>
+            <Text style={productGridStyles.price}>₹{product.price}</Text>
+            <Text style={productGridStyles.unit} numberOfLines={1}>
+              {product.unit}
+            </Text>
+          </View>
           <View
-            style={[productRowStyles.arrowBtn, { backgroundColor: theme.accent }]}
+            style={[
+              productGridStyles.buyNowBtn,
+              { backgroundColor: theme.accent },
+            ]}
           >
-            <Ionicons name="arrow-forward" size={13} color="#fff" />
+            <Text style={productGridStyles.buyNowText}>View in Catalog</Text>
           </View>
         </View>
       </TouchableOpacity>
@@ -300,38 +377,117 @@ function ProductRow({
   );
 }
 
-const productRowStyles = StyleSheet.create({
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 13,
-    gap: 12,
+function ExploreAllProductsCard({ onPress }: { onPress: () => void }) {
+  return (
+    <TouchableOpacity
+      style={productGridStyles.exploreCard}
+      onPress={onPress}
+      activeOpacity={0.86}
+    >
+      <LinearGradient
+        colors={[Colors.primary, Colors.primary + "D9"]}
+        style={productGridStyles.exploreGrad}
+      >
+        <Ionicons name="storefront-outline" size={30} color="#fff" />
+        <Text style={productGridStyles.exploreTitle}>Explore All Product</Text>
+        <Text style={productGridStyles.exploreSub}>Browse full catalog</Text>
+        <View style={productGridStyles.exploreArrow}>
+          <Ionicons name="arrow-forward" size={16} color={Colors.primary} />
+        </View>
+      </LinearGradient>
+    </TouchableOpacity>
+  );
+}
+
+const productGridStyles = StyleSheet.create({
+  card: {
+    width: POPULAR_CARD_WIDTH,
+    backgroundColor: "#fff",
+    borderRadius: 18,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
-  rowBorder: { borderBottomWidth: 1, borderBottomColor: "#F3F4F6" },
   imgBox: {
-    width: 46,
-    height: 46,
-    borderRadius: 14,
+    height: 105,
     justifyContent: "center",
     alignItems: "center",
     overflow: "hidden",
   },
   img: { width: "100%", height: "100%" },
-  info: { flex: 1 },
-  name: { fontSize: 14, fontWeight: "700", color: "#111", marginBottom: 2 },
-  unit: { fontSize: 12, color: "#bbb", fontWeight: "500" },
-  right: { alignItems: "flex-end", gap: 6 },
-  price: { fontSize: 15, fontWeight: "800" },
-  arrowBtn: {
-    width: 26,
-    height: 26,
-    borderRadius: 8,
+  info: { padding: 10, paddingBottom: 12 },
+  adminBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    marginBottom: 5,
+  },
+  adminName: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#16a34a",
+    maxWidth: 110,
+  },
+  name: { fontSize: 13, fontWeight: "800", color: "#111", minHeight: 34 },
+  footer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 8,
+  },
+  unit: { fontSize: 10.5, color: "#aaa", fontWeight: "700", maxWidth: 58 },
+  price: { fontSize: 15, fontWeight: "900", color: Colors.primary },
+  buyNowBtn: {
+    marginTop: 9,
+    borderRadius: 12,
+    paddingVertical: 9,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  buyNowText: { fontSize: 12, fontWeight: "900", color: "#fff" },
+  addBtn: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    width: 28,
+    height: 28,
+    borderRadius: 10,
+    backgroundColor: "#fff",
     justifyContent: "center",
     alignItems: "center",
   },
+  exploreCard: {
+    width: POPULAR_CARD_WIDTH,
+    borderRadius: 18,
+    overflow: "hidden",
+  },
+  exploreGrad: { minHeight: 176, padding: 16, justifyContent: "space-between" },
+  exploreTitle: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "900",
+    letterSpacing: -0.5,
+  },
+  exploreSub: {
+    color: "rgba(255,255,255,0.78)",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  exploreArrow: {
+    width: 32,
+    height: 32,
+    borderRadius: 12,
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+    alignSelf: "flex-end",
+  },
 });
 
-// ─── Main Screen 
+// ─── Main Screen
 export default function CustomerHome() {
   const { user } = useAuth();
   const router = useRouter();
@@ -342,17 +498,26 @@ export default function CustomerHome() {
   const [walletBalance, setWalletBalance] = useState(0);
   const [recentOrder, setRecentOrder] = useState<any>(null);
   const [featuredProducts, setFeaturedProducts] = useState<any[]>([]);
+  const [adminsList, setAdminsList] = useState<any[]>([]);
 
+  // Wallet card entrance
   const walletAnim = useRef(new Animated.Value(0)).current;
   const headerAnim = useRef(new Animated.Value(0)).current;
 
   const fetchData = async (isInitial = false) => {
     try {
-      const [walletData, ordersData, productsData] = await Promise.all([
-        api.getWallet(),
-        api.getOrders(),
-        api.getCatalogProducts(undefined, undefined),
-      ]);
+      const [walletData, ordersData, productsData, adminsData] =
+        await Promise.all([
+          api.getWallet(),
+          api.getOrders(),
+          api.getCatalogProducts(
+            (user as any)?.admin_id ?? undefined,
+            undefined,
+          ),
+          api.getAdmins(),
+        ]);
+
+      setAdminsList(adminsData.map((a: any) => ({ ...a, id: a.id || a._id })));
       setWalletBalance(walletData.balance);
       setRecentOrder(ordersData?.[0] || null);
       setFeaturedProducts((productsData || []).slice(0, 3));
@@ -393,7 +558,7 @@ export default function CustomerHome() {
     return () => clearInterval(interval);
   }, [isFocused]);
 
-  // ✅ Clicking any product just goes to catalog
+  // ✅ Home is browse-only — every product tap goes to the catalog (no buying here)
   const goToCatalog = () => router.push("/(customer)/catalog");
 
   if (loading) return <LoadingScreen />;
@@ -428,9 +593,15 @@ export default function CustomerHome() {
         {/* ── Brand Header ── */}
         <View style={s.headerRow}>
           <BrandHeader />
-          <TouchableOpacity style={s.notifBtn}>
+          <TouchableOpacity
+            style={s.notifBtn}
+            onPress={() =>
+              router.push("/(customer)/order-notifications" as any)
+            }
+            activeOpacity={0.82}
+          >
             <Ionicons name="notifications-outline" size={21} color="#333" />
-            <View style={s.notifDot} />
+            {recentOrder ? <View style={s.notifDot} /> : null}
           </TouchableOpacity>
         </View>
 
@@ -475,11 +646,19 @@ export default function CustomerHome() {
                     </View>
                   ) : (
                     <View style={s.okBadge}>
-                      <Ionicons name="checkmark-circle" size={10} color="#4ade80" />
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={10}
+                        color="#4ade80"
+                      />
                       <Text style={s.okBadgeText}>Good</Text>
                     </View>
                   )}
-                  <TouchableOpacity style={s.topUpBtn}>
+                  <TouchableOpacity
+                    style={s.topUpBtn}
+                    onPress={() => router.push("/(customer)/wallet")}
+                    activeOpacity={0.85}
+                  >
                     <Text style={s.topUpText}>Top Up</Text>
                   </TouchableOpacity>
                 </View>
@@ -487,6 +666,8 @@ export default function CustomerHome() {
             </LinearGradient>
           </TouchableOpacity>
         </Animated.View>
+
+        <HomeBannerSlider />
 
         {/* ── Recent Order ── */}
         <View style={s.sectionWrap}>
@@ -501,7 +682,11 @@ export default function CustomerHome() {
                       { backgroundColor: sc.bg, borderColor: sc.border },
                     ]}
                   >
-                    <Ionicons name={sc.icon as any} size={12} color={sc.color} />
+                    <Ionicons
+                      name={sc.icon as any}
+                      size={12}
+                      color={sc.color}
+                    />
                     <Text style={[s.orderStatusText, { color: sc.color }]}>
                       {sc.label}
                     </Text>
@@ -533,7 +718,9 @@ export default function CustomerHome() {
                 )}
                 <View style={s.orderTotalRow}>
                   <Text style={s.orderTotalLabel}>Total</Text>
-                  <Text style={s.orderTotalAmt}>₹{recentOrder.total_amount}</Text>
+                  <Text style={s.orderTotalAmt}>
+                    ₹{recentOrder.total_amount}
+                  </Text>
                 </View>
               </>
             ) : (
@@ -554,96 +741,42 @@ export default function CustomerHome() {
           </View>
         </View>
 
-        {/* ── Popular Items ── */}
+        {/* ── Popular Items (browse-only → catalog) ── */}
         {featuredProducts.length > 0 && (
           <View style={s.sectionWrap}>
             <View style={s.sectionHeaderRow}>
               <Text style={s.sectionTitle}>Popular Items</Text>
-              {/* Subtle hint that tapping goes to catalog */}
-              <TouchableOpacity onPress={goToCatalog}>
+              <TouchableOpacity onPress={goToCatalog} activeOpacity={0.7}>
                 <Text style={s.seeAllText}>See all →</Text>
               </TouchableOpacity>
             </View>
-
-            <View style={s.card}>
-              {featuredProducts.map((product, i) => (
-                <ProductRow
-                  key={product.id}
-                  product={product}
-                  index={i}
-                  onPress={goToCatalog}   // ✅ navigate to catalog
-                />
-              ))}
-
-              {/* Explore All Products */}
-              <TouchableOpacity
-                style={s.exploreBtn}
-                onPress={goToCatalog}
-                activeOpacity={0.85}
-              >
-                <LinearGradient
-                  colors={[Colors.primary + "18", Colors.primary + "08"]}
-                  style={s.exploreBtnGrad}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                >
-                  <View style={s.exploreBtnLeft}>
-                    <View style={s.exploreBtnIcon}>
-                      <Ionicons
-                        name="storefront-outline"
-                        size={16}
-                        color={Colors.primary}
-                      />
-                    </View>
-                    <View>
-                      <Text style={s.exploreBtnTitle}>Explore All Products</Text>
-                      <Text style={s.exploreBtnSub}>Browse the full catalogue →</Text>
-                    </View>
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color={Colors.primary} />
-                </LinearGradient>
-              </TouchableOpacity>
-
-              {/* My Subscriptions */}
-              <TouchableOpacity
-                style={s.exploreBtn}
-                onPress={() => router.push("/(customer)/my-subscriptions")}
-                activeOpacity={0.85}
-              >
-                <LinearGradient
-                  colors={["#F0FDF4", "#DCFCE7"]}
-                  style={[s.exploreBtnGrad, { borderColor: "#BBF7D0" }]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                >
-                  <View style={s.exploreBtnLeft}>
-                    <View style={[s.exploreBtnIcon, { backgroundColor: "#DCFCE7" }]}>
-                      <Ionicons name="repeat-outline" size={16} color="#22C55E" />
-                    </View>
-                    <View>
-                      <Text style={[s.exploreBtnTitle, { color: "#166534" }]}>
-                        My Subscriptions
-                      </Text>
-                      <Text style={[s.exploreBtnSub, { color: "#4B7C59" }]}>
-                        Manage your subscriptions →
-                      </Text>
-                    </View>
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color="#22C55E" />
-                </LinearGradient>
-              </TouchableOpacity>
+            <View style={s.popularGrid}>
+              {featuredProducts.map((product, i) => {
+                const admin = adminsList.find((a) => a.id === product.admin_id);
+                const adminName = admin?.shop_name || admin?.name || undefined;
+                return (
+                  <ProductGridCard
+                    key={product.id}
+                    product={product}
+                    index={i}
+                    adminName={adminName}
+                    onOpenCatalog={goToCatalog}
+                  />
+                );
+              })}
+              <ExploreAllProductsCard onPress={goToCatalog} />
             </View>
           </View>
         )}
 
-        {/* ── Brand Footer ── */}
+        {/* ── Animated Brand Footer ── */}
         <BrandFooter />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-// ─── Brand Footer 
+// ─── Brand Footer
 function BrandFooter() {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const sceneSlide = useRef(new Animated.Value(30)).current;
@@ -676,10 +809,19 @@ function BrandFooter() {
       <Text style={footerStyles.tagline}>Pure. Fresh. Delivered daily.</Text>
 
       <Animated.View
-        style={[footerStyles.sceneWrap, { transform: [{ translateY: sceneSlide }] }]}
+        style={[
+          footerStyles.sceneWrap,
+          { transform: [{ translateY: sceneSlide }] },
+        ]}
       >
         <Svg width="100%" height={130} viewBox="0 0 400 130">
-          <Rect x="0" y="0" width="400" height="130" fill={Colors.primary + "10"} />
+          <Rect
+            x="0"
+            y="0"
+            width="400"
+            height="130"
+            fill={Colors.primary + "10"}
+          />
           <Circle cx="48" cy="45" r="28" fill="#FCD34D" opacity={0.9} />
           <Circle cx="48" cy="45" r="20" fill="#FDE68A" />
           <Path
@@ -691,48 +833,237 @@ function BrandFooter() {
             fill={Colors.primary + "40"}
           />
           <G transform="translate(60, 72)">
-            <Ellipse cx="0" cy="0" rx="18" ry="10" fill={Colors.primary + "CC"} />
+            <Ellipse
+              cx="0"
+              cy="0"
+              rx="18"
+              ry="10"
+              fill={Colors.primary + "CC"}
+            />
             <Circle cx="16" cy="-8" r="7" fill={Colors.primary + "CC"} />
-            <Line x1="-10" y1="8" x2="-10" y2="20" stroke={Colors.primary} strokeWidth="3" strokeLinecap="round" />
-            <Line x1="-2" y1="9" x2="-2" y2="21" stroke={Colors.primary} strokeWidth="3" strokeLinecap="round" />
-            <Line x1="8" y1="9" x2="8" y2="21" stroke={Colors.primary} strokeWidth="3" strokeLinecap="round" />
-            <Line x1="15" y1="8" x2="15" y2="20" stroke={Colors.primary} strokeWidth="3" strokeLinecap="round" />
-            <Path d="M19 -13 Q24 -18 22 -22" stroke={Colors.primary} strokeWidth="2" fill="none" strokeLinecap="round" />
-            <Path d="M22 -13 Q28 -14 27 -18" stroke={Colors.primary} strokeWidth="2" fill="none" strokeLinecap="round" />
+            <Line
+              x1="-10"
+              y1="8"
+              x2="-10"
+              y2="20"
+              stroke={Colors.primary}
+              strokeWidth="3"
+              strokeLinecap="round"
+            />
+            <Line
+              x1="-2"
+              y1="9"
+              x2="-2"
+              y2="21"
+              stroke={Colors.primary}
+              strokeWidth="3"
+              strokeLinecap="round"
+            />
+            <Line
+              x1="8"
+              y1="9"
+              x2="8"
+              y2="21"
+              stroke={Colors.primary}
+              strokeWidth="3"
+              strokeLinecap="round"
+            />
+            <Line
+              x1="15"
+              y1="8"
+              x2="15"
+              y2="20"
+              stroke={Colors.primary}
+              strokeWidth="3"
+              strokeLinecap="round"
+            />
+            <Path
+              d="M19 -13 Q24 -18 22 -22"
+              stroke={Colors.primary}
+              strokeWidth="2"
+              fill="none"
+              strokeLinecap="round"
+            />
+            <Path
+              d="M22 -13 Q28 -14 27 -18"
+              stroke={Colors.primary}
+              strokeWidth="2"
+              fill="none"
+              strokeLinecap="round"
+            />
           </G>
           <G transform="translate(155, 58)">
-            <Rect x="-8" y="0" width="16" height="28" rx="4" fill="#fff" stroke={Colors.primary} strokeWidth="1.5" />
-            <Rect x="-5" y="-6" width="10" height="8" rx="2" fill="#fff" stroke={Colors.primary} strokeWidth="1.5" />
-            <Rect x="-8" y="6" width="16" height="8" fill={Colors.primary + "40"} />
+            <Rect
+              x="-8"
+              y="0"
+              width="16"
+              height="28"
+              rx="4"
+              fill="#fff"
+              stroke={Colors.primary}
+              strokeWidth="1.5"
+            />
+            <Rect
+              x="-5"
+              y="-6"
+              width="10"
+              height="8"
+              rx="2"
+              fill="#fff"
+              stroke={Colors.primary}
+              strokeWidth="1.5"
+            />
+            <Rect
+              x="-8"
+              y="6"
+              width="16"
+              height="8"
+              fill={Colors.primary + "40"}
+            />
           </G>
           <G transform="translate(230, 80)">
-            <Ellipse cx="0" cy="0" rx="12" ry="7" fill={Colors.primary + "88"} />
+            <Ellipse
+              cx="0"
+              cy="0"
+              rx="12"
+              ry="7"
+              fill={Colors.primary + "88"}
+            />
             <Circle cx="11" cy="-6" r="5" fill={Colors.primary + "88"} />
-            <Line x1="-7" y1="6" x2="-7" y2="14" stroke={Colors.primary + "88"} strokeWidth="2" strokeLinecap="round" />
-            <Line x1="-1" y1="7" x2="-1" y2="15" stroke={Colors.primary + "88"} strokeWidth="2" strokeLinecap="round" />
-            <Line x1="6" y1="7" x2="6" y2="15" stroke={Colors.primary + "88"} strokeWidth="2" strokeLinecap="round" />
-            <Line x1="10" y1="6" x2="10" y2="14" stroke={Colors.primary + "88"} strokeWidth="2" strokeLinecap="round" />
+            <Line
+              x1="-7"
+              y1="6"
+              x2="-7"
+              y2="14"
+              stroke={Colors.primary + "88"}
+              strokeWidth="2"
+              strokeLinecap="round"
+            />
+            <Line
+              x1="-1"
+              y1="7"
+              x2="-1"
+              y2="15"
+              stroke={Colors.primary + "88"}
+              strokeWidth="2"
+              strokeLinecap="round"
+            />
+            <Line
+              x1="6"
+              y1="7"
+              x2="6"
+              y2="15"
+              stroke={Colors.primary + "88"}
+              strokeWidth="2"
+              strokeLinecap="round"
+            />
+            <Line
+              x1="10"
+              y1="6"
+              x2="10"
+              y2="14"
+              stroke={Colors.primary + "88"}
+              strokeWidth="2"
+              strokeLinecap="round"
+            />
           </G>
           <G transform="translate(310, 55)">
-            <Rect x="-3" y="20" width="6" height="18" fill={Colors.primary + "80"} />
-            <Ellipse cx="0" cy="18" rx="14" ry="18" fill={Colors.primary + "90"} />
+            <Rect
+              x="-3"
+              y="20"
+              width="6"
+              height="18"
+              fill={Colors.primary + "80"}
+            />
+            <Ellipse
+              cx="0"
+              cy="18"
+              rx="14"
+              ry="18"
+              fill={Colors.primary + "90"}
+            />
           </G>
           <G transform="translate(340, 62)">
-            <Rect x="-2" y="15" width="5" height="14" fill={Colors.primary + "60"} />
-            <Ellipse cx="0" cy="14" rx="10" ry="13" fill={Colors.primary + "70"} />
+            <Rect
+              x="-2"
+              y="15"
+              width="5"
+              height="14"
+              fill={Colors.primary + "60"}
+            />
+            <Ellipse
+              cx="0"
+              cy="14"
+              rx="10"
+              ry="13"
+              fill={Colors.primary + "70"}
+            />
           </G>
           <G transform="translate(370, 58)">
-            <Rect x="-3" y="18" width="6" height="16" fill={Colors.primary + "80"} />
-            <Ellipse cx="0" cy="16" rx="13" ry="16" fill={Colors.primary + "88"} />
+            <Rect
+              x="-3"
+              y="18"
+              width="6"
+              height="16"
+              fill={Colors.primary + "80"}
+            />
+            <Ellipse
+              cx="0"
+              cy="16"
+              rx="13"
+              ry="16"
+              fill={Colors.primary + "88"}
+            />
           </G>
-          <Line x1="0" y1="108" x2="400" y2="108" stroke={Colors.primary + "60"} strokeWidth="1" />
+          <Line
+            x1="0"
+            y1="108"
+            x2="400"
+            y2="108"
+            stroke={Colors.primary + "60"}
+            strokeWidth="1"
+          />
           <G transform="translate(310, 90)">
-            <Circle cx="-12" cy="10" r="7" fill="none" stroke={Colors.primary} strokeWidth="2.5" />
-            <Circle cx="12" cy="10" r="7" fill="none" stroke={Colors.primary} strokeWidth="2.5" />
-            <Path d="M-12 10 L0 2 L12 10" fill="none" stroke={Colors.primary} strokeWidth="2" />
-            <Path d="M0 2 L4 -6 L14 -6" fill="none" stroke={Colors.primary} strokeWidth="2" strokeLinecap="round" />
-            <Rect x="4" y="-14" width="20" height="10" rx="3" fill={Colors.primary} />
-            <SvgText fill="#fff" x={7} y={-6} fontSize={6}>milk</SvgText>
+            <Circle
+              cx="-12"
+              cy="10"
+              r="7"
+              fill="none"
+              stroke={Colors.primary}
+              strokeWidth="2.5"
+            />
+            <Circle
+              cx="12"
+              cy="10"
+              r="7"
+              fill="none"
+              stroke={Colors.primary}
+              strokeWidth="2.5"
+            />
+            <Path
+              d="M-12 10 L0 2 L12 10"
+              fill="none"
+              stroke={Colors.primary}
+              strokeWidth="2"
+            />
+            <Path
+              d="M0 2 L4 -6 L14 -6"
+              fill="none"
+              stroke={Colors.primary}
+              strokeWidth="2"
+              strokeLinecap="round"
+            />
+            <Rect
+              x="4"
+              y="-14"
+              width="20"
+              height="10"
+              rx="3"
+              fill={Colors.primary}
+            />
+            <SvgText fill="#fff" x={7} y={-6} fontSize={6}>
+              milk
+            </SvgText>
           </G>
           <Rect x="0" y="120" width="400" height="10" fill={Colors.primary} />
         </Svg>
@@ -760,7 +1091,12 @@ const footerStyles = StyleSheet.create({
     marginBottom: 6,
   },
   statRow: { flexDirection: "row", alignItems: "baseline", gap: 4 },
-  statSuffix: { fontSize: 28, fontWeight: "900", color: "#E0E0E0", letterSpacing: -1 },
+  statSuffix: {
+    fontSize: 28,
+    fontWeight: "900",
+    color: "#E0E0E0",
+    letterSpacing: -1,
+  },
   statSub: {
     fontSize: 11,
     fontWeight: "700",
@@ -787,7 +1123,7 @@ const footerStyles = StyleSheet.create({
   },
 });
 
-// ─── Styles 
+// ─── Styles
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F4F4F6" },
 
@@ -908,6 +1244,75 @@ const s = StyleSheet.create({
   },
   topUpText: { fontSize: 12, fontWeight: "700", color: "#fff" },
 
+  // Home banner slider
+  bannerWrap: { marginHorizontal: 20, marginBottom: 20 },
+  bannerSlide: { width: HOME_BANNER_WIDTH },
+  bannerCard: {
+    height: 150,
+    borderRadius: 24,
+    overflow: "hidden",
+    padding: 18,
+    flexDirection: "row",
+    alignItems: "center",
+    shadowColor: "#123524",
+    shadowOpacity: 0.16,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
+  },
+  bannerTextBox: { flex: 1, zIndex: 2 },
+  bannerKicker: {
+    fontSize: 10,
+    fontWeight: "900",
+    color: "#bbf7d0",
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
+    marginBottom: 6,
+  },
+  bannerTitle: {
+    fontSize: 22,
+    fontWeight: "900",
+    color: "#fff",
+    letterSpacing: -0.6,
+    maxWidth: 190,
+  },
+  bannerSubtitle: {
+    fontSize: 11.5,
+    color: "rgba(255,255,255,0.76)",
+    fontWeight: "600",
+    marginTop: 7,
+    lineHeight: 16,
+    maxWidth: 190,
+  },
+  bannerImage: {
+    width: 135,
+    height: 120,
+    marginRight: -6,
+    zIndex: 2,
+  },
+  bannerGlow: {
+    position: "absolute",
+    right: -35,
+    bottom: -45,
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    backgroundColor: "rgba(187,247,208,0.18)",
+  },
+  bannerDots: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 6,
+    marginTop: 9,
+  },
+  bannerDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#D1D5DB",
+  },
+  bannerDotActive: { width: 18, backgroundColor: Colors.primary },
+
   // Sections
   sectionWrap: { marginHorizontal: 20, marginBottom: 20 },
   sectionHeaderRow: {
@@ -926,6 +1331,11 @@ const s = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700",
     color: Colors.primary,
+  },
+  popularGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: POPULAR_GRID_GAP,
   },
 
   // Generic card
@@ -1001,33 +1411,4 @@ const s = StyleSheet.create({
   },
   emptyTitle: { fontSize: 15, fontWeight: "700", color: "#999" },
   emptySubtitle: { fontSize: 12, color: "#ccc" },
-
-  // Explore / subscription buttons
-  exploreBtn: { marginTop: 14, borderRadius: 16, overflow: "hidden" },
-  exploreBtnGrad: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: Colors.primary + "20",
-  },
-  exploreBtnLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
-  exploreBtnIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 11,
-    backgroundColor: Colors.primary + "20",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  exploreBtnTitle: { fontSize: 14, fontWeight: "700", color: "#111" },
-  exploreBtnSub: {
-    fontSize: 11,
-    color: Colors.primary,
-    fontWeight: "600",
-    marginTop: 1,
-  },
 });

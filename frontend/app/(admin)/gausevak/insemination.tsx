@@ -1906,10 +1906,7 @@ export default function InseminationScreen() {
 
       {/* ── Header ── */}
       <View style={s.header}>
-        <TouchableOpacity
-          onPress={() => router.replace("/admin/gausevak" as any)}
-          style={s.backBtn}
-        >
+        <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
           <Ionicons name="arrow-back" size={20} color="#111827" />
         </TouchableOpacity>
         <View style={{ flex: 1, marginLeft: 12 }}>

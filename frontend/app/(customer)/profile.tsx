@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Calendar } from "react-native-calendars";
 import { useAuth } from "../../src/contexts/AuthContext";
@@ -298,10 +298,14 @@ const toastStyles = StyleSheet.create({
 
 export default function ProfileScreen() {
   const { user, logout, updateUser } = useAuth();
-  const router = useRouter();
-  const isFocused = useIsFocused();
+  const router = useRouter()
 
   // Pure state storage for vacations to bypass backend API
+  const params = useLocalSearchParams<{
+    openAddress?: string;
+    addressRequired?: string;
+    returnTo?: string;
+  }>();
   const [vacations, setVacations] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
   const [ordersExpanded, setOrdersExpanded] = useState(false);
@@ -316,6 +320,16 @@ export default function ProfileScreen() {
     user?.address || { tower: "", flat: "", floor: "" }
   );
   const [saving, setSaving] = useState(false);
+  const [deleteModal, setDeleteModal] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const isFocused = useIsFocused();
+
+  useEffect(() => {
+    if (!isFocused || params.openAddress !== "1") return;
+    setEditAddress(user?.address || { tower: "", flat: "", floor: "" });
+    setEditModal(true);
+  }, [isFocused, params.openAddress, user?.address]);
 
   const [alertConfig, setAlertConfig] = useState<AlertConfig>({
     visible: false,
@@ -340,6 +354,14 @@ export default function ProfileScreen() {
     setToast({ visible: true, message, type });
     setTimeout(() => setToast((prev) => ({ ...prev, visible: false })), 2800);
   };
+
+  useEffect(() => {
+    if (!isFocused || params.addressRequired !== "1") return;
+    showToast(
+      "Please add your delivery address before placing the order.",
+      "error",
+    );
+  }, [isFocused, params.addressRequired]);
 
   useEffect(() => {
     if (!isFocused) return;
@@ -381,6 +403,45 @@ export default function ProfileScreen() {
           onPress: async () => {
             await logout();
             router.replace("/");
+          },
+        },
+      ],
+    });
+  };
+
+  const handleDeleteAccount = () => {
+    setDeletePassword("");
+    setDeleteModal(true);
+  };
+
+  const confirmDeleteAccount = async () => {
+    if (!deletePassword.trim()) {
+      showToast("Please enter your password to delete your account.", "error");
+      return;
+    }
+    showAlert({
+      icon: "trash-outline",
+      iconColor: "#DC2626",
+      iconBg: "#FEF2F2",
+      title: "Delete Account",
+      message:
+        "This will permanently delete your Gau Satva account and remove your personal profile data. This action cannot be undone.",
+      actions: [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete Account",
+          style: "destructive",
+          onPress: async () => {
+            setDeletingAccount(true);
+            try {
+              await api.deleteAccount(deletePassword);
+              setDeleteModal(false);
+              router.replace("/(auth)/login");
+            } catch (error: any) {
+              showToast(error?.message || "Could not delete account. Please try again.", "error");
+            } finally {
+              setDeletingAccount(false);
+            }
           },
         },
       ],
@@ -448,16 +509,31 @@ export default function ProfileScreen() {
   };
 
   const handleSaveProfile = async () => {
+    if (!editAddress.tower?.trim() || !editAddress.flat?.trim()) {
+      showToast("Tower / building and flat number are required for delivery.", "error");
+      return;
+    }
+
+    const normalizedAddress = {
+      tower: editAddress.tower.trim(),
+      flat: editAddress.flat.trim(),
+      floor: editAddress.floor?.trim() || "",
+    };
+
     setSaving(true);
     try {
       await api.updateProfile({
         name: editName,
         phone: editPhone,
-        address: editAddress,
+        address: normalizedAddress,
       });
-      updateUser({ name: editName, phone: editPhone, address: editAddress });
+      setEditAddress(normalizedAddress);
+      updateUser({ name: editName, phone: editPhone, address: normalizedAddress });
       setEditModal(false);
       showToast("Profile updated successfully", "success");
+      if (params.returnTo === "catalog") {
+        router.replace("/(customer)/catalog");
+      }
     } catch (error: any) {
       showToast(error.message || "Failed to update profile", "error");
     } finally {
@@ -569,7 +645,7 @@ export default function ProfileScreen() {
             </View>
             <Text style={styles.cardTitle}>Delivery Address</Text>
           </View>
-          {user?.address && (user.address.tower || user.address.flat) ? (
+          {user?.address?.tower?.trim?.() && user?.address?.flat?.trim?.() ? (
             <View style={styles.addressGrid}>
               {user.address.tower && (
                 <View style={styles.addressPill}>
@@ -596,7 +672,9 @@ export default function ProfileScreen() {
               onPress={() => setEditModal(true)}
             >
               <Ionicons name="add-circle-outline" size={20} color={Colors.primary} />
-              <Text style={styles.emptyAddressText}>Add delivery address</Text>
+              <Text style={styles.emptyAddressText}>
+                {user?.address ? "Complete delivery address" : "Add delivery address"}
+              </Text>
             </TouchableOpacity>
           )}
         </View>
@@ -742,9 +820,53 @@ export default function ProfileScreen() {
             style={{ marginLeft: "auto" }}
           />
         </TouchableOpacity>
+
+        <TouchableOpacity style={styles.deleteAccountBtn} onPress={handleDeleteAccount}>
+          <View style={styles.logoutIcon}>
+            <Ionicons name="trash-outline" size={18} color="#dc2626" />
+          </View>
+          <Text style={styles.deleteAccountText}>Delete Account</Text>
+          <Ionicons
+            name="chevron-forward"
+            size={16}
+            color="#fca5a5"
+            style={{ marginLeft: "auto" }}
+          />
+        </TouchableOpacity>
       </ScrollView>
 
-      {/* ── Vacation Modal (Visual design untouched) ── */}
+      <Modal visible={deleteModal} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <View style={styles.dragHandle} />
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Delete Account</Text>
+              <TouchableOpacity onPress={() => setDeleteModal(false)}>
+                <Ionicons name="close" size={22} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.modalBody}>
+              <Text style={styles.deleteAccountHelp}>
+                Enter your password to confirm permanent account deletion.
+              </Text>
+              <Input
+                label="Password"
+                placeholder="Enter password"
+                value={deletePassword}
+                onChangeText={setDeletePassword}
+                secureTextEntry
+              />
+              <Button
+                title={deletingAccount ? "Deleting..." : "Continue"}
+                onPress={confirmDeleteAccount}
+                loading={deletingAccount}
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Vacation Modal ── */}
       <Modal visible={vacationModal} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalSheet}>
@@ -835,6 +957,21 @@ export default function ProfileScreen() {
               </TouchableOpacity>
             </View>
             <ScrollView showsVerticalScrollIndicator={false}>
+              {params.addressRequired === "1" && (
+                <View style={styles.addressRequiredBanner}>
+                  <View style={styles.addressRequiredIcon}>
+                    <Ionicons name="location" size={18} color="#dc2626" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.addressRequiredTitle}>
+                      Delivery address required
+                    </Text>
+                    <Text style={styles.addressRequiredText}>
+                      Add your address to continue placing the order.
+                    </Text>
+                  </View>
+                </View>
+              )}
               <Input
                 label="Name"
                 value={editName}
@@ -1121,6 +1258,25 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   logoutText: { fontSize: 15, fontWeight: "700", color: "#ef4444" },
+  deleteAccountBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginHorizontal: 16,
+    marginTop: 10,
+    padding: 16,
+    backgroundColor: "#FFF7F7",
+    borderRadius: 18,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: "#FECACA",
+  },
+  deleteAccountText: { fontSize: 15, fontWeight: "800", color: "#dc2626" },
+  deleteAccountHelp: {
+    fontSize: 14,
+    color: "#6B7280",
+    lineHeight: 20,
+    marginBottom: 14,
+  },
 
   // Modals
   modalOverlay: {
@@ -1136,6 +1292,7 @@ const styles = StyleSheet.create({
     paddingBottom: 36,
     maxHeight: "93%",
   },
+  modalBody: { paddingBottom: 4 },
   dragHandle: {
     width: 36,
     height: 4,
@@ -1196,4 +1353,25 @@ const styles = StyleSheet.create({
     marginTop: 12,
     marginBottom: 8,
   },
+  addressRequiredBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "#FEF2F2",
+    borderColor: "#FECACA",
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 16,
+  },
+  addressRequiredIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 11,
+    backgroundColor: "#FEE2E2",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  addressRequiredTitle: { fontSize: 13, fontWeight: "900", color: "#991B1B" },
+  addressRequiredText: { fontSize: 11.5, color: "#B91C1C", marginTop: 2 },
 });

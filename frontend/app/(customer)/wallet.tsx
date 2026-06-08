@@ -646,10 +646,23 @@ export default function WalletScreen() {
         {/* ── Hero ── */}
         <View style={styles.heroCard}>
           <View style={styles.heroTop}>
-            <Text style={styles.heroLabel}>Total Balance</Text>
-            <View style={styles.walletBadge}>
-              <Ionicons name="wallet-outline" size={14} color="#fff" />
-              <Text style={styles.walletBadgeText}>My Wallet</Text>
+            <View style={styles.heroInfoCard}>
+              <View style={styles.heroInfoIcon}>
+                <Ionicons name="wallet-outline" size={15} color="#fff" />
+              </View>
+              <View>
+                <Text style={styles.heroInfoLabel}>My Wallet</Text>
+                <Text style={styles.heroInfoValue}>Active</Text>
+              </View>
+            </View>
+            <View style={styles.heroInfoCard}>
+              <View style={styles.heroInfoIcon}>
+                <Ionicons name="cash-outline" size={15} color="#fff" />
+              </View>
+              <View>
+                <Text style={styles.heroInfoLabel}>Total Balance</Text>
+                <Text style={styles.heroInfoValue}>Available</Text>
+              </View>
             </View>
           </View>
           <Text style={styles.heroAmount}>₹{balance.toFixed(2)}</Text>
@@ -888,25 +901,32 @@ const styles = StyleSheet.create({
   },
   heroTop: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    gap: 10,
     alignItems: "center",
-    marginBottom: 8,
+    marginBottom: 14,
   },
-  heroLabel: {
-    fontSize: 13,
-    color: "rgba(255,255,255,0.7)",
-    fontWeight: "500",
-  },
-  walletBadge: {
+  heroInfoCard: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.15)",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 20,
-    gap: 4,
+    gap: 9,
+    backgroundColor: "rgba(255,255,255,0.16)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.22)",
+    paddingHorizontal: 11,
+    paddingVertical: 10,
+    borderRadius: 16,
   },
-  walletBadgeText: { fontSize: 11, color: "#fff", fontWeight: "600" },
+  heroInfoIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    backgroundColor: "rgba(255,255,255,0.18)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  heroInfoLabel: { fontSize: 11, color: "rgba(255,255,255,0.72)", fontWeight: "700" },
+  heroInfoValue: { fontSize: 13, color: "#fff", fontWeight: "900", marginTop: 2 },
   heroAmount: {
     fontSize: 44,
     fontWeight: "800",

@@ -405,6 +405,16 @@ class ApiService {
     return data;
   }
 
+// New API to get admin details by referral code (for registration flow)
+  async getAdminByReferral(referralCode: string) {
+  return this.request<{
+    found: boolean;
+    admin_id: string | null;
+    admin_name: string | null;
+    referral_code?: string;
+  }>(`/admin/referral/${referralCode.toUpperCase().trim()}`);
+}
+
   async register(userData: any) {
     const data = await this.request<any>("/auth/register", {
       method: "POST",
@@ -442,6 +452,16 @@ class ApiService {
       method: "PUT",
       body: JSON.stringify(data),
     });
+  }
+
+  async deleteAccount(password: string) {
+    const result = await this.request<any>("/auth/account", {
+      method: "DELETE",
+      body: JSON.stringify({ password }),
+    });
+    this.setToken(null);
+    await AsyncStorage.multiRemove(["access_token", "worker_token", "worker_data"]);
+    return result;
   }
 
   async getCatalogProducts(adminId?: string, category?: string) {
@@ -842,6 +862,8 @@ async cancelUserOrder(orderId: string) {
     isSold: boolean;
     type: string;
     milkActive: boolean;   // ← ADD THIS
+    qrLinkedData: string;
+    isBarcodeLinked: boolean;
   }>) {
     return this.request<any>(`/gausevak/cows/${id}`, {
       method: "PUT",
@@ -1366,6 +1388,17 @@ async cancelUserOrder(orderId: string) {
   async generateCowQR(cowId: string) {
     return this.request<any>(`/gausevak/cows/${cowId}/qr`, {
       method: "POST",
+    });
+  }
+
+  async linkQRToCow(
+    cowId: string,
+    qrData: string,
+    isBarcodeLinked: boolean = false,
+  ) {
+    return this.updateCow(cowId, {
+      qrLinkedData: qrData,
+      isBarcodeLinked,
     });
   }
 

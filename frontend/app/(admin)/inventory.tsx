@@ -18,12 +18,11 @@ import {
   Animated,
   Easing,
   Dimensions,
-  KeyboardAvoidingView,
-  Platform,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
+import { useRouter } from "expo-router";
 import SwipeToConfirm from "../../src/components/SwipeToConfirm";
 import { api } from "../../src/services/api";
 import LoadingScreen from "../../src/components/LoadingScreen";
@@ -33,27 +32,27 @@ const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 // ── Warm Color Palette
 const C = {
-  primary: "#FF9675",
-  secondary: "#FF9675",
-  accent: "#8B6854",
-  light: "#8B6854",
-  dark: "#BB6B3F",
-  deep: "#8B6854",
-  bg: "#FFF8EF",
-  card: "#FFE8D6",
-  text: "#3D1F0A",
-  textMuted: "#A07850",
-  textLight: "#C9A882",
-  success: "#22C55E",
-  successBg: "#F0FDF4",
-  white: "#FFFFFF",
-  border: "#FFE8C8",
-  inputBg: "#FFF8EF",
-  chipBg: "#FFF3DC",
-  overlay: "rgba(61,31,10,0.45)",
+  primary:    "#FF9675",
+  secondary:  "#FF9675",
+  accent:     "#8B6854",
+  light:      "#8B6854",
+  dark:       "#BB6B3F",
+  deep:       "#8B6854",
+  bg:         "#FFF8EF",
+  card:       "#FFE8D6",
+  text:       "#3D1F0A",
+  textMuted:  "#A07850",
+  textLight:  "#C9A882",
+  success:    "#22C55E",
+  successBg:  "#F0FDF4",
+  white:      "#FFFFFF",
+  border:     "#FFE8C8",
+  inputBg:    "#FFF8EF",
+  chipBg:     "#FFF3DC",
+  overlay:    "rgba(61,31,10,0.45)",
 };
 
-// ── Custom Alert
+// ── Custom Alert Types
 type AlertButton = {
   text: string;
   style?: "default" | "cancel" | "destructive";
@@ -67,6 +66,7 @@ type AlertConfig = {
   buttons: AlertButton[];
 };
 
+// ── Custom Alert Component
 function CustomAlert({
   config,
   onDismiss,
@@ -99,12 +99,10 @@ function CustomAlert({
               }
             />
           </View>
-
           <Text style={alertStyles.title}>{config.title}</Text>
           {config.message ? (
             <Text style={alertStyles.message}>{config.message}</Text>
           ) : null}
-
           <View style={alertStyles.btnRow}>
             {config.buttons.map((btn, idx) => {
               const isDestructive = btn.style === "destructive";
@@ -143,7 +141,7 @@ function CustomAlert({
   );
 }
 
-// ── Alert hook
+// ── Alert Hook
 function useCustomAlert() {
   const [alertConfig, setAlertConfig] = useState<AlertConfig>({
     visible: false,
@@ -168,6 +166,40 @@ function useCustomAlert() {
     setAlertConfig((prev) => ({ ...prev, visible: false }));
 
   return { alertConfig, showAlert, dismissAlert };
+}
+
+// ── Snackbar
+type SnackbarState = {
+  visible: boolean;
+  message: string;
+  type: "success" | "error";
+};
+
+function Snackbar({ visible, message, type }: SnackbarState) {
+  if (!visible) return null;
+  const isSuccess = type === "success";
+  return (
+    <View
+      style={[
+        snackStyles.wrap,
+        isSuccess ? snackStyles.successWrap : snackStyles.errorWrap,
+      ]}
+    >
+      <Ionicons
+        name={isSuccess ? "checkmark-circle" : "alert-circle"}
+        size={18}
+        color={isSuccess ? "#166534" : "#b91c1c"}
+      />
+      <Text
+        style={[
+          snackStyles.text,
+          { color: isSuccess ? "#166534" : "#b91c1c" },
+        ]}
+      >
+        {message}
+      </Text>
+    </View>
+  );
 }
 
 // ── Types
@@ -243,7 +275,7 @@ const CATEGORIES = [
 const DIETARY_OPTIONS = ["Veg", "Non-Veg", "Vegan", "Gluten-Free"];
 const TABS = ["Details", "Highlights", "Information"];
 
-// ── Animated Success Tick Component ──
+// ── Animated Success Tick Component
 function SuccessTick({
   visible,
   onDone,
@@ -264,29 +296,24 @@ function SuccessTick({
       textOpacity.setValue(0);
 
       Animated.sequence([
-        // Circle pops in
         Animated.spring(scaleAnim, {
           toValue: 1,
           friction: 4,
           tension: 100,
           useNativeDriver: true,
         }),
-        // Checkmark scales in
         Animated.spring(checkScale, {
           toValue: 1,
           friction: 3,
           tension: 120,
           useNativeDriver: true,
         }),
-        // Text fades in
         Animated.timing(textOpacity, {
           toValue: 1,
           duration: 200,
           useNativeDriver: true,
         }),
-        // Pause
         Animated.delay(600),
-        // Fade everything out
         Animated.timing(opacityAnim, {
           toValue: 0,
           duration: 400,
@@ -344,9 +371,10 @@ const tickStyles = StyleSheet.create({
   },
 });
 
-
 // ══  MAIN SCREEN  ══
 export default function InventoryScreen() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
   const { alertConfig, showAlert, dismissAlert } = useCustomAlert();
@@ -355,6 +383,25 @@ export default function InventoryScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
+
+  // ── Snackbar State
+  const [snackbar, setSnackbar] = useState<SnackbarState>({
+    visible: false,
+    message: "",
+    type: "success",
+  });
+
+  const showSnackbar = useCallback((message: string, type: "success" | "error") => {
+    setSnackbar({ visible: true, message, type });
+  }, []);
+
+  useEffect(() => {
+    if (!snackbar.visible) return;
+    const timer = setTimeout(() => {
+      setSnackbar((prev) => ({ ...prev, visible: false }));
+    }, 2600);
+    return () => clearTimeout(timer);
+  }, [snackbar.visible]);
 
   // ── Add Modal State
   const [addModal, setAddModal] = useState(false);
@@ -382,9 +429,8 @@ export default function InventoryScreen() {
     }
   };
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  useEffect(() => { fetchData(); }, []);
+
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     fetchData();
@@ -460,10 +506,11 @@ export default function InventoryScreen() {
         shelf_life: formData.shelf_life || undefined,
       });
 
-      // Show success animation
       setShowSuccessTick(true);
     } catch (e: any) {
-      showAlert("Something went wrong", e.message);
+      const message = e?.message || "Could not add product";
+      showAlert("Something went wrong", message);
+      showSnackbar(message, "error");
     }
   };
 
@@ -472,6 +519,7 @@ export default function InventoryScreen() {
     setAddModal(false);
     setFormData({ ...EMPTY_FORM });
     setActiveTab(0);
+    showSnackbar("Product added successfully", "success");
     fetchData();
   };
 
@@ -481,7 +529,6 @@ export default function InventoryScreen() {
     setIsEditing(false);
     setDetailModal(true);
     setEditTab(0);
-    // Pre-fill edit form
     setEditForm({
       name: product.name || "",
       category: product.category || "",
@@ -514,9 +561,12 @@ export default function InventoryScreen() {
         prev ? { ...prev, stock: newStock } : prev,
       );
       setEditForm((prev) => ({ ...prev, stock: String(newStock) }));
+      showSnackbar(`Stock updated to ${newStock}`, "success");
       fetchData();
     } catch (e: any) {
-      showAlert("Update Failed", e.message);
+      const message = e?.message || "Could not update stock";
+      showAlert("Update Failed", message);
+      showSnackbar(message, "error");
     } finally {
       setStockUpdating(false);
     }
@@ -550,7 +600,9 @@ export default function InventoryScreen() {
       });
       setShowEditSuccessTick(true);
     } catch (e: any) {
-      showAlert("Update Failed", e.message);
+      const message = e?.message || "Could not update product";
+      showAlert("Update Failed", message);
+      showSnackbar(message, "error");
     }
   };
 
@@ -559,24 +611,47 @@ export default function InventoryScreen() {
     setDetailModal(false);
     setIsEditing(false);
     setSelectedProduct(null);
+    showSnackbar("Product updated successfully", "success");
     fetchData();
   };
 
-  // ── Toggle availability
+  // ── Toggle Availability
   const toggleAvailability = async (product: Product) => {
-    try {
-      await api.updateProduct(product.id!, {
-        is_available: !product.is_available,
-      });
-      if (selectedProduct?.id === product.id) {
-        setSelectedProduct((prev) =>
-          prev ? { ...prev, is_available: !prev.is_available } : prev,
-        );
-      }
-      fetchData();
-    } catch (e: any) {
-      showAlert("Update Failed", e.message);
-    }
+    const nextState = !product.is_available;
+    showAlert(
+      nextState ? "Make Product Available?" : "Make Product Unavailable?",
+      nextState
+        ? `${product.name} will be visible for orders.`
+        : `${product.name} will be hidden from orders.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: nextState ? "Make Available" : "Make Unavailable",
+          style: "default",
+          onPress: async () => {
+            try {
+              await api.updateProduct(product.id!, { is_available: nextState });
+              if (selectedProduct?.id === product.id) {
+                setSelectedProduct((prev) =>
+                  prev ? { ...prev, is_available: nextState } : prev,
+                );
+              }
+              showSnackbar(
+                nextState
+                  ? `${product.name} is now available`
+                  : `${product.name} is now unavailable`,
+                "success",
+              );
+              fetchData();
+            } catch (e: any) {
+              const message = e?.message || "Could not update availability";
+              showAlert("Update Failed", message);
+              showSnackbar(message, "error");
+            }
+          },
+        },
+      ],
+    );
   };
 
   // ── Delete Product
@@ -594,6 +669,7 @@ export default function InventoryScreen() {
             await api.deleteProduct(id);
             setDetailModal(false);
             setSelectedProduct(null);
+            showSnackbar("Product deleted", "success");
             fetchData();
           },
         },
@@ -620,27 +696,22 @@ export default function InventoryScreen() {
   const available = products.filter((p) => p.is_available).length;
   const lowStock = products.filter((p) => p.stock > 0 && p.stock <= 5).length;
 
-  // ══  RENDER FORM TABS (shared for Add & Edit)  ══
+  // ── Render Form Tabs (shared for Add & Edit)
   const renderFormTab = (
     tab: number,
     data: FormData,
     update: (key: keyof FormData, val: string) => void,
   ) => {
     if (tab === 0) {
-      // ── TAB: Details
       return (
         <View>
-          {/* Thumbnail */}
           <Text style={styles.sectionHeader}>Product Images</Text>
           <TouchableOpacity
             style={styles.thumbnailPicker}
             onPress={() => pickImage((uri) => update("image", uri))}
           >
             {data.image ? (
-              <Image
-                source={{ uri: data.image }}
-                style={styles.thumbnailImage}
-              />
+              <Image source={{ uri: data.image }} style={styles.thumbnailImage} />
             ) : (
               <View style={styles.thumbnailEmpty}>
                 <View style={styles.thumbnailIconCircle}>
@@ -657,54 +728,36 @@ export default function InventoryScreen() {
             ) : null}
           </TouchableOpacity>
 
-          {/* Additional Images Row */}
           <View style={styles.additionalImagesRow}>
-            {/* Image 2 */}
             <TouchableOpacity
               style={styles.additionalImagePicker}
               onPress={() => pickImage((uri) => update("image2", uri))}
             >
               {data.image2 ? (
-                <Image
-                  source={{ uri: data.image2 }}
-                  style={styles.additionalImage}
-                />
+                <Image source={{ uri: data.image2 }} style={styles.additionalImage} />
               ) : (
                 <View style={styles.additionalImageEmpty}>
-                  <Ionicons
-                    name="add-circle-outline"
-                    size={22}
-                    color={C.textLight}
-                  />
+                  <Ionicons name="add-circle-outline" size={22} color={C.textLight} />
                   <Text style={styles.additionalImageText}>Image 2</Text>
                 </View>
               )}
             </TouchableOpacity>
 
-            {/* Image 3 */}
             <TouchableOpacity
               style={styles.additionalImagePicker}
               onPress={() => pickImage((uri) => update("image3", uri))}
             >
               {data.image3 ? (
-                <Image
-                  source={{ uri: data.image3 }}
-                  style={styles.additionalImage}
-                />
+                <Image source={{ uri: data.image3 }} style={styles.additionalImage} />
               ) : (
                 <View style={styles.additionalImageEmpty}>
-                  <Ionicons
-                    name="add-circle-outline"
-                    size={22}
-                    color={C.textLight}
-                  />
+                  <Ionicons name="add-circle-outline" size={22} color={C.textLight} />
                   <Text style={styles.additionalImageText}>Image 3</Text>
                 </View>
               )}
             </TouchableOpacity>
           </View>
 
-          {/* Product Name */}
           <Text style={styles.fieldLabel}>Product Name</Text>
           <TextInput
             style={styles.input}
@@ -714,7 +767,6 @@ export default function InventoryScreen() {
             onChangeText={(v) => update("name", v)}
           />
 
-          {/* Category */}
           <Text style={styles.fieldLabel}>Category</Text>
           <ScrollView
             horizontal
@@ -742,7 +794,6 @@ export default function InventoryScreen() {
             ))}
           </ScrollView>
 
-          {/* MRP & Current Price */}
           <View style={styles.row}>
             <View style={{ flex: 1 }}>
               <Text style={styles.fieldLabel}>MRP (₹)</Text>
@@ -769,7 +820,6 @@ export default function InventoryScreen() {
             </View>
           </View>
 
-          {/* Quantity & Stock */}
           <View style={styles.row}>
             <View style={{ flex: 1 }}>
               <Text style={styles.fieldLabel}>Quantity / Unit</Text>
@@ -799,7 +849,6 @@ export default function InventoryScreen() {
     }
 
     if (tab === 1) {
-      // ── TAB: Highlights
       return (
         <View>
           <Text style={styles.sectionHeader}>Product Highlights</Text>
@@ -858,7 +907,6 @@ export default function InventoryScreen() {
       );
     }
 
-    // ── TAB: Information
     return (
       <View>
         <Text style={styles.sectionHeader}>Product Information</Text>
@@ -956,14 +1004,11 @@ export default function InventoryScreen() {
     </View>
   );
 
-
-  // ══  RENDER PRODUCT DETAIL (View Mode)  
+  // ── Render Product Detail (View Mode)
   const renderProductDetail = () => {
     if (!selectedProduct) return null;
     const p = selectedProduct;
-    const allImages = [p.image, ...(p.images || [])].filter(
-      Boolean,
-    ) as string[];
+    const allImages = [p.image, ...(p.images || [])].filter(Boolean) as string[];
     const hasMrp = p.mrp && p.mrp > p.price;
 
     return (
@@ -971,7 +1016,6 @@ export default function InventoryScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 30 }}
       >
-        {/* Image Gallery */}
         {allImages.length > 0 ? (
           <ScrollView
             horizontal
@@ -1000,7 +1044,6 @@ export default function InventoryScreen() {
           </View>
         )}
 
-        {/* Name & Price */}
         <View style={styles.detailSection}>
           <Text style={styles.detailName}>{p.name}</Text>
           <View style={styles.detailPriceRow}>
@@ -1047,7 +1090,6 @@ export default function InventoryScreen() {
           </View>
         </View>
 
-        {/* Stock Controls */}
         <View style={styles.stockControlCard}>
           <View>
             <Text style={styles.stockControlLabel}>Current Stock</Text>
@@ -1078,12 +1120,10 @@ export default function InventoryScreen() {
           </View>
         </View>
 
-        {/* Highlights */}
         {(p.product_type || p.dietary_preference) && (
           <View style={styles.detailSection}>
             <Text style={styles.detailSectionTitle}>
-              <Ionicons name="star-outline" size={14} color={C.dark} />{" "}
-              Highlights
+              <Ionicons name="star-outline" size={14} color={C.dark} /> Highlights
             </Text>
             {p.product_type ? (
               <View style={styles.infoRow}>
@@ -1105,7 +1145,6 @@ export default function InventoryScreen() {
           </View>
         )}
 
-        {/* Information */}
         {(p.description ||
           p.disclaimer ||
           p.customer_care ||
@@ -1113,12 +1152,7 @@ export default function InventoryScreen() {
           p.shelf_life) && (
           <View style={styles.detailSection}>
             <Text style={styles.detailSectionTitle}>
-              <Ionicons
-                name="information-circle-outline"
-                size={14}
-                color={C.dark}
-              />{" "}
-              Information
+              <Ionicons name="information-circle-outline" size={14} color={C.dark} /> Information
             </Text>
             {p.description ? (
               <View style={styles.infoBlock}>
@@ -1141,9 +1175,7 @@ export default function InventoryScreen() {
             {p.seller_address ? (
               <View style={styles.infoBlock}>
                 <Text style={styles.infoLabel}>Seller Address</Text>
-                <Text style={styles.infoValueMultiline}>
-                  {p.seller_address}
-                </Text>
+                <Text style={styles.infoValueMultiline}>{p.seller_address}</Text>
               </View>
             ) : null}
             {p.customer_care ? (
@@ -1161,7 +1193,6 @@ export default function InventoryScreen() {
           </View>
         )}
 
-        {/* Action Buttons */}
         {isAdmin && (
           <View style={styles.detailActions}>
             <TouchableOpacity
@@ -1225,11 +1256,18 @@ export default function InventoryScreen() {
     );
   };
 
-
-  // ══  MAIN RENDER  
+  // ══  MAIN RENDER  ══
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <CustomAlert config={alertConfig} onDismiss={dismissAlert} />
+
+      {/* ── Snackbar ── */}
+      <View
+        pointerEvents="none"
+        style={[styles.snackbarWrap, { top: insets.top + 10 }]}
+      >
+        <Snackbar {...snackbar} />
+      </View>
 
       {/* ── Header ── */}
       <View style={styles.header}>
@@ -1278,6 +1316,26 @@ export default function InventoryScreen() {
         </View>
       </View>
 
+      {/* ── Order Summary Card ── */}
+      <TouchableOpacity
+        style={styles.orderSummaryCard}
+        activeOpacity={0.82}
+        onPress={() => router.push("/(admin)/order-summary" as any)}
+      >
+        <View style={styles.orderSummaryLeft}>
+          <View style={styles.orderSummaryIcon}>
+            <Ionicons name="receipt-outline" size={20} color={C.dark} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.orderSummaryTitle}>Product Order Summary</Text>
+            <Text style={styles.orderSummarySub}>
+              Check today orders by Milk, Paneer or any inventory product
+            </Text>
+          </View>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color={C.dark} />
+      </TouchableOpacity>
+
       {/* ── Product List ── */}
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -1297,9 +1355,7 @@ export default function InventoryScreen() {
               <Ionicons name="cube-outline" size={48} color={C.textLight} />
             </View>
             <Text style={styles.emptyTitle}>No products yet</Text>
-            <Text style={styles.emptyDesc}>
-              Tap + to add your first product
-            </Text>
+            <Text style={styles.emptyDesc}>Tap + to add your first product</Text>
           </View>
         ) : (
           products.map((product) => (
@@ -1309,7 +1365,6 @@ export default function InventoryScreen() {
               activeOpacity={0.7}
               onPress={() => openDetail(product)}
             >
-              {/* Image */}
               {product.image ? (
                 <Image
                   source={{ uri: product.image }}
@@ -1321,7 +1376,6 @@ export default function InventoryScreen() {
                 </View>
               )}
 
-              {/* Info */}
               <View style={styles.productInfo}>
                 <Text style={styles.productName} numberOfLines={1}>
                   {product.name}
@@ -1366,7 +1420,6 @@ export default function InventoryScreen() {
                 </View>
               </View>
 
-              {/* Stock Badge */}
               <View
                 style={[
                   styles.stockBadge,
@@ -1388,7 +1441,6 @@ export default function InventoryScreen() {
                 <Text style={styles.stockLabel}>stock</Text>
               </View>
 
-              {/* Chevron */}
               <Ionicons
                 name="chevron-forward"
                 size={16}
@@ -1401,7 +1453,7 @@ export default function InventoryScreen() {
         <View style={{ height: 20 }} />
       </ScrollView>
 
-      {/* ADD PRODUCT MODAL (Tabbed)*/}
+      {/* ── ADD PRODUCT MODAL (Tabbed) ── */}
       <Modal visible={addModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalSheet}>
@@ -1414,7 +1466,6 @@ export default function InventoryScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Tab Bar */}
             {renderTabBar(TABS, activeTab, setActiveTab)}
 
             <ScrollView
@@ -1426,7 +1477,6 @@ export default function InventoryScreen() {
 
               <View style={{ height: 16 }} />
 
-              {/* Swipe to Add — shown on last tab or when form is valid */}
               {isFormValid && (
                 <View style={styles.swipeWrapper}>
                   <SwipeToConfirm
@@ -1445,13 +1495,12 @@ export default function InventoryScreen() {
               </TouchableOpacity>
             </ScrollView>
 
-            {/* Success Tick Overlay */}
             <SuccessTick visible={showSuccessTick} onDone={onTickDone} />
           </View>
         </View>
       </Modal>
 
-      {/*PRODUCT DETAIL / EDIT MODAL*/}
+      {/* ── PRODUCT DETAIL / EDIT MODAL ── */}
       <Modal visible={detailModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={[styles.modalSheet, { maxHeight: "95%" }]}>
@@ -1510,7 +1559,6 @@ export default function InventoryScreen() {
               renderProductDetail()
             )}
 
-            {/* Success Tick Overlay for Edit */}
             <SuccessTick
               visible={showEditSuccessTick}
               onDone={onEditTickDone}
@@ -1522,7 +1570,7 @@ export default function InventoryScreen() {
   );
 }
 
-// ══  ALERT STYLES  
+// ══  ALERT STYLES  ══
 const alertStyles = StyleSheet.create({
   overlay: {
     flex: 1,
@@ -1584,9 +1632,48 @@ const alertStyles = StyleSheet.create({
   btnTextDestructive: { color: C.text },
 });
 
-//SCREEN STYLES  
+// ══  SNACKBAR STYLES  ══
+const snackStyles = StyleSheet.create({
+  wrap: {
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    shadowColor: "#000",
+    shadowOpacity: 0.14,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 8,
+    borderWidth: 1,
+  },
+  successWrap: {
+    backgroundColor: "#f0fdf4",
+    borderColor: "#bbf7d0",
+  },
+  errorWrap: {
+    backgroundColor: "#fef2f2",
+    borderColor: "#fecaca",
+  },
+  text: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "700",
+  },
+});
+
+// ══  SCREEN STYLES  ══
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
+
+  // ── Snackbar
+  snackbarWrap: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    zIndex: 60,
+  },
 
   // ── Header
   header: {
@@ -1647,6 +1734,47 @@ const styles = StyleSheet.create({
   },
   summaryDivider: { width: 1, backgroundColor: C.border },
 
+  // ── Order Summary Card
+  orderSummaryCard: {
+    marginHorizontal: 20,
+    marginBottom: 16,
+    backgroundColor: C.white,
+    borderRadius: 18,
+    padding: 15,
+    borderWidth: 1.5,
+    borderColor: "#FFE1CC",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    shadowColor: C.dark,
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  orderSummaryLeft: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  orderSummaryIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: C.chipBg,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  orderSummaryTitle: { fontSize: 14, fontWeight: "800", color: C.text },
+  orderSummarySub: {
+    fontSize: 12,
+    color: C.textMuted,
+    fontWeight: "600",
+    marginTop: 2,
+    lineHeight: 16,
+  },
+
   // ── Product List
   listContent: { paddingHorizontal: 16 },
   productCard: {
@@ -1688,7 +1816,6 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     textTransform: "capitalize",
   },
-
   statusPill: {
     flexDirection: "row",
     alignItems: "center",

@@ -465,7 +465,7 @@ function WrongPasswordModal({
               color="#6b7280"
             />
             <Text style={wm.optionText}>
-              Make sure you're using the right account
+              Make sure you are using the right account
             </Text>
           </View>
           <TouchableOpacity
@@ -1437,7 +1437,7 @@ export default function LoginScreen() {
 
           {/* Footer */}
           <View style={styles.footer}>
-            <Text style={styles.footerText}>Don't have an account?</Text>
+            <Text style={styles.footerText}>Do not have an account?</Text>
             <TouchableOpacity onPress={() => router.push("/(auth)/register")}>
               <Text style={styles.linkText}>Sign Up</Text>
             </TouchableOpacity>
@@ -1460,23 +1460,23 @@ const styles = StyleSheet.create({
     height: Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0,
   },
   keyboardView: { flex: 1 },
-  scrollContent: { flexGrow: 1, padding: 24 },
-  header: { alignItems: "center", marginTop: 40, marginBottom: 32 },
+  scrollContent: { flexGrow: 1, paddingHorizontal: 22, paddingTop: 14, paddingBottom: 16 },
+  header: { alignItems: "center", marginTop: 6, marginBottom: 18 },
   logoCircle: {},
-  logoImage: { width: 150, height: 150, marginBottom: 12 },
+  logoImage: { width: 118, height: 118, marginBottom: 8 },
   title: {
-    fontSize: 28,
+    fontSize: 25,
     fontWeight: "700",
     color: Colors.text,
-    marginBottom: 8,
+    marginBottom: 5,
   },
-  subtitle: { fontSize: 16, color: Colors.textSecondary },
-  form: { marginBottom: 24 },
+  subtitle: { fontSize: 15, color: Colors.textSecondary },
+  form: { marginBottom: 16 },
   card: {
     backgroundColor: "#FFFFFF",
     borderRadius: 20,
-    padding: 20,
-    gap: 12,
+    padding: 18,
+    gap: 8,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.08,
@@ -1541,12 +1541,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     gap: 8,
-    marginBottom: 24,
+    marginBottom: 14,
   },
   footerText: { fontSize: 14, color: Colors.textSecondary },
   linkText: { fontSize: 14, fontWeight: "600", color: Colors.primary },
   demoSection: {
-    padding: 16,
+    padding: 12,
     backgroundColor: Colors.surfaceSecondary,
     borderRadius: 12,
   },

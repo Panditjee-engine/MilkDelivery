@@ -12,15 +12,19 @@ import {
   Platform,
   Animated,
   StatusBar,
+  ActivityIndicator,
 } from "react-native";
+import { api } from "../../src/services/api";
+import QRCode from "react-native-qrcode-svg";
+import * as Sharing from "expo-sharing";
+import ViewShot, { captureRef } from "react-native-view-shot";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../src/contexts/AuthContext";
-import { api } from "../../src/services/api"; // adjust path if needed
 
-// ── Palette (unchanged)
+// ── Palette
 const C = {
   bg: "#FFF8F4",
   card: "#fff",
@@ -45,6 +49,7 @@ type ModalType =
   | "contact"
   | "profile"
   | "password"
+  | "share"
   | null;
 
 type OtpStep = "input" | "verify" | "change";
@@ -73,6 +78,21 @@ const GRACE_OPTIONS = [
 ];
 const HOURS_12 = ["5", "6", "7", "8", "9", "10", "11", "12"];
 const MINUTES = ["00", "15", "30", "45"];
+
+// ── Helper: build referral code from a user object
+function buildReferralCode(u: any): string {
+  const name = u?.name || "GAU";
+  const nameClean = name.replace(/[^a-zA-Z]/g, "");
+  const namePart = nameClean.slice(0, 3).toUpperCase().padEnd(3, "X");
+
+  const adminId = String(u?.id || "000");
+  const asciiSum = adminId
+    .split("")
+    .reduce((sum: number, c: string) => sum + c.charCodeAt(0), 0);
+  const numPart = String((asciiSum % 900) + 100);
+
+  return `${namePart}${numPart}`;
+}
 
 // ── Custom Alert
 type AlertBtn = {
@@ -146,6 +166,8 @@ function CustomAlert({
           </View>
           <Text style={aS.title}>{cfg.title}</Text>
           {cfg.message ? <Text style={aS.msg}>{cfg.message}</Text> : null}
+
+          {/* OTP Code Display */}
           {cfg.otpCode ? (
             <View style={aS.otpBox}>
               {cfg.otpCode.split("").map((digit, i) => (
@@ -155,6 +177,7 @@ function CustomAlert({
               ))}
             </View>
           ) : null}
+
           <View
             style={[
               aS.btnRow,
@@ -309,7 +332,222 @@ function SettingModal({
   );
 }
 
-// ── Setting Row (modernised)
+// ── Share Modal (QR code)
+function ShareModal({
+  visible,
+  onClose,
+  adminUser,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  adminUser: any;
+}) {
+  const captureRefContainer = useRef<any>(null);
+  const [sharing, setSharing] = useState(false);
+  const [qrData, setQrData] = useState<{
+    admin_id: string;
+    admin_name: string;
+    qr_value: string;
+    referral_code: string;
+  } | null>(null);
+  const [loadingQr, setLoadingQr] = useState(false);
+
+  useEffect(() => {
+    if (visible && !qrData) {
+      fetchQrData();
+    }
+  }, [visible]);
+
+  const fetchQrData = async () => {
+    setLoadingQr(true);
+    try {
+      const name = adminUser?.name || "GAU";
+      const adminId = String(adminUser?.id || "000");
+
+      // Universal Link with referral param (for Play Store fallback)
+      const universalLink = `https://play.google.com/store/apps/details?id=com.badal_12.frontend&referrer=admin_id%3D${adminId}`;
+
+      setQrData({
+        admin_id: adminId,
+        admin_name: name,
+        qr_value: universalLink,
+        referral_code: buildReferralCode(adminUser),
+      });
+    } catch (e) {
+      console.warn("QR setup failed", e);
+      setQrData({
+        admin_id: String(adminUser?.id || "000"),
+        admin_name: adminUser?.name || "GAU",
+        // Fallback Play Store link
+        qr_value:
+          "https://play.google.com/store/apps/details?id=com.badal_12.frontend",
+        referral_code: "GAU100",
+      });
+    } finally {
+      setLoadingQr(false);
+    }
+  };
+
+  const handleShare = async () => {
+    if (sharing || !captureRefContainer.current) return;
+    try {
+      setSharing(true);
+      const uri = await captureRef(captureRefContainer.current, {
+        format: "png",
+        quality: 1,
+      });
+      if (!(await Sharing.isAvailableAsync())) return;
+      await Sharing.shareAsync(uri, {
+        mimeType: "image/png",
+        dialogTitle: "Share QR code of your Farm",
+      });
+    } catch (error) {
+      console.warn("Share failed", error);
+    } finally {
+      setSharing(false);
+    }
+  };
+
+  const qrValue =
+    qrData?.qr_value ||
+    `gausatv://register?admin_id=${adminUser?.id || "default"}`;
+  const displayName = qrData?.admin_name || adminUser?.name || "GauSatva";
+  const shortCode =
+    qrData?.referral_code ||
+    String(qrData?.admin_id || adminUser?.id || "")
+      .slice(-6)
+      .toUpperCase();
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <View style={mS.overlay}>
+        <View style={mS.sheet}>
+          <View style={mS.drag} />
+          <View style={mS.header}>
+            <View style={mS.headerLeft}>
+              <View style={mS.headerIcon}>
+                <Ionicons name="qr-code-outline" size={16} color={C.dark} />
+              </View>
+              <Text style={mS.headerTitle}>Share Your QR</Text>
+            </View>
+            <TouchableOpacity style={mS.closeBtn} onPress={onClose}>
+              <Ionicons name="close" size={16} color={C.dark} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView showsVerticalScrollIndicator={false} style={mS.body}>
+            {loadingQr ? (
+              <View style={qrS.loadingBox}>
+                <ActivityIndicator color={C.primary} size="large" />
+                <Text style={qrS.loadingText}>Generating your QR...</Text>
+              </View>
+            ) : (
+              <>
+                {/* Info Banner */}
+                <View style={qrS.infoBanner}>
+                  <Ionicons
+                    name="information-circle-outline"
+                    size={16}
+                    color={C.dark}
+                  />
+                  <Text style={qrS.infoBannerText}>
+                    The customer who uses your referral code will only see your
+                    Gaushala’s products.
+                  </Text>
+                </View>
+
+                {/* QR Card — share QR image */}
+                <ViewShot
+                  ref={(ref) => {
+                    captureRefContainer.current = ref;
+                  }}
+                  style={qrS.shotWrap}
+                >
+                  <View style={qrS.card}>
+                    {/* Card Header */}
+                    <View style={qrS.cardHeader}>
+                      <View style={qrS.leafBadge}>
+                        <Ionicons name="leaf" size={14} color="#fff" />
+                      </View>
+                      <Text style={qrS.gaushaalaName}>{displayName}</Text>
+                    </View>
+
+                    <Text style={qrS.cardTitle}>
+                      Scan Our QR To Connect With Us
+                    </Text>
+                    <Text style={qrS.cardSubtitle}>
+                      Scan the QR code to download our app and use the referral
+                      code to connect directly with the{"\n"}
+                      farm and explore fresh products.
+                    </Text>
+
+                    {/* QR Code */}
+                    <View style={qrS.qrBox}>
+                      <QRCode
+                        value={qrValue}
+                        size={180}
+                        backgroundColor="white"
+                        color={C.dark}
+                      />
+                    </View>
+
+                    {/* Footer */}
+                    <View style={qrS.cardFooter}>
+                      <View style={qrS.footerDivider} />
+                      <View style={qrS.footerRow}>
+                        <Ionicons
+                          name="shield-checkmark"
+                          size={11}
+                          color={C.muted}
+                        />
+                        <Text style={qrS.footerText}>
+                          GauSatv · Pure & Fresh
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                </ViewShot>
+
+                {/* Referral Code Row */}
+                <View style={qrS.codeRow}>
+                  <Text style={qrS.codeLabel}>Your Referral - Code:</Text>
+                  <View style={qrS.codePill}>
+                    <Text style={qrS.codeValue}>{shortCode}</Text>
+                  </View>
+                </View>
+
+                {/* Share Button */}
+                <TouchableOpacity
+                  style={mS.saveBtn}
+                  onPress={handleShare}
+                  activeOpacity={0.8}
+                  disabled={sharing}
+                >
+                  <Ionicons
+                    name="share-social-outline"
+                    size={18}
+                    color="#fff"
+                  />
+                  <Text style={mS.saveTxt}>
+                    {sharing ? "Sharing..." : "Share QR"}
+                  </Text>
+                </TouchableOpacity>
+              </>
+            )}
+            <View style={{ height: 24 }} />
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+// ── Setting Row (animated, chevron)
 function SettingRow({
   icon,
   iconBg,
@@ -367,7 +605,7 @@ function SettingRow({
   );
 }
 
-// ── OTP Input
+// ── OTP Input: 6 individual boxes
 function OtpInput({
   value,
   onChange,
@@ -376,6 +614,7 @@ function OtpInput({
   onChange: (v: string) => void;
 }) {
   const inputs = useRef<(TextInput | null)[]>([]);
+
   const handleChange = (text: string, index: number) => {
     const cleaned = text.replace(/[^0-9]/g, "").slice(-1);
     const arr = value.padEnd(6, " ").split("");
@@ -384,10 +623,12 @@ function OtpInput({
     onChange(next);
     if (cleaned && index < 5) inputs.current[index + 1]?.focus();
   };
+
   const handleKeyPress = (e: any, index: number) => {
     if (e.nativeEvent.key === "Backspace" && !value[index] && index > 0)
       inputs.current[index - 1]?.focus();
   };
+
   return (
     <View style={mS.otpRow}>
       {[0, 1, 2, 3, 4, 5].map((i) => (
@@ -440,6 +681,8 @@ export default function AdminSettingsScreen() {
   const { cfg: alertCfg, show: showAlert, dismiss: dismissAlert } = useAlert();
   const headerAnim = useRef(new Animated.Value(0)).current;
 
+  const referralCode = buildReferralCode(user);
+
   const [activeModal, setActiveModal] = useState<ModalType>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [settings, setSettings] = useState<Settings>({
@@ -463,7 +706,7 @@ export default function AdminSettingsScreen() {
     phone: (user as any)?.phone ?? "",
   });
 
-  // OTP / password state
+  // ── OTP / password state
   const [otpStep, setOtpStep] = useState<OtpStep>("input");
   const [otpContact, setOtpContact] = useState("");
   const [generatedOtp, setGeneratedOtp] = useState("");
@@ -471,6 +714,12 @@ export default function AdminSettingsScreen() {
   const [otpResendTimer, setOtpResendTimer] = useState(0);
   const [pwDraft, setPwDraft] = useState({ newPw: "", confirm: "" });
   const [showPw, setShowPw] = useState({ newPw: false, confirm: false });
+
+  // ── Referral / delete account state
+  const [referralExpanded, setReferralExpanded] = useState(false);
+  const [deleteModal, setDeleteModal] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   useEffect(() => {
     AsyncStorage.getItem("APP_SETTINGS").then((data) => {
@@ -483,6 +732,7 @@ export default function AdminSettingsScreen() {
     }).start();
   }, []);
 
+  // Resend countdown
   useEffect(() => {
     if (otpResendTimer <= 0) return;
     const t = setTimeout(() => setOtpResendTimer((p) => p - 1), 1000);
@@ -538,13 +788,19 @@ export default function AdminSettingsScreen() {
     }
     setIsSaving(true);
     try {
-      const updatedUser = await api.updateProfile({
+      const payload = {
         name: profileDraft.name.trim(),
         email: profileDraft.email.trim(),
         phone: profileDraft.phone.trim(),
-      });
-      // Update AuthContext so profile card re-renders immediately
+      };
+
+      const result = await api.updateProfile(payload);
+      // Use API response when available, otherwise fall back to local payload
+      const updatedUser = result && typeof result === "object" ? result : payload;
+
+      // Update AuthContext so the profile card re-renders immediately
       updateUser?.(updatedUser);
+
       // Also persist locally
       const cached = await AsyncStorage.getItem("user_data");
       if (cached) {
@@ -554,6 +810,7 @@ export default function AdminSettingsScreen() {
           JSON.stringify({ ...parsed, ...updatedUser }),
         );
       }
+
       setActiveModal(null);
       showAlert(
         "Profile Updated",
@@ -566,7 +823,7 @@ export default function AdminSettingsScreen() {
     } catch (error: any) {
       showAlert(
         "Update Failed",
-        error.message || "Something went wrong. Please try again.",
+        error?.message || "Something went wrong. Please try again.",
         undefined,
         "alert-circle-outline",
         C.deepPeach,
@@ -577,12 +834,13 @@ export default function AdminSettingsScreen() {
     }
   };
 
+  // ── OTP: Step 1 — Request OTP
   const handleRequestOtp = () => {
     const trimmed = otpContact.trim();
     if (!trimmed) {
       showAlert(
         "Required",
-        "Please enter your email or phone number.",
+        "Please enter your email address or phone number.",
         undefined,
         "alert-circle-outline",
         C.deepPeach,
@@ -595,7 +853,7 @@ export default function AdminSettingsScreen() {
     if (!isEmail && !isPhone) {
       showAlert(
         "Invalid Input",
-        "Enter a valid email or phone number.",
+        "Enter a valid email address or phone number.",
         undefined,
         "alert-circle-outline",
         C.deepPeach,
@@ -603,10 +861,14 @@ export default function AdminSettingsScreen() {
       );
       return;
     }
+
+    // Generate a 6-digit OTP (simulated — replace with real API call)
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     setGeneratedOtp(otp);
     setOtpStep("verify");
     setOtpResendTimer(30);
+
+    // TODO: call api.sendOtp(trimmed) — the otp below is for demo only
     showAlert(
       "OTP Sent",
       `Your one-time password has been sent to ${trimmed}`,
@@ -614,15 +876,16 @@ export default function AdminSettingsScreen() {
       "mail-outline",
       C.deepPeach,
       C.dark,
-      otp,
+      otp, // display OTP in alert (remove in production)
     );
   };
 
+  // ── OTP: Step 2 — Verify OTP
   const handleVerifyOtp = () => {
     if (enteredOtp.length < 6) {
       showAlert(
         "Incomplete OTP",
-        "Please enter all 6 digits.",
+        "Please enter all 6 digits of the OTP.",
         undefined,
         "alert-circle-outline",
         C.deepPeach,
@@ -633,7 +896,7 @@ export default function AdminSettingsScreen() {
     if (enteredOtp !== generatedOtp) {
       showAlert(
         "Invalid OTP",
-        "The OTP you entered is incorrect.",
+        "The OTP you entered is incorrect. Please try again.",
         undefined,
         "close-circle-outline",
         "#FFE8D6",
@@ -645,12 +908,14 @@ export default function AdminSettingsScreen() {
     setOtpStep("change");
   };
 
+  // ── OTP: Resend OTP
   const handleResendOtp = () => {
     if (otpResendTimer > 0) return;
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     setGeneratedOtp(otp);
     setEnteredOtp("");
     setOtpResendTimer(30);
+    // TODO: call api.sendOtp(otpContact)
     showAlert(
       "OTP Resent",
       `A new OTP has been sent to ${otpContact}`,
@@ -662,11 +927,12 @@ export default function AdminSettingsScreen() {
     );
   };
 
+  // ── OTP: Step 3 — Save new password
   const handleSavePassword = () => {
     if (!pwDraft.newPw || !pwDraft.confirm) {
       showAlert(
         "Fill All Fields",
-        "Please fill in both fields.",
+        "Please fill in both password fields.",
         undefined,
         "lock-closed-outline",
         C.deepPeach,
@@ -677,7 +943,7 @@ export default function AdminSettingsScreen() {
     if (pwDraft.newPw.length < 6) {
       showAlert(
         "Too Short",
-        "Password must be at least 6 characters.",
+        "New password must be at least 6 characters.",
         undefined,
         "alert-circle-outline",
         C.deepPeach,
@@ -700,7 +966,7 @@ export default function AdminSettingsScreen() {
     setActiveModal(null);
     showAlert(
       "Password Changed",
-      "Your password has been updated.",
+      "Your password has been updated successfully.",
       undefined,
       "shield-checkmark",
       C.deepPeach,
@@ -711,7 +977,7 @@ export default function AdminSettingsScreen() {
   const handleLogout = () => {
     showAlert(
       "Logout",
-      "Are you sure you want to logout?",
+      "Are you sure you want to logout from your account?",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -729,8 +995,63 @@ export default function AdminSettingsScreen() {
     );
   };
 
+  const handleDeleteAccount = () => {
+    setDeletePassword("");
+    setDeleteModal(true);
+  };
+
+  const confirmDeleteAccount = () => {
+    if (!deletePassword.trim()) {
+      showAlert(
+        "Password Required",
+        "Enter your password to delete your account.",
+        undefined,
+        "alert-circle-outline",
+        "#FEF2F2",
+        "#dc2626",
+      );
+      return;
+    }
+    showAlert(
+      "Delete Account",
+      "This will permanently delete your Gau Satva account and remove your personal profile data. This action cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete Account",
+          style: "destructive",
+          onPress: async () => {
+            setDeletingAccount(true);
+            try {
+              await api.deleteAccount(deletePassword);
+              setDeleteModal(false);
+              router.replace("/(auth)/login");
+            } catch (err: any) {
+              showAlert(
+                "Delete Failed",
+                err?.message ??
+                  "Could not delete account. Please try again.",
+                undefined,
+                "alert-circle-outline",
+                "#FEF2F2",
+                "#dc2626",
+              );
+            } finally {
+              setDeletingAccount(false);
+            }
+          },
+        },
+      ],
+      "trash-outline",
+      "#FEF2F2",
+      "#dc2626",
+    );
+  };
+
+  // Display strings
   const cutoffDisplay = `${settings.cutoffHour}:${settings.cutoffMin} ${settings.cutoffAmPm}`;
   const deliveryDisplay = `${settings.deliveryStartHour}:${settings.deliveryStartMin} ${settings.deliveryStartAmPm} – ${settings.deliveryEndHour}:${settings.deliveryEndMin} ${settings.deliveryEndAmPm}`;
+
   const pwStepTitle =
     otpStep === "input"
       ? "Verify Identity"
@@ -774,7 +1095,7 @@ export default function AdminSettingsScreen() {
         >
           <Text style={s.topBarTitle}>Settings</Text>
           <View style={s.topBarRight}>
-            <InfoPill icon="time-outline" label="Admin" />
+            <InfoPill icon="shield-checkmark-outline" label="Admin" />
           </View>
         </Animated.View>
 
@@ -842,6 +1163,59 @@ export default function AdminSettingsScreen() {
             </TouchableOpacity>
           </View>
         </Animated.View>
+
+        {/* ── Referral & Share */}
+        <View style={s.referralCard}>
+          <TouchableOpacity
+            style={[
+              s.referralHeader,
+              referralExpanded ? s.referralHeaderExpanded : null,
+            ]}
+            activeOpacity={0.85}
+            onPress={() => setReferralExpanded((prev) => !prev)}
+          >
+            <View style={s.referralIconWrap}>
+              <Ionicons name="gift-outline" size={18} color={C.dark} />
+            </View>
+            <View style={s.referralContent}>
+              <Text style={s.referralTitle}>Referral & Share</Text>
+              <Text style={s.referralSubtitle}>
+                Share your farm QR and referral code with customers.
+              </Text>
+            </View>
+            <View style={s.referralToggleBtn}>
+              <Ionicons
+                name={referralExpanded ? "remove" : "add"}
+                size={18}
+                color={C.dark}
+              />
+            </View>
+          </TouchableOpacity>
+
+          {referralExpanded ? (
+            <View style={s.referralRow}>
+              <View style={s.referralCodeBlock}>
+                <Text style={s.referralLabel}>Referral Code</Text>
+                <View style={s.referralCodePill}>
+                  <Text style={s.referralCodeValue}>{referralCode}</Text>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                style={s.referralShareBtn}
+                activeOpacity={0.85}
+                onPress={() => openModal("share")}
+              >
+                <Ionicons
+                  name="share-social-outline"
+                  size={15}
+                  color="#fff"
+                />
+                <Text style={s.referralShareTxt}>Share</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+        </View>
 
         {/* ── System Configuration */}
         <View style={s.section}>
@@ -923,7 +1297,86 @@ export default function AdminSettingsScreen() {
             style={{ marginLeft: "auto" }}
           />
         </TouchableOpacity>
+
+        {/* ── Delete Account */}
+        <TouchableOpacity
+          style={s.deleteAccountBtn}
+          onPress={handleDeleteAccount}
+          activeOpacity={0.8}
+        >
+          <View style={s.deleteIconWrap}>
+            <Ionicons name="trash-outline" size={18} color="#dc2626" />
+          </View>
+          <Text style={s.deleteAccountTxt}>Delete Account</Text>
+          <Ionicons
+            name="chevron-forward"
+            size={15}
+            color="#FCA5A5"
+            style={{ marginLeft: "auto" }}
+          />
+        </TouchableOpacity>
       </ScrollView>
+
+      {/* ── Share Modal */}
+      <ShareModal
+        visible={activeModal === "share"}
+        onClose={closeModal}
+        adminUser={user}
+      />
+
+      {/* ── Delete Account Modal */}
+      <Modal visible={deleteModal} animationType="slide" transparent>
+        <View style={mS.overlay}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            style={mS.sheet}
+          >
+            <View style={mS.drag} />
+            <View style={mS.header}>
+              <View style={mS.headerLeft}>
+                <View
+                  style={[mS.headerIcon, { backgroundColor: "#FEE2E2" }]}
+                >
+                  <Ionicons name="trash-outline" size={16} color="#dc2626" />
+                </View>
+                <Text style={mS.headerTitle}>Delete Account</Text>
+              </View>
+              <TouchableOpacity
+                style={mS.closeBtn}
+                onPress={() => setDeleteModal(false)}
+              >
+                <Ionicons name="close" size={16} color={C.dark} />
+              </TouchableOpacity>
+            </View>
+            <View style={mS.body}>
+              <Text style={mS.shareSubtitle}>
+                Enter your password to confirm permanent account deletion.
+              </Text>
+              <TextInput
+                style={mS.input}
+                value={deletePassword}
+                onChangeText={setDeletePassword}
+                placeholder="Password"
+                placeholderTextColor={C.light}
+                secureTextEntry
+              />
+              <TouchableOpacity
+                style={[mS.saveBtn, { backgroundColor: "#dc2626" }]}
+                onPress={confirmDeleteAccount}
+                disabled={deletingAccount}
+                activeOpacity={0.8}
+              >
+                {deletingAccount ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={mS.saveTxt}>Continue</Text>
+                )}
+              </TouchableOpacity>
+              <View style={{ height: 16 }} />
+            </View>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
 
       {/* ── Modal: Order Cut-off */}
       <SettingModal
@@ -1200,7 +1653,7 @@ export default function AdminSettingsScreen() {
         </TouchableOpacity>
       </SettingModal>
 
-      {/* ── Modal: Change Password */}
+      {/* ── Modal: Change Password (OTP Flow) */}
       <SettingModal
         visible={activeModal === "password"}
         title={pwStepTitle}
@@ -1253,8 +1706,8 @@ export default function AdminSettingsScreen() {
               </View>
               <Text style={mS.stepInfoTitle}>Verify your identity</Text>
               <Text style={mS.stepInfoDesc}>
-                Enter your registered email or phone number to receive a
-                one-time password.
+                Enter your registered email address or phone number to receive
+                a one-time password.
               </Text>
             </View>
             <Text style={mS.fieldLabel}>Email / Phone Number</Text>
@@ -1300,8 +1753,11 @@ export default function AdminSettingsScreen() {
                 . It expires in 10 minutes.
               </Text>
             </View>
+
             <Text style={mS.fieldLabel}>One-Time Password</Text>
             <OtpInput value={enteredOtp} onChange={setEnteredOtp} />
+
+            {/* Resend row */}
             <View style={mS.resendRow}>
               <Text style={mS.resendLabel}>Didn't receive it?</Text>
               <TouchableOpacity
@@ -1320,6 +1776,7 @@ export default function AdminSettingsScreen() {
                 </Text>
               </TouchableOpacity>
             </View>
+
             <TouchableOpacity
               style={mS.saveBtn}
               onPress={handleVerifyOtp}
@@ -1328,6 +1785,7 @@ export default function AdminSettingsScreen() {
               <Ionicons name="checkmark-circle" size={18} color="#fff" />
               <Text style={mS.saveTxt}>Verify OTP</Text>
             </TouchableOpacity>
+
             <TouchableOpacity
               style={mS.backBtn}
               onPress={() => setOtpStep("input")}
@@ -1354,10 +1812,11 @@ export default function AdminSettingsScreen() {
                 Identity verified. Enter your new password below.
               </Text>
             </View>
+
             {(
               [
                 { label: "New Password", key: "newPw" },
-                { label: "Confirm Password", key: "confirm" },
+                { label: "Confirm New Password", key: "confirm" },
               ] as const
             ).map((f) => (
               <View key={f.key}>
@@ -1389,6 +1848,7 @@ export default function AdminSettingsScreen() {
                 <View style={{ height: 12 }} />
               </View>
             ))}
+
             <View style={mS.pwHint}>
               <Ionicons
                 name="information-circle-outline"
@@ -1399,6 +1859,7 @@ export default function AdminSettingsScreen() {
                 Password must be at least 6 characters
               </Text>
             </View>
+
             <TouchableOpacity
               style={mS.saveBtn}
               onPress={handleSavePassword}
@@ -1606,6 +2067,14 @@ const mS = StyleSheet.create({
   },
   saveBtnDisabled: { backgroundColor: "#FFBF9E", shadowOpacity: 0 },
   saveTxt: { fontSize: 15, fontWeight: "800", color: "#fff" },
+  // Share / generic subtitle
+  shareSubtitle: {
+    fontSize: 13,
+    color: "#A07850",
+    lineHeight: 18,
+    marginBottom: 16,
+    fontWeight: "500",
+  },
   pwRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   eyeBtn: {
     width: 50,
@@ -1786,7 +2255,7 @@ const s = StyleSheet.create({
   // Hero card
   heroCard: {
     marginHorizontal: 16,
-    marginBottom: 24,
+    marginBottom: 18,
     marginTop: 8,
     backgroundColor: C.primary,
     borderRadius: 28,
@@ -1899,6 +2368,104 @@ const s = StyleSheet.create({
   heroBtnSep: { width: 10 },
   heroBtnTxt: { fontSize: 13, fontWeight: "700", color: C.dark },
 
+  // Referral card
+  referralCard: {
+    backgroundColor: "#fff",
+    marginHorizontal: 16,
+    marginBottom: 18,
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: C.deepPeach,
+    shadowColor: "#BB6B3F",
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  referralHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  referralHeaderExpanded: { marginBottom: 12 },
+  referralIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: C.peach,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  referralContent: { flex: 1 },
+  referralTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: C.text,
+    letterSpacing: -0.2,
+    marginBottom: 2,
+  },
+  referralSubtitle: {
+    fontSize: 11,
+    lineHeight: 16,
+    color: C.muted,
+    fontWeight: "500",
+  },
+  referralToggleBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: C.peach,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  referralRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  referralCodeBlock: { flex: 1, gap: 8 },
+  referralLabel: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: C.accent,
+    textTransform: "uppercase",
+    letterSpacing: 0.7,
+  },
+  referralCodePill: {
+    alignSelf: "flex-start",
+    backgroundColor: "#FFF6EE",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: C.deepPeach,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  referralCodeValue: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: C.dark,
+    letterSpacing: 1,
+  },
+  referralShareBtn: {
+    minWidth: 90,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    backgroundColor: C.primary,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  referralShareTxt: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#fff",
+  },
+
   // Sections
   section: { marginBottom: 8, paddingHorizontal: 16 },
   sectionHeaderRow: {
@@ -1991,4 +2558,165 @@ const s = StyleSheet.create({
     alignItems: "center",
   },
   logoutTxt: { fontSize: 15, fontWeight: "700", color: "#BB6B3F" },
+
+  // Delete account
+  deleteAccountBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginHorizontal: 16,
+    marginTop: 12,
+    padding: 16,
+    backgroundColor: "#FEF2F2",
+    borderRadius: 20,
+    gap: 12,
+    borderWidth: 1.5,
+    borderColor: "#FECACA",
+  },
+  deleteIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 11,
+    backgroundColor: "#FEE2E2",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  deleteAccountTxt: { fontSize: 15, fontWeight: "800", color: "#dc2626" },
+});
+
+// ── QR Modal Styles
+const qrS = StyleSheet.create({
+  loadingBox: {
+    alignItems: "center",
+    paddingVertical: 60,
+    gap: 16,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: C.muted,
+    fontWeight: "600",
+  },
+  infoBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    backgroundColor: C.peach,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 18,
+    borderWidth: 1,
+    borderColor: C.deepPeach,
+  },
+  infoBannerText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "500",
+    color: C.dark,
+    lineHeight: 19,
+  },
+  shotWrap: {
+    borderRadius: 22,
+    overflow: "hidden",
+    marginBottom: 14,
+  },
+  card: {
+    backgroundColor: "#fff",
+    borderRadius: 22,
+    padding: 24,
+    alignItems: "center",
+    borderWidth: 1.5,
+    borderColor: C.deepPeach,
+  },
+  cardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 14,
+  },
+  leafBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 9,
+    backgroundColor: C.primary,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  gaushaalaName: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: C.dark,
+    letterSpacing: -0.3,
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: C.text,
+    marginBottom: 6,
+    letterSpacing: -0.3,
+  },
+  cardSubtitle: {
+    fontSize: 12,
+    color: C.muted,
+    textAlign: "center",
+    lineHeight: 18,
+    fontWeight: "500",
+    marginBottom: 4,
+  },
+  qrBox: {
+    padding: 16,
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: C.deepPeach,
+    marginVertical: 18,
+    shadowColor: C.dark,
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
+  cardFooter: {
+    width: "100%",
+    alignItems: "center",
+    gap: 10,
+  },
+  footerDivider: {
+    width: "80%",
+    height: 1,
+    backgroundColor: C.deepPeach,
+  },
+  footerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  footerText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: C.muted,
+    letterSpacing: 0.3,
+  },
+  codeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginBottom: 14,
+  },
+  codeLabel: {
+    fontSize: 15,
+    color: C.muted,
+    fontWeight: "600",
+  },
+  codePill: {
+    backgroundColor: C.deepPeach,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+  },
+  codeValue: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: C.dark,
+    letterSpacing: 1.5,
+  },
 });

@@ -36,6 +36,13 @@ const C = {
   textLight: "#C9A882",
 };
 
+const getLocalDateKey = (date = new Date()) => {
+  const y = date.getFullYear();
+  const m = `${date.getMonth() + 1}`.padStart(2, "0");
+  const d = `${date.getDate()}`.padStart(2, "0");
+  return `${y}-${m}-${d}`;
+};
+
 // ── Modal Types
 type ModalType =
   | "customers"
@@ -296,7 +303,7 @@ export default function AdminDashboard() {
           api.getAdminDashboard(),
           api.getProducts(),
           api.getAllUsers("customer"),
-          api.getAllOrders(), // ← no filter, sab orders aayenge
+          api.getAllOrders(),
         ]);
       setStats(dashboardData);
       setProducts(productsData);
@@ -334,10 +341,15 @@ export default function AdminDashboard() {
     day: "numeric",
   });
 
-  // ── orders.length = source of truth
   const totalOrdersToday = orders.length;
-  const deliveredToday = orders.filter((o: any) => o.status === "delivered").length;
+  const deliveredToday = orders.filter(
+    (o: any) => o.status?.toLowerCase() === "delivered",
+  ).length;
   const pending = totalOrdersToday - deliveredToday;
+  const todayTotalAmount = orders.reduce(
+    (sum: number, order: any) => sum + Number(order.total_amount || order.total || 0),
+    0,
+  );
 
   const deliveryRate = totalOrdersToday
     ? Math.round((deliveredToday / totalOrdersToday) * 100)
@@ -372,7 +384,7 @@ export default function AdminDashboard() {
         {/* ── Revenue Card ── */}
         <View style={styles.revenueCard}>
           <View style={styles.revenueLeft}>
-            <Text style={styles.revenueLabel}>Today's Revenue</Text>
+            <Text style={styles.revenueLabel}>{`Today's Revenue`}</Text>
             <Text style={styles.revenueAmount}>
               ₹{stats?.today_revenue || 0}
             </Text>
@@ -385,6 +397,29 @@ export default function AdminDashboard() {
             <Ionicons name="cash" size={42} color={C.deep} />
           </View>
         </View>
+
+        <TouchableOpacity
+          style={styles.todayOrderCard}
+          activeOpacity={0.82}
+          onPress={() => router.push("/(admin)/order-summary" as any)}
+        >
+          <View style={styles.todayOrderLeft}>
+            <View style={styles.todayOrderIcon}>
+              <Ionicons name="receipt-outline" size={22} color={C.dark} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.todayOrderTitle}>{`Today's Order Summary`}</Text>
+              <Text style={styles.todayOrderSub}>
+                Product, customer, address and date wise details
+              </Text>
+            </View>
+          </View>
+          <View style={styles.todayOrderRight}>
+            <Text style={styles.todayOrderCount}>{totalOrdersToday}</Text>
+            <Text style={styles.todayOrderMeta}>₹{todayTotalAmount}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={C.dark} />
+        </TouchableOpacity>
 
         {/* ── Stats Grid ── */}
         <View style={styles.statsGrid}>
@@ -429,7 +464,7 @@ export default function AdminDashboard() {
           {/* ── FIXED: Total Orders — orders.length use karo ── */}
           <TouchableOpacity
             style={[styles.statCard, { backgroundColor: "#FFE8D6" }]}
-            onPress={() => setModalType("orders")}
+            onPress={() => router.push("/(admin)/order-summary" as any)}
             activeOpacity={0.75}
           >
             <View
@@ -838,6 +873,49 @@ const styles = StyleSheet.create({
   },
   revenueBadgeText: { fontSize: 11, color: C.deep, fontWeight: "700" },
   revenueIcon: { opacity: 0.5 },
+
+  todayOrderCard: {
+    marginHorizontal: 20,
+    marginBottom: 16,
+    backgroundColor: "#fff",
+    borderRadius: 18,
+    padding: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderWidth: 1.5,
+    borderColor: "#FFE1CC",
+    shadowColor: C.dark,
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
+  todayOrderLeft: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  todayOrderIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    backgroundColor: "#FFF3DC",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  todayOrderTitle: { fontSize: 15, fontWeight: "800", color: C.text },
+  todayOrderSub: {
+    fontSize: 12,
+    color: C.textMuted,
+    fontWeight: "600",
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  todayOrderRight: { alignItems: "flex-end" },
+  todayOrderCount: { fontSize: 24, fontWeight: "900", color: C.dark },
+  todayOrderMeta: { fontSize: 12, fontWeight: "800", color: C.textMuted },
 
   statsGrid: {
     flexDirection: "row",

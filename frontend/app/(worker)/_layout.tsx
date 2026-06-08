@@ -2,7 +2,7 @@ import { Stack } from "expo-router";
 import { useEffect } from "react";
 import { useRouter } from "expo-router";
 import { useAuth } from "../../src/contexts/AuthContext";
-// LanguageProvider import HATAO
+import { LanguageProvider } from "../../src/contexts/LanguageContext";
 
 export default function WorkerLayout() {
   const { isWorker, loading } = useAuth();
@@ -17,6 +17,8 @@ export default function WorkerLayout() {
   if (loading || !isWorker) return null;
 
   return (
-    <Stack screenOptions={{ headerShown: false }} />
+    <LanguageProvider>
+      <Stack screenOptions={{ headerShown: false }} />
+    </LanguageProvider>
   );
 }

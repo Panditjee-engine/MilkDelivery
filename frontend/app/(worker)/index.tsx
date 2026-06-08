@@ -16,6 +16,7 @@ import {
   Image,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { useFocusEffect } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
 import {
@@ -24,7 +25,7 @@ import {
   FontAwesome5,
 } from "@expo/vector-icons";
 import { useAuth } from "../../src/contexts/AuthContext";
-import { useLang, LanguageProvider } from "../../src/contexts/LanguageContext";
+import { useLang } from "../../src/contexts/LanguageContext";
 import { api } from "../../src/services/api";
 
 import MilkScreen from "./milk";
@@ -1371,7 +1372,7 @@ function FullScreenModal({
 
 // ─── Extra Work Modal ─────────────────────────────────────────────────────────
 
-function ExtraWorkModal({
+export function ExtraWorkModal({
   visible,
   onClose,
   onTaskSaved,
@@ -2096,12 +2097,97 @@ function PointsHistoryModal({
   );
 }
 
+function ExtraTasksSummaryCard({
+  tasks,
+  loading,
+  onPress,
+}: {
+  tasks: ExtraTask[];
+  loading: boolean;
+  onPress: () => void;
+}) {
+  const { lang } = useLang();
+  const TASK_META = useTaskMeta();
+  const isHindi = lang === "hi";
+
+  const completed = tasks.filter(
+    (task) => task.verification_status === "verified" || task.points_awarded,
+  ).length;
+  const pending = Math.max(tasks.length - completed, 0);
+  const visibleTasks = tasks.slice(0, 3);
+
+  if (!loading && tasks.length === 0) return null;
+
+  return (
+    <TouchableOpacity style={s.extraSummaryCard} activeOpacity={0.88} onPress={onPress}>
+      <View style={s.extraSummaryHeader}>
+        <View style={s.extraSummaryIcon}>
+          <MaterialCommunityIcons name="clipboard-clock-outline" size={22} color="#b45309" />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={s.extraSummaryTitle}>
+            {isHindi ? "पेंडिंग अतिरिक्त कार्य" : "Pending Extra Task"}
+          </Text>
+          <Text style={s.extraSummarySub}>
+            {loading
+              ? isHindi ? "कार्य लोड हो रहे हैं..." : "Loading tasks..."
+              : isHindi ? "आज के अतिरिक्त कार्य" : "Today's extra work"}
+          </Text>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color="#9a3412" />
+      </View>
+
+      {loading ? (
+        <View style={s.extraSummaryLoading}>
+          <ActivityIndicator size="small" color="#b45309" />
+        </View>
+      ) : (
+        <>
+          <View style={s.extraCountRow}>
+            <View style={[s.extraCountCard, { backgroundColor: "#fff7ed", borderColor: "#fed7aa" }]}>
+              <Text style={[s.extraCountValue, { color: "#c2410c" }]}>{pending}</Text>
+              <Text style={s.extraCountLabel}>{isHindi ? "पेंडिंग" : "Pending"}</Text>
+            </View>
+            <View style={[s.extraCountCard, { backgroundColor: "#ecfdf5", borderColor: "#bbf7d0" }]}>
+              <Text style={[s.extraCountValue, { color: "#15803d" }]}>{completed}</Text>
+              <Text style={s.extraCountLabel}>{isHindi ? "पूर्ण" : "Completed"}</Text>
+            </View>
+          </View>
+
+          <View style={s.extraTaskList}>
+            {visibleTasks.map((task) => {
+              const meta = TASK_META[task.task_type] ?? TASK_META.custom;
+              const done = task.verification_status === "verified" || task.points_awarded;
+              const label = task.custom_label || task.description || meta.label;
+              return (
+                <View key={task.id} style={s.extraTaskRow}>
+                  <View style={[s.extraTaskDot, { backgroundColor: done ? "#16a34a" : meta.color }]} />
+                  <Text style={s.extraTaskName} numberOfLines={1}>
+                    {label}
+                  </Text>
+                  <Text style={[s.extraTaskStatus, { color: done ? "#15803d" : "#b45309" }]}>
+                    {done ? (isHindi ? "पूर्ण" : "Done") : (isHindi ? "बाकी" : "Pending")}
+                  </Text>
+                </View>
+              );
+            })}
+            {tasks.length > visibleTasks.length ? (
+              <Text style={s.extraMoreText}>
+                +{tasks.length - visibleTasks.length} {isHindi ? "और" : "more"}
+              </Text>
+            ) : null}
+          </View>
+        </>
+      )}
+    </TouchableOpacity>
+  );
+}
+
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 
 function DashboardContent() {
-  const [logoutAlert, setLogoutAlert] = useState(false);
-  const { worker, workerToken, workerLogout } = useAuth();
-  const { lang, toggleLang, t } = useLang();
+  const { worker, workerToken } = useAuth();
+  const { lang, t } = useLang();
   const router = useRouter();
 
   const [activeAction, setActiveAction] = useState<QuickAction>(null);
@@ -2119,10 +2205,11 @@ function DashboardContent() {
   const [scannedCow, setScannedCow] = useState<Cow | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
 
-  const [extraWorkOpen, setExtraWorkOpen] = useState(false);
   const [points, setPoints] = useState<WorkerPointsSummary | null>(null);
   const [pointsLoading, setPointsLoading] = useState(false);
   const [pointsOpen, setPointsOpen] = useState(false);
+  const [extraTasks, setExtraTasks] = useState<ExtraTask[]>([]);
+  const [extraTasksLoading, setExtraTasksLoading] = useState(false);
 
   const headerAnim = useRef(new Animated.Value(0)).current;
 
@@ -2198,6 +2285,19 @@ function DashboardContent() {
     }
   }, [workerToken]);
 
+  const fetchExtraTasks = useCallback(async () => {
+    if (!workerToken) return;
+    setExtraTasksLoading(true);
+    try {
+      const data = await api.workerGetTodayExtraTasks();
+      setExtraTasks(Array.isArray(data) ? data : []);
+    } catch {
+      setExtraTasks([]);
+    } finally {
+      setExtraTasksLoading(false);
+    }
+  }, [workerToken]);
+
   useEffect(() => {
     Animated.timing(headerAnim, {
       toValue: 1,
@@ -2206,7 +2306,14 @@ function DashboardContent() {
     }).start();
     fetchCows();
     fetchPoints();
+    fetchExtraTasks();
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchExtraTasks();
+    }, [fetchExtraTasks]),
+  );
 
   useEffect(() => {
     if (cows.length > 0) fetchStatuses(cows);
@@ -2230,16 +2337,6 @@ function DashboardContent() {
     }
   };
 
-  const handleLogout = async () => {
-    setLogoutAlert(true);
-  };
-
-  const confirmLogout = async () => {
-    setLogoutAlert(false);
-    await workerLogout();
-    router.replace("/(auth)/login");
-  };
-
   const firstName = worker?.name?.split(" ")[0] ?? "Worker";
   const fedPct = fedTotal > 0 ? Math.round((fedDone / fedTotal) * 100) : 0;
   const todayDate = new Date().toLocaleDateString("en-IN", {
@@ -2257,17 +2354,6 @@ function DashboardContent() {
     >
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
 
-      <ModernAlert
-        visible={logoutAlert}
-        title="Logout"
-        message="Do you want to logout?"
-        type="confirm"
-        confirmText="Logout"
-        cancelText="Go Back"
-        onConfirm={confirmLogout}
-        onCancel={() => setLogoutAlert(false)}
-      />
-
       {/* ── Top Bar ── */}
       <Animated.View style={[s.topBar, { opacity: headerAnim }]}>
         <View>
@@ -2278,6 +2364,15 @@ function DashboardContent() {
           ) : null}
         </View>
         <View style={s.topRight}>
+          <TouchableOpacity
+            style={s.scanBtn}
+            onPress={() => {
+              setScanError(null);
+              setScannerOpen(true);
+            }}
+          >
+            <Ionicons name="qr-code-outline" size={18} color="#16a34a" />
+          </TouchableOpacity>
           <TouchableOpacity
             style={s.pointsPill}
             onPress={() => setPointsOpen(true)}
@@ -2293,41 +2388,12 @@ function DashboardContent() {
               </Text>
             </View>
           </TouchableOpacity>
-
-          {/* Add Task button */}
           <TouchableOpacity
-            onPress={() => setExtraWorkOpen(true)}
+            style={s.settingsBtn}
+            onPress={() => router.push("/(worker)/settings" as any)}
             activeOpacity={0.85}
-            style={s.addTaskBtn}
           >
-            <LinearGradient
-              colors={[PALETTE.accent, PALETTE.primary]}
-              style={s.addTaskGradient}
-            >
-              <MaterialCommunityIcons name="clipboard-plus-outline" size={20} color="#fff" />
-            </LinearGradient>
-          </TouchableOpacity>
-
-          {/* Hindi / English Toggle */}
-          <TouchableOpacity
-            style={s.langBtn}
-            onPress={toggleLang}
-            activeOpacity={0.75}
-          >
-            <Text style={s.langBtnText}>{lang === "en" ? "हि" : "EN"}</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={s.scanBtn}
-            onPress={() => {
-              setScanError(null);
-              setScannerOpen(true);
-            }}
-          >
-            <Ionicons name="qr-code-outline" size={18} color="#16a34a" />
-          </TouchableOpacity>
-          <TouchableOpacity style={s.logoutBtn} onPress={handleLogout}>
-            <Ionicons name="log-out-outline" size={16} color="#dc2626" />
+            <Ionicons name="settings-outline" size={18} color="#4f46e5" />
           </TouchableOpacity>
         </View>
       </Animated.View>
@@ -2344,6 +2410,12 @@ function DashboardContent() {
           </Text>
         </View>
       </View>
+
+      <ExtraTasksSummaryCard
+        tasks={extraTasks}
+        loading={extraTasksLoading}
+        onPress={() => router.push("/(worker)/settings" as any)}
+      />
 
       {scanError && (
         <View style={s.errorBanner}>
@@ -2475,12 +2547,6 @@ function DashboardContent() {
         onRefreshStatus={handleRefreshStatus}
       />
 
-      {/* ── Extra Work Modal ── */}
-      <ExtraWorkModal
-        visible={extraWorkOpen}
-        onClose={() => setExtraWorkOpen(false)}
-        onTaskSaved={fetchPoints}
-      />
       <PointsHistoryModal
         visible={pointsOpen}
         onClose={() => setPointsOpen(false)}
@@ -2494,11 +2560,7 @@ function DashboardContent() {
 // ─── Root export ──────────────────────────────────────────────────────────────
 
 export default function DashboardScreen() {
-  return (
-    <LanguageProvider>
-      <DashboardContent />
-    </LanguageProvider>
-  );
+  return <DashboardContent />;
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
@@ -3476,6 +3538,113 @@ const s = StyleSheet.create({
     borderColor: "#bbf7d0",
     alignItems: "center",
     justifyContent: "center",
+  },
+  settingsBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: "#eef2ff",
+    borderWidth: 1,
+    borderColor: "#c7d2fe",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  extraSummaryCard: {
+    backgroundColor: "#fffaf0",
+    borderWidth: 1,
+    borderColor: "#fed7aa",
+    borderRadius: 18,
+    padding: 14,
+    marginBottom: 14,
+    shadowColor: "#92400e",
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 3,
+  },
+  extraSummaryHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  extraSummaryIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: "#ffedd5",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  extraSummaryTitle: {
+    fontSize: 16,
+    fontWeight: "900",
+    color: "#7c2d12",
+  },
+  extraSummarySub: {
+    fontSize: 12,
+    color: "#9a3412",
+    fontWeight: "600",
+    marginTop: 2,
+  },
+  extraSummaryLoading: {
+    paddingVertical: 18,
+    alignItems: "center",
+  },
+  extraCountRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 12,
+  },
+  extraCountCard: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+  extraCountValue: {
+    fontSize: 21,
+    fontWeight: "900",
+  },
+  extraCountLabel: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#6b7280",
+    marginTop: 2,
+  },
+  extraTaskList: {
+    marginTop: 12,
+    gap: 8,
+  },
+  extraTaskRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+  },
+  extraTaskDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  extraTaskName: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#374151",
+  },
+  extraTaskStatus: {
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  extraMoreText: {
+    fontSize: 12,
+    color: "#9a3412",
+    fontWeight: "800",
+    textAlign: "center",
   },
   logoutBtn: {
     width: 38,

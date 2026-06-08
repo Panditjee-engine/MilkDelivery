@@ -69,6 +69,9 @@ export default function CustomerLayout() {
           tabBarIcon: ({ color, size }) => <Ionicons name="person" size={size} color={color} />,
         }}
       />
+      <Tabs.Screen name="order-notifications" options={{ href: null }} />
+      <Tabs.Screen name="product-search" options={{ href: null }} />
+      <Tabs.Screen name="product-details" options={{ href: null }} />
     </Tabs>
   );
 }

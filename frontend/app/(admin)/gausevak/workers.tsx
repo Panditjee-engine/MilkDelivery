@@ -971,6 +971,7 @@ export default function WorkersScreen() {
   const [creating, setCreating] = useState(false);
   const [selectedWorker, setSelectedWorker] = useState<Worker | null>(null);
   const [detailVisible, setDetailVisible] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [toast, setToast] = useState({
     visible: false,
     msg: "",
@@ -1021,6 +1022,7 @@ export default function WorkersScreen() {
         farm_name: form.farm_name.trim() || undefined,
       });
       setModalVisible(false);
+      setShowPassword(false);
       setForm({
         name: "",
         email: "",
@@ -1140,7 +1142,10 @@ export default function WorkersScreen() {
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.addBtn}
-          onPress={() => setModalVisible(true)}
+          onPress={() => {
+            setShowPassword(false);
+            setModalVisible(true);
+          }}
         >
           <LinearGradient
             colors={["#2d6a4f", "#1b4332"]}
@@ -1243,7 +1248,10 @@ export default function WorkersScreen() {
           </Text>
           <TouchableOpacity
             style={styles.emptyBtn}
-            onPress={() => setModalVisible(true)}
+            onPress={() => {
+              setShowPassword(false);
+              setModalVisible(true);
+            }}
           >
             <Text style={styles.emptyBtnText}>+ Add Worker</Text>
           </TouchableOpacity>
@@ -1295,7 +1303,10 @@ export default function WorkersScreen() {
                 </View>
                 <TouchableOpacity
                   style={styles.closeBtn}
-                  onPress={() => setModalVisible(false)}
+                  onPress={() => {
+                    setShowPassword(false);
+                    setModalVisible(false);
+                  }}
                 >
                   <Ionicons name="close" size={20} color="#666" />
                 </TouchableOpacity>
@@ -1342,8 +1353,23 @@ export default function WorkersScreen() {
                       }
                       autoCapitalize="none"
                       keyboardType={f.kb as any}
-                      secureTextEntry={f.secure}
+                      secureTextEntry={f.secure && !showPassword}
                     />
+                    {f.secure && (
+                      <TouchableOpacity
+                        style={styles.passwordEyeBtn}
+                        onPress={() => setShowPassword((visible) => !visible)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        accessibilityRole="button"
+                        accessibilityLabel={showPassword ? "Hide password" : "Show password"}
+                      >
+                        <Ionicons
+                          name={showPassword ? "eye-off-outline" : "eye-outline"}
+                          size={20}
+                          color={showPassword ? "#2d6a4f" : "#777"}
+                        />
+                      </TouchableOpacity>
+                    )}
                   </View>
                 ))}
                 <Text style={[styles.sectionLabel, { marginTop: 16 }]}>
@@ -1704,6 +1730,15 @@ const styles = StyleSheet.create({
   },
   inputIcon: { marginRight: 8 },
   input: { flex: 1, paddingVertical: 13, fontSize: 15, color: "#1a1a1a" },
+  passwordEyeBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#ecfdf5",
+    marginLeft: 8,
+  },
   designationChip: {
     borderWidth: 1.5,
     borderColor: "#e0e0e0",
