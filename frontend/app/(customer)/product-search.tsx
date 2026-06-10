@@ -266,13 +266,19 @@ export default function ProductSearchScreen() {
       tomorrow.setDate(tomorrow.getDate() + 1);
       const startDate = tomorrow.toISOString().split("T")[0];
       await api.createSubscription({
-        product_id: selectedProduct.id,
-        quantity,
+        items: [
+          {
+            product_id: selectedProduct.id,
+            quantity,
+            price: Number(selectedProduct.price) || 0,
+            amount,
+          },
+        ],
         pattern,
         custom_days: pattern === "custom" ? customDays : null,
         start_date: startDate,
         end_date: pattern === "buy_once" ? startDate : null,
-        amount,
+        delivery_slot: "morning",
       });
       setFeedback(pattern === "buy_once" ? "Order placed successfully." : "Subscription activated successfully.");
       setTimeout(() => setSelectedProduct(null), 700);

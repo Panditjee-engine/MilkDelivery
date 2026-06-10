@@ -79,6 +79,48 @@ const NEWLY_ADDED_SLIDES = [
   },
 ];
 
+type CatalogSlide = {
+  id: string;
+  title: string;
+  subtitle: string;
+  kicker: string;
+  colors: string[];
+  image: any;
+};
+
+const SLIDE_GRADIENTS = [
+  ["#123524", "#1f6f43"],
+  ["#0f3c66", "#2563EB"],
+  ["#14532d", "#16A34A"],
+  ["#78350f", "#D97706"],
+  ["#3b0764", "#7C3AED"],
+];
+
+function normalizeContentImage(img?: string) {
+  if (!img) return null;
+  if (img.startsWith("http") || img.startsWith("data:image")) {
+    return { uri: img };
+  }
+  return { uri: `data:image/jpeg;base64,${img}` };
+}
+
+function mapContentToSlides(content: any[]): CatalogSlide[] {
+  return (content || [])
+    .flatMap((item, itemIndex) => {
+      const images = Array.isArray(item?.images) ? item.images : [];
+      return images.map((img: string, imageIndex: number) => ({
+        id: `${item?.id || item?._id || itemIndex}-${imageIndex}`,
+        title: item?.title || "Fresh dairy, every day",
+        subtitle: item?.description || "Newly added products from trusted farms",
+        kicker: "New Arrival",
+        colors:
+          SLIDE_GRADIENTS[(itemIndex + imageIndex) % SLIDE_GRADIENTS.length],
+        image: normalizeContentImage(img),
+      }));
+    })
+    .filter((slide) => Boolean(slide.image));
+}
+
 // ─── Design tokens ─────────────────────────────────────────────────────────
 const T = {
   bg: "#F9F8F6",
@@ -2858,6 +2900,7 @@ export default function CatalogScreen() {
   const [toastProduct, setToastProduct] = useState("");
   const [toastIsSub, setToastIsSub] = useState(false);
   const [activeNewSlide, setActiveNewSlide] = useState(0);
+  const [catalogSlides, setCatalogSlides] = useState<CatalogSlide[]>([]);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isFocused = useIsFocused();
 
@@ -2883,17 +2926,19 @@ export default function CatalogScreen() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [prods, cats, wallet] = await Promise.all([
+      const [prods, cats, wallet, content] = await Promise.all([
         api.getCatalogProducts(
           linkedAdminId ?? undefined,
           selectedCategory || undefined,
         ),
         api.getCategories(),
         api.getWallet(),
+        api.getCatalogContent().catch(() => null),
       ]);
       setProducts(prods);
       setCategories(cats);
       setWalletBalance(wallet.balance ?? 0);
+      setCatalogSlides(mapContentToSlides(content?.data || []));
       await fetchSubs();
     } catch {
     } finally {
@@ -3146,6 +3191,8 @@ const handleQuickAddConfirm = async (qty: number) => {
 
   if (loading) return <LoadingScreen />;
 
+  const newSlides = catalogSlides.length > 0 ? catalogSlides : NEWLY_ADDED_SLIDES;
+
   const ListHeader = (
     <>
       <View style={mainS.pageHeader}>
@@ -3205,7 +3252,7 @@ const handleQuickAddConfirm = async (qty: number) => {
             setActiveNewSlide(index);
           }}
         >
-          {NEWLY_ADDED_SLIDES.map((slide) => (
+          {newSlides.map((slide) => (
             <View key={slide.id} style={mainS.newSlide}>
               <TouchableOpacity activeOpacity={0.88}>
                 <LinearGradient
@@ -3231,7 +3278,7 @@ const handleQuickAddConfirm = async (qty: number) => {
           ))}
         </ScrollView>
         <View style={mainS.newDots}>
-          {NEWLY_ADDED_SLIDES.map((slide, index) => (
+          {newSlides.map((slide, index) => (
             <View
               key={slide.id}
               style={[

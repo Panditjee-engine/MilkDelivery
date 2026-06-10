@@ -293,22 +293,35 @@ export default function AdminDashboard() {
   const [products, setProducts] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
+  const [pendingRechargeRequests, setPendingRechargeRequests] = useState<any[]>(
+    [],
+  );
   const [modalType, setModalType] = useState<ModalType>(null);
   const isFocused = useIsFocused();
 
   const fetchData = async () => {
     try {
-      const [dashboardData, productsData, usersData, ordersData] =
+      const [
+        dashboardData,
+        productsData,
+        usersData,
+        ordersData,
+        rechargeRequestsData,
+      ] =
         await Promise.all([
           api.getAdminDashboard(),
           api.getProducts(),
           api.getAllUsers("customer"),
           api.getAllOrders(),
+          api.getAdminRechargeRequests("pending").catch(() => []),
         ]);
       setStats(dashboardData);
       setProducts(productsData);
       setCustomers(usersData);
       setOrders(ordersData);
+      setPendingRechargeRequests(
+        Array.isArray(rechargeRequestsData) ? rechargeRequestsData : [],
+      );
     } catch (error) {
       console.error("Error fetching dashboard:", error);
     } finally {
@@ -420,6 +433,34 @@ export default function AdminDashboard() {
           </View>
           <Ionicons name="chevron-forward" size={18} color={C.dark} />
         </TouchableOpacity>
+
+        {pendingRechargeRequests.length > 0 ? (
+          <TouchableOpacity
+            style={styles.rechargeRequestCard}
+            activeOpacity={0.82}
+            onPress={() => router.push("/(admin)/wallet-payment" as any)}
+          >
+            <View style={styles.rechargeRequestLeft}>
+              <View style={styles.rechargeRequestIcon}>
+                <Ionicons name="wallet-outline" size={20} color={C.dark} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.rechargeRequestTitle}>
+                  Pending Recharge Requests
+                </Text>
+                <Text style={styles.rechargeRequestSub}>
+                  Review customer wallet payment requests
+                </Text>
+              </View>
+            </View>
+            <View style={styles.rechargeRequestCount}>
+              <Text style={styles.rechargeRequestCountText}>
+                {pendingRechargeRequests.length}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={C.dark} />
+          </TouchableOpacity>
+        ) : null}
 
         {/* ── Stats Grid ── */}
         <View style={styles.statsGrid}>
@@ -916,6 +957,55 @@ const styles = StyleSheet.create({
   todayOrderRight: { alignItems: "flex-end" },
   todayOrderCount: { fontSize: 24, fontWeight: "900", color: C.dark },
   todayOrderMeta: { fontSize: 12, fontWeight: "800", color: C.textMuted },
+
+  rechargeRequestCard: {
+    marginHorizontal: 20,
+    marginBottom: 16,
+    backgroundColor: "#FFF3DC",
+    borderRadius: 18,
+    padding: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderWidth: 1.5,
+    borderColor: "#FFD9B8",
+  },
+  rechargeRequestLeft: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  rechargeRequestIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: C.primary + "30",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  rechargeRequestTitle: { fontSize: 14, fontWeight: "900", color: C.text },
+  rechargeRequestSub: {
+    fontSize: 11,
+    color: C.textMuted,
+    fontWeight: "600",
+    marginTop: 2,
+    lineHeight: 15,
+  },
+  rechargeRequestCount: {
+    minWidth: 32,
+    height: 32,
+    borderRadius: 11,
+    backgroundColor: C.primary,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 8,
+  },
+  rechargeRequestCountText: {
+    fontSize: 14,
+    fontWeight: "900",
+    color: "#fff",
+  },
 
   statsGrid: {
     flexDirection: "row",

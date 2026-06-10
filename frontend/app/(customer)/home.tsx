@@ -58,6 +58,36 @@ const homeBanners = [
 ];
 const HOME_BANNER_WIDTH = Math.max(0, SCREEN_WIDTH - 40);
 
+type BannerSlide = {
+  id: string;
+  image: any;
+  title: string;
+  subtitle: string;
+};
+
+function normalizeContentImage(img?: string) {
+  if (!img) return null;
+  if (img.startsWith("http") || img.startsWith("data:image")) {
+    return { uri: img };
+  }
+  return { uri: `data:image/jpeg;base64,${img}` };
+}
+
+function mapContentToSlides(content: any[]): BannerSlide[] {
+  return (content || [])
+    .flatMap((item, itemIndex) => {
+      const images = Array.isArray(item?.images) ? item.images : [];
+      return images.map((img: string, imageIndex: number) => ({
+        id: `${item?.id || item?._id || itemIndex}-${imageIndex}`,
+        image: normalizeContentImage(img),
+        title: item?.title || "Fresh dairy, every day",
+        subtitle:
+          item?.description || "Manage subscriptions and deliveries in one place",
+      }));
+    })
+    .filter((slide) => Boolean(slide.image));
+}
+
 // ─── Status helpers
 const statusConfig = (status: string) => {
   switch (status) {
@@ -197,8 +227,9 @@ function BrandHeader() {
   );
 }
 
-function HomeBannerSlider() {
+function HomeBannerSlider({ banners }: { banners: BannerSlide[] }) {
   const [activeIndex, setActiveIndex] = useState(0);
+  const slides = banners.length > 0 ? banners : homeBanners;
 
   return (
     <View style={s.bannerWrap}>
@@ -213,7 +244,7 @@ function HomeBannerSlider() {
           setActiveIndex(index);
         }}
       >
-        {homeBanners.map((banner) => (
+        {slides.map((banner) => (
           <View key={banner.id} style={s.bannerSlide}>
             <LinearGradient
               colors={["#123524", "#1f6f43"]}
@@ -237,7 +268,7 @@ function HomeBannerSlider() {
         ))}
       </ScrollView>
       <View style={s.bannerDots}>
-        {homeBanners.map((banner, index) => (
+        {slides.map((banner, index) => (
           <View
             key={banner.id}
             style={[s.bannerDot, activeIndex === index && s.bannerDotActive]}
@@ -499,6 +530,7 @@ export default function CustomerHome() {
   const [recentOrder, setRecentOrder] = useState<any>(null);
   const [featuredProducts, setFeaturedProducts] = useState<any[]>([]);
   const [adminsList, setAdminsList] = useState<any[]>([]);
+  const [contentSlides, setContentSlides] = useState<BannerSlide[]>([]);
 
   // Wallet card entrance
   const walletAnim = useRef(new Animated.Value(0)).current;
@@ -506,7 +538,7 @@ export default function CustomerHome() {
 
   const fetchData = async (isInitial = false) => {
     try {
-      const [walletData, ordersData, productsData, adminsData] =
+      const [walletData, ordersData, productsData, adminsData, contentData] =
         await Promise.all([
           api.getWallet(),
           api.getOrders(),
@@ -515,12 +547,14 @@ export default function CustomerHome() {
             undefined,
           ),
           api.getAdmins(),
+          api.getCatalogContent().catch(() => null),
         ]);
 
       setAdminsList(adminsData.map((a: any) => ({ ...a, id: a.id || a._id })));
       setWalletBalance(walletData.balance);
       setRecentOrder(ordersData?.[0] || null);
       setFeaturedProducts((productsData || []).slice(0, 3));
+      setContentSlides(mapContentToSlides(contentData?.data || []));
 
       if (isInitial) {
         Animated.parallel([
@@ -675,7 +709,7 @@ export default function CustomerHome() {
           </TouchableOpacity>
         </Animated.View>
 
-        <HomeBannerSlider />
+        <HomeBannerSlider banners={contentSlides} />
 
         {/* ── Recent Order ── */}
         <View style={s.sectionWrap}>

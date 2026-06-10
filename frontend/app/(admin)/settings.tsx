@@ -13,10 +13,12 @@ import {
   Animated,
   StatusBar,
   ActivityIndicator,
+  Image,
 } from "react-native";
 import { api } from "../../src/services/api";
 import QRCode from "react-native-qrcode-svg";
 import * as Sharing from "expo-sharing";
+import * as ImagePicker from "expo-image-picker";
 import ViewShot, { captureRef } from "react-native-view-shot";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -53,6 +55,16 @@ type ModalType =
   | null;
 
 type OtpStep = "input" | "verify" | "change";
+
+type AdminContent = {
+  id?: string;
+  _id?: string;
+  content_id?: string;
+  title: string;
+  description: string;
+  images?: string[];
+  is_active?: boolean;
+};
 
 interface Settings {
   cutoffHour: string;
@@ -720,6 +732,23 @@ export default function AdminSettingsScreen() {
   const [deleteModal, setDeleteModal] = useState(false);
   const [deletePassword, setDeletePassword] = useState("");
   const [deletingAccount, setDeletingAccount] = useState(false);
+  const [contentModal, setContentModal] = useState(false);
+  const [contentItems, setContentItems] = useState<AdminContent[]>([]);
+  const [contentLoading, setContentLoading] = useState(false);
+  const [contentSaving, setContentSaving] = useState(false);
+  const [contentDraft, setContentDraft] = useState<{
+    id: string | null;
+    title: string;
+    description: string;
+    images: string[];
+    is_active: boolean;
+  }>({
+    id: null,
+    title: "",
+    description: "",
+    images: [],
+    is_active: true,
+  });
 
   useEffect(() => {
     AsyncStorage.getItem("APP_SETTINGS").then((data) => {
@@ -730,6 +759,7 @@ export default function AdminSettingsScreen() {
       duration: 600,
       useNativeDriver: true,
     }).start();
+    loadContent();
   }, []);
 
   // Resend countdown
@@ -758,6 +788,215 @@ export default function AdminSettingsScreen() {
     setActiveModal(type);
   };
   const closeModal = () => setActiveModal(null);
+
+  const getContentId = (item: AdminContent) =>
+    String(item.id || item._id || item.content_id || "");
+
+  const normalizeImageUri = (img: string) => {
+    if (!img) return "";
+    if (img.startsWith("http") || img.startsWith("data:image")) return img;
+    return `data:image/jpeg;base64,${img}`;
+  };
+
+  const resetContentDraft = () =>
+    setContentDraft({
+      id: null,
+      title: "",
+      description: "",
+      images: [],
+      is_active: true,
+    });
+
+  const loadContent = async () => {
+    setContentLoading(true);
+    try {
+      const res = await api.getContent();
+      setContentItems(Array.isArray(res?.data) ? res.data : []);
+    } catch (error: any) {
+      showAlert(
+        "Content Load Failed",
+        error?.message || "Could not load content right now.",
+        undefined,
+        "alert-circle-outline",
+        C.deepPeach,
+        C.amber,
+      );
+    } finally {
+      setContentLoading(false);
+    }
+  };
+
+  const openContentModal = () => {
+    router.push("/(admin)/content" as any);
+  };
+
+  const pickContentImages = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      showAlert(
+        "Permission Needed",
+        "Please allow photo access to add content images.",
+        undefined,
+        "image-outline",
+        C.deepPeach,
+        C.dark,
+      );
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsMultipleSelection: true,
+      base64: true,
+      quality: 0.72,
+    });
+    if (result.canceled) return;
+    const images = result.assets
+      .map((asset) => asset.base64)
+      .filter(Boolean) as string[];
+    setContentDraft((draft) => ({
+      ...draft,
+      images: [...draft.images, ...images],
+    }));
+  };
+
+  const saveContent = async () => {
+    if (!contentDraft.title.trim() || !contentDraft.description.trim()) {
+      showAlert(
+        "Missing Details",
+        "Please enter both title and description.",
+        undefined,
+        "document-text-outline",
+        C.deepPeach,
+        C.dark,
+      );
+      return;
+    }
+    setContentSaving(true);
+    try {
+      if (contentDraft.id) {
+        await api.updateContent(contentDraft.id, {
+          title: contentDraft.title.trim(),
+          description: contentDraft.description.trim(),
+          images: contentDraft.images,
+          is_active: contentDraft.is_active,
+          updated_at: new Date().toISOString(),
+        });
+      } else {
+        await api.addContent({
+          title: contentDraft.title.trim(),
+          description: contentDraft.description.trim(),
+          images: contentDraft.images,
+        });
+      }
+      resetContentDraft();
+      await loadContent();
+      showAlert(
+        "Saved",
+        "Content saved successfully.",
+        undefined,
+        "checkmark-circle",
+        "#E8F5E9",
+        "#388E3C",
+      );
+    } catch (error: any) {
+      showAlert(
+        "Save Failed",
+        error?.message || "Could not save content.",
+        undefined,
+        "alert-circle-outline",
+        C.deepPeach,
+        C.amber,
+      );
+    } finally {
+      setContentSaving(false);
+    }
+  };
+
+  const editContent = (item: AdminContent) => {
+    showAlert(
+      "Edit Content?",
+      "This will load the selected content into the form for editing.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Edit",
+          onPress: () =>
+            setContentDraft({
+              id: getContentId(item),
+              title: item.title || "",
+              description: item.description || "",
+              images: item.images || [],
+              is_active: item.is_active ?? true,
+            }),
+        },
+      ],
+      "pencil-outline",
+      C.deepPeach,
+      C.dark,
+    );
+  };
+
+  const toggleContent = async (item: AdminContent) => {
+    const id = getContentId(item);
+    if (!id) return;
+    const willActivate = item.is_active === false;
+    showAlert(
+      willActivate ? "Activate Content?" : "Deactivate Content?",
+      willActivate
+        ? "This content will become visible again."
+        : "This content will be hidden from active content.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: willActivate ? "Activate" : "Deactivate",
+          onPress: async () => {
+            try {
+              await api.toggleContentStatus(id);
+              await loadContent();
+            } catch (error: any) {
+              showAlert(
+                "Update Failed",
+                error?.message || "Could not update status.",
+              );
+            }
+          },
+        },
+      ],
+      "power-outline",
+      C.deepPeach,
+      C.dark,
+    );
+  };
+
+  const deleteContent = (item: AdminContent) => {
+    const id = getContentId(item);
+    if (!id) return;
+    showAlert(
+      "Delete Content?",
+      "This content will be permanently deleted.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await api.deleteContent(id);
+              await loadContent();
+            } catch (error: any) {
+              showAlert(
+                "Delete Failed",
+                error?.message || "Could not delete content.",
+              );
+            }
+          },
+        },
+      ],
+      "trash-outline",
+      "#FEE2E2",
+      "#dc2626",
+    );
+  };
 
   const saveSettings = async () => {
     setSettings({ ...draft });
@@ -1217,6 +1456,58 @@ export default function AdminSettingsScreen() {
           ) : null}
         </View>
 
+        {/* ── Content Management */}
+        <View style={s.contentCard}>
+          <View style={s.contentCardHeader}>
+            <View style={s.contentIconWrap}>
+              <Ionicons name="images-outline" size={18} color={C.dark} />
+            </View>
+            <View style={s.contentCardBody}>
+              <Text style={s.contentCardTitle}>App Content</Text>
+              <Text style={s.contentCardSubtitle}>
+                Add image content for customer app banners and highlights.
+              </Text>
+            </View>
+            <View style={s.contentCountPill}>
+              <Text style={s.contentCountText}>{contentItems.length}</Text>
+            </View>
+          </View>
+          <TouchableOpacity
+            style={s.contentManageBtn}
+            activeOpacity={0.85}
+            onPress={openContentModal}
+          >
+            <Ionicons name="create-outline" size={15} color="#fff" />
+            <Text style={s.contentManageText}>Manage Content</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* ── Wallet Payment */}
+        <View style={s.contentCard}>
+          <View style={s.contentCardHeader}>
+            <View style={s.contentIconWrap}>
+              <Ionicons name="qr-code-outline" size={18} color={C.dark} />
+            </View>
+            <View style={s.contentCardBody}>
+              <Text style={s.contentCardTitle}>Wallet Payment</Text>
+              <Text style={s.contentCardSubtitle}>
+                Upload payment QR and manage customer recharge requests.
+              </Text>
+            </View>
+            <View style={s.contentCountPill}>
+              <Ionicons name="wallet-outline" size={16} color={C.dark} />
+            </View>
+          </View>
+          <TouchableOpacity
+            style={s.contentManageBtn}
+            activeOpacity={0.85}
+            onPress={() => router.push("/(admin)/wallet-payment" as any)}
+          >
+            <Ionicons name="card-outline" size={15} color="#fff" />
+            <Text style={s.contentManageText}>Manage Wallet Payment</Text>
+          </TouchableOpacity>
+        </View>
+
         {/* ── System Configuration */}
         <View style={s.section}>
           <SectionHeader title="System Configuration" />
@@ -1316,6 +1607,218 @@ export default function AdminSettingsScreen() {
           />
         </TouchableOpacity>
       </ScrollView>
+
+      {/* ── Content Management Modal */}
+      <Modal visible={contentModal} animationType="slide" transparent>
+        <View style={mS.overlay}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            style={mS.sheet}
+          >
+            <View style={mS.drag} />
+            <View style={mS.header}>
+              <View style={mS.headerLeft}>
+                <View style={mS.headerIcon}>
+                  <Ionicons name="images-outline" size={16} color={C.dark} />
+                </View>
+                <Text style={mS.headerTitle}>App Content</Text>
+              </View>
+              <TouchableOpacity
+                style={mS.closeBtn}
+                onPress={() => setContentModal(false)}
+              >
+                <Ionicons name="close" size={16} color={C.dark} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={mS.body}>
+              <Text style={mS.shareSubtitle}>
+                Create and manage title, description, and base64 images for app
+                content.
+              </Text>
+
+              <Text style={mS.fieldLabel}>Title</Text>
+              <TextInput
+                style={mS.input}
+                value={contentDraft.title}
+                onChangeText={(title) =>
+                  setContentDraft((draft) => ({ ...draft, title }))
+                }
+                placeholder="Content title"
+                placeholderTextColor={C.light}
+              />
+
+              <Text style={mS.fieldLabel}>Description</Text>
+              <TextInput
+                style={[mS.input, cS.descriptionInput]}
+                value={contentDraft.description}
+                onChangeText={(description) =>
+                  setContentDraft((draft) => ({ ...draft, description }))
+                }
+                placeholder="Content description"
+                placeholderTextColor={C.light}
+                multiline
+              />
+
+              <View style={cS.imageTopRow}>
+                <Text style={mS.fieldLabel}>Images</Text>
+                <TouchableOpacity
+                  style={cS.addImageBtn}
+                  onPress={pickContentImages}
+                  activeOpacity={0.82}
+                >
+                  <Ionicons name="image-outline" size={14} color={C.dark} />
+                  <Text style={cS.addImageText}>Add Image</Text>
+                </TouchableOpacity>
+              </View>
+
+              {contentDraft.images.length > 0 ? (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={cS.previewRow}
+                >
+                  {contentDraft.images.map((img, index) => (
+                    <View key={`${img.slice(0, 12)}-${index}`} style={cS.thumbWrap}>
+                      <Image
+                        source={{ uri: normalizeImageUri(img) }}
+                        style={cS.thumb}
+                      />
+                      <TouchableOpacity
+                        style={cS.removeThumb}
+                        onPress={() =>
+                          setContentDraft((draft) => ({
+                            ...draft,
+                            images: draft.images.filter((_, i) => i !== index),
+                          }))
+                        }
+                      >
+                        <Ionicons name="close" size={12} color="#fff" />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </ScrollView>
+              ) : (
+                <View style={cS.emptyImages}>
+                  <Ionicons name="image-outline" size={18} color={C.light} />
+                  <Text style={cS.emptyImagesText}>No images selected</Text>
+                </View>
+              )}
+
+              <TouchableOpacity
+                style={[mS.saveBtn, contentSaving && { opacity: 0.65 }]}
+                onPress={saveContent}
+                activeOpacity={0.8}
+                disabled={contentSaving}
+              >
+                {contentSaving ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <>
+                    <Ionicons name="checkmark-circle" size={18} color="#fff" />
+                    <Text style={mS.saveTxt}>
+                      {contentDraft.id ? "Update Content" : "Add Content"}
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              <View style={cS.listHeader}>
+                <Text style={cS.listTitle}>All Content</Text>
+                <TouchableOpacity onPress={loadContent} activeOpacity={0.75}>
+                  <Ionicons name="refresh" size={17} color={C.dark} />
+                </TouchableOpacity>
+              </View>
+
+              {contentLoading ? (
+                <View style={cS.loadingBox}>
+                  <ActivityIndicator color={C.primary} />
+                  <Text style={cS.loadingText}>Loading content...</Text>
+                </View>
+              ) : contentItems.length === 0 ? (
+                <View style={cS.emptyList}>
+                  <Ionicons name="document-text-outline" size={22} color={C.light} />
+                  <Text style={cS.emptyListText}>No content added yet</Text>
+                </View>
+              ) : (
+                contentItems.map((item) => (
+                  <View key={getContentId(item) || item.title} style={cS.itemCard}>
+                    <View style={cS.itemTop}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={cS.itemTitle} numberOfLines={1}>
+                          {item.title}
+                        </Text>
+                        <Text style={cS.itemDescription} numberOfLines={2}>
+                          {item.description}
+                        </Text>
+                      </View>
+                      <View
+                        style={[
+                          cS.statusPill,
+                          item.is_active === false && cS.statusPillOff,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            cS.statusText,
+                            item.is_active === false && cS.statusTextOff,
+                          ]}
+                        >
+                          {item.is_active === false ? "Inactive" : "Active"}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {(item.images || []).length > 0 ? (
+                      <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={cS.itemImages}
+                      >
+                        {(item.images || []).slice(0, 5).map((img, index) => (
+                          <Image
+                            key={`${getContentId(item)}-${index}`}
+                            source={{ uri: normalizeImageUri(img) }}
+                            style={cS.itemImage}
+                          />
+                        ))}
+                      </ScrollView>
+                    ) : null}
+
+                    <View style={cS.actionsRow}>
+                      <TouchableOpacity
+                        style={cS.actionBtn}
+                        onPress={() => editContent(item)}
+                      >
+                        <Ionicons name="pencil-outline" size={14} color={C.dark} />
+                        <Text style={cS.actionText}>Edit</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={cS.actionBtn}
+                        onPress={() => toggleContent(item)}
+                      >
+                        <Ionicons name="power-outline" size={14} color={C.dark} />
+                        <Text style={cS.actionText}>Toggle</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[cS.actionBtn, cS.deleteBtn]}
+                        onPress={() => deleteContent(item)}
+                      >
+                        <Ionicons name="trash-outline" size={14} color="#dc2626" />
+                        <Text style={[cS.actionText, { color: "#dc2626" }]}>
+                          Delete
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))
+              )}
+
+              <View style={{ height: 24 }} />
+            </ScrollView>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
 
       {/* ── Share Modal */}
       <ShareModal
@@ -1759,7 +2262,7 @@ export default function AdminSettingsScreen() {
 
             {/* Resend row */}
             <View style={mS.resendRow}>
-              <Text style={mS.resendLabel}>Didn't receive it?</Text>
+              <Text style={mS.resendLabel}>{"Didn't receive it?"}</Text>
               <TouchableOpacity
                 onPress={handleResendOtp}
                 disabled={otpResendTimer > 0}
@@ -2221,6 +2724,135 @@ const mS = StyleSheet.create({
   backTxt: { fontSize: 13, color: "#A07850", fontWeight: "600" },
 });
 
+const cS = StyleSheet.create({
+  descriptionInput: {
+    minHeight: 92,
+    textAlignVertical: "top",
+    paddingTop: 12,
+  },
+  imageTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 4,
+  },
+  addImageBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: C.peach,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  addImageText: { fontSize: 11, fontWeight: "800", color: C.dark },
+  previewRow: { gap: 10, paddingVertical: 8 },
+  thumbWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 14,
+    overflow: "hidden",
+    backgroundColor: C.peach,
+  },
+  thumb: { width: "100%", height: "100%" },
+  removeThumb: {
+    position: "absolute",
+    top: 5,
+    right: 5,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  emptyImages: {
+    height: 68,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderColor: C.deepPeach,
+    backgroundColor: "#FFFDFB",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    marginBottom: 12,
+  },
+  emptyImagesText: { fontSize: 11, fontWeight: "700", color: C.light },
+  listHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 18,
+    marginBottom: 10,
+  },
+  listTitle: { fontSize: 14, fontWeight: "900", color: C.text },
+  loadingBox: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 24,
+    gap: 8,
+  },
+  loadingText: { fontSize: 12, fontWeight: "700", color: C.muted },
+  emptyList: {
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 28,
+  },
+  emptyListText: { fontSize: 12, fontWeight: "700", color: C.light },
+  itemCard: {
+    backgroundColor: "#FFFDFB",
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 10,
+  },
+  itemTop: { flexDirection: "row", gap: 10, alignItems: "flex-start" },
+  itemTitle: {
+    fontSize: 13,
+    fontWeight: "900",
+    color: C.text,
+    marginBottom: 4,
+  },
+  itemDescription: {
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: "600",
+    color: C.muted,
+  },
+  statusPill: {
+    backgroundColor: "#E8F5E9",
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  statusPillOff: { backgroundColor: "#FEE2E2" },
+  statusText: { fontSize: 10, fontWeight: "900", color: "#388E3C" },
+  statusTextOff: { color: "#dc2626" },
+  itemImages: { gap: 8, paddingTop: 10 },
+  itemImage: {
+    width: 54,
+    height: 54,
+    borderRadius: 12,
+    backgroundColor: C.peach,
+  },
+  actionsRow: { flexDirection: "row", gap: 8, marginTop: 12 },
+  actionBtn: {
+    flex: 1,
+    minHeight: 36,
+    borderRadius: 12,
+    backgroundColor: C.peach,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+  },
+  deleteBtn: { backgroundColor: "#FEE2E2" },
+  actionText: { fontSize: 11, fontWeight: "800", color: C.dark },
+});
+
 // ── Screen Styles
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#FFF8F4" },
@@ -2465,6 +3097,71 @@ const s = StyleSheet.create({
     fontWeight: "800",
     color: "#fff",
   },
+
+  // Content card
+  contentCard: {
+    backgroundColor: "#fff",
+    marginHorizontal: 16,
+    marginBottom: 18,
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: C.deepPeach,
+    shadowColor: "#BB6B3F",
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  contentCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  contentIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: C.peach,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  contentCardBody: { flex: 1 },
+  contentCardTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: C.text,
+    letterSpacing: -0.2,
+    marginBottom: 2,
+  },
+  contentCardSubtitle: {
+    fontSize: 11,
+    lineHeight: 16,
+    color: C.muted,
+    fontWeight: "500",
+  },
+  contentCountPill: {
+    minWidth: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: C.peach,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 8,
+  },
+  contentCountText: { fontSize: 13, fontWeight: "900", color: C.dark },
+  contentManageBtn: {
+    marginTop: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    backgroundColor: C.primary,
+    borderRadius: 14,
+    paddingVertical: 11,
+  },
+  contentManageText: { fontSize: 12, fontWeight: "800", color: "#fff" },
 
   // Sections
   section: { marginBottom: 8, paddingHorizontal: 16 },
