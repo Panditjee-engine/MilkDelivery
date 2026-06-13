@@ -769,6 +769,11 @@ async updateOrderStatus(orderId: string, status: string) {
   });
 }
 
+// Recurring subscriptions whose customers are tagged to this rider
+async getAssignedSubscriptions(): Promise<any[]> {
+  return this.request<any[]>("/subscriptions/delivery/assigned");
+}
+
   async assignDeliveryPartner(orderId: string, partnerId: string) {
     return this.request<any>(
       `/admin/orders/${orderId}/assign?partner_id=${partnerId}`,
@@ -2414,7 +2419,9 @@ async editSubscription(
   });
 }
 
-
+async acceptSubscription(id: string) {
+  return this.request<any>(`/subscriptions/${id}/accept`, { method: 'POST' });
+}
 
 // Logout
   logout = async () => {
