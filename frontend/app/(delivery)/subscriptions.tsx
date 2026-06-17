@@ -499,28 +499,34 @@ function SubCard({
 /** Get next delivery date label */
 function getNextDelivery(sub: Subscription): string {
   const today = new Date();
+  const pattern = getPattern(sub);
+
   for (let i = 1; i <= 7; i++) {
-    const next    = new Date(today);
+    const next = new Date(today);
     next.setDate(today.getDate() + i);
     const nextStr = next.toISOString().split('T')[0];
-    if (isDeliveryToday({ ...sub, start_date: sub.start_date })) {
-      // reuse helper by shifting start
-    }
-    const pattern   = getPattern(sub);
-    const startDate = new Date(sub.start_date);
-    const jsDay     = next.getDay();
-    const pyDay     = jsDay === 0 ? 6 : jsDay - 1;
-    const daysDiff  = Math.round((next.getTime() - startDate.getTime()) / 86400000);
-    let delivers    = false;
+
+    const end = sub.end_date;
+    if (end && nextStr > end) break;
+    if (nextStr < sub.start_date) continue;
+
+    const jsDay = next.getDay();
+    const pyDay = jsDay === 0 ? 6 : jsDay - 1;
+    const daysDiff = Math.round(
+      (next.getTime() - new Date(sub.start_date).getTime()) / 86400000
+    );
+
+    let delivers = false;
     if (pattern === 'daily')     delivers = true;
     if (pattern === 'alternate') delivers = daysDiff % 2 === 0;
     if (pattern === 'custom' || pattern === 'weekly')
       delivers = (sub.custom_days ?? []).includes(pyDay);
-    const end = sub.end_date;
-    if (end && nextStr > end) break;
+
     if (delivers) {
       if (i === 1) return 'Tomorrow';
-      return next.toLocaleDateString('en-IN', { weekday: 'short', month: 'short', day: 'numeric' });
+      return next.toLocaleDateString('en-IN', {
+        weekday: 'short', month: 'short', day: 'numeric',
+      });
     }
   }
   return 'Soon';
