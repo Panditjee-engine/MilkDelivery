@@ -405,6 +405,40 @@ class ApiService {
     return data;
   }
 
+  private async requestFormData<T>(
+    endpoint: string,
+    formData: FormData,
+    method: "POST" | "PUT" = "POST",
+  ): Promise<T> {
+    const url = `${API_BASE}/api${endpoint}`;
+    const storedToken =
+      this.token || (await AsyncStorage.getItem("access_token"));
+    const headers: Record<string, string> = {};
+
+    if (storedToken) {
+      headers.Authorization = `Bearer ${storedToken}`;
+    }
+
+    const response = await fetch(url, {
+      method,
+      headers,
+      body: formData,
+    });
+
+    const text = await response.text();
+    if (!response.ok) {
+      if (response.status === 401) throw new Error("UNAUTHORIZED");
+      try {
+        const errJson = JSON.parse(text);
+        throw new Error(errJson.message || errJson.detail || "Request failed");
+      } catch {
+        throw new Error(text || "Request failed");
+      }
+    }
+    if (!text) return {} as T;
+    return JSON.parse(text);
+  }
+
 // New API to get admin details by referral code (for registration flow)
   async getAdminByReferral(referralCode: string) {
   return this.request<{
@@ -490,6 +524,90 @@ class ApiService {
 
   async getCategories() {
     return this.request<any[]>("/categories");
+  }
+
+  async addContent(data: {
+    title: string;
+    description: string;
+    images: string[];
+  }) {
+    return this.request<any>("/content/addContent", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getContent() {
+    return this.request<any>("/content/getContent");
+  }
+
+  async getCatalogContent() {
+    return this.request<any>("/catalog/content");
+  }
+
+  async updateContent(
+    contentId: string,
+    data: {
+      title: string;
+      description: string;
+      images: string[];
+      is_active: boolean;
+      updated_at: string;
+    },
+  ) {
+    return this.request<any>(`/content/updateContent/${contentId}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async toggleContentStatus(contentId: string) {
+    return this.request<any>(`/content/toggleStatus/${contentId}`, {
+      method: "PUT",
+    });
+  }
+
+  async deleteContent(contentId: string) {
+    return this.request<any>(`/content/deleteContent/${contentId}`, {
+      method: "DELETE",
+    });
+  }
+
+  async createPaymentQr(data: { file: any; label: string }) {
+    const formData = new FormData();
+    formData.append("file", data.file as any);
+    formData.append("label", data.label);
+    return this.requestFormData<any>("/wallet/payment-qr", formData, "POST");
+  }
+
+  async updatePaymentQr(data: { file: any; label: string }) {
+    const formData = new FormData();
+    formData.append("file", data.file as any);
+    formData.append("label", data.label);
+    return this.requestFormData<any>("/wallet/payment-qr", formData, "PUT");
+  }
+
+  async getMyPaymentQr() {
+    return this.request<any>("/wallet/payment-qr/mine");
+  }
+
+  async getPaymentQr() {
+    return this.request<any>("/wallet/payment-qr");
+  }
+
+  async getAdminRechargeRequests(status?: string) {
+    const query = status ? `?status=${encodeURIComponent(status)}` : "";
+    return this.request<any[]>(`/admin/recharge-requests${query}`);
+  }
+
+  async updateRechargeRequest(
+    requestId: string,
+    data: { status: string; note: string },
+  ) {
+    return this.request<any>(`/admin/recharge-requests/${requestId}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
   }
 
   async getSubscriptions() {
@@ -630,6 +748,17 @@ async getAdminSubscriptionsAll(): Promise<any[]> {
       method: "POST",
       body: JSON.stringify({ amount }),
     });
+  }
+
+  async createRechargeRequest(data: { amount: number; reference: string }) {
+    return this.request<any>("/wallet/recharge-request", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getRechargeRequests() {
+    return this.request<any[]>("/wallet/recharge-request");
   }
 
   async getOrders() {

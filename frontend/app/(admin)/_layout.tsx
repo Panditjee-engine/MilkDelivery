@@ -95,6 +95,18 @@ export default function AdminLayout() {
             href: null,
           }}
         />
+        <Tabs.Screen
+          name="content"
+          options={{
+            href: null,
+          }}
+        />
+        <Tabs.Screen
+          name="wallet-payment"
+          options={{
+            href: null,
+          }}
+        />
       </Tabs>
     </NotificationProvider>
   );

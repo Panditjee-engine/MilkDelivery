@@ -8,12 +8,14 @@ import {
   TouchableOpacity,
   TextInput,
   Modal,
+  Image,
   Animated,
   Vibration,
   Easing,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import * as Sharing from "expo-sharing";
 import { api } from "../../src/services/api";
 import { Colors } from "../../src/constants/colors";
 import LoadingScreen from "../../src/components/LoadingScreen";
@@ -22,6 +24,35 @@ import Button from "../../src/components/Button";
 const quickAmounts = [100, 200, 500, 1000];
 const MIN_AMOUNT = 100;
 const MAX_AMOUNT = 99999;
+
+function getFileCacheDir(): string {
+  try {
+    const FS = require("expo-file-system");
+    return (
+      FS.cacheDirectory ??
+      FS.documentDirectory ??
+      FS.Dirs?.Cache ??
+      FS.Dirs?.Document ??
+      ""
+    );
+  } catch {
+    return "";
+  }
+}
+
+async function writeBase64File(uri: string, base64: string) {
+  const FS = require("expo-file-system");
+  if (typeof FS.writeAsStringAsync === "function") {
+    await FS.writeAsStringAsync(uri, base64, {
+      encoding: FS.EncodingType?.Base64 ?? "base64",
+    });
+    return;
+  }
+  if (typeof FS.File === "function") {
+    const file = new FS.File(uri);
+    await file.write(base64, { encoding: "base64" });
+  }
+}
 
 // ─── Limit Toast 
 type ToastType = "min" | "max" | null;
@@ -274,8 +305,8 @@ function SuccessModal({
           </View>
 
           {/* Text */}
-          <Text style={ss.title}>Money Added!</Text>
-          <Text style={ss.subtitle}>Your wallet has been topped up</Text>
+          <Text style={ss.title}>Request Submitted!</Text>
+          <Text style={ss.subtitle}>Your wallet will update after admin approval</Text>
 
           {/* Amount chip */}
           <Animated.View
@@ -294,7 +325,7 @@ function SuccessModal({
               },
             ]}
           >
-            <Text style={ss.amountLabel}>Amount Added</Text>
+            <Text style={ss.amountLabel}>Amount Requested</Text>
             <Text style={ss.amountValue}>+₹{amount.toFixed(2)}</Text>
           </Animated.View>
 
@@ -316,7 +347,7 @@ function SuccessModal({
             ]}
           >
             <Ionicons name="wallet-outline" size={14} color="#888" />
-            <Text style={ss.balanceText}>New Balance</Text>
+            <Text style={ss.balanceText}>Available Balance</Text>
             <Text style={ss.balanceValue}>₹{newBalance.toFixed(2)}</Text>
           </Animated.View>
 
@@ -471,8 +502,13 @@ export default function WalletScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [balance, setBalance] = useState(0);
   const [transactions, setTransactions] = useState<any[]>([]);
+  const [rechargeRequests, setRechargeRequests] = useState<any[]>([]);
+  const [paymentQr, setPaymentQr] = useState<any>(null);
+  const [qrPreviewVisible, setQrPreviewVisible] = useState(false);
+  const [downloadingQr, setDownloadingQr] = useState(false);
   const [rechargeModal, setRechargeModal] = useState(false);
   const [rechargeAmount, setRechargeAmount] = useState("");
+  const [reference, setReference] = useState("");
   const [recharging, setRecharging] = useState(false);
   const [toast, setToast] = useState<ToastType>(null);
   const [successVisible, setSuccessVisible] = useState(false);
@@ -544,12 +580,16 @@ export default function WalletScreen() {
 
   const fetchData = async () => {
     try {
-      const [walletData, txData] = await Promise.all([
+      const [walletData, txData, requestData, qrData] = await Promise.all([
         api.getWallet(),
         api.getWalletTransactions(),
+        api.getRechargeRequests().catch(() => []),
+        api.getPaymentQr().catch(() => null),
       ]);
       setBalance(walletData.balance);
       setTransactions(txData);
+      setRechargeRequests(Array.isArray(requestData) ? requestData : []);
+      setPaymentQr(qrData);
     } catch (error) {
       console.error("Error fetching wallet:", error);
     } finally {
@@ -583,14 +623,22 @@ export default function WalletScreen() {
       showToast("max");
       return;
     }
+    if (!reference.trim()) {
+      triggerShake();
+      return;
+    }
 
     setRecharging(true);
     try {
-      await api.rechargeWallet(amount);
+      await api.createRechargeRequest({
+        amount,
+        reference: reference.trim(),
+      });
 
       // Close sheet
       setRechargeModal(false);
       setRechargeAmount("");
+      setReference("");
       setToast(null);
 
       // Refresh data, then show success
@@ -608,8 +656,35 @@ export default function WalletScreen() {
   const closeModal = () => {
     setRechargeModal(false);
     setRechargeAmount("");
+    setReference("");
     setToast(null);
     if (toastTimer.current) clearTimeout(toastTimer.current);
+  };
+
+  const downloadQr = async () => {
+    if (!paymentQr?.qr_image_base64) return;
+    const base64 = String(paymentQr.qr_image_base64).replace(
+      /^data:image\/\w+;base64,/,
+      "",
+    );
+    const ext = String(paymentQr.file_type || "").toLowerCase().includes("png")
+      ? "png"
+      : "jpg";
+    const dir = getFileCacheDir();
+    if (!dir) return;
+    const fileUri = `${dir}payment-qr-${Date.now()}.${ext}`;
+    setDownloadingQr(true);
+    try {
+      await writeBase64File(fileUri, base64);
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(fileUri, {
+          mimeType: ext === "png" ? "image/png" : "image/jpeg",
+          dialogTitle: "Download Payment QR",
+        });
+      }
+    } finally {
+      setDownloadingQr(false);
+    }
   };
 
   const formatDate = (dateStr: string) => {
@@ -632,8 +707,38 @@ export default function WalletScreen() {
     .reduce((s, t) => s + t.amount, 0);
   const isValidAmount = (() => {
     const n = parseFloat(rechargeAmount);
-    return !isNaN(n) && n >= MIN_AMOUNT && n <= MAX_AMOUNT;
+    return (
+      !isNaN(n) &&
+      n >= MIN_AMOUNT &&
+      n <= MAX_AMOUNT &&
+      Boolean(reference.trim())
+    );
   })();
+  const pendingRequests = rechargeRequests.filter(
+    (item) => (item.status || "").toLowerCase() === "pending",
+  );
+  const qrImageUri = paymentQr?.qr_image_base64
+    ? paymentQr.qr_image_base64.startsWith("data:image")
+      ? paymentQr.qr_image_base64
+      : `data:image/jpeg;base64,${paymentQr.qr_image_base64}`
+    : "";
+  const historyItems = [
+    ...transactions.map((item) => ({
+      kind: "transaction",
+      id: item.id,
+      date: item.created_at,
+      data: item,
+    })),
+    ...rechargeRequests.map((item) => ({
+      kind: "request",
+      id: item.id || item._id || item.request_id,
+      date: item.created_at,
+      data: item,
+    })),
+  ].sort(
+    (a, b) =>
+      new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime(),
+  );
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
@@ -700,14 +805,43 @@ export default function WalletScreen() {
           </TouchableOpacity>
         </View>
 
+        {pendingRequests.length > 0 ? (
+          <View style={styles.pendingCard}>
+            <View style={styles.pendingHead}>
+              <View style={styles.pendingIcon}>
+                <Ionicons name="time-outline" size={18} color="#f59e0b" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.pendingTitle}>Pending Approval</Text>
+                <Text style={styles.pendingSub}>
+                  Recharge amount can be used only after admin approval.
+                </Text>
+              </View>
+              <View style={styles.pendingCount}>
+                <Text style={styles.pendingCountText}>
+                  {pendingRequests.length}
+                </Text>
+              </View>
+            </View>
+            {pendingRequests.slice(0, 3).map((item) => (
+              <View key={item.id || item._id || item.reference} style={styles.pendingRow}>
+                <Text style={styles.pendingRef} numberOfLines={1}>
+                  {item.reference || "Reference pending"}
+                </Text>
+                <Text style={styles.pendingAmount}>₹{item.amount}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+
         {/* ── Transactions ── */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Transaction History</Text>
           <Text style={styles.sectionSub}>
-            {transactions.length} transactions
+            {historyItems.length} records
           </Text>
         </View>
-        {transactions.length === 0 ? (
+        {historyItems.length === 0 ? (
           <View style={styles.emptyState}>
             <View style={styles.emptyIcon}>
               <Ionicons name="receipt-outline" size={32} color="#ccc" />
@@ -719,11 +853,69 @@ export default function WalletScreen() {
           </View>
         ) : (
           <View style={styles.txList}>
-            {transactions
-              .slice()
-              .reverse()
-              .map((tx, index) => (
-                <View key={tx.id || index} style={styles.txCard}>
+            {historyItems.map((entry, index) => {
+              if (entry.kind === "request") {
+                const req = entry.data;
+                const status = (req.status || "pending").toLowerCase();
+                const isApproved = status === "approved";
+                const isRejected = status === "rejected";
+                const color = isApproved
+                  ? "#22c55e"
+                  : isRejected
+                    ? "#ef4444"
+                    : "#f59e0b";
+                return (
+                  <View key={`request-${entry.id || index}`} style={styles.txCard}>
+                    <View
+                      style={[
+                        styles.txIcon,
+                        isApproved
+                          ? styles.txIconGreen
+                          : isRejected
+                            ? styles.txIconRed
+                            : styles.txIconYellow,
+                      ]}
+                    >
+                      <Ionicons
+                        name={
+                          isApproved
+                            ? "checkmark"
+                            : isRejected
+                              ? "close"
+                              : "time-outline"
+                        }
+                        size={16}
+                        color={color}
+                      />
+                    </View>
+                    <View style={styles.txInfo}>
+                      <Text style={styles.txDesc}>Recharge Request</Text>
+                      <Text style={styles.txDate}>
+                        {req.reference || "No reference"} ·{" "}
+                        {formatDate(req.created_at)}
+                      </Text>
+                    </View>
+                    <View style={styles.txRight}>
+                      <Text style={[styles.txAmount, { color }]}>
+                        ₹{req.amount}
+                      </Text>
+                      <View
+                        style={[
+                          styles.requestStatusPill,
+                          { backgroundColor: color + "18" },
+                        ]}
+                      >
+                        <Text style={[styles.requestStatusText, { color }]}>
+                          {status}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                );
+              }
+              const tx = entry.data;
+              return (
+                <View key={`tx-${entry.id || index}`} style={styles.txCard}>
                   <View
                     style={[
                       styles.txIcon,
@@ -756,7 +948,8 @@ export default function WalletScreen() {
                     <Text style={styles.txBal}>₹{tx.balance_after}</Text>
                   </View>
                 </View>
-              ))}
+              );
+            })}
           </View>
         )}
         <View style={{ height: 30 }} />
@@ -783,6 +976,37 @@ export default function WalletScreen() {
                 />
                 <Text style={styles.limitText}>
                   Min ₹{MIN_AMOUNT} · Max ₹{MAX_AMOUNT.toLocaleString("en-IN")}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.qrBox}>
+              {qrImageUri ? (
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  onPress={() => setQrPreviewVisible(true)}
+                >
+                  <Image
+                    source={{ uri: qrImageUri }}
+                    style={styles.qrImage}
+                    resizeMode="contain"
+                  />
+                  <View style={styles.qrTapHint}>
+                    <Ionicons name="expand-outline" size={11} color="#fff" />
+                  </View>
+                </TouchableOpacity>
+              ) : (
+                <View style={styles.qrEmpty}>
+                  <Ionicons name="qr-code-outline" size={28} color="#bbb" />
+                  <Text style={styles.qrEmptyText}>Payment QR unavailable</Text>
+                </View>
+              )}
+              <View style={styles.qrInfo}>
+                <Text style={styles.qrLabel}>
+                  {paymentQr?.label || "Admin Payment QR"}
+                </Text>
+                <Text style={styles.qrNote}>
+                  Pay on this QR, then enter transaction reference below.
                 </Text>
               </View>
             </View>
@@ -833,6 +1057,16 @@ export default function WalletScreen() {
 
             <LimitToast type={toast} />
 
+            <Text style={styles.quickLabel}>Payment Reference</Text>
+            <TextInput
+              style={styles.referenceInput}
+              value={reference}
+              onChangeText={setReference}
+              placeholder="UPI / transaction reference"
+              placeholderTextColor="#bbb"
+              autoCapitalize="characters"
+            />
+
             <Text style={styles.quickLabel}>Quick Select</Text>
             <View style={styles.quickRow}>
               {quickAmounts.map((amt) => (
@@ -861,15 +1095,57 @@ export default function WalletScreen() {
             </View>
 
             <Button
-              title={isValidAmount ? `Add ₹${rechargeAmount}` : "Enter Amount"}
+              title={
+                isValidAmount
+                  ? `Submit ₹${rechargeAmount} Request`
+                  : "Enter Amount & Reference"
+              }
               onPress={handleRecharge}
               loading={recharging}
-              disabled={!rechargeAmount}
+              disabled={!isValidAmount}
             />
             <Text style={styles.mockNote}>
-              Mock payment — for demo purposes only
+              Amount will be usable only after admin approval.
             </Text>
           </View>
+          {qrPreviewVisible ? (
+            <View style={styles.previewOverlay}>
+              <View style={styles.previewCard}>
+                <View style={styles.previewHeader}>
+                  <View>
+                    <Text style={styles.previewTitle}>
+                      {paymentQr?.label || "Payment QR"}
+                    </Text>
+                    <Text style={styles.previewSub}>Scan or download this QR</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.previewClose}
+                    onPress={() => setQrPreviewVisible(false)}
+                  >
+                    <Ionicons name="close" size={18} color="#333" />
+                  </TouchableOpacity>
+                </View>
+                {qrImageUri ? (
+                  <Image
+                    source={{ uri: qrImageUri }}
+                    style={styles.previewImage}
+                    resizeMode="contain"
+                  />
+                ) : null}
+                <TouchableOpacity
+                  style={styles.downloadBtn}
+                  onPress={downloadQr}
+                  disabled={downloadingQr}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="download-outline" size={18} color="#fff" />
+                  <Text style={styles.downloadText}>
+                    {downloadingQr ? "Preparing..." : "Download QR"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : null}
         </View>
       </Modal>
 
@@ -980,6 +1256,66 @@ const styles = StyleSheet.create({
   },
   addMoneyText: { fontSize: 15, fontWeight: "700", color: Colors.primary },
 
+  pendingCard: {
+    marginHorizontal: 20,
+    marginBottom: 18,
+    backgroundColor: "#fffbeb",
+    borderRadius: 18,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#fde68a",
+  },
+  pendingHead: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 10,
+  },
+  pendingIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: "#fef3c7",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pendingTitle: { fontSize: 14, fontWeight: "900", color: "#92400e" },
+  pendingSub: {
+    fontSize: 11,
+    lineHeight: 15,
+    color: "#b45309",
+    fontWeight: "600",
+    marginTop: 2,
+  },
+  pendingCount: {
+    minWidth: 30,
+    height: 30,
+    borderRadius: 10,
+    backgroundColor: "#f59e0b",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 8,
+  },
+  pendingCountText: { fontSize: 13, fontWeight: "900", color: "#fff" },
+  pendingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "rgba(255,255,255,0.72)",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    marginTop: 7,
+  },
+  pendingRef: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#92400e",
+    marginRight: 10,
+  },
+  pendingAmount: { fontSize: 13, fontWeight: "900", color: "#b45309" },
+
   section: {
     flexDirection: "row",
     alignItems: "baseline",
@@ -1014,12 +1350,24 @@ const styles = StyleSheet.create({
   },
   txIconGreen: { backgroundColor: "#f0fdf4" },
   txIconRed: { backgroundColor: "#fef2f2" },
+  txIconYellow: { backgroundColor: "#fffbeb" },
   txInfo: { flex: 1 },
   txDesc: { fontSize: 14, fontWeight: "600", color: "#1A1A1A" },
   txDate: { fontSize: 11, color: "#aaa", marginTop: 3 },
   txRight: { alignItems: "flex-end" },
   txAmount: { fontSize: 15, fontWeight: "800" },
   txBal: { fontSize: 10, color: "#bbb", marginTop: 3 },
+  requestStatusPill: {
+    marginTop: 4,
+    borderRadius: 10,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  requestStatusText: {
+    fontSize: 9,
+    fontWeight: "900",
+    textTransform: "capitalize",
+  },
 
   emptyState: { alignItems: "center", paddingVertical: 60, gap: 10 },
   emptyIcon: {
@@ -1045,6 +1393,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 28,
     padding: 24,
     paddingBottom: 36,
+    maxHeight: "92%",
   },
   dragHandle: {
     width: 40,
@@ -1080,6 +1429,59 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   limitText: { fontSize: 11, color: "#888", fontWeight: "600" },
+  qrBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: "#F8F8F8",
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: "#EFEFEF",
+  },
+  qrImage: {
+    width: 86,
+    height: 86,
+    borderRadius: 12,
+    backgroundColor: "#fff",
+  },
+  qrTapHint: {
+    position: "absolute",
+    right: 5,
+    bottom: 5,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "rgba(0,0,0,0.58)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  qrEmpty: {
+    width: 86,
+    height: 86,
+    borderRadius: 12,
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 8,
+  },
+  qrEmptyText: {
+    fontSize: 9,
+    color: "#aaa",
+    fontWeight: "700",
+    textAlign: "center",
+    marginTop: 4,
+  },
+  qrInfo: { flex: 1 },
+  qrLabel: { fontSize: 14, fontWeight: "900", color: "#1A1A1A" },
+  qrNote: {
+    fontSize: 11,
+    color: "#888",
+    lineHeight: 15,
+    fontWeight: "600",
+    marginTop: 4,
+  },
   amountBox: {
     flexDirection: "row",
     alignItems: "center",
@@ -1130,6 +1532,18 @@ const styles = StyleSheet.create({
   toastIconMax: { backgroundColor: "#fee2e2" },
   toastTitle: { fontSize: 13, fontWeight: "700", color: "#1A1A1A" },
   toastSub: { fontSize: 11, color: "#888", marginTop: 1 },
+  referenceInput: {
+    backgroundColor: "#F8F8F8",
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    minHeight: 48,
+    borderWidth: 1.5,
+    borderColor: "#EFEFEF",
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#1A1A1A",
+    marginBottom: 16,
+  },
 
   quickLabel: {
     fontSize: 12,
@@ -1156,4 +1570,50 @@ const styles = StyleSheet.create({
   quickChipText: { fontSize: 14, fontWeight: "700", color: "#888" },
   quickChipTextActive: { color: Colors.primary },
   mockNote: { fontSize: 11, color: "#ccc", textAlign: "center", marginTop: 12 },
+  previewOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.72)",
+    justifyContent: "center",
+    padding: 20,
+    zIndex: 50,
+  },
+  previewCard: {
+    backgroundColor: "#fff",
+    borderRadius: 24,
+    padding: 18,
+  },
+  previewHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 14,
+  },
+  previewTitle: { fontSize: 18, fontWeight: "900", color: "#1A1A1A" },
+  previewSub: { fontSize: 12, color: "#888", fontWeight: "600", marginTop: 2 },
+  previewClose: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: "#F0F0F0",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  previewImage: {
+    width: "100%",
+    height: 340,
+    borderRadius: 18,
+    backgroundColor: "#F8F8F8",
+  },
+  downloadBtn: {
+    marginTop: 14,
+    minHeight: 50,
+    borderRadius: 16,
+    backgroundColor: Colors.primary,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  downloadText: { fontSize: 15, fontWeight: "900", color: "#fff" },
 });

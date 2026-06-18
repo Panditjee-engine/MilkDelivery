@@ -20,6 +20,8 @@ import {
   Dimensions,
 } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
+import { useRouter } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../../src/services/api";
@@ -28,9 +30,96 @@ import Button from "../../src/components/Button";
 import LoadingScreen from "../../src/components/LoadingScreen";
 import { useAuth } from "../../src/contexts/AuthContext";
 
-const CARD_WIDTH = 134;
 const SCREEN_WIDTH = Dimensions.get("window").width;
+const GRID_PADDING = 20;
+const GRID_GAP = 12;
+const CARD_WIDTH = Math.floor((SCREEN_WIDTH - GRID_PADDING * 2 - GRID_GAP) / 2);
+const NEW_BANNER_WIDTH = SCREEN_WIDTH - 40;
 const DAIRY_CATEGORIES = ["milk", "dairy"];
+const NEWLY_ADDED_SLIDES = [
+  {
+    id: "new-1",
+    title: "Fresh dairy, every day",
+    subtitle: "Newly added products from trusted farms",
+    kicker: "Gau Satva",
+    colors: ["#123524", "#1f6f43"],
+    image: require("../../assets/images/bull-cow.png"),
+  },
+  {
+    id: "new-2",
+    title: "Pure milk picks",
+    subtitle: "Morning fresh collection for your home",
+    kicker: "New Arrival",
+    colors: ["#0f3c66", "#2563EB"],
+    image: require("../../assets/images/1cow.png"),
+  },
+  {
+    id: "new-3",
+    title: "Farm fresh range",
+    subtitle: "Healthy daily essentials just added",
+    kicker: "Fresh Stock",
+    colors: ["#14532d", "#16A34A"],
+    image: require("../../assets/images/calf-cow.png"),
+  },
+  {
+    id: "new-4",
+    title: "Gir cow dairy",
+    subtitle: "Premium dairy products for subscription",
+    kicker: "Premium",
+    colors: ["#78350f", "#D97706"],
+    image: require("../../assets/images/gir-cow.png"),
+  },
+  {
+    id: "new-5",
+    title: "Daily goodness",
+    subtitle: "Explore more fresh products today",
+    kicker: "Explore",
+    colors: ["#3b0764", "#7C3AED"],
+    image: require("../../assets/images/icon-cow.png"),
+  },
+];
+
+type CatalogSlide = {
+  id: string;
+  title: string;
+  subtitle: string;
+  kicker: string;
+  colors: string[];
+  image: any;
+};
+
+const SLIDE_GRADIENTS = [
+  ["#123524", "#1f6f43"],
+  ["#0f3c66", "#2563EB"],
+  ["#14532d", "#16A34A"],
+  ["#78350f", "#D97706"],
+  ["#3b0764", "#7C3AED"],
+];
+
+function normalizeContentImage(img?: string) {
+  if (!img) return null;
+  if (img.startsWith("http") || img.startsWith("data:image")) {
+    return { uri: img };
+  }
+  return { uri: `data:image/jpeg;base64,${img}` };
+}
+
+function mapContentToSlides(content: any[]): CatalogSlide[] {
+  return (content || [])
+    .flatMap((item, itemIndex) => {
+      const images = Array.isArray(item?.images) ? item.images : [];
+      return images.map((img: string, imageIndex: number) => ({
+        id: `${item?.id || item?._id || itemIndex}-${imageIndex}`,
+        title: item?.title || "Fresh dairy, every day",
+        subtitle: item?.description || "Newly added products from trusted farms",
+        kicker: "New Arrival",
+        colors:
+          SLIDE_GRADIENTS[(itemIndex + imageIndex) % SLIDE_GRADIENTS.length],
+        image: normalizeContentImage(img),
+      }));
+    })
+    .filter((slide) => Boolean(slide.image));
+}
 
 // ─── Design tokens ─────────────────────────────────────────────────────────
 const T = {
@@ -140,6 +229,12 @@ interface CartItem {
 
 function isDairyProduct(p: any): boolean {
   return DAIRY_CATEGORIES.includes(p?.category?.toLowerCase());
+}
+function categoryRank(category: string): number {
+  const normalized = category?.toLowerCase();
+  if (normalized === "milk") return 0;
+  if (normalized === "dairy") return 1;
+  return 2;
 }
 function getCategoryTheme(cat: string) {
   return CATEGORY_THEMES[cat?.toLowerCase()] || CATEGORY_THEMES.other;
@@ -900,12 +995,14 @@ const ssS = StyleSheet.create({
 // ─── Product Card ───────────────────────────────────────────────────────────
 function ProductCard({
   product,
+  onOpenDetails,
   onBuyOnce,
   onSubscribe,
   onAddToCart,
   cartQty,
 }: {
   product: any;
+  onOpenDetails: () => void;
   onBuyOnce: () => void;
   onSubscribe: () => void;
   onAddToCart: () => void;
@@ -916,7 +1013,11 @@ function ProductCard({
   const noStock = !product.is_available || (product.stock ?? 0) === 0;
 
   return (
-    <View style={cardS.card}>
+    <TouchableOpacity
+      style={cardS.card}
+      activeOpacity={0.88}
+      onPress={onOpenDetails}
+    >
       <View style={[cardS.imgBox, { backgroundColor: theme.bg }]}>
         {product.image ? (
           <Image
@@ -948,7 +1049,7 @@ function ProductCard({
         )}
       </View>
       <View style={cardS.body}>
-        <Text style={cardS.name} numberOfLines={1}>
+        <Text style={cardS.name} numberOfLines={2}>
           {product.name}
         </Text>
         <View style={cardS.priceRow}>
@@ -974,14 +1075,20 @@ function ProductCard({
               cardS.halfOutline,
               { borderColor: theme.accent },
             ]}
-            onPress={onBuyOnce}
+            onPress={(event) => {
+              event.stopPropagation?.();
+              onBuyOnce();
+            }}
             activeOpacity={0.7}
           >
             <Text style={[cardS.halfTxt, { color: theme.accent }]}>Once</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[cardS.halfBtn, { backgroundColor: T.amber }]}
-            onPress={onSubscribe}
+            onPress={(event) => {
+              event.stopPropagation?.();
+              onSubscribe();
+            }}
             activeOpacity={0.7}
           >
             <Ionicons name="repeat-outline" size={10} color="#fff" />
@@ -992,7 +1099,10 @@ function ProductCard({
         <View style={cardS.actionRow}>
           <TouchableOpacity
             style={[cardS.fullBtn, { backgroundColor: theme.accent }]}
-            onPress={onAddToCart}
+            onPress={(event) => {
+              event.stopPropagation?.();
+              onAddToCart();
+            }}
             activeOpacity={0.7}
           >
             <Ionicons name="add" size={12} color="#fff" />
@@ -1000,21 +1110,21 @@ function ProductCard({
           </TouchableOpacity>
         </View>
       )}
-    </View>
+    </TouchableOpacity>
   );
 }
 const cardS = StyleSheet.create({
   card: {
     width: CARD_WIDTH,
     backgroundColor: T.surface,
-    borderRadius: T.radius.lg,
+    borderRadius: T.radius.md,
     overflow: "hidden",
     shadowColor: "#000",
     shadowOpacity: 0.04,
     shadowRadius: 8,
     elevation: 2,
   },
-  imgBox: { height: 86, justifyContent: "center", alignItems: "center" },
+  imgBox: { height: 112, justifyContent: "center", alignItems: "center" },
   img: { width: "100%", height: "100%" },
   iconBox: {
     width: 44,
@@ -1055,20 +1165,27 @@ const cardS = StyleSheet.create({
     alignItems: "center",
   },
   qtyBadgeTxt: { fontSize: 9, fontWeight: "800", color: "#fff" },
-  body: { padding: 9, paddingBottom: 6 },
-  name: { fontSize: 11, fontWeight: "700", color: T.text, marginBottom: 3 },
+  body: { padding: 10, paddingBottom: 7 },
+  name: {
+    minHeight: 32,
+    fontSize: 12,
+    fontWeight: "700",
+    color: T.text,
+    marginBottom: 5,
+    lineHeight: 16,
+  },
   priceRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
-  price: { fontSize: 13, fontWeight: "800" },
+  price: { fontSize: 14, fontWeight: "800" },
   unit: { fontSize: 9, fontWeight: "600" },
   actionRow: {
     flexDirection: "row",
     gap: 5,
-    paddingHorizontal: 8,
-    paddingBottom: 8,
+    paddingHorizontal: 10,
+    paddingBottom: 10,
     paddingTop: 2,
   },
   halfBtn: {
@@ -1110,6 +1227,7 @@ function CategorySection({
   onBuyOnce,
   onSubscribe,
   onAddToCart,
+  onOpenDetails,
   cart,
 }: {
   value: string;
@@ -1118,6 +1236,7 @@ function CategorySection({
   onBuyOnce: (i: any) => void;
   onSubscribe: (i: any) => void;
   onAddToCart: (i: any) => void;
+  onOpenDetails: (i: any) => void;
   cart: CartItem[];
 }) {
   const theme = getCategoryTheme(value);
@@ -1137,11 +1256,7 @@ function CategorySection({
           </View>
         )}
       </View>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={secS.list}
-      >
+      <View style={secS.list}>
         {items.map((item) => {
           const qty = cart
             .filter((c) => c.product.id === item.id)
@@ -1151,18 +1266,19 @@ function CategorySection({
               key={item.id?.toString()}
               product={item}
               cartQty={qty}
+              onOpenDetails={() => onOpenDetails(item)}
               onBuyOnce={() => onBuyOnce(item)}
               onSubscribe={() => onSubscribe(item)}
               onAddToCart={() => onAddToCart(item)}
             />
           );
         })}
-      </ScrollView>
+      </View>
     </View>
   );
 }
 const secS = StyleSheet.create({
-  section: { marginTop: 24 },
+  section: { marginTop: 22 },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -1188,7 +1304,12 @@ const secS = StyleSheet.create({
     paddingVertical: 2,
   },
   subPillTxt: { fontSize: 9, fontWeight: "700", color: T.amber },
-  list: { paddingLeft: 20, paddingRight: 8, gap: 10 },
+  list: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: GRID_GAP,
+    paddingHorizontal: GRID_PADDING,
+  },
 });
 
 // ─── Quick Add Modal ────────────────────────────────────────────────────────
@@ -2746,6 +2867,7 @@ const pillS = StyleSheet.create({
 
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 export default function CatalogScreen() {
+  const router = useRouter();
   const { user } = useAuth();
   const [linkedAdminId, setLinkedAdminId] = useState<string | null>(null);
   const [products, setProducts] = useState<any[]>([]);
@@ -2777,6 +2899,8 @@ export default function CatalogScreen() {
   const [toastVisible, setToastVisible] = useState(false);
   const [toastProduct, setToastProduct] = useState("");
   const [toastIsSub, setToastIsSub] = useState(false);
+  const [activeNewSlide, setActiveNewSlide] = useState(0);
+  const [catalogSlides, setCatalogSlides] = useState<CatalogSlide[]>([]);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isFocused = useIsFocused();
 
@@ -2802,17 +2926,19 @@ export default function CatalogScreen() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [prods, cats, wallet] = await Promise.all([
+      const [prods, cats, wallet, content] = await Promise.all([
         api.getCatalogProducts(
           linkedAdminId ?? undefined,
           selectedCategory || undefined,
         ),
         api.getCategories(),
         api.getWallet(),
+        api.getCatalogContent().catch(() => null),
       ]);
       setProducts(prods);
       setCategories(cats);
       setWalletBalance(wallet.balance ?? 0);
+      setCatalogSlides(mapContentToSlides(content?.data || []));
       await fetchSubs();
     } catch {
     } finally {
@@ -2894,6 +3020,17 @@ const handleAddToCart = (p: any) => {
   
   showToast(p.name, false);
 };
+
+  const openProductDetails = (product: any) => {
+    router.push({
+      pathname: "/(customer)/product-details",
+      params: {
+        id: product.id || product._id,
+        product: encodeURIComponent(JSON.stringify(product)),
+      },
+    } as any);
+  };
+
   const handleDairyBuyOnce = (p: any) => {
     if ((p.stock ?? 0) === 0) {
       alert("Out of stock");
@@ -3039,14 +3176,22 @@ const handleQuickAddConfirm = async (qty: number) => {
       if (!map[c]) map[c] = [];
       map[c].push(p);
     });
-    return Object.entries(map).map(([v, items]) => ({
-      value: v,
-      label: categories.find((c) => c.value === v)?.label || v,
-      items,
-    }));
+    return Object.entries(map)
+      .map(([v, items]) => ({
+        value: v,
+        label: categories.find((c) => c.value === v)?.label || v,
+        items,
+      }))
+      .sort((a, b) => {
+        const rankDiff = categoryRank(a.value) - categoryRank(b.value);
+        if (rankDiff !== 0) return rankDiff;
+        return a.label.localeCompare(b.label);
+      });
   }, [products, selectedCategory, categories]);
 
   if (loading) return <LoadingScreen />;
+
+  const newSlides = catalogSlides.length > 0 ? catalogSlides : NEWLY_ADDED_SLIDES;
 
   const ListHeader = (
     <>
@@ -3054,6 +3199,12 @@ const handleQuickAddConfirm = async (qty: number) => {
         <View style={mainS.headerTop}>
           <Text style={mainS.pageTitle}>Shop</Text>
           <View style={mainS.headerBtns}>
+            <TouchableOpacity
+              style={mainS.iconBtn}
+              onPress={() => router.push("/(customer)/product-search" as any)}
+            >
+              <Ionicons name="search-outline" size={18} color="#111111" />
+            </TouchableOpacity>
             <TouchableOpacity
               style={mainS.iconBtn}
               onPress={() => setSubSheetVisible(true)}
@@ -3084,6 +3235,58 @@ const handleQuickAddConfirm = async (qty: number) => {
             <Ionicons name="wallet-outline" size={10} color={Colors.primary} />
             <Text style={mainS.walletTxt}>₹{walletBalance.toFixed(2)}</Text>
           </View>
+        </View>
+      </View>
+
+      <View style={mainS.newSection}>
+        <ScrollView
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          snapToInterval={NEW_BANNER_WIDTH}
+          decelerationRate="fast"
+          onMomentumScrollEnd={(event) => {
+            const index = Math.round(
+              event.nativeEvent.contentOffset.x / NEW_BANNER_WIDTH,
+            );
+            setActiveNewSlide(index);
+          }}
+        >
+          {newSlides.map((slide) => (
+            <View key={slide.id} style={mainS.newSlide}>
+              <TouchableOpacity activeOpacity={0.88}>
+                <LinearGradient
+                  colors={slide.colors as [string, string]}
+                  style={mainS.newCard}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                >
+                  <View style={mainS.newTextBox}>
+                    <Text style={mainS.newKicker}>{slide.kicker}</Text>
+                    <Text style={mainS.newCardTitle}>{slide.title}</Text>
+                    <Text style={mainS.newCardSub}>{slide.subtitle}</Text>
+                  </View>
+                  <Image
+                    source={slide.image}
+                    style={mainS.newImage}
+                    resizeMode="contain"
+                  />
+                  <View style={mainS.newGlow} />
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          ))}
+        </ScrollView>
+        <View style={mainS.newDots}>
+          {newSlides.map((slide, index) => (
+            <View
+              key={slide.id}
+              style={[
+                mainS.newDot,
+                activeNewSlide === index && mainS.newDotActive,
+              ]}
+            />
+          ))}
         </View>
       </View>
 
@@ -3152,6 +3355,7 @@ const handleQuickAddConfirm = async (qty: number) => {
             onBuyOnce={handleDairyBuyOnce}
             onSubscribe={handleSubscribe}
             onAddToCart={handleAddToCart}
+            onOpenDetails={openProductDetails}
           />
         )}
       />
@@ -3278,6 +3482,77 @@ const mainS = StyleSheet.create({
     paddingVertical: 4,
   },
   walletTxt: { fontSize: 11, fontWeight: "700", color: Colors.primary },
+  newSection: {
+    marginHorizontal: 20,
+    marginTop: 6,
+    marginBottom: 2,
+  },
+  newSlide: { width: NEW_BANNER_WIDTH },
+  newCard: {
+    height: 150,
+    borderRadius: 24,
+    overflow: "hidden",
+    padding: 18,
+    flexDirection: "row",
+    alignItems: "center",
+    shadowColor: "#123524",
+    shadowOpacity: 0.16,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
+  },
+  newTextBox: { flex: 1, zIndex: 2 },
+  newKicker: {
+    fontSize: 10,
+    fontWeight: "900",
+    color: "#bbf7d0",
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
+    marginBottom: 6,
+  },
+  newCardTitle: {
+    fontSize: 22,
+    fontWeight: "900",
+    color: "#fff",
+    letterSpacing: -0.6,
+    maxWidth: 190,
+  },
+  newCardSub: {
+    fontSize: 11.5,
+    color: "rgba(255,255,255,0.76)",
+    fontWeight: "600",
+    marginTop: 7,
+    lineHeight: 16,
+    maxWidth: 190,
+  },
+  newImage: {
+    width: 135,
+    height: 120,
+    marginRight: -6,
+    zIndex: 2,
+  },
+  newGlow: {
+    position: "absolute",
+    right: -35,
+    bottom: -45,
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    backgroundColor: "rgba(187,247,208,0.18)",
+  },
+  newDots: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 6,
+    marginTop: 9,
+  },
+  newDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#D1D5DB",
+  },
+  newDotActive: { width: 18, backgroundColor: Colors.primary },
   chips: { paddingHorizontal: 20, paddingVertical: 10, gap: 7 },
   chip: {
     paddingHorizontal: 14,

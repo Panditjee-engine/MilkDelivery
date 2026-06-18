@@ -22,6 +22,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { LinearGradient } from "expo-linear-gradient";
 import { api } from "../../src/services/api";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // ── Brand Colors
 const C = {
@@ -46,6 +47,7 @@ type Step = "phone" | "otp" | "details";
 type ToastType = "error" | "success" | "warn";
 type Status = "idle" | "checking" | "ok" | "error";
 const REGISTER_PLATFORM = "fcm";
+const DEVICE_ID_KEY = "GAUSATVA_DEVICE_ID";
 
 const REGISTER_STEPS: Array<{ key: Step; label: string }> = [
   { key: "phone", label: "Phone" },
@@ -71,6 +73,16 @@ function validateIndianMobile(num: string): { ok: boolean; reason?: string } {
 
 function validateEmail(val: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val.trim());
+}
+
+async function getDeviceId(): Promise<string> {
+  const existing = await AsyncStorage.getItem(DEVICE_ID_KEY);
+  if (existing) return existing;
+  const generated = `${Platform.OS}-${Date.now()}-${Math.random()
+    .toString(36)
+    .slice(2, 12)}`;
+  await AsyncStorage.setItem(DEVICE_ID_KEY, generated);
+  return generated;
 }
 
 // ── Toast
@@ -696,13 +708,15 @@ export default function RegisterScreen() {
 
     setLoading(true);
     try {
+      const deviceId = await getDeviceId();
       await register({
         name: name.trim(),
         email: email.trim().toLowerCase(),
         phone: fullPhone,
         password,
         role,
-        device_token: "",
+        device_type: Platform.OS,
+        device_token: deviceId,
         platform: REGISTER_PLATFORM,
         referral_admin_id: referralAdminId ?? undefined,
       });
