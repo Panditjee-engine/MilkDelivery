@@ -12,6 +12,9 @@ import {
   Animated,
   Vibration,
   Easing,
+  KeyboardAvoidingView,
+  Platform,
+  Keyboard,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -54,7 +57,7 @@ async function writeBase64File(uri: string, base64: string) {
   }
 }
 
-// ─── Limit Toast 
+// ─── Limit Toast ─────────────────────────────────────────────────────────────
 type ToastType = "min" | "max" | null;
 
 function LimitToast({ type }: { type: ToastType }) {
@@ -122,7 +125,7 @@ function LimitToast({ type }: { type: ToastType }) {
   );
 }
 
-// ─── Particle 
+// ─── Particle ─────────────────────────────────────────────────────────────────
 const PARTICLE_COLORS = [
   "#22c55e",
   "#4ade80",
@@ -181,7 +184,7 @@ function Particle({ delay, color }: { delay: number; color: string }) {
   );
 }
 
-// ─── Success Modal 
+// ─── Success Modal ────────────────────────────────────────────────────────────
 function SuccessModal({
   visible,
   amount,
@@ -213,7 +216,6 @@ function SuccessModal({
       ringOpacity.setValue(0);
       amountAnim.setValue(0);
 
-      // Card entrance
       Animated.parallel([
         Animated.spring(scaleAnim, {
           toValue: 1,
@@ -228,7 +230,6 @@ function SuccessModal({
         }),
       ]).start(() => {
         setShowParticles(true);
-        // Ring pulse
         Animated.parallel([
           Animated.spring(ringScale, {
             toValue: 1,
@@ -242,7 +243,6 @@ function SuccessModal({
             useNativeDriver: true,
           }),
         ]).start();
-        // Checkmark pop
         Animated.spring(checkScale, {
           toValue: 1,
           useNativeDriver: true,
@@ -254,7 +254,6 @@ function SuccessModal({
           duration: 200,
           useNativeDriver: true,
         }).start();
-        // Amount slide up
         Animated.spring(amountAnim, {
           toValue: 1,
           useNativeDriver: true,
@@ -280,7 +279,6 @@ function SuccessModal({
             { opacity: opacityAnim, transform: [{ scale: scaleAnim }] },
           ]}
         >
-          {/* Icon + particles */}
           <View style={ss.iconWrap}>
             <Animated.View
               style={[
@@ -304,11 +302,11 @@ function SuccessModal({
             </View>
           </View>
 
-          {/* Text */}
           <Text style={ss.title}>Request Submitted!</Text>
-          <Text style={ss.subtitle}>Your wallet will update after admin approval</Text>
+          <Text style={ss.subtitle}>
+            Your wallet will update after admin approval
+          </Text>
 
-          {/* Amount chip */}
           <Animated.View
             style={[
               ss.amountChip,
@@ -329,7 +327,6 @@ function SuccessModal({
             <Text style={ss.amountValue}>+₹{amount.toFixed(2)}</Text>
           </Animated.View>
 
-          {/* New balance */}
           <Animated.View
             style={[
               ss.balanceRow,
@@ -351,7 +348,6 @@ function SuccessModal({
             <Text style={ss.balanceValue}>₹{newBalance.toFixed(2)}</Text>
           </Animated.View>
 
-          {/* Done button */}
           <TouchableOpacity
             style={ss.btn}
             onPress={onClose}
@@ -496,7 +492,7 @@ const ss = StyleSheet.create({
   },
 });
 
-// ─── Main Screen 
+// ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function WalletScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -601,6 +597,7 @@ export default function WalletScreen() {
   useEffect(() => {
     fetchData();
   }, []);
+
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     fetchData();
@@ -630,18 +627,11 @@ export default function WalletScreen() {
 
     setRecharging(true);
     try {
-      await api.createRechargeRequest({
-        amount,
-        reference: reference.trim(),
-      });
-
-      // Close sheet
+      await api.createRechargeRequest({ amount, reference: reference.trim() });
       setRechargeModal(false);
       setRechargeAmount("");
       setReference("");
       setToast(null);
-
-      // Refresh data, then show success
       await fetchData();
       setSuccessAmount(amount);
       setSuccessVisible(true);
@@ -654,6 +644,7 @@ export default function WalletScreen() {
   };
 
   const closeModal = () => {
+    Keyboard.dismiss();
     setRechargeModal(false);
     setRechargeAmount("");
     setReference("");
@@ -667,7 +658,9 @@ export default function WalletScreen() {
       /^data:image\/\w+;base64,/,
       "",
     );
-    const ext = String(paymentQr.file_type || "").toLowerCase().includes("png")
+    const ext = String(paymentQr.file_type || "")
+      .toLowerCase()
+      .includes("png")
       ? "png"
       : "jpg";
     const dir = getFileCacheDir();
@@ -736,8 +729,7 @@ export default function WalletScreen() {
       data: item,
     })),
   ].sort(
-    (a, b) =>
-      new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime(),
+    (a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime(),
   );
 
   return (
@@ -805,7 +797,7 @@ export default function WalletScreen() {
           </TouchableOpacity>
         </View>
 
-        {pendingRequests.length > 0 ? (
+        {pendingRequests.length > 0 && (
           <View style={styles.pendingCard}>
             <View style={styles.pendingHead}>
               <View style={styles.pendingIcon}>
@@ -824,7 +816,10 @@ export default function WalletScreen() {
               </View>
             </View>
             {pendingRequests.slice(0, 3).map((item) => (
-              <View key={item.id || item._id || item.reference} style={styles.pendingRow}>
+              <View
+                key={item.id || item._id || item.reference}
+                style={styles.pendingRow}
+              >
                 <Text style={styles.pendingRef} numberOfLines={1}>
                   {item.reference || "Reference pending"}
                 </Text>
@@ -832,14 +827,12 @@ export default function WalletScreen() {
               </View>
             ))}
           </View>
-        ) : null}
+        )}
 
         {/* ── Transactions ── */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Transaction History</Text>
-          <Text style={styles.sectionSub}>
-            {historyItems.length} records
-          </Text>
+          <Text style={styles.sectionSub}>{historyItems.length} records</Text>
         </View>
         {historyItems.length === 0 ? (
           <View style={styles.emptyState}>
@@ -865,7 +858,10 @@ export default function WalletScreen() {
                     ? "#ef4444"
                     : "#f59e0b";
                 return (
-                  <View key={`request-${entry.id || index}`} style={styles.txCard}>
+                  <View
+                    key={`request-${entry.id || index}`}
+                    style={styles.txCard}
+                  >
                     <View
                       style={[
                         styles.txIcon,
@@ -955,9 +951,31 @@ export default function WalletScreen() {
         <View style={{ height: 30 }} />
       </ScrollView>
 
-      {/* ── Recharge Modal ── */}
-      <Modal visible={rechargeModal} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
+      {/* ── Recharge Modal ── keyboard-safe ── */}
+      <Modal
+        visible={rechargeModal}
+        animationType="slide"
+        transparent
+        onRequestClose={closeModal}
+      >
+        {/*
+          KeyboardAvoidingView sits inside the Modal so it only adjusts
+          the sheet, not the whole screen.
+          On iOS: behavior="padding" lifts the sheet above the keyboard.
+          On Android: behavior="height" shrinks the sheet height.
+        */}
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
+        >
+          {/* Tap-to-dismiss backdrop */}
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={closeModal}
+          />
+
           <View style={styles.modalSheet}>
             <View style={styles.dragHandle} />
             <View style={styles.modalHeader}>
@@ -967,148 +985,176 @@ export default function WalletScreen() {
               </TouchableOpacity>
             </View>
 
-            <View style={styles.limitBar}>
-              <View style={styles.limitBadge}>
-                <Ionicons
-                  name="information-circle-outline"
-                  size={12}
-                  color="#888"
-                />
-                <Text style={styles.limitText}>
-                  Min ₹{MIN_AMOUNT} · Max ₹{MAX_AMOUNT.toLocaleString("en-IN")}
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.qrBox}>
-              {qrImageUri ? (
-                <TouchableOpacity
-                  activeOpacity={0.85}
-                  onPress={() => setQrPreviewVisible(true)}
-                >
-                  <Image
-                    source={{ uri: qrImageUri }}
-                    style={styles.qrImage}
-                    resizeMode="contain"
-                  />
-                  <View style={styles.qrTapHint}>
-                    <Ionicons name="expand-outline" size={11} color="#fff" />
-                  </View>
-                </TouchableOpacity>
-              ) : (
-                <View style={styles.qrEmpty}>
-                  <Ionicons name="qr-code-outline" size={28} color="#bbb" />
-                  <Text style={styles.qrEmptyText}>Payment QR unavailable</Text>
-                </View>
-              )}
-              <View style={styles.qrInfo}>
-                <Text style={styles.qrLabel}>
-                  {paymentQr?.label || "Admin Payment QR"}
-                </Text>
-                <Text style={styles.qrNote}>
-                  Pay on this QR, then enter transaction reference below.
-                </Text>
-              </View>
-            </View>
-
-            <Animated.View
-              style={[
-                styles.amountBox,
-                toast === "min" && styles.amountBoxWarnMin,
-                toast === "max" && styles.amountBoxWarnMax,
-                { transform: [{ translateX: shakeAnim }] },
-              ]}
+            {/*
+              ScrollView inside the sheet so all content is reachable
+              even on small screens or when the keyboard is open.
+              keyboardShouldPersistTaps="handled" lets quick-select chips
+              work without first dismissing the keyboard.
+            */}
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={styles.sheetScrollContent}
             >
-              <Text
+              <View style={styles.limitBar}>
+                <View style={styles.limitBadge}>
+                  <Ionicons
+                    name="information-circle-outline"
+                    size={12}
+                    color="#888"
+                  />
+                  <Text style={styles.limitText}>
+                    Min ₹{MIN_AMOUNT} · Max ₹
+                    {MAX_AMOUNT.toLocaleString("en-IN")}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.qrBox}>
+                {qrImageUri ? (
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    onPress={() => setQrPreviewVisible(true)}
+                  >
+                    <Image
+                      source={{ uri: qrImageUri }}
+                      style={styles.qrImage}
+                      resizeMode="contain"
+                    />
+                    <View style={styles.qrTapHint}>
+                      <Ionicons name="expand-outline" size={11} color="#fff" />
+                    </View>
+                  </TouchableOpacity>
+                ) : (
+                  <View style={styles.qrEmpty}>
+                    <Ionicons name="qr-code-outline" size={28} color="#bbb" />
+                    <Text style={styles.qrEmptyText}>
+                      Payment QR unavailable
+                    </Text>
+                  </View>
+                )}
+                <View style={styles.qrInfo}>
+                  <Text style={styles.qrLabel}>
+                    {paymentQr?.label || "Admin Payment QR"}
+                  </Text>
+                  <Text style={styles.qrNote}>
+                    Pay on this QR, then enter transaction reference below.
+                  </Text>
+                </View>
+              </View>
+
+              {/* Amount input */}
+              <Text style={styles.quickLabel}>Enter Amount</Text>
+              <Animated.View
                 style={[
-                  styles.rupeeSymbol,
-                  toast === "max" && { color: "#ef4444" },
-                  toast === "min" && { color: "#f59e0b" },
+                  styles.amountBox,
+                  toast === "min" && styles.amountBoxWarnMin,
+                  toast === "max" && styles.amountBoxWarnMax,
+                  { transform: [{ translateX: shakeAnim }] },
                 ]}
               >
-                ₹
-              </Text>
-              <TextInput
-                style={[
-                  styles.amountInput,
-                  toast === "max" && { color: "#ef4444" },
-                  toast === "min" && { color: "#f59e0b" },
-                ]}
-                value={rechargeAmount}
-                onChangeText={handleAmountChange}
-                keyboardType="numeric"
-                placeholder="0"
-                placeholderTextColor="#ddd"
-                autoFocus
-                maxLength={5}
-              />
-              {rechargeAmount.length > 0 && (
-                <TouchableOpacity
-                  onPress={() => {
-                    setRechargeAmount("");
-                    setToast(null);
-                  }}
-                  style={styles.clearBtn}
-                >
-                  <Ionicons name="close-circle" size={20} color="#ccc" />
-                </TouchableOpacity>
-              )}
-            </Animated.View>
-
-            <LimitToast type={toast} />
-
-            <Text style={styles.quickLabel}>Payment Reference</Text>
-            <TextInput
-              style={styles.referenceInput}
-              value={reference}
-              onChangeText={setReference}
-              placeholder="UPI / transaction reference"
-              placeholderTextColor="#bbb"
-              autoCapitalize="characters"
-            />
-
-            <Text style={styles.quickLabel}>Quick Select</Text>
-            <View style={styles.quickRow}>
-              {quickAmounts.map((amt) => (
-                <TouchableOpacity
-                  key={amt}
+                <Text
                   style={[
-                    styles.quickChip,
-                    rechargeAmount === amt.toString() && styles.quickChipActive,
+                    styles.rupeeSymbol,
+                    toast === "max" && { color: "#ef4444" },
+                    toast === "min" && { color: "#f59e0b" },
                   ]}
-                  onPress={() => {
-                    setRechargeAmount(amt.toString());
-                    setToast(null);
-                  }}
                 >
-                  <Text
-                    style={[
-                      styles.quickChipText,
-                      rechargeAmount === amt.toString() &&
-                        styles.quickChipTextActive,
-                    ]}
+                  ₹
+                </Text>
+                <TextInput
+                  style={[
+                    styles.amountInput,
+                    toast === "max" && { color: "#ef4444" },
+                    toast === "min" && { color: "#f59e0b" },
+                  ]}
+                  value={rechargeAmount}
+                  onChangeText={handleAmountChange}
+                  keyboardType="numeric"
+                  placeholder="0"
+                  placeholderTextColor="#ddd"
+                  autoFocus
+                  maxLength={5}
+                  returnKeyType="next"
+                />
+                {rechargeAmount.length > 0 && (
+                  <TouchableOpacity
+                    onPress={() => {
+                      setRechargeAmount("");
+                      setToast(null);
+                    }}
+                    style={styles.clearBtn}
                   >
-                    ₹{amt}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+                    <Ionicons name="close-circle" size={20} color="#ccc" />
+                  </TouchableOpacity>
+                )}
+              </Animated.View>
 
-            <Button
-              title={
-                isValidAmount
-                  ? `Submit ₹${rechargeAmount} Request`
-                  : "Enter Amount & Reference"
-              }
-              onPress={handleRecharge}
-              loading={recharging}
-              disabled={!isValidAmount}
-            />
-            <Text style={styles.mockNote}>
-              Amount will be usable only after admin approval.
-            </Text>
+              <LimitToast type={toast} />
+
+              {/* Quick amounts */}
+              <Text style={styles.quickLabel}>Quick Select</Text>
+              <View style={styles.quickRow}>
+                {quickAmounts.map((amt) => (
+                  <TouchableOpacity
+                    key={amt}
+                    style={[
+                      styles.quickChip,
+                      rechargeAmount === amt.toString() &&
+                        styles.quickChipActive,
+                    ]}
+                    onPress={() => {
+                      setRechargeAmount(amt.toString());
+                      setToast(null);
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.quickChipText,
+                        rechargeAmount === amt.toString() &&
+                          styles.quickChipTextActive,
+                      ]}
+                    >
+                      ₹{amt}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Reference input */}
+              <Text style={styles.quickLabel}>Payment Reference</Text>
+              <TextInput
+                style={styles.referenceInput}
+                value={reference}
+                onChangeText={setReference}
+                placeholder="UPI / transaction reference"
+                placeholderTextColor="#bbb"
+                autoCapitalize="characters"
+                returnKeyType="done"
+                onSubmitEditing={Keyboard.dismiss}
+              />
+
+              <Button
+                title={
+                  isValidAmount
+                    ? `Submit ₹${rechargeAmount} Request`
+                    : "Enter Amount & Reference"
+                }
+                onPress={handleRecharge}
+                loading={recharging}
+                disabled={!isValidAmount}
+              />
+              <Text style={styles.mockNote}>
+                Amount will be usable only after admin approval.
+              </Text>
+
+              {/* Safe bottom padding so content clears the home bar */}
+              <View style={{ height: 12 }} />
+            </ScrollView>
           </View>
-          {qrPreviewVisible ? (
+
+          {/* QR full preview (inside the KAV so it covers the sheet) */}
+          {qrPreviewVisible && (
             <View style={styles.previewOverlay}>
               <View style={styles.previewCard}>
                 <View style={styles.previewHeader}>
@@ -1116,7 +1162,9 @@ export default function WalletScreen() {
                     <Text style={styles.previewTitle}>
                       {paymentQr?.label || "Payment QR"}
                     </Text>
-                    <Text style={styles.previewSub}>Scan or download this QR</Text>
+                    <Text style={styles.previewSub}>
+                      Scan or download this QR
+                    </Text>
                   </View>
                   <TouchableOpacity
                     style={styles.previewClose}
@@ -1145,8 +1193,8 @@ export default function WalletScreen() {
                 </TouchableOpacity>
               </View>
             </View>
-          ) : null}
-        </View>
+          )}
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* ── Success Modal ── */}
@@ -1160,7 +1208,7 @@ export default function WalletScreen() {
   );
 }
 
-// ─── Styles 
+// ─── Styles ──────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F8F7F4" },
 
@@ -1201,8 +1249,17 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  heroInfoLabel: { fontSize: 11, color: "rgba(255,255,255,0.72)", fontWeight: "700" },
-  heroInfoValue: { fontSize: 13, color: "#fff", fontWeight: "900", marginTop: 2 },
+  heroInfoLabel: {
+    fontSize: 11,
+    color: "rgba(255,255,255,0.72)",
+    fontWeight: "700",
+  },
+  heroInfoValue: {
+    fontSize: 13,
+    color: "#fff",
+    fontWeight: "900",
+    marginTop: 2,
+  },
   heroAmount: {
     fontSize: 44,
     fontWeight: "800",
@@ -1382,6 +1439,7 @@ const styles = StyleSheet.create({
   emptyTitle: { fontSize: 16, fontWeight: "700", color: "#999" },
   emptyDesc: { fontSize: 13, color: "#ccc" },
 
+  // ── Modal shell ──
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.4)",
@@ -1391,17 +1449,24 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
-    padding: 24,
-    paddingBottom: 36,
+    // No fixed height — grows with content, shrinks when keyboard opens
     maxHeight: "92%",
+    // Horizontal padding on the shell; vertical padding lives in the scroll content
+    paddingHorizontal: 24,
+    paddingTop: 16,
   },
+  // Padding inside the ScrollView so nothing touches the edges
+  sheetScrollContent: {
+    paddingBottom: 24,
+  },
+
   dragHandle: {
     width: 40,
     height: 4,
     backgroundColor: "#E0E0E0",
     borderRadius: 2,
     alignSelf: "center",
-    marginBottom: 20,
+    marginBottom: 16,
   },
   modalHeader: {
     flexDirection: "row",
@@ -1418,6 +1483,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+
   limitBar: { alignItems: "center", marginBottom: 16 },
   limitBadge: {
     flexDirection: "row",
@@ -1429,6 +1495,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   limitText: { fontSize: 11, color: "#888", fontWeight: "600" },
+
   qrBox: {
     flexDirection: "row",
     alignItems: "center",
@@ -1440,12 +1507,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#EFEFEF",
   },
-  qrImage: {
-    width: 86,
-    height: 86,
-    borderRadius: 12,
-    backgroundColor: "#fff",
-  },
+  qrImage: { width: 86, height: 86, borderRadius: 12, backgroundColor: "#fff" },
   qrTapHint: {
     position: "absolute",
     right: 5,
@@ -1482,6 +1544,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginTop: 4,
   },
+
   amountBox: {
     flexDirection: "row",
     alignItems: "center",
@@ -1532,6 +1595,7 @@ const styles = StyleSheet.create({
   toastIconMax: { backgroundColor: "#fee2e2" },
   toastTitle: { fontSize: 13, fontWeight: "700", color: "#1A1A1A" },
   toastSub: { fontSize: 11, color: "#888", marginTop: 1 },
+
   referenceInput: {
     backgroundColor: "#F8F8F8",
     borderRadius: 14,
@@ -1570,19 +1634,15 @@ const styles = StyleSheet.create({
   quickChipText: { fontSize: 14, fontWeight: "700", color: "#888" },
   quickChipTextActive: { color: Colors.primary },
   mockNote: { fontSize: 11, color: "#ccc", textAlign: "center", marginTop: 12 },
+
   previewOverlay: {
     ...StyleSheet.absoluteFillObject,
-    flex: 1,
     backgroundColor: "rgba(0,0,0,0.72)",
     justifyContent: "center",
     padding: 20,
     zIndex: 50,
   },
-  previewCard: {
-    backgroundColor: "#fff",
-    borderRadius: 24,
-    padding: 18,
-  },
+  previewCard: { backgroundColor: "#fff", borderRadius: 24, padding: 18 },
   previewHeader: {
     flexDirection: "row",
     alignItems: "center",

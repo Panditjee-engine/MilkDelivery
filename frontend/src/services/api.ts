@@ -2552,6 +2552,32 @@ async acceptSubscription(id: string) {
   return this.request<any>(`/subscriptions/${id}/accept`, { method: 'POST' });
 }
 
+//passord reset admin setting screen added by anurag
+ async requestChangePasswordOtp(): Promise<{ otp: string; expires_in_minutes: number }> {
+    return this.request("/auth/change-password-otp", { method: "POST" });
+  }
+ 
+  /**
+   * Step 2: User typed the OTP shown on screen — verify it.
+   * Returns { verified: true } on success.
+   */
+  async verifyChangePasswordOtp(otp: string): Promise<{ verified: boolean }> {
+    return this.request("/auth/verify-change-otp", {
+      method: "POST",
+      body: JSON.stringify({ otp }),
+    });
+  }
+ 
+  async confirmChangePassword(
+    new_password: string,
+    confirm_password: string,
+  ): Promise<{ message: string }> {
+    return this.request("/auth/confirm-change-password", {
+      method: "POST",
+      body: JSON.stringify({ new_password, confirm_password }),
+    });
+  }
+
 // Logout
   logout = async () => {
     this.setToken(null);

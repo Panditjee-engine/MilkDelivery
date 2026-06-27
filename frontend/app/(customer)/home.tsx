@@ -10,6 +10,9 @@ import {
   Animated,
   Easing,
   Dimensions,
+  Modal,
+  TouchableWithoutFeedback,
+  StatusBar,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -320,6 +323,455 @@ const brandStyles = StyleSheet.create({
 const POPULAR_GRID_GAP = 12;
 const POPULAR_CARD_WIDTH = (SCREEN_WIDTH - 40 - POPULAR_GRID_GAP) / 2;
 
+// ─── Product Details Modal
+function ProductDetailsModal({
+  product,
+  adminName,
+  visible,
+  onClose,
+  onBuyNow,
+}: {
+  product: any;
+  adminName?: string;
+  visible: boolean;
+  onClose: () => void;
+  onBuyNow: () => void;
+}) {
+  const slideAnim = useRef(new Animated.Value(400)).current;
+  const backdropAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (visible) {
+      Animated.parallel([
+        Animated.spring(slideAnim, {
+          toValue: 0,
+          tension: 65,
+          friction: 11,
+          useNativeDriver: true,
+        }),
+        Animated.timing(backdropAnim, {
+          toValue: 1,
+          duration: 250,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(slideAnim, {
+          toValue: 400,
+          duration: 220,
+          easing: Easing.in(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(backdropAnim, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [visible]);
+
+  if (!product) return null;
+
+  const theme = getCategoryTheme(product.category);
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="none"
+      statusBarTranslucent
+      onRequestClose={onClose}
+    >
+      <TouchableWithoutFeedback onPress={onClose}>
+        <Animated.View
+          style={[
+            modalStyles.backdrop,
+            { opacity: backdropAnim },
+          ]}
+        />
+      </TouchableWithoutFeedback>
+
+      <Animated.View
+        style={[
+          modalStyles.sheet,
+          { transform: [{ translateY: slideAnim }] },
+        ]}
+      >
+        {/* Handle */}
+        <View style={modalStyles.handle} />
+
+        {/* Close button */}
+        <TouchableOpacity style={modalStyles.closeBtn} onPress={onClose} activeOpacity={0.8}>
+          <Ionicons name="close" size={20} color="#555" />
+        </TouchableOpacity>
+
+        {/* Product Image */}
+        <View style={[modalStyles.imageBox, { backgroundColor: theme.bg }]}>
+          {product?.image ? (
+            <Image
+              source={{ uri: product.image }}
+              style={modalStyles.productImage}
+              resizeMode="contain"
+            />
+          ) : (
+            <View style={modalStyles.imagePlaceholder}>
+              <Ionicons name={theme.icon as any} size={52} color={theme.accent} />
+            </View>
+          )}
+          {/* Category badge */}
+          <View style={[modalStyles.categoryBadge, { backgroundColor: theme.accent + "18", borderColor: theme.accent + "30" }]}>
+            <Ionicons name={theme.icon as any} size={11} color={theme.accent} />
+            <Text style={[modalStyles.categoryBadgeText, { color: theme.accent }]}>
+              {product.category || "Other"}
+            </Text>
+          </View>
+        </View>
+
+        {/* Content */}
+        <ScrollView
+          style={modalStyles.contentScroll}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 24 }}
+        >
+          {/* Admin / Shop */}
+          {adminName && (
+            <View style={modalStyles.shopRow}>
+              <Ionicons name="storefront-outline" size={13} color="#16a34a" />
+              <Text style={modalStyles.shopName}>{adminName}</Text>
+            </View>
+          )}
+
+          {/* Name + Price Row */}
+          <View style={modalStyles.namePriceRow}>
+            <Text style={modalStyles.productName}>{product.name}</Text>
+            <View style={modalStyles.priceBox}>
+              <Text style={modalStyles.priceLabel}>Price</Text>
+              <Text style={[modalStyles.priceValue, { color: theme.accent }]}>₹{product.price}</Text>
+            </View>
+          </View>
+
+          {/* Unit */}
+          <View style={modalStyles.unitRow}>
+            <View style={modalStyles.unitPill}>
+              <Ionicons name="cube-outline" size={12} color="#888" />
+              <Text style={modalStyles.unitText}>{product.unit}</Text>
+            </View>
+          </View>
+
+          {/* Description */}
+          {product.description ? (
+            <View style={modalStyles.descBox}>
+              <Text style={modalStyles.descLabel}>About this product</Text>
+              <Text style={modalStyles.descText}>{product.description}</Text>
+            </View>
+          ) : (
+            <View style={modalStyles.descBox}>
+              <Text style={modalStyles.descLabel}>About this product</Text>
+              <Text style={modalStyles.descText}>
+                Fresh and pure {product.name?.toLowerCase()} sourced directly for you. Daily delivery ensures maximum freshness.
+              </Text>
+            </View>
+          )}
+
+          {/* Info pills row */}
+          <View style={modalStyles.infoPillsRow}>
+            <View style={modalStyles.infoPill}>
+              <Ionicons name="leaf-outline" size={14} color={Colors.primary} />
+              <Text style={modalStyles.infoPillText}>100% Pure</Text>
+            </View>
+            <View style={modalStyles.infoPill}>
+              <Ionicons name="time-outline" size={14} color={Colors.primary} />
+              <Text style={modalStyles.infoPillText}>Daily Fresh</Text>
+            </View>
+            <View style={modalStyles.infoPill}>
+              <Ionicons name="shield-checkmark-outline" size={14} color={Colors.primary} />
+              <Text style={modalStyles.infoPillText}>Quality Checked</Text>
+            </View>
+          </View>
+
+          {/* Divider */}
+          <View style={modalStyles.divider} />
+
+          {/* Price summary */}
+          <View style={modalStyles.priceSummaryRow}>
+            <Text style={modalStyles.priceSummaryLabel}>Unit Price</Text>
+            <Text style={modalStyles.priceSummaryValue}>₹{product.price} / {product.unit}</Text>
+          </View>
+        </ScrollView>
+
+        {/* CTA Buttons */}
+        <View style={modalStyles.ctaRow}>
+          <TouchableOpacity
+            style={modalStyles.closeSecondaryBtn}
+            onPress={onClose}
+            activeOpacity={0.8}
+          >
+            <Text style={modalStyles.closeSecondaryText}>Close</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[modalStyles.buyNowBtn, { backgroundColor: theme.accent }]}
+            onPress={onBuyNow}
+            activeOpacity={0.85}
+          >
+            <LinearGradient
+              colors={[theme.accent, theme.accent + "CC"]}
+              style={modalStyles.buyNowGrad}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <Ionicons name="cart-outline" size={18} color="#fff" />
+              <Text style={modalStyles.buyNowText}>Buy Now</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+      </Animated.View>
+    </Modal>
+  );
+}
+
+const modalStyles = StyleSheet.create({
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.5)",
+  },
+  sheet: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    maxHeight: "88%",
+    shadowColor: "#000",
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: -6 },
+    elevation: 20,
+  },
+  handle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#E5E7EB",
+    alignSelf: "center",
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  closeBtn: {
+    position: "absolute",
+    top: 16,
+    right: 18,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#F3F4F6",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 10,
+  },
+  imageBox: {
+    height: 200,
+    marginHorizontal: 20,
+    marginTop: 8,
+    borderRadius: 20,
+    overflow: "hidden",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  productImage: {
+    width: "100%",
+    height: "100%",
+  },
+  imagePlaceholder: {
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  categoryBadge: {
+    position: "absolute",
+    bottom: 10,
+    left: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  categoryBadgeText: {
+    fontSize: 11,
+    fontWeight: "700",
+    textTransform: "capitalize",
+  },
+  contentScroll: {
+    paddingHorizontal: 20,
+    marginTop: 16,
+  },
+  shopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginBottom: 8,
+  },
+  shopName: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#16a34a",
+  },
+  namePriceRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 10,
+  },
+  productName: {
+    flex: 1,
+    fontSize: 22,
+    fontWeight: "900",
+    color: "#111",
+    letterSpacing: -0.5,
+    paddingRight: 12,
+  },
+  priceBox: {
+    alignItems: "flex-end",
+  },
+  priceLabel: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: "#aaa",
+    marginBottom: 2,
+  },
+  priceValue: {
+    fontSize: 24,
+    fontWeight: "900",
+    letterSpacing: -0.8,
+  },
+  unitRow: {
+    flexDirection: "row",
+    marginBottom: 16,
+  },
+  unitPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "#F3F4F6",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+  },
+  unitText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#555",
+  },
+  descBox: {
+    backgroundColor: "#F9FAFB",
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+  },
+  descLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#aaa",
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+    marginBottom: 6,
+  },
+  descText: {
+    fontSize: 13.5,
+    color: "#444",
+    lineHeight: 20,
+    fontWeight: "400",
+  },
+  infoPillsRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 16,
+    flexWrap: "wrap",
+  },
+  infoPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: Colors.primary + "10",
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+  },
+  infoPillText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: Colors.primary,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: "#F3F4F6",
+    marginBottom: 14,
+  },
+  priceSummaryRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  priceSummaryLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#888",
+  },
+  priceSummaryValue: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#111",
+  },
+  ctaRow: {
+    flexDirection: "row",
+    gap: 12,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 28,
+    borderTopWidth: 1,
+    borderTopColor: "#F3F4F6",
+    backgroundColor: "#fff",
+  },
+  closeSecondaryBtn: {
+    flex: 1,
+    height: 52,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: "#E5E7EB",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  closeSecondaryText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#555",
+  },
+  buyNowBtn: {
+    flex: 2,
+    borderRadius: 16,
+    overflow: "hidden",
+    height: 52,
+  },
+  buyNowGrad: {
+    flex: 1,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 8,
+  },
+  buyNowText: {
+    fontSize: 16,
+    fontWeight: "900",
+    color: "#fff",
+    letterSpacing: -0.3,
+  },
+});
+
 // ─── Product grid — tapping ANYWHERE opens product details
 function ProductGridCard({
   product,
@@ -532,6 +984,11 @@ export default function CustomerHome() {
   const [adminsList, setAdminsList] = useState<any[]>([]);
   const [contentSlides, setContentSlides] = useState<BannerSlide[]>([]);
 
+  // ─── Product details modal state
+  const [selectedProduct, setSelectedProduct] = useState<any>(null);
+  const [selectedAdminName, setSelectedAdminName] = useState<string | undefined>(undefined);
+  const [modalVisible, setModalVisible] = useState(false);
+
   // Wallet card entrance
   const walletAnim = useRef(new Animated.Value(0)).current;
   const headerAnim = useRef(new Animated.Value(0)).current;
@@ -593,14 +1050,34 @@ export default function CustomerHome() {
   }, [isFocused]);
 
   const goToCatalog = () => router.push("/(customer)/catalog");
+
+  // ─── Open product details modal
   const openProductDetails = (product: any) => {
-    router.push({
-      pathname: "/(customer)/product-details",
-      params: {
-        id: product.id || product._id,
-        product: encodeURIComponent(JSON.stringify(product)),
-      },
-    } as any);
+    const admin = adminsList.find((a) => a.id === product.admin_id);
+    const adminName = admin?.shop_name || admin?.name || undefined;
+    setSelectedProduct(product);
+    setSelectedAdminName(adminName);
+    setModalVisible(true);
+  };
+
+  // ─── Close modal
+  const closeModal = () => {
+    setModalVisible(false);
+    // Delay clearing product so animation can finish
+    setTimeout(() => {
+      setSelectedProduct(null);
+      setSelectedAdminName(undefined);
+    }, 300);
+  };
+
+  // ─── Buy Now: close modal and navigate to catalog
+  const handleBuyNow = () => {
+    setModalVisible(false);
+    setTimeout(() => {
+      setSelectedProduct(null);
+      setSelectedAdminName(undefined);
+      router.push("/(customer)/catalog");
+    }, 250);
   };
 
   if (loading) return <LoadingScreen />;
@@ -814,6 +1291,15 @@ export default function CustomerHome() {
         {/* ── Animated Brand Footer ── */}
         <BrandFooter />
       </ScrollView>
+
+      {/* ── Product Details Modal ── */}
+      <ProductDetailsModal
+        product={selectedProduct}
+        adminName={selectedAdminName}
+        visible={modalVisible}
+        onClose={closeModal}
+        onBuyNow={handleBuyNow}
+      />
     </SafeAreaView>
   );
 }

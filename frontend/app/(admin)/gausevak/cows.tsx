@@ -913,6 +913,7 @@ const BREEDS = [
   { name: "Rathi", image: cowImg, origin: "Rajasthan" },
   { name: "Kankrej", image: cowImg, origin: "Gujarat" },
   { name: "Badri / Pahadi", image: cowImg, origin: "Uttarakhand" },
+  { name: "Haryani", image: cowImg, origin: "Haryana" },
 ];
 
 function BreedSelector({
@@ -4699,7 +4700,7 @@ const m = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#f3dbbc",
+   backgroundColor: "#16a34a",
     borderRadius: 14,
     paddingVertical: 15,
     gap: 8,
