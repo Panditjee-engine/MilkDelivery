@@ -399,12 +399,16 @@ class ApiService {
   async login(
     identifier: string,
     password: string,
-    method: "email" | "phone" = "email",
+    method: 'email' | 'phone' = 'email',
+    extraData: Record<string, any> = {},
   ) {
-    const body =
-      method === "phone"
-        ? { phone: identifier, password }
-        : { email: identifier, password };
+    const body = {
+      email: method === 'email' ? identifier : "",
+      phone: method === 'phone' ? identifier : "",
+      password,
+      platform: extraData.platform || "fcm",
+      device_token: extraData.device_token || "",
+    };
 
     const data = await this.request<any>("/auth/login", {
       method: "POST",

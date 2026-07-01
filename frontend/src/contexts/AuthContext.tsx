@@ -37,7 +37,12 @@ interface AuthContextType {
   workerToken: string | null;
   isWorker: boolean;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (
+    email: string,
+    password: string,
+    extraData?: Record<string, any>,
+    method?: 'email' | 'phone',
+  ) => Promise<void>;
   workerLogin: (email: string, password: string) => Promise<void>;
   workerLogout: () => Promise<void>;
   register: (data: any) => Promise<void>;
@@ -104,8 +109,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     }
   };
-  const login = async (email: string, password: string) => {
-    const response = await api.login(email, password);
+  const login = async (
+    identifier: string,
+    password: string,
+    extraData: Record<string, any> = {},
+    method: 'email' | 'phone' = 'email',
+  ) => {
+    const response = await api.login(identifier, password, method, extraData);
     await AsyncStorage.setItem('access_token', response.access_token);
     setToken(response.access_token);
     setUser(response.user);
