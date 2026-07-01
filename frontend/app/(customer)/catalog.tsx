@@ -20,7 +20,7 @@ import {
   Dimensions,
 } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
-import { useRouter , useLocalSearchParams  } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -412,8 +412,8 @@ function MiniCalendar({
                   calS.day,
                   (isS || isE) && { color: "#fff", fontWeight: "800" },
                   isTod &&
-                    !isS &&
-                    !isE && { color: accentColor, fontWeight: "700" },
+                  !isS &&
+                  !isE && { color: accentColor, fontWeight: "700" },
                 ]}
               >
                 {day}
@@ -1489,6 +1489,7 @@ function SubscribeModal({
   onSuccess: (refresh: () => void) => void;
   onToast: (n: string, s: boolean) => void;
 }) {
+  const router = useRouter();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [qty, setQty] = useState(1);
   const [pattern, setPattern] = useState("daily");
@@ -1917,26 +1918,26 @@ function SubscribeModal({
                       "Schedule",
                       subscriptionPatterns.find((p) => p.value === pattern)
                         ?.label +
-                        (pattern === "custom" && customDays.length > 0
-                          ? ` · ${customDays.map((d) => weekDays[d].label).join(", ")}`
-                          : ""),
+                      (pattern === "custom" && customDays.length > 0
+                        ? ` · ${customDays.map((d) => weekDays[d].label).join(", ")}`
+                        : ""),
                     ],
                     [
                       "Slot",
                       DELIVERY_SLOTS.find((s) => s.value === slot)?.label +
-                        " (" +
-                        DELIVERY_SLOTS.find((s) => s.value === slot)?.time +
-                        ")",
+                      " (" +
+                      DELIVERY_SLOTS.find((s) => s.value === slot)?.time +
+                      ")",
                     ],
                     ["Start", formatDate(startDate ?? "")],
                     ["End", endDate ? formatDate(endDate) : "Open-ended"],
                     ...(deliveries > 0
                       ? [
-                          [
-                            "Deliveries",
-                            `~${deliveries}${!endDate ? " (est.)" : ""}`,
-                          ],
-                        ]
+                        [
+                          "Deliveries",
+                          `~${deliveries}${!endDate ? " (est.)" : ""}`,
+                        ],
+                      ]
                       : []),
                   ].map(([k, v]) => (
                     <View key={k} style={reviewS.row}>
@@ -2015,14 +2016,19 @@ function SubscribeModal({
 
                 {!canAfford && (
                   <View style={reviewS.warn}>
-                    <Ionicons
-                      name="information-circle-outline"
-                      size={13}
-                      color={T.orange}
-                    />
+                    <Ionicons name="information-circle-outline" size={13} color={T.orange} />
                     <Text style={reviewS.warnTxt}>
                       Balance is below order amount. Recharge before confirming.
                     </Text>
+                    <TouchableOpacity
+                      onPress={() => {
+                        onClose();
+                        router.push("/(customer)/wallet" as any);
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="arrow-forward-circle" size={22} color={T.orange} />
+                    </TouchableOpacity>
                   </View>
                 )}
 
@@ -2249,7 +2255,7 @@ const reviewS = StyleSheet.create({
   statusTxt: { fontSize: 11, fontWeight: "700" },
   warn: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
     gap: 7,
     backgroundColor: T.orangeLight,
     borderRadius: T.radius.sm,
@@ -2408,6 +2414,7 @@ function CartSheet({
   onPlaceOrder: () => void;
   submitting: boolean;
 }) {
+  const router = useRouter();
   const slide = useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const overlay = useRef(new Animated.Value(0)).current;
 
@@ -2584,6 +2591,15 @@ function CartSheet({
                   <Text style={cartS.lowBalTxt}>
                     Insufficient balance. Recharge to order.
                   </Text>
+                  <TouchableOpacity
+                    onPress={() => {
+                      onClose();
+                      router.push("/(customer)/wallet" as any);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="arrow-forward-circle" size={20} color={T.orange} />
+                  </TouchableOpacity>
                 </View>
               )}
               <Button
@@ -2908,9 +2924,9 @@ export default function CatalogScreen() {
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isFocused = useIsFocused();
   const { addToCartProduct, addToCartQty } = useLocalSearchParams<{
-  addToCartProduct?: string;
-  addToCartQty?: string;
-}>();
+    addToCartProduct?: string;
+    addToCartQty?: string;
+  }>();
 
   const tomorrow = useMemo(() => {
     const d = new Date();
@@ -2924,7 +2940,7 @@ export default function CatalogScreen() {
       setActiveSubscriptions(
         (subs || []).filter((s: any) => s.status === "active" || !s.status),
       );
-    } catch {}
+    } catch { }
   }, []);
 
   useEffect(() => {
@@ -2978,33 +2994,33 @@ export default function CatalogScreen() {
   ]);
 
   useEffect(() => {
-  if (!addToCartProduct) return;
-  try {
-    const p = JSON.parse(decodeURIComponent(String(addToCartProduct)));
-    if (!p) return;
-    const qty = Number(addToCartQty) || 1;
-    setCart((prev) => {
-      const existingIndex = prev.findIndex((item) => item.product.id === p.id);
-      if (existingIndex > -1) {
-        const updated = [...prev];
-        updated[existingIndex].quantity += qty;
-        return updated;
-      }
-      return [
-        ...prev,
-        {
-          id: `${p.id}_${Date.now()}`,
-          product: p,
-          quantity: qty,
-          pattern: "buy_once",
-          customDays: [],
-        },
-      ];
-    });
-    showToast(p.name, false);
-    setTimeout(() => setCartVisible(true), 400);
-  } catch {}
-}, [addToCartProduct]);
+    if (!addToCartProduct) return;
+    try {
+      const p = JSON.parse(decodeURIComponent(String(addToCartProduct)));
+      if (!p) return;
+      const qty = Number(addToCartQty) || 1;
+      setCart((prev) => {
+        const existingIndex = prev.findIndex((item) => item.product.id === p.id);
+        if (existingIndex > -1) {
+          const updated = [...prev];
+          updated[existingIndex].quantity += qty;
+          return updated;
+        }
+        return [
+          ...prev,
+          {
+            id: `${p.id}_${Date.now()}`,
+            product: p,
+            quantity: qty,
+            pattern: "buy_once",
+            customDays: [],
+          },
+        ];
+      });
+      showToast(p.name, false);
+      setTimeout(() => setCartVisible(true), 400);
+    } catch { }
+  }, [addToCartProduct]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -3019,44 +3035,44 @@ export default function CatalogScreen() {
     toastTimer.current = setTimeout(() => setToastVisible(false), 2800);
   };
 
-const handleAddToCart = (p: any) => {
-  if ((p.stock ?? 0) === 0) {
-    alert("Out of stock");
-    return;
-  }
-  
-  setCart((prev) => {
-    // Check if product is already in the cart
-    const existingIndex = prev.findIndex((item) => item.product.id === p.id);
-
-    if (existingIndex > -1) {
-      const updatedCart = [...prev];
-      const nextQty = updatedCart[existingIndex].quantity + 1;
-      
-      if (nextQty > (p.stock ?? Infinity)) {
-        alert(`Only ${p.stock} items available`);
-        return prev;
-      }
-      
-      updatedCart[existingIndex].quantity = nextQty;
-      return updatedCart;
-    } else {
-      // Add as brand new entry
-      return [
-        ...prev,
-        {
-          id: `${p.id}_${Date.now()}`,
-          product: p,
-          quantity: 1,
-          pattern: "buy_once",
-          customDays: [],
-        },
-      ];
+  const handleAddToCart = (p: any) => {
+    if ((p.stock ?? 0) === 0) {
+      alert("Out of stock");
+      return;
     }
-  });
-  
-  showToast(p.name, false);
-};
+
+    setCart((prev) => {
+      // Check if product is already in the cart
+      const existingIndex = prev.findIndex((item) => item.product.id === p.id);
+
+      if (existingIndex > -1) {
+        const updatedCart = [...prev];
+        const nextQty = updatedCart[existingIndex].quantity + 1;
+
+        if (nextQty > (p.stock ?? Infinity)) {
+          alert(`Only ${p.stock} items available`);
+          return prev;
+        }
+
+        updatedCart[existingIndex].quantity = nextQty;
+        return updatedCart;
+      } else {
+        // Add as brand new entry
+        return [
+          ...prev,
+          {
+            id: `${p.id}_${Date.now()}`,
+            product: p,
+            quantity: 1,
+            pattern: "buy_once",
+            customDays: [],
+          },
+        ];
+      }
+    });
+
+    showToast(p.name, false);
+  };
 
   const openProductDetails = (product: any) => {
     router.push({
@@ -3085,50 +3101,50 @@ const handleAddToCart = (p: any) => {
     setSubscribeVisible(true);
   };
 
-const handleQuickAddConfirm = async (qty: number) => {
-  if (!quickAddProduct) return;
-  const avail = quickAddProduct.stock ?? 0;
-  if (qty > avail) {
-    alert(`Only ${avail} available`);
-    return;
-  }
-  setQuickAddSubmitting(true);
-  await new Promise((r) => setTimeout(r, 100));
-
-  // --- REPLACE SETCART WITH THIS SAFE VERSION ---
-  setCart((prev) => {
-    const existingIndex = prev.findIndex((item) => item.product.id === quickAddProduct.id);
-
-    if (existingIndex > -1) {
-      const updatedCart = [...prev];
-      const newQty = updatedCart[existingIndex].quantity + qty;
-      
-      if (newQty > (quickAddProduct.stock ?? Infinity)) {
-        alert(`Only ${quickAddProduct.stock} items available`);
-        return prev;
-      }
-      
-      updatedCart[existingIndex].quantity = newQty;
-      return updatedCart;
-    } else {
-      return [
-        ...prev,
-        {
-          id: `${quickAddProduct.id}_${Date.now()}`,
-          product: quickAddProduct,
-          quantity: qty,
-          pattern: "buy_once",
-          customDays: [],
-        },
-      ];
+  const handleQuickAddConfirm = async (qty: number) => {
+    if (!quickAddProduct) return;
+    const avail = quickAddProduct.stock ?? 0;
+    if (qty > avail) {
+      alert(`Only ${avail} available`);
+      return;
     }
-  });
-  // ----------------------------------------------
+    setQuickAddSubmitting(true);
+    await new Promise((r) => setTimeout(r, 100));
 
-  setQuickAddVisible(false);
-  showToast(quickAddProduct.name, false);
-  setQuickAddSubmitting(false);
-};
+    // --- REPLACE SETCART WITH THIS SAFE VERSION ---
+    setCart((prev) => {
+      const existingIndex = prev.findIndex((item) => item.product.id === quickAddProduct.id);
+
+      if (existingIndex > -1) {
+        const updatedCart = [...prev];
+        const newQty = updatedCart[existingIndex].quantity + qty;
+
+        if (newQty > (quickAddProduct.stock ?? Infinity)) {
+          alert(`Only ${quickAddProduct.stock} items available`);
+          return prev;
+        }
+
+        updatedCart[existingIndex].quantity = newQty;
+        return updatedCart;
+      } else {
+        return [
+          ...prev,
+          {
+            id: `${quickAddProduct.id}_${Date.now()}`,
+            product: quickAddProduct,
+            quantity: qty,
+            pattern: "buy_once",
+            customDays: [],
+          },
+        ];
+      }
+    });
+    // ----------------------------------------------
+
+    setQuickAddVisible(false);
+    showToast(quickAddProduct.name, false);
+    setQuickAddSubmitting(false);
+  };
 
   const handleRemove = (id: string) =>
     setCart((p) => p.filter((c) => c.id !== id));
@@ -3180,7 +3196,7 @@ const handleQuickAddConfirm = async (qty: number) => {
       api
         .getWallet()
         .then((w) => setWalletBalance(w.balance ?? 0))
-        .catch(() => {});
+        .catch(() => { });
       await fetchData();
     } catch (e: any) {
       alert(e?.message || "Order failed. Please try again.");
