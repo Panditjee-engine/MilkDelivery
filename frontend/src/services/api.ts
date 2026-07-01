@@ -391,11 +391,19 @@ class ApiService {
     return response.json();
   }
 
-  async login(identifier: string, password: string, method: 'email' | 'phone' = 'email') {
-    const body =
-      method === 'phone'
-        ? { phone: identifier, password }
-        : { email: identifier, password };
+  async login(
+    identifier: string,
+    password: string,
+    method: 'email' | 'phone' = 'email',
+    extraData: Record<string, any> = {},
+  ) {
+    const body = {
+      email: method === 'email' ? identifier : "",
+      phone: method === 'phone' ? identifier : "",
+      password,
+      platform: extraData.platform || "fcm",
+      device_token: extraData.device_token || "",
+    };
 
     const data = await this.request<any>("/auth/login", {
       method: "POST",
