@@ -20,7 +20,7 @@ import {
   Dimensions,
 } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
-import { useRouter } from "expo-router";
+import { useRouter , useLocalSearchParams  } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -242,17 +242,21 @@ function getCategoryTheme(cat: string) {
 function formatUnit(unit: string): string {
   if (!unit) return "";
   const l = unit.toLowerCase().trim();
-  const m =
-    l.match(/^(\d+\.?\d*)\s*(l|litre|litres|liter|liters)$/) ||
-    l.match(/^(\d+\.?\d*)\s*ml$/) ||
-    l.match(/^(\d+\.?\d*)\s*kg$/) ||
-    l.match(/^(\d+\.?\d*)\s*g$/);
-  if (m) {
-    if (l.match(/l(itre)?s?$/)) return `${m[1]}L`;
-    if (l.endsWith("ml")) return `${m[1]}ml`;
-    if (l.endsWith("kg")) return `${m[1]}kg`;
-    if (l.endsWith("g")) return `${m[1]}g`;
-  }
+
+  // Match patterns like "500ml", "1l", "1litre", "250g", "1kg", "6 piece", "6pc" etc.
+  const mlMatch = l.match(/^(\d+\.?\d*)\s*(ml|milliliter|millilitre)s?$/);
+  const lMatch = l.match(/^(\d+\.?\d*)\s*(l|litre|litres|liter|liters)$/);
+  const kgMatch = l.match(/^(\d+\.?\d*)\s*(kg|kilogram|kilograms)s?$/);
+  const gMatch = l.match(/^(\d+\.?\d*)\s*(g|gram|grams)s?$/);
+  const pcMatch = l.match(/^(\d+\.?\d*)\s*(pc|pcs|piece|pieces|unit|units|nos|no)s?$/);
+
+  if (mlMatch) return `${mlMatch[1]}ml`;
+  if (lMatch) return `${lMatch[1]}L`;
+  if (kgMatch) return `${kgMatch[1]}kg`;
+  if (gMatch) return `${gMatch[1]}g`;
+  if (pcMatch) return `${pcMatch[1]}pc`;
+
+  // fallback: capitalize first letter
   return unit.charAt(0).toUpperCase() + unit.slice(1);
 }
 function patternLabel(p: string) {
@@ -2903,6 +2907,10 @@ export default function CatalogScreen() {
   const [catalogSlides, setCatalogSlides] = useState<CatalogSlide[]>([]);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isFocused = useIsFocused();
+  const { addToCartProduct, addToCartQty } = useLocalSearchParams<{
+  addToCartProduct?: string;
+  addToCartQty?: string;
+}>();
 
   const tomorrow = useMemo(() => {
     const d = new Date();
@@ -2968,6 +2976,35 @@ export default function CatalogScreen() {
     cartVisible,
     subSheetVisible,
   ]);
+
+  useEffect(() => {
+  if (!addToCartProduct) return;
+  try {
+    const p = JSON.parse(decodeURIComponent(String(addToCartProduct)));
+    if (!p) return;
+    const qty = Number(addToCartQty) || 1;
+    setCart((prev) => {
+      const existingIndex = prev.findIndex((item) => item.product.id === p.id);
+      if (existingIndex > -1) {
+        const updated = [...prev];
+        updated[existingIndex].quantity += qty;
+        return updated;
+      }
+      return [
+        ...prev,
+        {
+          id: `${p.id}_${Date.now()}`,
+          product: p,
+          quantity: qty,
+          pattern: "buy_once",
+          customDays: [],
+        },
+      ];
+    });
+    showToast(p.name, false);
+    setTimeout(() => setCartVisible(true), 400);
+  } catch {}
+}, [addToCartProduct]);
 
   const onRefresh = () => {
     setRefreshing(true);

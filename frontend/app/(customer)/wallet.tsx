@@ -12,6 +12,8 @@ import {
   Animated,
   Vibration,
   Easing,
+  KeyboardAvoidingView,  // ← ADD
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -958,156 +960,163 @@ export default function WalletScreen() {
       {/* ── Recharge Modal ── */}
       <Modal visible={rechargeModal} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalSheet}>
-            <View style={styles.dragHandle} />
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add Money</Text>
-              <TouchableOpacity style={styles.closeBtn} onPress={closeModal}>
-                <Ionicons name="close" size={16} color="#666" />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.limitBar}>
-              <View style={styles.limitBadge}>
-                <Ionicons
-                  name="information-circle-outline"
-                  size={12}
-                  color="#888"
-                />
-                <Text style={styles.limitText}>
-                  Min ₹{MIN_AMOUNT} · Max ₹{MAX_AMOUNT.toLocaleString("en-IN")}
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.qrBox}>
-              {qrImageUri ? (
-                <TouchableOpacity
-                  activeOpacity={0.85}
-                  onPress={() => setQrPreviewVisible(true)}
-                >
-                  <Image
-                    source={{ uri: qrImageUri }}
-                    style={styles.qrImage}
-                    resizeMode="contain"
-                  />
-                  <View style={styles.qrTapHint}>
-                    <Ionicons name="expand-outline" size={11} color="#fff" />
-                  </View>
-                </TouchableOpacity>
-              ) : (
-                <View style={styles.qrEmpty}>
-                  <Ionicons name="qr-code-outline" size={28} color="#bbb" />
-                  <Text style={styles.qrEmptyText}>Payment QR unavailable</Text>
-                </View>
-              )}
-              <View style={styles.qrInfo}>
-                <Text style={styles.qrLabel}>
-                  {paymentQr?.label || "Admin Payment QR"}
-                </Text>
-                <Text style={styles.qrNote}>
-                  Pay on this QR, then enter transaction reference below.
-                </Text>
-              </View>
-            </View>
-
-            <Animated.View
-              style={[
-                styles.amountBox,
-                toast === "min" && styles.amountBoxWarnMin,
-                toast === "max" && styles.amountBoxWarnMax,
-                { transform: [{ translateX: shakeAnim }] },
-              ]}
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            style={{ width: "100%" }}
+          >
+            <ScrollView
+              style={styles.modalSheet}
+              contentContainerStyle={{ paddingBottom: 36 }}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
             >
-              <Text
+              <View style={styles.dragHandle} />
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Add Money</Text>
+                <TouchableOpacity style={styles.closeBtn} onPress={closeModal}>
+                  <Ionicons name="close" size={16} color="#666" />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.limitBar}>
+                <View style={styles.limitBadge}>
+                  <Ionicons name="information-circle-outline" size={12} color="#888" />
+                  <Text style={styles.limitText}>
+                    Min ₹{MIN_AMOUNT} · Max ₹{MAX_AMOUNT.toLocaleString("en-IN")}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.qrBox}>
+                {qrImageUri ? (
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    onPress={() => setQrPreviewVisible(true)}
+                  >
+                    <Image
+                      source={{ uri: qrImageUri }}
+                      style={styles.qrImage}
+                      resizeMode="contain"
+                    />
+                    <View style={styles.qrTapHint}>
+                      <Ionicons name="expand-outline" size={11} color="#fff" />
+                    </View>
+                  </TouchableOpacity>
+                ) : (
+                  <View style={styles.qrEmpty}>
+                    <Ionicons name="qr-code-outline" size={28} color="#bbb" />
+                    <Text style={styles.qrEmptyText}>Payment QR unavailable</Text>
+                  </View>
+                )}
+                <View style={styles.qrInfo}>
+                  <Text style={styles.qrLabel}>
+                    {paymentQr?.label || "Admin Payment QR"}
+                  </Text>
+                  <Text style={styles.qrNote}>
+                    Pay on this QR, then enter transaction reference below.
+                  </Text>
+                </View>
+              </View>
+
+              <Animated.View
                 style={[
-                  styles.rupeeSymbol,
-                  toast === "max" && { color: "#ef4444" },
-                  toast === "min" && { color: "#f59e0b" },
+                  styles.amountBox,
+                  toast === "min" && styles.amountBoxWarnMin,
+                  toast === "max" && styles.amountBoxWarnMax,
+                  { transform: [{ translateX: shakeAnim }] },
                 ]}
               >
-                ₹
-              </Text>
-              <TextInput
-                style={[
-                  styles.amountInput,
-                  toast === "max" && { color: "#ef4444" },
-                  toast === "min" && { color: "#f59e0b" },
-                ]}
-                value={rechargeAmount}
-                onChangeText={handleAmountChange}
-                keyboardType="numeric"
-                placeholder="0"
-                placeholderTextColor="#ddd"
-                autoFocus
-                maxLength={5}
-              />
-              {rechargeAmount.length > 0 && (
-                <TouchableOpacity
-                  onPress={() => {
-                    setRechargeAmount("");
-                    setToast(null);
-                  }}
-                  style={styles.clearBtn}
-                >
-                  <Ionicons name="close-circle" size={20} color="#ccc" />
-                </TouchableOpacity>
-              )}
-            </Animated.View>
-
-            <LimitToast type={toast} />
-
-            <Text style={styles.quickLabel}>Payment Reference</Text>
-            <TextInput
-              style={styles.referenceInput}
-              value={reference}
-              onChangeText={setReference}
-              placeholder="UPI / transaction reference"
-              placeholderTextColor="#bbb"
-              autoCapitalize="characters"
-            />
-
-            <Text style={styles.quickLabel}>Quick Select</Text>
-            <View style={styles.quickRow}>
-              {quickAmounts.map((amt) => (
-                <TouchableOpacity
-                  key={amt}
+                <Text
                   style={[
-                    styles.quickChip,
-                    rechargeAmount === amt.toString() && styles.quickChipActive,
+                    styles.rupeeSymbol,
+                    toast === "max" && { color: "#ef4444" },
+                    toast === "min" && { color: "#f59e0b" },
                   ]}
-                  onPress={() => {
-                    setRechargeAmount(amt.toString());
-                    setToast(null);
-                  }}
                 >
-                  <Text
-                    style={[
-                      styles.quickChipText,
-                      rechargeAmount === amt.toString() &&
-                        styles.quickChipTextActive,
-                    ]}
+                  ₹
+                </Text>
+                <TextInput
+                  style={[
+                    styles.amountInput,
+                    toast === "max" && { color: "#ef4444" },
+                    toast === "min" && { color: "#f59e0b" },
+                  ]}
+                  value={rechargeAmount}
+                  onChangeText={handleAmountChange}
+                  keyboardType="numeric"
+                  placeholder="0"
+                  placeholderTextColor="#ddd"
+                  autoFocus
+                  maxLength={5}
+                />
+                {rechargeAmount.length > 0 && (
+                  <TouchableOpacity
+                    onPress={() => {
+                      setRechargeAmount("");
+                      setToast(null);
+                    }}
+                    style={styles.clearBtn}
                   >
-                    ₹{amt}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+                    <Ionicons name="close-circle" size={20} color="#ccc" />
+                  </TouchableOpacity>
+                )}
+              </Animated.View>
 
-            <Button
-              title={
-                isValidAmount
-                  ? `Submit ₹${rechargeAmount} Request`
-                  : "Enter Amount & Reference"
-              }
-              onPress={handleRecharge}
-              loading={recharging}
-              disabled={!isValidAmount}
-            />
-            <Text style={styles.mockNote}>
-              Amount will be usable only after admin approval.
-            </Text>
-          </View>
+              <LimitToast type={toast} />
+
+              <Text style={styles.quickLabel}>Payment Reference</Text>
+              <TextInput
+                style={styles.referenceInput}
+                value={reference}
+                onChangeText={setReference}
+                placeholder="UPI / transaction reference"
+                placeholderTextColor="#bbb"
+                autoCapitalize="characters"
+              />
+
+              <Text style={styles.quickLabel}>Quick Select</Text>
+              <View style={styles.quickRow}>
+                {quickAmounts.map((amt) => (
+                  <TouchableOpacity
+                    key={amt}
+                    style={[
+                      styles.quickChip,
+                      rechargeAmount === amt.toString() && styles.quickChipActive,
+                    ]}
+                    onPress={() => {
+                      setRechargeAmount(amt.toString());
+                      setToast(null);
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.quickChipText,
+                        rechargeAmount === amt.toString() &&
+                        styles.quickChipTextActive,
+                      ]}
+                    >
+                      ₹{amt}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Button
+                title={
+                  isValidAmount
+                    ? `Submit ₹${rechargeAmount} Request`
+                    : "Enter Amount & Reference"
+                }
+                onPress={handleRecharge}
+                loading={recharging}
+                disabled={!isValidAmount}
+              />
+              <Text style={styles.mockNote}>
+                Amount will be usable only after admin approval.
+              </Text>
+            </ScrollView>
+          </KeyboardAvoidingView>
+
           {qrPreviewVisible ? (
             <View style={styles.previewOverlay}>
               <View style={styles.previewCard}>
@@ -1392,7 +1401,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     padding: 24,
-    paddingBottom: 36,
+    //paddingBottom: 36,
     maxHeight: "92%",
   },
   dragHandle: {
