@@ -272,6 +272,8 @@ const CATEGORIES = [
   "vegetables",
   "essentials",
 ];
+// ── Fixed unit options — dairy-focused, dropdown/chip selection only (no free text)
+const UNITS = ["ml", "L", "g", "kg"];
 const DIETARY_OPTIONS = ["Veg", "Non-Veg", "Vegan", "Gluten-Free"];
 const TABS = ["Details", "Highlights", "Information"];
 
@@ -464,19 +466,28 @@ export default function InventoryScreen() {
     setEditForm((p) => ({ ...p, [key]: val }));
 
   // ── Validation
+  // Only Name and Price are required. Category, Unit, Image, and Stock
+  // are all optional and can be filled in later by editing the product.
   const isFormValid = useMemo(() => {
     const price = parseFloat(formData.price);
-    const stock = parseInt(formData.stock, 10);
+    if (!formData.name.trim()) return false;
+    if (!Number.isFinite(price) || price <= 0) return false;
     if (
-      !formData.name.trim() ||
-      !formData.category.trim() ||
-      !formData.unit.trim()
+      formData.stock.trim() &&
+      !Number.isInteger(parseInt(formData.stock, 10))
     )
       return false;
-    if (!Number.isFinite(price) || price <= 0) return false;
-    if (!Number.isInteger(stock) || stock < 0) return false;
-    if (!formData.image || formData.image.length < 10) return false;
     return true;
+  }, [formData]);
+
+  // Surface what's missing so the user knows what to fill in later —
+  // shown as a soft hint, never blocks saving.
+  const missingFieldsHint = useMemo(() => {
+    const missing: string[] = [];
+    if (!formData.category.trim()) missing.push("category");
+    if (!formData.unit.trim()) missing.push("unit");
+    if (!formData.image) missing.push("photo");
+    return missing;
   }, [formData]);
 
   // ── Add Product
@@ -488,12 +499,12 @@ export default function InventoryScreen() {
 
       await api.createProduct({
         name: formData.name,
-        category: formData.category.toLowerCase(),
-        unit: formData.unit,
+        category: formData.category ? formData.category.toLowerCase() : undefined,
+        unit: formData.unit || undefined,
         price: Number(formData.price),
         mrp: formData.mrp ? Number(formData.mrp) : Number(formData.price),
-        stock: Number(formData.stock),
-        image: formData.image,
+        stock: formData.stock.trim() ? Number(formData.stock) : 0,
+        image: formData.image || undefined,
         images,
         image_type: "base64",
         product_type: formData.product_type || undefined,
@@ -535,7 +546,7 @@ export default function InventoryScreen() {
       unit: product.unit || "",
       price: String(product.price || ""),
       mrp: String(product.mrp || ""),
-      stock: String(product.stock || ""),
+      stock: String(product.stock ?? ""),
       image: product.image || "",
       image2: product.images?.[0] || "",
       image3: product.images?.[1] || "",
@@ -582,12 +593,12 @@ export default function InventoryScreen() {
 
       await api.updateProduct(selectedProduct.id, {
         name: editForm.name,
-        category: editForm.category.toLowerCase(),
-        unit: editForm.unit,
+        category: editForm.category ? editForm.category.toLowerCase() : undefined,
+        unit: editForm.unit || undefined,
         price: Number(editForm.price),
         mrp: editForm.mrp ? Number(editForm.mrp) : Number(editForm.price),
-        stock: Number(editForm.stock),
-        image: editForm.image,
+        stock: editForm.stock.trim() ? Number(editForm.stock) : 0,
+        image: editForm.image || undefined,
         images,
         product_type: editForm.product_type || undefined,
         dietary_preference: editForm.dietary_preference || undefined,
@@ -820,30 +831,40 @@ export default function InventoryScreen() {
             </View>
           </View>
 
-          <View style={styles.row}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.fieldLabel}>Quantity / Unit</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. 500ml"
-                placeholderTextColor={C.textLight}
-                value={data.unit}
-                onChangeText={(v) => update("unit", v)}
-              />
-            </View>
-            <View style={{ width: 12 }} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.fieldLabel}>Stock</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="0"
-                placeholderTextColor={C.textLight}
-                keyboardType="numeric"
-                value={data.stock}
-                onChangeText={(v) => update("stock", v)}
-              />
-            </View>
+          {/* ── Unit: fixed dropdown/chip selection (ml, L, g, kg) — no free text ── */}
+          <Text style={styles.fieldLabel}>Unit</Text>
+          <View style={styles.unitGrid}>
+            {UNITS.map((u) => {
+              const isActive = data.unit === u;
+              return (
+                <TouchableOpacity
+                  key={u}
+                  style={[styles.unitChip, isActive && styles.unitChipActive]}
+                  onPress={() => update("unit", u)}
+                  activeOpacity={0.75}
+                >
+                  <Text
+                    style={[
+                      styles.unitChipText,
+                      isActive && styles.unitChipTextActive,
+                    ]}
+                  >
+                    {u}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
+
+          <Text style={styles.fieldLabel}>Stock (optional)</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="0"
+            placeholderTextColor={C.textLight}
+            keyboardType="numeric"
+            value={data.stock}
+            onChangeText={(v) => update("stock", v)}
+          />
         </View>
       );
     }
@@ -1058,14 +1079,18 @@ export default function InventoryScreen() {
             )}
           </View>
           <View style={styles.detailMetaRow}>
-            <View style={styles.metaChip}>
-              <Ionicons name="pricetag-outline" size={12} color={C.dark} />
-              <Text style={styles.metaChipText}>{p.category}</Text>
-            </View>
-            <View style={styles.metaChip}>
-              <Ionicons name="scale-outline" size={12} color={C.dark} />
-              <Text style={styles.metaChipText}>{p.unit}</Text>
-            </View>
+            {p.category ? (
+              <View style={styles.metaChip}>
+                <Ionicons name="pricetag-outline" size={12} color={C.dark} />
+                <Text style={styles.metaChipText}>{p.category}</Text>
+              </View>
+            ) : null}
+            {p.unit ? (
+              <View style={styles.metaChip}>
+                <Ionicons name="scale-outline" size={12} color={C.dark} />
+                <Text style={styles.metaChipText}>{p.unit}</Text>
+              </View>
+            ) : null}
             <View
               style={[
                 styles.metaChip,
@@ -1387,7 +1412,9 @@ export default function InventoryScreen() {
                   )}
                 </View>
                 <Text style={styles.productMeta}>
-                  {product.unit} · {product.category}
+                  {product.unit || product.category
+                    ? [product.unit, product.category].filter(Boolean).join(" · ")
+                    : "Details pending"}
                 </Text>
                 <View
                   style={[
@@ -1476,6 +1503,15 @@ export default function InventoryScreen() {
               {renderFormTab(activeTab, formData, updateForm)}
 
               <View style={{ height: 16 }} />
+
+              {isFormValid && missingFieldsHint.length > 0 && (
+                <View style={styles.hintBanner}>
+                  <Ionicons name="information-circle-outline" size={16} color={C.dark} />
+                  <Text style={styles.hintBannerText}>
+                    You can add {missingFieldsHint.join(", ")} later by editing this product.
+                  </Text>
+                </View>
+              )}
 
               {isFormValid && (
                 <View style={styles.swipeWrapper}>
@@ -2024,6 +2060,49 @@ const styles = StyleSheet.create({
     textTransform: "capitalize",
   },
   catChipTextActive: { color: C.dark },
+
+  // ── Unit Chips (dropdown-style fixed selection: ml, L, g, kg)
+  unitGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginBottom: 16,
+  },
+  unitChip: {
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: C.inputBg,
+    borderWidth: 1.5,
+    borderColor: C.border,
+    minWidth: 64,
+    alignItems: "center",
+  },
+  unitChipActive: {
+    backgroundColor: C.primary + "20",
+    borderColor: C.primary,
+  },
+  unitChipText: { fontSize: 14, fontWeight: "700", color: C.textMuted },
+  unitChipTextActive: { color: C.dark },
+
+  // ── Missing-fields soft hint (shown above swipe-to-add when optional fields are blank)
+  hintBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: C.chipBg,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 12,
+  },
+  hintBannerText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "600",
+    color: C.textMuted,
+    lineHeight: 17,
+  },
 
   // ── Dietary Grid
   dietaryGrid: {

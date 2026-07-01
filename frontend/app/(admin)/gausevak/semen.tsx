@@ -83,6 +83,7 @@ const BREEDS = [
   { name: "Rathi", image: cowImg, origin: "Rajasthan" },
   { name: "Kankrej", image: cowImg, origin: "Gujarat" },
   { name: "Badri / Pahadi", image: cowImg, origin: "Uttarakhand" },
+  { name: "Haryani", image: cowImg, origin: "Haryana" },
 ];
 
 function conceptionRate(record: SemenRecord): string {

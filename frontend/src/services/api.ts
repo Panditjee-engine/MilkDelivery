@@ -14,9 +14,9 @@ export interface InsuranceCreate {
   company: string;
   sum_insured: number;
   annual_premium: number;
-  start_date: string;        // YYYY-MM-DD
-  expiry_date: string;       // YYYY-MM-DD
-  premium_due_date: string;  // YYYY-MM-DD
+  start_date: string; // YYYY-MM-DD
+  expiry_date: string; // YYYY-MM-DD
+  premium_due_date: string; // YYYY-MM-DD
   notify_before_expiry?: boolean;
   notify_before_due?: boolean;
   expiry_alert_days?: number;
@@ -28,7 +28,7 @@ export interface InsuranceCreate {
   claim_status?: string;
   claim_notes?: string;
 }
- 
+
 export interface Insurance {
   id: string;
   admin_id: string;
@@ -50,14 +50,14 @@ export interface Insurance {
   claim_filed: boolean;
   claim_date?: string;
   claim_amount?: number;
-  claim_status?: string;   // "pending" | "approved" | "rejected"
+  claim_status?: string; // "pending" | "approved" | "rejected"
   claim_notes?: string;
-  status: string;          // "active" | "expiring" | "expired"
+  status: string; // "active" | "expiring" | "expired"
   days_to_expiry?: number;
   created_at: string;
   updated_at?: string;
 }
- 
+
 export interface InsuranceSummary {
   total_insured: number;
   active: number;
@@ -68,7 +68,7 @@ export interface InsuranceSummary {
   total_insured_value: number;
   total_annual_premium: number;
 }
- 
+
 export interface InsuranceNotificationLog {
   id: string;
   admin_id: string;
@@ -81,7 +81,7 @@ export interface InsuranceNotificationLog {
   sent_at: string;
   success: boolean;
 }
- 
+
 export interface InsuranceNotificationSettings {
   admin_id: string;
   notify_expiry: boolean;
@@ -103,7 +103,7 @@ export type MedicineCategory =
   | "Ethnovetary"
   | "Supplement"
   | "Other";
- 
+
 export type MedicineUnit =
   | "ml"
   | "L"
@@ -114,13 +114,13 @@ export type MedicineUnit =
   | "vial"
   | "dose"
   | "sachet";
- 
+
 export type StockTransactionType =
-  | "purchase"   // stock added
-  | "used"       // dispensed for a cow
-  | "adjusted"   // manual correction
-  | "expired";   // written off
- 
+  | "purchase" // stock added
+  | "used" // dispensed for a cow
+  | "adjusted" // manual correction
+  | "expired"; // written off
+
 export interface Medicine {
   id: string;
   admin_id: string;
@@ -130,9 +130,9 @@ export interface Medicine {
   description?: string;
   manufacturer?: string;
   batch_number?: string;
-  expiry_date?: string;          // DD/MM/YYYY
-  purchase_date?: string;        // DD/MM/YYYY
-  cost_per_unit?: number;        // ₹
+  expiry_date?: string; // DD/MM/YYYY
+  purchase_date?: string; // DD/MM/YYYY
+  cost_per_unit?: number; // ₹
   current_stock: number;
   min_stock_alert?: number;
   storage_instructions?: string;
@@ -140,7 +140,7 @@ export interface Medicine {
   created_at: string;
   updated_at?: string;
 }
- 
+
 export interface MedicineCreate {
   name: string;
   category: MedicineCategory;
@@ -156,9 +156,9 @@ export interface MedicineCreate {
   storage_instructions?: string;
   notes?: string;
 }
- 
+
 export type MedicineUpdate = Partial<MedicineCreate>;
- 
+
 export interface StockTransaction {
   id: string;
   admin_id: string;
@@ -174,37 +174,37 @@ export interface StockTransaction {
   cow_tag?: string;
   reason?: string;
   performed_by?: string;
-  date: string;                  // YYYY-MM-DD
+  date: string; // YYYY-MM-DD
   created_at: string;
 }
- 
+
 export interface MedicineUsageCreate {
   medicine_id: string;
   cow_id: string;
   cow_name: string;
   cow_tag: string;
   quantity_used: number;
-  date: string;                  // YYYY-MM-DD
+  date: string; // YYYY-MM-DD
   notes?: string;
   performed_by?: string;
 }
- 
+
 export interface StockAdjustmentCreate {
   medicine_id: string;
   new_quantity: number;
   reason?: string;
 }
- 
+
 export interface StockPurchaseCreate {
   medicine_id: string;
   quantity_added: number;
   cost_per_unit?: number;
   batch_number?: string;
-  expiry_date?: string;          // DD/MM/YYYY
-  purchase_date?: string;        // DD/MM/YYYY
+  expiry_date?: string; // DD/MM/YYYY
+  purchase_date?: string; // DD/MM/YYYY
   notes?: string;
 }
- 
+
 export interface MedicineStockSummary {
   total_medicines: number;
   low_stock_count: number;
@@ -212,7 +212,7 @@ export interface MedicineStockSummary {
   expiring_soon_count: number;
   total_stock_value: number;
 }
- 
+
 export interface StockOperationResult {
   success: boolean;
   stock_before: number;
@@ -232,11 +232,17 @@ export type FeedStockCategory =
   | "Cotton Seed"
   | "Mustard Cake"
   | "Other";
- 
-export type FeedStockUnit = "kg" | "quintal" | "ton" | "bag" | "bundle" | "litre";
- 
+
+export type FeedStockUnit =
+  | "kg"
+  | "quintal"
+  | "ton"
+  | "bag"
+  | "bundle"
+  | "litre";
+
 export type FeedTransactionType = "purchase" | "used" | "adjusted" | "expired";
- 
+
 export interface FeedStock {
   id: string;
   admin_id: string;
@@ -246,8 +252,8 @@ export interface FeedStock {
   description?: string;
   supplier?: string;
   batch_number?: string;
-  expiry_date?: string;        // DD/MM/YYYY
-  purchase_date?: string;      // DD/MM/YYYY
+  expiry_date?: string; // DD/MM/YYYY
+  purchase_date?: string; // DD/MM/YYYY
   cost_per_unit?: number;
   current_stock: number;
   min_stock_alert?: number;
@@ -256,7 +262,7 @@ export interface FeedStock {
   created_at: string;
   updated_at?: string;
 }
- 
+
 export interface FeedStockCreate {
   name: string;
   category: FeedStockCategory;
@@ -272,9 +278,9 @@ export interface FeedStockCreate {
   storage_location?: string;
   notes?: string;
 }
- 
+
 export type FeedStockUpdate = Partial<FeedStockCreate>;
- 
+
 export interface FeedStockSummary {
   total_items: number;
   low_stock_count: number;
@@ -282,7 +288,7 @@ export interface FeedStockSummary {
   expiring_soon_count: number;
   total_stock_value: number;
 }
- 
+
 export interface FeedStockTransaction {
   id: string;
   admin_id: string;
@@ -295,34 +301,34 @@ export interface FeedStockTransaction {
   stock_after: number;
   reason?: string;
   performed_by?: string;
-  date: string;         // YYYY-MM-DD
+  date: string; // YYYY-MM-DD
   created_at: string;
 }
- 
+
 export interface FeedStockPurchaseCreate {
   feed_stock_id: string;
   quantity_added: number;
   cost_per_unit?: number;
   batch_number?: string;
-  expiry_date?: string;    // DD/MM/YYYY
-  purchase_date?: string;  // DD/MM/YYYY
+  expiry_date?: string; // DD/MM/YYYY
+  purchase_date?: string; // DD/MM/YYYY
   notes?: string;
 }
- 
+
 export interface FeedStockUsageCreate {
   feed_stock_id: string;
   quantity_used: number;
-  date: string;            // YYYY-MM-DD
+  date: string; // YYYY-MM-DD
   notes?: string;
   performed_by?: string;
 }
- 
+
 export interface FeedStockAdjustmentCreate {
   feed_stock_id: string;
   new_quantity: number;
   reason?: string;
 }
- 
+
 export interface FeedStockOperationResult {
   success: boolean;
   stock_before: number;
@@ -371,7 +377,6 @@ class ApiService {
     });
 
     if (!response.ok) {
-
       const text = await response.text();
 
       console.log("API ERROR URL:", url);
@@ -381,21 +386,29 @@ class ApiService {
       if (response.status === 401) {
         throw new Error("UNAUTHORIZED");
       }
-       try {
-    const errJson = JSON.parse(text);
-    throw new Error(errJson.detail || text || "Request failed");
-  } catch {
-    throw new Error(text || "Request failed");
-  }
-}
+      try {
+        const errJson = JSON.parse(text);
+        throw new Error(errJson.detail || text || "Request failed");
+      } catch {
+        throw new Error(text || "Request failed");
+      }
+    }
     return response.json();
   }
 
-  async login(identifier: string, password: string, method: 'email' | 'phone' = 'email') {
-    const body =
-      method === 'phone'
-        ? { phone: identifier, password }
-        : { email: identifier, password };
+  async login(
+    identifier: string,
+    password: string,
+    method: 'email' | 'phone' = 'email',
+    extraData: Record<string, any> = {},
+  ) {
+    const body = {
+      email: method === 'email' ? identifier : "",
+      phone: method === 'phone' ? identifier : "",
+      password,
+      platform: extraData.platform || "fcm",
+      device_token: extraData.device_token || "",
+    };
 
     const data = await this.request<any>("/auth/login", {
       method: "POST",
@@ -439,15 +452,15 @@ class ApiService {
     return JSON.parse(text);
   }
 
-// New API to get admin details by referral code (for registration flow)
+  // New API to get admin details by referral code (for registration flow)
   async getAdminByReferral(referralCode: string) {
-  return this.request<{
-    found: boolean;
-    admin_id: string | null;
-    admin_name: string | null;
-    referral_code?: string;
-  }>(`/admin/referral/${referralCode.toUpperCase().trim()}`);
-}
+    return this.request<{
+      found: boolean;
+      admin_id: string | null;
+      admin_name: string | null;
+      referral_code?: string;
+    }>(`/admin/referral/${referralCode.toUpperCase().trim()}`);
+  }
 
   async register(userData: any) {
     const data = await this.request<any>("/auth/register", {
@@ -458,23 +471,21 @@ class ApiService {
     return data;
   }
 
-  async requestAuthOtp(data: {
-    phone: string;
-  }) {
+  async requestAuthOtp(data: { phone: string }) {
     return this.request<{ message: string }>("/auth/send-register-otp", {
       method: "POST",
       body: JSON.stringify(data),
     });
   }
 
-  async verifyAuthOtp(data: {
-    phone: string;
-    otp: string;
-  }) {
-    return this.request<{ verified: boolean; phone: string }>("/auth/verify-register-otp", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
+  async verifyAuthOtp(data: { phone: string; otp: string }) {
+    return this.request<{ verified: boolean; phone: string }>(
+      "/auth/verify-register-otp",
+      {
+        method: "POST",
+        body: JSON.stringify(data),
+      },
+    );
   }
 
   async getMe() {
@@ -494,7 +505,11 @@ class ApiService {
       body: JSON.stringify({ password }),
     });
     this.setToken(null);
-    await AsyncStorage.multiRemove(["access_token", "worker_token", "worker_data"]);
+    await AsyncStorage.multiRemove([
+      "access_token",
+      "worker_token",
+      "worker_data",
+    ]);
     return result;
   }
 
@@ -614,73 +629,73 @@ class ApiService {
     return this.request<any[]>("/subscriptions");
   }
 
-async createSubscription(data: {
-  items: Array<{
-    product_id: string;
-    quantity: number;
-    price: number;
-    amount: number;
-  }>;
-  pattern: string;
-  custom_days: number[] | null;
-  start_date: string;
-  end_date?: string | null;
-  delivery_slot: string;
-}) {
-  const payload = {
-    ...data,
-    end_date: data.end_date ?? null,  // ← FIX: always null, never undefined
-  };
-  return this.request<any>("/subscriptions", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-}
+  async createSubscription(data: {
+    items: Array<{
+      product_id: string;
+      quantity: number;
+      price: number;
+      amount: number;
+    }>;
+    pattern: string;
+    custom_days: number[] | null;
+    start_date: string;
+    end_date?: string | null;
+    delivery_slot: string;
+  }) {
+    const payload = {
+      ...data,
+      end_date: data.end_date ?? null, // ← FIX: always null, never undefined
+    };
+    return this.request<any>("/subscriptions", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  }
 
-async placeCartOrders(
-  items: Array<{
-    product_id: string;
-    quantity: number;
-    price: number;
-    amount: number;
-  }>,
-  deliveryDate: string,
-  deliverySlot: string = "morning",
-): Promise<number> {
-  let placed = 0;
-  for (const item of items) {
-    await this.createSubscription({
-      items: [item],
+  async placeCartOrders(
+    items: Array<{
+      product_id: string;
+      quantity: number;
+      price: number;
+      amount: number;
+    }>,
+    deliveryDate: string,
+    deliverySlot: string = "morning",
+  ): Promise<number> {
+    let placed = 0;
+    for (const item of items) {
+      await this.createSubscription({
+        items: [item],
+        pattern: "buy_once",
+        custom_days: null,
+        start_date: deliveryDate,
+        end_date: deliveryDate, // explicit — never undefined
+        delivery_slot: deliverySlot,
+      });
+      placed++;
+    }
+    return placed;
+  }
+
+  async placeCartAsSingleOrder(
+    items: Array<{
+      product_id: string;
+      quantity: number;
+      price: number;
+      amount: number;
+    }>,
+    deliveryDate: string,
+    deliverySlot: string = "morning",
+  ): Promise<any> {
+    return this.createSubscription({
+      items,
       pattern: "buy_once",
       custom_days: null,
       start_date: deliveryDate,
-      end_date: deliveryDate,       // explicit — never undefined
+      end_date: deliveryDate,
       delivery_slot: deliverySlot,
     });
-    placed++;
   }
-  return placed;
-}
-
-async placeCartAsSingleOrder(
-  items: Array<{
-    product_id: string;
-    quantity: number;
-    price: number;
-    amount: number;
-  }>,
-  deliveryDate: string,
-  deliverySlot: string = "morning",
-): Promise<any> {
-  return this.createSubscription({
-    items,
-    pattern: "buy_once",
-    custom_days: null,
-    start_date: deliveryDate,
-    end_date: deliveryDate,
-    delivery_slot: deliverySlot,
-  });
-}
 
   async updateSubscription(id: string, data: any) {
     return this.request<any>(`/subscriptions/${id}`, {
@@ -689,34 +704,34 @@ async placeCartAsSingleOrder(
     });
   }
 
- async modifySubscriptionDate(id: string, date: string, quantity: number) {
-  return this.request<any>(`/subscriptions/${id}/modify`, {
-    method: "POST",
-    body: JSON.stringify({ date, quantity }),
-  });
-}
+  async modifySubscriptionDate(id: string, date: string, quantity: number) {
+    return this.request<any>(`/subscriptions/${id}/modify`, {
+      method: "POST",
+      body: JSON.stringify({ date, quantity }),
+    });
+  }
 
-async cancelSubscription(id: string) {
-  return this.request<any>(`/subscriptions/${id}`, {
-    method: "DELETE",
-  });
-}
+  async cancelSubscription(id: string) {
+    return this.request<any>(`/subscriptions/${id}`, {
+      method: "DELETE",
+    });
+  }
 
-//added by anurag
-async cancelOrder(orderId: string) {
-  return this.request<any>(`/orders/${orderId}`, {
-    method: "DELETE",
-  });
-}
+  //added by anurag
+  async cancelOrder(orderId: string) {
+    return this.request<any>(`/orders/${orderId}`, {
+      method: "DELETE",
+    });
+  }
 
-// anurag 
-// Fetch ONLY subscriptions that belong to this logged-in admin
-async getAdminSubscriptionsAll(): Promise<any[]> {
-  // hits GET /subscriptions/admin/all (the new backend route)
-  return this.request<any[]>(`/subscriptions/admin/all`);
-}
+  // anurag
+  // Fetch ONLY subscriptions that belong to this logged-in admin
+  async getAdminSubscriptionsAll(): Promise<any[]> {
+    // hits GET /subscriptions/admin/all (the new backend route)
+    return this.request<any[]>(`/subscriptions/admin/all`);
+  }
 
-//----
+  //----
 
   async getVacations() {
     return this.request<any[]>("/vacations");
@@ -777,8 +792,6 @@ async getAdminSubscriptionsAll(): Promise<any[]> {
     return this.request<any>("/delivery/checkin", { method: "POST" });
   }
 
-
-
   async checkout() {
     return this.request<any>("/delivery/checkout", { method: "POST" });
   }
@@ -809,19 +822,19 @@ async getAdminSubscriptionsAll(): Promise<any[]> {
       {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
-      }
+      },
     );
     const data = await response.json();
     if (!response.ok) throw new Error(data.detail || "Reject failed");
     return data;
   }
 
-async updateOrderStatus(orderId: string, status: string) {
+  async updateOrderStatus(orderId: string, status: string) {
     const response = await fetch(`${API_BASE}/api/delivery/status-update`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${await AsyncStorage.getItem("access_token")}`,
+        Authorization: `Bearer ${await AsyncStorage.getItem("access_token")}`,
       },
       body: JSON.stringify({ order_id: orderId, status }),
     });
@@ -840,10 +853,13 @@ async updateOrderStatus(orderId: string, status: string) {
   }
 
   async verifyDeliveryOtp(orderId: string, otp: string) {
-    return this.request<any>(`/delivery/orders/${orderId}/verify-delivery-otp`, {
-      method: "POST",
-      body: JSON.stringify({ otp }),
-    });
+    return this.request<any>(
+      `/delivery/orders/${orderId}/verify-delivery-otp`,
+      {
+        method: "POST",
+        body: JSON.stringify({ otp }),
+      },
+    );
   }
 
   async completeDelivery(orderId: string, proofImage?: string) {
@@ -893,10 +909,15 @@ async updateOrderStatus(orderId: string, status: string) {
   }
 
   async adminCancelOrder(orderId: string) {
-  return this.request<any>(`/admin/orders/${orderId}/cancel`, {
-    method: "PATCH",
-  });
-}
+    return this.request<any>(`/admin/orders/${orderId}/cancel`, {
+      method: "PATCH",
+    });
+  }
+
+  // Recurring subscriptions whose customers are tagged to this rider
+  async getAssignedSubscriptions(): Promise<any[]> {
+    return this.request<any[]>("/subscriptions/delivery/assigned");
+  }
 
   async assignDeliveryPartner(orderId: string, partnerId: string) {
     return this.request<any>(
@@ -907,12 +928,13 @@ async updateOrderStatus(orderId: string, status: string) {
     );
   }
 
-async cancelUserOrder(orderId: string) {
-  return this.request<{ success: boolean; message: string; order_id: string }>(
-    `/orders/${orderId}`,
-    { method: "DELETE" }
-  );
-}
+  async cancelUserOrder(orderId: string) {
+    return this.request<{
+      success: boolean;
+      message: string;
+      order_id: string;
+    }>(`/orders/${orderId}`, { method: "DELETE" });
+  }
 
   async getFinanceReport(startDate?: string, endDate?: string) {
     const params = new URLSearchParams();
@@ -978,22 +1000,25 @@ async cancelUserOrder(orderId: string) {
     return this.request<any[]>(`/gausevak/cows${query}`);
   }
 
-  async updateCow(id: string, data: Partial<{
-    tag: string;
-    name: string;
-    breed: string;
-    weight: string;
-    father: string;
-    size: string;
-    boughtDate: string;
-    bornDate: string;
-    isActive: boolean;
-    isSold: boolean;
-    type: string;
-    milkActive: boolean;   // ← ADD THIS
-    qrLinkedData: string;
-    isBarcodeLinked: boolean;
-  }>) {
+  async updateCow(
+    id: string,
+    data: Partial<{
+      tag: string;
+      name: string;
+      breed: string;
+      weight: string;
+      father: string;
+      size: string;
+      boughtDate: string;
+      bornDate: string;
+      isActive: boolean;
+      isSold: boolean;
+      type: string;
+      milkActive: boolean; // ← ADD THIS
+      qrLinkedData: string;
+      isBarcodeLinked: boolean;
+    }>,
+  ) {
     return this.request<any>(`/gausevak/cows/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
@@ -1005,6 +1030,19 @@ async cancelUserOrder(orderId: string) {
       method: "DELETE",
     });
   }
+
+  //cow gneder and new born promotion by anurag
+  async promoteNewbornCow(id: string) {
+  return this.request<any>(`/gausevak/cows/${id}/promote`, {
+    method: "PATCH",
+  });
+}
+
+// async promoteCowToMature(id: string) {
+//   return this.request<any>(`/gausevak/cows/${id}/promote-to-mature`, {
+//     method: "PATCH",
+//   });
+// }
 
   async createInsemination(data: {
     cowSrNo: string;
@@ -1030,17 +1068,20 @@ async cancelUserOrder(orderId: string) {
     return this.request<any[]>(`/gausevak/inseminations${query}`);
   }
 
-  async updateInsemination(id: string, data: Partial<{
-    cowSrNo: string;
-    cowName: string;
-    inseminationDate: string;
-    pregnancyStatus: boolean;
-    pdDone: boolean;
-    pregnancyStatusDate: string;
-    doctorName: string;
-    actualCalvingDate: string;
-    heatAfterCalvingDate: string;
-  }>) {
+  async updateInsemination(
+    id: string,
+    data: Partial<{
+      cowSrNo: string;
+      cowName: string;
+      inseminationDate: string;
+      pregnancyStatus: boolean;
+      pdDone: boolean;
+      pregnancyStatusDate: string;
+      doctorName: string;
+      actualCalvingDate: string;
+      heatAfterCalvingDate: string;
+    }>,
+  ) {
     return this.request<any>(`/gausevak/inseminations/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
@@ -1077,17 +1118,20 @@ async cancelUserOrder(orderId: string) {
     return this.request<any[]>(`/gausevak/semen${query}`);
   }
 
-  async updateSemenRecord(id: string, data: Partial<{
-    bullSrNo: string;
-    bullName: string;
-    breed: string;
-    femalCalves: number;
-    maleCalves: number;
-    damaged: number;
-    conceptionCount: number;
-    totalDoses: number;
-    notes: string;
-  }>) {
+  async updateSemenRecord(
+    id: string,
+    data: Partial<{
+      bullSrNo: string;
+      bullName: string;
+      breed: string;
+      femalCalves: number;
+      maleCalves: number;
+      damaged: number;
+      conceptionCount: number;
+      totalDoses: number;
+      notes: string;
+    }>,
+  ) {
     return this.request<any>(`/gausevak/semen/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
@@ -1131,23 +1175,26 @@ async cancelUserOrder(orderId: string) {
     return this.request<any[]>(`/gausevak/medical${query}`);
   }
 
-  async updateMedicalRecord(id: string, data: Partial<{
-    cowSrNo: string;
-    cowName: string;
-    cowAge: string;
-    currentStatus: string;
-    lastVaccinationDate: string;
-    nextVaccinationDate: string;
-    vaccinationName: string;
-    lastIssueName: string;
-    lastIssueDate: string;
-    currentIssueName: string;
-    currentIssueDate: string;
-    treatmentGiven: string;
-    doctorName: string;
-    medicineName: string;
-    notes: string;
-  }>) {
+  async updateMedicalRecord(
+    id: string,
+    data: Partial<{
+      cowSrNo: string;
+      cowName: string;
+      cowAge: string;
+      currentStatus: string;
+      lastVaccinationDate: string;
+      nextVaccinationDate: string;
+      vaccinationName: string;
+      lastIssueName: string;
+      lastIssueDate: string;
+      currentIssueName: string;
+      currentIssueDate: string;
+      treatmentGiven: string;
+      doctorName: string;
+      medicineName: string;
+      notes: string;
+    }>,
+  ) {
     return this.request<any>(`/gausevak/medical/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
@@ -1160,30 +1207,42 @@ async cancelUserOrder(orderId: string) {
     });
   }
 
-  async getFeedLogs(date: string, shift: 'morning' | 'evening') {
+  async getFeedLogs(date: string, shift: "morning" | "evening") {
     return this.request<any[]>(`/worker/feed?date=${date}&shift=${shift}`);
   }
 
-  async markFed(data: { cow_id: string; cow_name: string; cow_tag: string; date: string; shift: 'morning' | 'evening' }) {
-    return this.request<any>('/worker/feed', { method: 'POST', body: JSON.stringify(data) });
+  async markFed(data: {
+    cow_id: string;
+    cow_name: string;
+    cow_tag: string;
+    date: string;
+    shift: "morning" | "evening";
+  }) {
+    return this.request<any>("/worker/feed", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
   }
 
-  async unmarkFed(cow_id: string, date: string, shift: 'morning' | 'evening') {
-    return this.request<any>(`/worker/feed?cow_id=${cow_id}&date=${date}&shift=${shift}`, { method: 'DELETE' });
+  async unmarkFed(cow_id: string, date: string, shift: "morning" | "evening") {
+    return this.request<any>(
+      `/worker/feed?cow_id=${cow_id}&date=${date}&shift=${shift}`,
+      { method: "DELETE" },
+    );
   }
 
-  async getAdminFeedLogs(date?: string, shift?: 'morning' | 'evening') {
+  async getAdminFeedLogs(date?: string, shift?: "morning" | "evening") {
     const params = new URLSearchParams();
-    if (date) params.append('date', date);
-    if (shift) params.append('shift', shift);
-    const query = params.toString() ? `?${params.toString()}` : '';
+    if (date) params.append("date", date);
+    if (shift) params.append("shift", shift);
+    const query = params.toString() ? `?${params.toString()}` : "";
     return this.request<{ summary: any; cows: any[] }>(`/admin/feed${query}`);
   }
 
   async getAdminMilkLogs(date?: string) {
     const params = new URLSearchParams();
-    if (date) params.append('date', date);
-    const query = params.toString() ? `?${params.toString()}` : '';
+    if (date) params.append("date", date);
+    const query = params.toString() ? `?${params.toString()}` : "";
     return this.request<{
       date: string;
       summary: {
@@ -1418,10 +1477,17 @@ async cancelUserOrder(orderId: string) {
     }>(`/gausevak/cows/${cowId}/default-feed`);
   }
 
-  async setCowDefaultFeed(cowId: string, morningFeeds: FeedItem[], eveningFeeds: FeedItem[]) {
+  async setCowDefaultFeed(
+    cowId: string,
+    morningFeeds: FeedItem[],
+    eveningFeeds: FeedItem[],
+  ) {
     return this.request<any>(`/gausevak/cows/${cowId}/default-feed`, {
       method: "PUT",
-      body: JSON.stringify({ morning_feeds: morningFeeds, evening_feeds: eveningFeeds }),
+      body: JSON.stringify({
+        morning_feeds: morningFeeds,
+        evening_feeds: eveningFeeds,
+      }),
     });
   }
 
@@ -1495,12 +1561,15 @@ async cancelUserOrder(orderId: string) {
     }>(`/admin/milk/dashboard${query}`);
   }
 
-  async updateBullSemen(bullId: string, data: {
-    totalDoses?: number;
-    semenAvailable?: boolean;
-    lastUsedDate?: string;
-    successRate?: number;
-  }) {
+  async updateBullSemen(
+    bullId: string,
+    data: {
+      totalDoses?: number;
+      semenAvailable?: boolean;
+      lastUsedDate?: string;
+      successRate?: number;
+    },
+  ) {
     return this.request<any>(`/gausevak/bulls/${bullId}/semen`, {
       method: "PUT",
       body: JSON.stringify(data),
@@ -1510,7 +1579,7 @@ async cancelUserOrder(orderId: string) {
   async useBullSemen(bullId: string, dosesUsed: number = 1) {
     return this.request<{ remaining_doses: number; semenAvailable: boolean }>(
       `/gausevak/bulls/${bullId}/use-semen?doses_used=${dosesUsed}`,
-      { method: "POST" }
+      { method: "POST" },
     );
   }
 
@@ -1542,23 +1611,27 @@ async cancelUserOrder(orderId: string) {
 
   //Worker Apis-------------------
   async workerGetCows() {
-    const token = await AsyncStorage.getItem('worker_token');
+    const token = await AsyncStorage.getItem("worker_token");
     const response = await fetch(`${API_BASE}/api/worker/cows`, {
-      headers: { 'Authorization': `Bearer ${token}` },
+      headers: { Authorization: `Bearer ${token}` },
     });
     const data = await response.json();
-    if (!response.ok) throw new Error(data.detail || 'Failed to fetch cows');
+    if (!response.ok) throw new Error(data.detail || "Failed to fetch cows");
     return data;
   }
 
   async workerGetTodayHealthLogs() {
-    const today = new Date().toISOString().split('T')[0];
-    const token = await AsyncStorage.getItem('worker_token');
-    const response = await fetch(`${API_BASE}/api/worker/health?date=${today}`, {
-      headers: { 'Authorization': `Bearer ${token}` },
-    });
+    const today = new Date().toISOString().split("T")[0];
+    const token = await AsyncStorage.getItem("worker_token");
+    const response = await fetch(
+      `${API_BASE}/api/worker/health?date=${today}`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    );
     const data = await response.json();
-    if (!response.ok) throw new Error(data.detail || 'Failed to fetch health logs');
+    if (!response.ok)
+      throw new Error(data.detail || "Failed to fetch health logs");
     return data;
   }
 
@@ -1569,148 +1642,168 @@ async cancelUserOrder(orderId: string) {
     status: string;
     date: string;
   }) {
-    const token = await AsyncStorage.getItem('worker_token');
+    const token = await AsyncStorage.getItem("worker_token");
     const response = await fetch(`${API_BASE}/api/worker/health`, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify(data),
     });
     const result = await response.json();
-    if (!response.ok) throw new Error(result.detail || 'Failed to save health log');
+    if (!response.ok)
+      throw new Error(result.detail || "Failed to save health log");
     return result;
   }
 
-async workerGetTodayExtraTasks() {
-  const token = await AsyncStorage.getItem('worker_token');
-  const response = await fetch(`${API_BASE}/api/worker/extra-tasks/today`, {
-    headers: { 'Authorization': `Bearer ${token}` },
-  });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.detail || 'Failed to fetch extra tasks');
-  return data;
-}
-
-async workerAddExtraTask(data: {
-  task_type: string;
-  description?: string;
-  date: string;
-  image_url?: string;
-}) {
-  const token = await AsyncStorage.getItem('worker_token');
-  const response = await fetch(`${API_BASE}/api/worker/extra-tasks`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`,
-    },
-    body: JSON.stringify(data),
-  });
-  const result = await response.json();
-  if (!response.ok) throw new Error(result.detail || 'Failed to save extra task');
-  return result;
-}
-
-async workerGetPoints() {
-  const token = await AsyncStorage.getItem('worker_token');
-  const endpoints = [
-    `${API_BASE}/api/worker/points`,
-    `${API_BASE}/api/worker/points/`,
-    `${API_BASE}/worker/points`,
-    `${API_BASE}/worker/points/`,
-  ];
-
-  for (const endpoint of endpoints) {
-    try {
-      const response = await fetch(endpoint, {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-      const text = await response.text();
-      const trimmed = text.trim();
-      const data = trimmed ? (() => {
-        try {
-          return JSON.parse(trimmed);
-        } catch {
-          return null;
-        }
-      })() : null;
-
-      if (response.ok && data) return data;
-      if (response.status === 404) continue;
-
-      if (!data && trimmed.startsWith('<')) {
-        continue;
-      }
-
-      throw new Error(
-        (data && typeof data === 'object' && 'detail' in data && typeof data.detail === 'string'
-          ? data.detail
-          : trimmed) || 'Failed to fetch worker points'
-      );
-    } catch {
-      continue;
-    }
-  }
-  return null;
-}
-
-async workerDeleteExtraTask(taskId: string) {
-  const token = await AsyncStorage.getItem('worker_token');
-  const response = await fetch(`${API_BASE}/api/worker/extra-tasks/${taskId}`, {
-    method: 'DELETE',
-    headers: { 'Authorization': `Bearer ${token}` },
-  });
-  const result = await response.json();
-  if (!response.ok) throw new Error(result.detail || 'Failed to delete extra task');
-  return result;
-}
-
-async adminGetWorkerExtraTasks(workerId: string) {
-  const token = await AsyncStorage.getItem('access_token'); // ← was 'admin_token'
-  const response = await fetch(`${API_BASE}/api/admin/extra-tasks/${workerId}`, {
-    headers: { 'Authorization': `Bearer ${token}` },
-  });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.detail || 'Failed to fetch worker extra tasks');
-  return data.tasks;
-}
-
-async adminAddMilk(data: {
-  cow_id: string;
-  cow_name: string;
-  cow_tag: string;
-  quantity: number;
-  shift: 'morning' | 'evening';
-  date: string;
-}) {
-  return this.request<any>('/admin/milk/entry', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
-}
-
-async adminMarkFed(data: {
-  cow_id: string;
-  cow_name: string;
-  cow_tag: string;
-  date: string;
-  shift: 'morning' | 'evening';
-}) {
-  return this.request<any>('/admin/feed/mark', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
-}
-
-  async workerGetFeedStatus(date: string, shift: 'morning' | 'evening') {
-    const token = await AsyncStorage.getItem('worker_token');
-    const response = await fetch(`${API_BASE}/api/worker/feed?date=${date}&shift=${shift}`, {
-      headers: { 'Authorization': `Bearer ${token}` },
+  async workerGetTodayExtraTasks() {
+    const token = await AsyncStorage.getItem("worker_token");
+    const response = await fetch(`${API_BASE}/api/worker/extra-tasks/today`, {
+      headers: { Authorization: `Bearer ${token}` },
     });
     const data = await response.json();
-    if (!response.ok) throw new Error(data.detail || 'Failed to fetch feed status');
+    if (!response.ok)
+      throw new Error(data.detail || "Failed to fetch extra tasks");
+    return data;
+  }
+
+  async workerAddExtraTask(data: {
+    task_type: string;
+    description?: string;
+    date: string;
+    image_url?: string;
+  }) {
+    const token = await AsyncStorage.getItem("worker_token");
+    const response = await fetch(`${API_BASE}/api/worker/extra-tasks`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(data),
+    });
+    const result = await response.json();
+    if (!response.ok)
+      throw new Error(result.detail || "Failed to save extra task");
+    return result;
+  }
+
+  async workerGetPoints() {
+    const token = await AsyncStorage.getItem("worker_token");
+    const endpoints = [
+      `${API_BASE}/api/worker/points`,
+      `${API_BASE}/api/worker/points/`,
+      `${API_BASE}/worker/points`,
+      `${API_BASE}/worker/points/`,
+    ];
+
+    for (const endpoint of endpoints) {
+      try {
+        const response = await fetch(endpoint, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const text = await response.text();
+        const trimmed = text.trim();
+        const data = trimmed
+          ? (() => {
+              try {
+                return JSON.parse(trimmed);
+              } catch {
+                return null;
+              }
+            })()
+          : null;
+
+        if (response.ok && data) return data;
+        if (response.status === 404) continue;
+
+        if (!data && trimmed.startsWith("<")) {
+          continue;
+        }
+
+        throw new Error(
+          (data &&
+          typeof data === "object" &&
+          "detail" in data &&
+          typeof data.detail === "string"
+            ? data.detail
+            : trimmed) || "Failed to fetch worker points",
+        );
+      } catch {
+        continue;
+      }
+    }
+    return null;
+  }
+
+  async workerDeleteExtraTask(taskId: string) {
+    const token = await AsyncStorage.getItem("worker_token");
+    const response = await fetch(
+      `${API_BASE}/api/worker/extra-tasks/${taskId}`,
+      {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    );
+    const result = await response.json();
+    if (!response.ok)
+      throw new Error(result.detail || "Failed to delete extra task");
+    return result;
+  }
+
+  async adminGetWorkerExtraTasks(workerId: string) {
+    const token = await AsyncStorage.getItem("access_token"); // ← was 'admin_token'
+    const response = await fetch(
+      `${API_BASE}/api/admin/extra-tasks/${workerId}`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    );
+    const data = await response.json();
+    if (!response.ok)
+      throw new Error(data.detail || "Failed to fetch worker extra tasks");
+    return data.tasks;
+  }
+
+  async adminAddMilk(data: {
+    cow_id: string;
+    cow_name: string;
+    cow_tag: string;
+    quantity: number;
+    shift: "morning" | "evening";
+    date: string;
+  }) {
+    return this.request<any>("/admin/milk/entry", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async adminMarkFed(data: {
+    cow_id: string;
+    cow_name: string;
+    cow_tag: string;
+    date: string;
+    shift: "morning" | "evening";
+  }) {
+    return this.request<any>("/admin/feed/mark", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async workerGetFeedStatus(date: string, shift: "morning" | "evening") {
+    const token = await AsyncStorage.getItem("worker_token");
+    const response = await fetch(
+      `${API_BASE}/api/worker/feed?date=${date}&shift=${shift}`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    );
+    const data = await response.json();
+    if (!response.ok)
+      throw new Error(data.detail || "Failed to fetch feed status");
     return data;
   }
 
@@ -1719,53 +1812,59 @@ async adminMarkFed(data: {
     cow_name: string;
     cow_tag: string;
     date: string;
-    shift: 'morning' | 'evening';
+    shift: "morning" | "evening";
   }) {
-    const token = await AsyncStorage.getItem('worker_token');
+    const token = await AsyncStorage.getItem("worker_token");
     const response = await fetch(`${API_BASE}/api/worker/feed`, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify(data),
     });
     const result = await response.json();
-    if (!response.ok) throw new Error(result.detail || 'Failed to mark fed');
+    if (!response.ok) throw new Error(result.detail || "Failed to mark fed");
     return result;
   }
 
-  async workerUnmarkFed(cow_id: string, date: string, shift: 'morning' | 'evening') {
-    const token = await AsyncStorage.getItem('worker_token');
+  async workerUnmarkFed(
+    cow_id: string,
+    date: string,
+    shift: "morning" | "evening",
+  ) {
+    const token = await AsyncStorage.getItem("worker_token");
     const response = await fetch(
       `${API_BASE}/api/worker/feed?cow_id=${cow_id}&date=${date}&shift=${shift}`,
       {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` },
-      }
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      },
     );
     const result = await response.json();
-    if (!response.ok) throw new Error(result.detail || 'Failed to unmark fed');
+    if (!response.ok) throw new Error(result.detail || "Failed to unmark fed");
     return result;
   }
 
   async workerGetShiftStatus() {
-    const token = await AsyncStorage.getItem('worker_token');
+    const token = await AsyncStorage.getItem("worker_token");
     const response = await fetch(`${API_BASE}/api/worker/milk/shift-status`, {
-      headers: { 'Authorization': `Bearer ${token}` },
+      headers: { Authorization: `Bearer ${token}` },
     });
     const data = await response.json();
-    if (!response.ok) throw new Error(data.detail || 'Failed to fetch shift status');
+    if (!response.ok)
+      throw new Error(data.detail || "Failed to fetch shift status");
     return data;
   }
 
   async workerGetTodayMilk() {
-    const token = await AsyncStorage.getItem('worker_token');
+    const token = await AsyncStorage.getItem("worker_token");
     const response = await fetch(`${API_BASE}/api/worker/milk/today`, {
-      headers: { 'Authorization': `Bearer ${token}` },
+      headers: { Authorization: `Bearer ${token}` },
     });
     const data = await response.json();
-    if (!response.ok) throw new Error(data.detail || 'Failed to fetch today milk');
+    if (!response.ok)
+      throw new Error(data.detail || "Failed to fetch today milk");
     return data;
   }
 
@@ -1774,42 +1873,68 @@ async adminMarkFed(data: {
     cow_name: string;
     cow_tag: string;
     quantity: number;
-    shift: 'morning' | 'evening';
+    shift: "morning" | "evening";
     date: string;
     notes?: string;
   }) {
-    const token = await AsyncStorage.getItem('worker_token');
+    const token = await AsyncStorage.getItem("worker_token");
     const response = await fetch(`${API_BASE}/api/worker/milk`, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify(data),
     });
     const result = await response.json();
-    if (!response.ok) throw new Error(result.detail || 'Failed to save milk entry');
+    if (!response.ok)
+      throw new Error(result.detail || "Failed to save milk entry");
     return result;
   }
 
+  //worker undo milk log by anurag
+  async workerDeleteMilkEntry(entryId: string): Promise<{
+  success: boolean;
+  deleted_entry: {
+    id: string;
+    cow_id: string;
+    cow_name: string;
+    cow_tag: string;
+    quantity: number;
+    shift: "morning" | "evening";
+    date: string;
+    worker_name: string;
+  };
+}> {
+  const token = await AsyncStorage.getItem("worker_token");
+  const response = await fetch(`${API_BASE}/api/worker/milk/${entryId}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const result = await response.json();
+  if (!response.ok)
+    throw new Error(result.detail || "Failed to delete milk entry");
+  return result;
+}
+
   async workerLogin(identifier: string, password: string) {
     const response = await fetch(`${API_BASE}/api/worker/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email: identifier, password }),
     });
     const data = await response.json();
-    if (!response.ok) throw new Error(data.detail || 'Worker login failed');
+    if (!response.ok) throw new Error(data.detail || "Worker login failed");
 
-    await AsyncStorage.setItem('worker_token', data.access_token);
-    await AsyncStorage.setItem('worker_data', JSON.stringify(data.worker));
+    await AsyncStorage.setItem("worker_token", data.access_token);
+    await AsyncStorage.setItem("worker_data", JSON.stringify(data.worker));
 
     return data;
   }
 
   async workerLogout() {
-    await AsyncStorage.removeItem('worker_token');
-    await AsyncStorage.removeItem('worker_data');
+    await AsyncStorage.removeItem("worker_token");
+    await AsyncStorage.removeItem("worker_data");
   }
 
   async checkDuplicate(
@@ -1845,12 +1970,47 @@ async adminMarkFed(data: {
     });
   }
 
-  async updateWorker(id: string, data: Partial<{ name: string; phone: string; designation: string; farm_name: string; is_active: boolean }>) {
+  async updateWorker(
+    id: string,
+    data: Partial<{
+      name: string;
+      phone: string;
+      designation: string;
+      farm_name: string;
+      is_active: boolean;
+      password: string;
+    }>,
+  ) {
     return this.request<any>(`/admin/workers/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
     });
   }
+
+  //worker id delete by anurag
+  async deleteWorker(id: string) {
+  return this.request<{ success: boolean; id: string }>(`/admin/workers/${id}`, {
+    method: "DELETE",
+  });
+}
+
+//vet id delete pass eidt by anurag
+async deleteVeterinarian(id: string) {
+  return this.request<{ success: boolean; id: string }>(
+    `/admin/veterinarians/${id}`,
+    { method: "DELETE" }
+  );
+}
+
+async resetVeterinarianPassword(id: string, new_password: string) {
+  return this.request<{ success: boolean; message: string }>(
+    `/admin/veterinarians/${id}/password`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ new_password }),
+    }
+  );
+}
 
   // ── Bank Account ─────────────────────────────────────────
 
@@ -1861,7 +2021,7 @@ async adminMarkFed(data: {
       ifscCode: string;
       bankName: string;
       upiId?: string;
-    }>('/wallet/bank-account');
+    }>("/wallet/bank-account");
   }
 
   async saveBankAccount(data: {
@@ -1871,8 +2031,8 @@ async adminMarkFed(data: {
     bankName: string;
     upiId?: string;
   }) {
-    return this.request<any>('/wallet/bank-account', {
-      method: 'POST',
+    return this.request<any>("/wallet/bank-account", {
+      method: "POST",
       body: JSON.stringify(data),
     });
   }
@@ -1885,23 +2045,25 @@ async adminMarkFed(data: {
       withdrawal_id: string;
       amount: number;
       status: string;
-    }>('/wallet/withdraw', {
-      method: 'POST',
+    }>("/wallet/withdraw", {
+      method: "POST",
       body: JSON.stringify({ amount }),
     });
   }
 
   async getWithdrawalHistory() {
-    return this.request<Array<{
-      id: string;
-      amount: number;
-      status: string;  // "pending" | "processing" | "completed" | "rejected"
-      created_at: string;
-      bank_account: {
-        bankName: string;
-        accountNumber: string;
-      };
-    }>>('/wallet/withdrawals');
+    return this.request<
+      Array<{
+        id: string;
+        amount: number;
+        status: string; // "pending" | "processing" | "completed" | "rejected"
+        created_at: string;
+        bank_account: {
+          bankName: string;
+          accountNumber: string;
+        };
+      }>
+    >("/wallet/withdrawals");
   }
 
   async createOrder(data: {
@@ -1933,23 +2095,21 @@ async adminMarkFed(data: {
     const params = new URLSearchParams();
     if (search) params.append("search", search);
     const query = params.toString() ? `?${params.toString()}` : "";
-    return this.request<Array<{
-      id: string;
-      admin_id: string;
-      title: string;
-      content: string;
-      color: string;
-      is_pinned: boolean;
-      created_at: string;
-      updated_at: string;
-    }>>(`/notes/${query}`);
+    return this.request<
+      Array<{
+        id: string;
+        admin_id: string;
+        title: string;
+        content: string;
+        color: string;
+        is_pinned: boolean;
+        created_at: string;
+        updated_at: string;
+      }>
+    >(`/notes/${query}`);
   }
 
-  async createNote(data: {
-    title: string;
-    content: string;
-    color?: string;
-  }) {
+  async createNote(data: { title: string; content: string; color?: string }) {
     return this.request<{
       id: string;
       admin_id: string;
@@ -1965,12 +2125,15 @@ async adminMarkFed(data: {
     });
   }
 
-  async updateNote(id: string, data: Partial<{
-    title: string;
-    content: string;
-    color: string;
-    is_pinned: boolean;
-  }>) {
+  async updateNote(
+    id: string,
+    data: Partial<{
+      title: string;
+      content: string;
+      color: string;
+      is_pinned: boolean;
+    }>,
+  ) {
     return this.request<{
       id: string;
       admin_id: string;
@@ -1993,319 +2156,383 @@ async adminMarkFed(data: {
   }
 
   async toggleNotePin(id: string) {
-    return this.request<{ id: string; is_pinned: boolean }>(`/notes/${id}/pin`, {
-      method: "PATCH",
+    return this.request<{ id: string; is_pinned: boolean }>(
+      `/notes/${id}/pin`,
+      {
+        method: "PATCH",
+      },
+    );
+  }
+
+  async createInsurance(data: InsuranceCreate): Promise<Insurance> {
+    return this.request<Insurance>("/gausevak/insurance", {
+      method: "POST",
+      body: JSON.stringify(data),
     });
   }
 
-async createInsurance(data: InsuranceCreate): Promise<Insurance> {
-  return this.request<Insurance>('/gausevak/insurance', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
-}
- 
-async getAllInsurances(params?: { status?: string; search?: string }): Promise<Insurance[]> {
-  const p = new URLSearchParams();
-  if (params?.status) p.append('status', params.status);
-  if (params?.search) p.append('search', params.search);
-  const q = p.toString() ? `?${p.toString()}` : '';
-  return this.request<Insurance[]>(`/gausevak/insurance${q}`);
-}
- 
-async getCowInsurance(cowId: string): Promise<Insurance | null> {
-  try {
-    return await this.request<Insurance>(`/gausevak/cows/${cowId}/insurance`);
-  } catch {
-    return null;
+  async getAllInsurances(params?: {
+    status?: string;
+    search?: string;
+  }): Promise<Insurance[]> {
+    const p = new URLSearchParams();
+    if (params?.status) p.append("status", params.status);
+    if (params?.search) p.append("search", params.search);
+    const q = p.toString() ? `?${p.toString()}` : "";
+    return this.request<Insurance[]>(`/gausevak/insurance${q}`);
   }
-}
- 
-async updateInsurance(insuranceId: string, data: Partial<InsuranceCreate>): Promise<Insurance> {
-  return this.request<Insurance>(`/gausevak/insurance/${insuranceId}`, {
-    method: 'PUT',
-    body: JSON.stringify(data),
-  });
-}
- 
-async deleteInsurance(insuranceId: string): Promise<{ message: string; id: string }> {
-  return this.request(`/gausevak/insurance/${insuranceId}`, { method: 'DELETE' });
-}
- 
-async getExpiringInsurances(days: number = 30): Promise<Insurance[]> {
-  return this.request<Insurance[]>(`/gausevak/insurance/expiring?days=${days}`);
-}
- 
-// --- Claim ---
- 
-async updateInsuranceClaim(insuranceId: string, data: {
-  claim_filed: boolean;
-  claim_date?: string;
-  claim_amount?: number;
-  claim_status?: string;
-  claim_notes?: string;
-}): Promise<Insurance> {
-  return this.request<Insurance>(`/gausevak/insurance/${insuranceId}/claim`, {
-    method: 'PATCH',
-    body: JSON.stringify(data),
-  });
-}
- 
-// --- Summary & Logs ---
- 
-async getInsuranceSummary(): Promise<InsuranceSummary> {
-  return this.request<InsuranceSummary>('/admin/insurance/summary');
-}
- 
-async getInsuranceNotificationLogs(limit: number = 50): Promise<InsuranceNotificationLog[]> {
-  return this.request<InsuranceNotificationLog[]>(
-    `/admin/insurance/notifications?limit=${limit}`
-  );
-}
- 
-// --- Notification Settings ---
- 
-async getInsuranceNotificationSettings(): Promise<InsuranceNotificationSettings> {
-  return this.request<InsuranceNotificationSettings>(
-    '/admin/insurance/notification-settings'
-  );
-}
- 
-async updateInsuranceNotificationSettings(data: {
-  notify_expiry?: boolean;
-  notify_due?: boolean;
-  notify_renewal?: boolean;
-  notify_claim?: boolean;
-  expiry_alert_days?: number;
-  due_alert_days?: number;
-  fcm_token?: string;
-}): Promise<InsuranceNotificationSettings> {
-  return this.request<InsuranceNotificationSettings>(
-    '/admin/insurance/notification-settings',
-    { method: 'PUT', body: JSON.stringify(data) }
-  );
-}
- 
-async registerFcmToken(token: string): Promise<{ success: boolean; message: string }> {
-  return this.request(`/admin/insurance/register-fcm-token?token=${encodeURIComponent(token)}`, {
-    method: 'POST',
-  });
-}
- 
-async sendTestInsuranceNotification(): Promise<{ success: boolean; tokens_count: number }> {
-  return this.request('/admin/insurance/send-test-notification', { method: 'POST' });
-}
-// ── Veterinary APIs 
 
-async getAdminVeterinarians() {
-  return this.request<any[]>("/admin/veterinarians");
-}
+  async getCowInsurance(cowId: string): Promise<Insurance | null> {
+    try {
+      return await this.request<Insurance>(`/gausevak/cows/${cowId}/insurance`);
+    } catch {
+      return null;
+    }
+  }
 
-async createVeterinarian(data: {
-  name: string;
-  email: string;
-  password: string;
-  phone?: string;
-  specialization?: string;
-  license_number?: string;
-}) {
-  return this.request<any>("/admin/veterinarians", {
-    method: "POST",
-    body: JSON.stringify(data),
-  });
-}
+  async updateInsurance(
+    insuranceId: string,
+    data: Partial<InsuranceCreate>,
+  ): Promise<Insurance> {
+    return this.request<Insurance>(`/gausevak/insurance/${insuranceId}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
 
-async updateVeterinarian(id: string, data: Partial<{
-  name: string;
-  phone: string;
-  specialization: string;
-  license_number: string;
-  is_active: boolean;
-}>) {
-  return this.request<any>(`/admin/veterinarians/${id}`, {
-    method: "PUT",
-    body: JSON.stringify(data),
-  });
-}
+  async deleteInsurance(
+    insuranceId: string,
+  ): Promise<{ message: string; id: string }> {
+    return this.request(`/gausevak/insurance/${insuranceId}`, {
+      method: "DELETE",
+    });
+  }
 
-async vetLogin(email: string, password: string) {
-  const response = await fetch(`${API_BASE}/api/vet/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password }),
-  });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.detail || 'Vet login failed');
-  await AsyncStorage.setItem('vet_token', data.access_token);
-  await AsyncStorage.setItem('vet_data', JSON.stringify(data.vet));
-  return data;
-}
+  async getExpiringInsurances(days: number = 30): Promise<Insurance[]> {
+    return this.request<Insurance[]>(
+      `/gausevak/insurance/expiring?days=${days}`,
+    );
+  }
 
-async vetLogout() {
-  await AsyncStorage.removeItem('vet_token');
-  await AsyncStorage.removeItem('vet_data');
-}
+  // --- Claim ---
 
-async getVetMedicineRecords() {
-  const token = await AsyncStorage.getItem('vet_token');
-  const response = await fetch(`${API_BASE}/api/vet/medicine-records`, {
-    headers: { 'Authorization': `Bearer ${token}` },
-  });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.detail || 'Failed to fetch medicine records');
-  return data;
-}
-
-async getVetMilkRecords() {
-  const token = await AsyncStorage.getItem('vet_token');
-  const response = await fetch(`${API_BASE}/api/vet/milk-records`, {
-    headers: { 'Authorization': `Bearer ${token}` },
-  });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.detail || 'Failed to fetch milk records');
-  return data;
-}
-
-async getVetFeedRecords() {
-  const token = await AsyncStorage.getItem('vet_token');
-  const response = await fetch(`${API_BASE}/api/vet/feed-records`, {
-    headers: { 'Authorization': `Bearer ${token}` },
-  });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.detail || 'Failed to fetch feed records');
-  return data;
-}
-
-async getVetHealthRecords() {
-  const token = await AsyncStorage.getItem('vet_token');
-  const response = await fetch(`${API_BASE}/api/vet/health-records`, {
-    headers: { 'Authorization': `Bearer ${token}` },
-  });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.detail || 'Failed to fetch health records');
-  return data;
-}
-
-async getVetInseminationRecords() {
-  const token = await AsyncStorage.getItem('vet_token');
-  const response = await fetch(`${API_BASE}/api/vet/insemination-records`, {
-    headers: { 'Authorization': `Bearer ${token}` },
-  });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.detail || 'Failed to fetch insemination records');
-  return data;
-}
-
-async getVetSemenRecords() {
-  const token = await AsyncStorage.getItem('vet_token');
-  const response = await fetch(`${API_BASE}/api/vet/semen-records`, {
-    headers: { 'Authorization': `Bearer ${token}` },
-  });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.detail || 'Failed to fetch semen records');
-  return data;
-}
-
-async vetGetCows() {
-  const token = await AsyncStorage.getItem('vet_token');
-  const response = await fetch(`${API_BASE}/api/vet/cows`, {
-    headers: { 'Authorization': `Bearer ${token}` },
-  });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.detail || 'Failed to fetch cows');
-  return data;
-}
-
-async getAnimalMedicineRecords(animalId: string) {
-  const token = await AsyncStorage.getItem('vet_token');
-  const response = await fetch(`${API_BASE}/api/vet/animals/${animalId}/medicine-records`, {
-    headers: { 'Authorization': `Bearer ${token}` },
-  });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.detail || 'Failed to fetch medicine records');
-  return data;
-}
- 
-async getAnimalHealthRecords(animalId: string) {
-  const token = await AsyncStorage.getItem('vet_token');
-  const response = await fetch(`${API_BASE}/api/vet/animals/${animalId}/health-records`, {
-    headers: { 'Authorization': `Bearer ${token}` },
-  });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.detail || 'Failed to fetch health records');
-  return data;
-}
- 
-async getAnimalMilkRecords(animalId: string) {
-  const token = await AsyncStorage.getItem('vet_token');
-  const response = await fetch(`${API_BASE}/api/vet/animals/${animalId}/milk-records`, {
-    headers: { 'Authorization': `Bearer ${token}` },
-  });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.detail || 'Failed to fetch milk records');
-  return data;
-}
- 
-async getAnimalFeedRecords(animalId: string) {
-  const token = await AsyncStorage.getItem('vet_token');
-  const response = await fetch(`${API_BASE}/api/vet/animals/${animalId}/feed-records`, {
-    headers: { 'Authorization': `Bearer ${token}` },
-  });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.detail || 'Failed to fetch feed records');
-  return data;
-}
- 
-async updateMedicineRecord(recordId: string, data: Partial<{
-  medicine_name: string;
-  dosage: string;
-  administered_by: string;
-  notes: string;
-  next_due: string;
-}>) {
-  const token = await AsyncStorage.getItem('vet_token');
-  const response = await fetch(`${API_BASE}/api/vet/medicine-records/${recordId}`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`,
+  async updateInsuranceClaim(
+    insuranceId: string,
+    data: {
+      claim_filed: boolean;
+      claim_date?: string;
+      claim_amount?: number;
+      claim_status?: string;
+      claim_notes?: string;
     },
-    body: JSON.stringify(data),
-  });
-  const result = await response.json();
-  if (!response.ok) throw new Error(result.detail || 'Failed to update medicine record');
-  return result;
-}
+  ): Promise<Insurance> {
+    return this.request<Insurance>(`/gausevak/insurance/${insuranceId}/claim`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
 
-async getGausevakNotifications() {
-  return this.request<any[]>("/gausevak/notifications");
-}
+  // --- Summary & Logs ---
 
-async markGausevakNotifRead(id: string) {
-  return this.request<any>(`/gausevak/notifications/${id}/read`, {
-    method: "PATCH",
-  });
-}
-async vetGetHealthLogs(date?: string) {
-  const token = await AsyncStorage.getItem('vet_token');
-  const today = date ?? new Date().toISOString().split('T')[0];
-  const response = await fetch(`${API_BASE}/api/worker/health?date=${today}`, {
-    headers: { 'Authorization': `Bearer ${token}` },
-  });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.detail || 'Failed to fetch health logs');
-  return data;
-}
+  async getInsuranceSummary(): Promise<InsuranceSummary> {
+    return this.request<InsuranceSummary>("/admin/insurance/summary");
+  }
 
+  async getInsuranceNotificationLogs(
+    limit: number = 50,
+  ): Promise<InsuranceNotificationLog[]> {
+    return this.request<InsuranceNotificationLog[]>(
+      `/admin/insurance/notifications?limit=${limit}`,
+    );
+  }
 
+  // --- Notification Settings ---
 
-async createMedicine(data: MedicineCreate): Promise<Medicine> {
+  async getInsuranceNotificationSettings(): Promise<InsuranceNotificationSettings> {
+    return this.request<InsuranceNotificationSettings>(
+      "/admin/insurance/notification-settings",
+    );
+  }
+
+  async updateInsuranceNotificationSettings(data: {
+    notify_expiry?: boolean;
+    notify_due?: boolean;
+    notify_renewal?: boolean;
+    notify_claim?: boolean;
+    expiry_alert_days?: number;
+    due_alert_days?: number;
+    fcm_token?: string;
+  }): Promise<InsuranceNotificationSettings> {
+    return this.request<InsuranceNotificationSettings>(
+      "/admin/insurance/notification-settings",
+      { method: "PUT", body: JSON.stringify(data) },
+    );
+  }
+
+  async registerFcmToken(
+    token: string,
+  ): Promise<{ success: boolean; message: string }> {
+    return this.request(
+      `/admin/insurance/register-fcm-token?token=${encodeURIComponent(token)}`,
+      {
+        method: "POST",
+      },
+    );
+  }
+
+  async sendTestInsuranceNotification(): Promise<{
+    success: boolean;
+    tokens_count: number;
+  }> {
+    return this.request("/admin/insurance/send-test-notification", {
+      method: "POST",
+    });
+  }
+  // ── Veterinary APIs
+
+  async getAdminVeterinarians() {
+    return this.request<any[]>("/admin/veterinarians");
+  }
+
+  async createVeterinarian(data: {
+    name: string;
+    email: string;
+    password: string;
+    phone?: string;
+    specialization?: string;
+    license_number?: string;
+  }) {
+    return this.request<any>("/admin/veterinarians", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateVeterinarian(
+    id: string,
+    data: Partial<{
+      name: string;
+      phone: string;
+      specialization: string;
+      license_number: string;
+      is_active: boolean;
+    }>,
+  ) {
+    return this.request<any>(`/admin/veterinarians/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async vetLogin(email: string, password: string) {
+    const response = await fetch(`${API_BASE}/api/vet/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "Vet login failed");
+    await AsyncStorage.setItem("vet_token", data.access_token);
+    await AsyncStorage.setItem("vet_data", JSON.stringify(data.vet));
+    return data;
+  }
+
+  async vetLogout() {
+    await AsyncStorage.removeItem("vet_token");
+    await AsyncStorage.removeItem("vet_data");
+  }
+
+  async getVetMedicineRecords() {
+    const token = await AsyncStorage.getItem("vet_token");
+    const response = await fetch(`${API_BASE}/api/vet/medicine-records`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await response.json();
+    if (!response.ok)
+      throw new Error(data.detail || "Failed to fetch medicine records");
+    return data;
+  }
+
+  async getVetMilkRecords() {
+    const token = await AsyncStorage.getItem("vet_token");
+    const response = await fetch(`${API_BASE}/api/vet/milk-records`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await response.json();
+    if (!response.ok)
+      throw new Error(data.detail || "Failed to fetch milk records");
+    return data;
+  }
+
+  async getVetFeedRecords() {
+    const token = await AsyncStorage.getItem("vet_token");
+    const response = await fetch(`${API_BASE}/api/vet/feed-records`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await response.json();
+    if (!response.ok)
+      throw new Error(data.detail || "Failed to fetch feed records");
+    return data;
+  }
+
+  async getVetHealthRecords() {
+    const token = await AsyncStorage.getItem("vet_token");
+    const response = await fetch(`${API_BASE}/api/vet/health-records`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await response.json();
+    if (!response.ok)
+      throw new Error(data.detail || "Failed to fetch health records");
+    return data;
+  }
+
+  async getVetInseminationRecords() {
+    const token = await AsyncStorage.getItem("vet_token");
+    const response = await fetch(`${API_BASE}/api/vet/insemination-records`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await response.json();
+    if (!response.ok)
+      throw new Error(data.detail || "Failed to fetch insemination records");
+    return data;
+  }
+
+  async getVetSemenRecords() {
+    const token = await AsyncStorage.getItem("vet_token");
+    const response = await fetch(`${API_BASE}/api/vet/semen-records`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await response.json();
+    if (!response.ok)
+      throw new Error(data.detail || "Failed to fetch semen records");
+    return data;
+  }
+
+  async vetGetCows() {
+    const token = await AsyncStorage.getItem("vet_token");
+    const response = await fetch(`${API_BASE}/api/vet/cows`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "Failed to fetch cows");
+    return data;
+  }
+
+  async getAnimalMedicineRecords(animalId: string) {
+    const token = await AsyncStorage.getItem("vet_token");
+    const response = await fetch(
+      `${API_BASE}/api/vet/animals/${animalId}/medicine-records`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    );
+    const data = await response.json();
+    if (!response.ok)
+      throw new Error(data.detail || "Failed to fetch medicine records");
+    return data;
+  }
+
+  async getAnimalHealthRecords(animalId: string) {
+    const token = await AsyncStorage.getItem("vet_token");
+    const response = await fetch(
+      `${API_BASE}/api/vet/animals/${animalId}/health-records`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    );
+    const data = await response.json();
+    if (!response.ok)
+      throw new Error(data.detail || "Failed to fetch health records");
+    return data;
+  }
+
+  async getAnimalMilkRecords(animalId: string) {
+    const token = await AsyncStorage.getItem("vet_token");
+    const response = await fetch(
+      `${API_BASE}/api/vet/animals/${animalId}/milk-records`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    );
+    const data = await response.json();
+    if (!response.ok)
+      throw new Error(data.detail || "Failed to fetch milk records");
+    return data;
+  }
+
+  async getAnimalFeedRecords(animalId: string) {
+    const token = await AsyncStorage.getItem("vet_token");
+    const response = await fetch(
+      `${API_BASE}/api/vet/animals/${animalId}/feed-records`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    );
+    const data = await response.json();
+    if (!response.ok)
+      throw new Error(data.detail || "Failed to fetch feed records");
+    return data;
+  }
+
+  async updateMedicineRecord(
+    recordId: string,
+    data: Partial<{
+      medicine_name: string;
+      dosage: string;
+      administered_by: string;
+      notes: string;
+      next_due: string;
+    }>,
+  ) {
+    const token = await AsyncStorage.getItem("vet_token");
+    const response = await fetch(
+      `${API_BASE}/api/vet/medicine-records/${recordId}`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(data),
+      },
+    );
+    const result = await response.json();
+    if (!response.ok)
+      throw new Error(result.detail || "Failed to update medicine record");
+    return result;
+  }
+
+  async getGausevakNotifications() {
+    return this.request<any[]>("/gausevak/notifications");
+  }
+
+  async markGausevakNotifRead(id: string) {
+    return this.request<any>(`/gausevak/notifications/${id}/read`, {
+      method: "PATCH",
+    });
+  }
+  async vetGetHealthLogs(date?: string) {
+    const token = await AsyncStorage.getItem("vet_token");
+    const today = date ?? new Date().toISOString().split("T")[0];
+    const response = await fetch(
+      `${API_BASE}/api/worker/health?date=${today}`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    );
+    const data = await response.json();
+    if (!response.ok)
+      throw new Error(data.detail || "Failed to fetch health logs");
+    return data;
+  }
+
+  async createMedicine(data: MedicineCreate): Promise<Medicine> {
     return this.request<Medicine>("/gausevak/medicines", {
       method: "POST",
       body: JSON.stringify(data),
     });
   }
- 
+
   async getMedicines(params?: {
     search?: string;
     category?: string;
@@ -2313,111 +2540,115 @@ async createMedicine(data: MedicineCreate): Promise<Medicine> {
     expired?: boolean;
   }): Promise<Medicine[]> {
     const p = new URLSearchParams();
-    if (params?.search)    p.append("search",    params.search);
-    if (params?.category)  p.append("category",  params.category);
-    if (params?.low_stock) p.append("low_stock",  "true");
-    if (params?.expired)   p.append("expired",    "true");
+    if (params?.search) p.append("search", params.search);
+    if (params?.category) p.append("category", params.category);
+    if (params?.low_stock) p.append("low_stock", "true");
+    if (params?.expired) p.append("expired", "true");
     const q = p.toString() ? `?${p.toString()}` : "";
     return this.request<Medicine[]>(`/gausevak/medicines${q}`);
   }
- 
+
   async getMedicine(id: string): Promise<Medicine> {
     return this.request<Medicine>(`/gausevak/medicines/${id}`);
   }
- 
+
   async getMedicineStockSummary(): Promise<MedicineStockSummary> {
     return this.request<MedicineStockSummary>("/gausevak/medicines/summary");
   }
- 
+
   async updateMedicine(id: string, data: MedicineUpdate): Promise<Medicine> {
     return this.request<Medicine>(`/gausevak/medicines/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
     });
   }
- 
+
   async deleteMedicine(id: string): Promise<{ message: string; id: string }> {
     return this.request(`/gausevak/medicines/${id}`, { method: "DELETE" });
   }
- 
+
   // ── Stock operations
- 
+
   async restockMedicine(
     medicineId: string,
-    data: StockPurchaseCreate
+    data: StockPurchaseCreate,
   ): Promise<StockOperationResult> {
     return this.request<StockOperationResult>(
       `/gausevak/medicines/${medicineId}/purchase`,
-      { method: "POST", body: JSON.stringify(data) }
+      { method: "POST", body: JSON.stringify(data) },
     );
   }
- 
+
   async useMedicine(data: MedicineUsageCreate): Promise<StockOperationResult> {
     return this.request<StockOperationResult>("/gausevak/medicines/use", {
       method: "POST",
       body: JSON.stringify(data),
     });
   }
- 
+
   async adjustMedicineStock(
     medicineId: string,
-    data: StockAdjustmentCreate
+    data: StockAdjustmentCreate,
   ): Promise<StockOperationResult> {
     return this.request<StockOperationResult>(
       `/gausevak/medicines/${medicineId}/adjust`,
-      { method: "POST", body: JSON.stringify(data) }
+      { method: "POST", body: JSON.stringify(data) },
     );
   }
- 
-  // ── Transaction history 
- 
+
+  // ── Transaction history
+
   async getMedicineTransactions(
     medicineId: string,
-    params?: { limit?: number; transaction_type?: StockTransactionType }
+    params?: { limit?: number; transaction_type?: StockTransactionType },
   ): Promise<StockTransaction[]> {
     const p = new URLSearchParams();
-    if (params?.limit)            p.append("limit",            String(params.limit));
-    if (params?.transaction_type) p.append("transaction_type", params.transaction_type);
+    if (params?.limit) p.append("limit", String(params.limit));
+    if (params?.transaction_type)
+      p.append("transaction_type", params.transaction_type);
     const q = p.toString() ? `?${p.toString()}` : "";
     return this.request<StockTransaction[]>(
-      `/gausevak/medicines/${medicineId}/transactions${q}`
+      `/gausevak/medicines/${medicineId}/transactions${q}`,
     );
   }
- 
+
   async getAllMedicineTransactions(params?: {
     limit?: number;
     cow_id?: string;
     transaction_type?: StockTransactionType;
-    date?: string;              // YYYY-MM-DD
+    date?: string; // YYYY-MM-DD
   }): Promise<StockTransaction[]> {
     const p = new URLSearchParams();
-    if (params?.limit)            p.append("limit",            String(params.limit));
-    if (params?.cow_id)           p.append("cow_id",           params.cow_id);
-    if (params?.transaction_type) p.append("transaction_type", params.transaction_type);
-    if (params?.date)             p.append("date",             params.date);
+    if (params?.limit) p.append("limit", String(params.limit));
+    if (params?.cow_id) p.append("cow_id", params.cow_id);
+    if (params?.transaction_type)
+      p.append("transaction_type", params.transaction_type);
+    if (params?.date) p.append("date", params.date);
     const q = p.toString() ? `?${p.toString()}` : "";
-    return this.request<StockTransaction[]>(`/gausevak/medicine-transactions${q}`);
+    return this.request<StockTransaction[]>(
+      `/gausevak/medicine-transactions${q}`,
+    );
   }
- 
-  // ── medicine stock Alerts 
- 
+
+  // ── medicine stock Alerts
+
   async getLowStockMedicines(): Promise<Medicine[]> {
     return this.request<Medicine[]>("/gausevak/medicines/alerts/low-stock");
   }
- 
+
   async getExpiringMedicines(days = 30): Promise<Medicine[]> {
     return this.request<Medicine[]>(
-      `/gausevak/medicines/alerts/expiring?days=${days}`
+      `/gausevak/medicines/alerts/expiring?days=${days}`,
     );
   }
- 
-async createFeedStock(data: FeedStockCreate): Promise<FeedStock> {
+
+  async createFeedStock(data: FeedStockCreate): Promise<FeedStock> {
     return this.request<FeedStock>("/gausevak/feed-stocks", {
       method: "POST",
       body: JSON.stringify(data),
     });
   }
- 
+
   async getFeedStocks(params?: {
     search?: string;
     category?: string;
@@ -2425,131 +2656,168 @@ async createFeedStock(data: FeedStockCreate): Promise<FeedStock> {
     expired?: boolean;
   }): Promise<FeedStock[]> {
     const p = new URLSearchParams();
-    if (params?.search)    p.append("search",    params.search);
-    if (params?.category)  p.append("category",  params.category);
-    if (params?.low_stock) p.append("low_stock",  "true");
-    if (params?.expired)   p.append("expired",    "true");
+    if (params?.search) p.append("search", params.search);
+    if (params?.category) p.append("category", params.category);
+    if (params?.low_stock) p.append("low_stock", "true");
+    if (params?.expired) p.append("expired", "true");
     const q = p.toString() ? `?${p.toString()}` : "";
     return this.request<FeedStock[]>(`/gausevak/feed-stocks${q}`);
   }
- 
+
   async getFeedStock(id: string): Promise<FeedStock> {
     return this.request<FeedStock>(`/gausevak/feed-stocks/${id}`);
   }
- 
+
   async getFeedStockSummary(): Promise<FeedStockSummary> {
     return this.request<FeedStockSummary>("/gausevak/feed-stocks/summary");
   }
- 
+
   async updateFeedStock(id: string, data: FeedStockUpdate): Promise<FeedStock> {
     return this.request<FeedStock>(`/gausevak/feed-stocks/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
     });
   }
- 
+
   async deleteFeedStock(id: string): Promise<{ message: string; id: string }> {
     return this.request(`/gausevak/feed-stocks/${id}`, { method: "DELETE" });
   }
- 
+
   // ── Stock operations
- 
+
   async restockFeedStock(
     feedStockId: string,
-    data: FeedStockPurchaseCreate
+    data: FeedStockPurchaseCreate,
   ): Promise<FeedStockOperationResult> {
     return this.request<FeedStockOperationResult>(
       `/gausevak/feed-stocks/${feedStockId}/purchase`,
-      { method: "POST", body: JSON.stringify(data) }
+      { method: "POST", body: JSON.stringify(data) },
     );
   }
- 
-  async useFeedStock(data: FeedStockUsageCreate): Promise<FeedStockOperationResult> {
+
+  async useFeedStock(
+    data: FeedStockUsageCreate,
+  ): Promise<FeedStockOperationResult> {
     return this.request<FeedStockOperationResult>("/gausevak/feed-stocks/use", {
       method: "POST",
       body: JSON.stringify(data),
     });
   }
- 
+
   async adjustFeedStock(
     feedStockId: string,
-    data: FeedStockAdjustmentCreate
+    data: FeedStockAdjustmentCreate,
   ): Promise<FeedStockOperationResult> {
     return this.request<FeedStockOperationResult>(
       `/gausevak/feed-stocks/${feedStockId}/adjust`,
-      { method: "POST", body: JSON.stringify(data) }
+      { method: "POST", body: JSON.stringify(data) },
     );
   }
- 
+
   // ── Transaction history
- 
+
   async getFeedStockTransactions(
     feedStockId: string,
-    params?: { limit?: number; transaction_type?: FeedTransactionType }
+    params?: { limit?: number; transaction_type?: FeedTransactionType },
   ): Promise<FeedStockTransaction[]> {
     const p = new URLSearchParams();
-    if (params?.limit)            p.append("limit",            String(params.limit));
-    if (params?.transaction_type) p.append("transaction_type", params.transaction_type);
+    if (params?.limit) p.append("limit", String(params.limit));
+    if (params?.transaction_type)
+      p.append("transaction_type", params.transaction_type);
     const q = p.toString() ? `?${p.toString()}` : "";
     return this.request<FeedStockTransaction[]>(
-      `/gausevak/feed-stocks/${feedStockId}/transactions${q}`
+      `/gausevak/feed-stocks/${feedStockId}/transactions${q}`,
     );
   }
- 
+
   async getAllFeedStockTransactions(params?: {
     limit?: number;
     transaction_type?: FeedTransactionType;
-    date?: string;   // YYYY-MM-DD
+    date?: string; // YYYY-MM-DD
   }): Promise<FeedStockTransaction[]> {
     const p = new URLSearchParams();
-    if (params?.limit)            p.append("limit",            String(params.limit));
-    if (params?.transaction_type) p.append("transaction_type", params.transaction_type);
-    if (params?.date)             p.append("date",             params.date);
+    if (params?.limit) p.append("limit", String(params.limit));
+    if (params?.transaction_type)
+      p.append("transaction_type", params.transaction_type);
+    if (params?.date) p.append("date", params.date);
     const q = p.toString() ? `?${p.toString()}` : "";
-    return this.request<FeedStockTransaction[]>(`/gausevak/feed-stock-transactions${q}`);
+    return this.request<FeedStockTransaction[]>(
+      `/gausevak/feed-stock-transactions${q}`,
+    );
   }
- 
+
   // ── Alerts
- 
+
   async getLowStockFeeds(): Promise<FeedStock[]> {
     return this.request<FeedStock[]>("/gausevak/feed-stocks/alerts/low-stock");
   }
- 
+
   async getExpiringFeeds(days = 30): Promise<FeedStock[]> {
     return this.request<FeedStock[]>(
-      `/gausevak/feed-stocks/alerts/expiring?days=${days}`
+      `/gausevak/feed-stocks/alerts/expiring?days=${days}`,
     );
   }
- 
-async editSubscription(
-  id: string,
-  data: {
-    pattern?: string;
-    custom_days?: number[] | null;
-    end_date?: string | null;
-    items?: Array<{
-      product_id: string;
-      quantity: number;
-      price: number;
-      amount: number;
-    }>;
-    total_quantity?: number;
-    total_amount?: number;
+
+  async editSubscription(
+    id: string,
+    data: {
+      pattern?: string;
+      custom_days?: number[] | null;
+      end_date?: string | null;
+      items?: Array<{
+        product_id: string;
+        quantity: number;
+        price: number;
+        amount: number;
+      }>;
+      total_quantity?: number;
+      total_amount?: number;
+    },
+  ) {
+    return this.request<any>(`/subscriptions/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
   }
-) {
-  return this.request<any>(`/subscriptions/${id}`, {
-    method: "PATCH",
-    body: JSON.stringify(data),
-  });
-}
 
+  async acceptSubscription(id: string) {
+    return this.request<any>(`/subscriptions/${id}/accept`, { method: "POST" });
+  }
 
+  //passord reset admin setting screen added by anurag
+  async requestChangePasswordOtp(): Promise<{
+    otp: string;
+    expires_in_minutes: number;
+  }> {
+    return this.request("/auth/change-password-otp", { method: "POST" });
+  }
 
-// Logout
+  /**
+   * Step 2: User typed the OTP shown on screen — verify it.
+   * Returns { verified: true } on success.
+   */
+  async verifyChangePasswordOtp(otp: string): Promise<{ verified: boolean }> {
+    return this.request("/auth/verify-change-otp", {
+      method: "POST",
+      body: JSON.stringify({ otp }),
+    });
+  }
+
+  async confirmChangePassword(
+    new_password: string,
+    confirm_password: string,
+  ): Promise<{ message: string }> {
+    return this.request("/auth/confirm-change-password", {
+      method: "POST",
+      body: JSON.stringify({ new_password, confirm_password }),
+    });
+  }
+
+  // Logout
   logout = async () => {
     this.setToken(null);
-    await AsyncStorage.removeItem('worker_token');
-    await AsyncStorage.removeItem('worker_data');
+    await AsyncStorage.removeItem("worker_token");
+    await AsyncStorage.removeItem("worker_data");
   };
 }
 

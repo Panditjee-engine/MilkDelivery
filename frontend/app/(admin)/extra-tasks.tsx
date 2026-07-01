@@ -203,14 +203,9 @@ export default function AdminExtraTasksScreen() {
     [selectedWorkerId, workers],
   );
 
-  const handleBack = useCallback(() => {
-    const from = typeof params.from === "string" ? params.from : "";
-    if (from === "gausevak") {
-      router.replace("/(admin)/gausevak");
-      return;
-    }
-    router.replace("/(admin)/dashboard");
-  }, [params.from, router]);
+const handleBack = useCallback(() => {
+  router.replace("/(admin)/gausevak");
+}, [router]);
 
   const handleRefresh = () => {
     setRefreshing(true);

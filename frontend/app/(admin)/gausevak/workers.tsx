@@ -14,6 +14,7 @@ import {
   KeyboardAvoidingView,
   ScrollView,
   Switch,
+  Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -256,26 +257,43 @@ function WorkerDetailModal({
   onClose,
   onSave,
   onToggleActive,
+  onDelete,
 }: {
   worker: Worker | null;
   visible: boolean;
   onClose: () => void;
-  onSave: (id: string, data: Partial<Worker>) => Promise<void>;
+  onSave: (
+    id: string,
+    data: Partial<Worker> & { password?: string },
+  ) => Promise<void>;
   onToggleActive: (id: string, active: boolean) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
 }) {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [extraTasks, setExtraTasks] = useState<ExtraTask[]>([]);
   const [loadingTasks, setLoadingTasks] = useState(false);
+
+  // Edit form state
   const [form, setForm] = useState({
     name: "",
     phone: "",
     designation: "",
     farm_name: "",
   });
+
+  // Password change state
+  const [showPasswordSection, setShowPasswordSection] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showNewPwd, setShowNewPwd] = useState(false);
+  const [showConfirmPwd, setShowConfirmPwd] = useState(false);
+
   const scaleAnim = useRef(new Animated.Value(0.92)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(40)).current;
+  const pwdHeightAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (visible && worker) {
@@ -287,9 +305,17 @@ function WorkerDetailModal({
       });
       setEditing(false);
       setExtraTasks([]);
+      setShowPasswordSection(false);
+      setNewPassword("");
+      setConfirmPassword("");
+      setShowNewPwd(false);
+      setShowConfirmPwd(false);
+
       scaleAnim.setValue(0.92);
       opacityAnim.setValue(0);
       slideAnim.setValue(40);
+      pwdHeightAnim.setValue(0);
+
       Animated.parallel([
         Animated.spring(scaleAnim, {
           toValue: 1,
@@ -310,15 +336,23 @@ function WorkerDetailModal({
         }),
       ]).start();
 
-      // Fetch extra tasks for this worker
       fetchExtraTasks(worker.id);
     }
   }, [visible, worker]);
 
+  // Animate password section expand/collapse
+  useEffect(() => {
+    Animated.spring(pwdHeightAnim, {
+      toValue: showPasswordSection ? 1 : 0,
+      useNativeDriver: false,
+      tension: 80,
+      friction: 12,
+    }).start();
+  }, [showPasswordSection]);
+
   const fetchExtraTasks = async (workerId: string) => {
     try {
       setLoadingTasks(true);
-      // Call the worker extra tasks endpoint scoped to this worker
       const data = await api.adminGetWorkerExtraTasks(workerId);
       setExtraTasks(Array.isArray(data) ? data : []);
     } catch {
@@ -340,15 +374,56 @@ function WorkerDetailModal({
 
   const handleSave = async () => {
     if (!form.name.trim()) return;
+
+    // Validate password if section is open
+    if (showPasswordSection) {
+      if (newPassword && newPassword.length < 6) {
+        Alert.alert("Weak Password", "Password must be at least 6 characters.");
+        return;
+      }
+      if (newPassword && newPassword !== confirmPassword) {
+        Alert.alert("Mismatch", "Passwords do not match.");
+        return;
+      }
+    }
+
     setSaving(true);
-    await onSave(worker.id, {
+    const payload: Partial<Worker> & { password?: string } = {
       name: form.name.trim(),
       phone: form.phone.trim() || undefined,
       designation: form.designation.trim() || undefined,
       farm_name: form.farm_name.trim() || undefined,
-    });
+    };
+
+    if (showPasswordSection && newPassword.trim()) {
+      payload.password = newPassword.trim();
+    }
+
+    await onSave(worker.id, payload);
     setSaving(false);
     setEditing(false);
+    setShowPasswordSection(false);
+    setNewPassword("");
+    setConfirmPassword("");
+  };
+
+  const handleDelete = () => {
+    Alert.alert(
+      "Delete Worker",
+      `Are you sure you want to permanently delete "${worker.name}"? This cannot be undone.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            setDeleting(true);
+            await onDelete(worker.id);
+            setDeleting(false);
+          },
+        },
+      ],
+    );
   };
 
   return (
@@ -375,11 +450,18 @@ function WorkerDetailModal({
                 <Ionicons name="close" size={18} color="#fff" />
               </TouchableOpacity>
               <TouchableOpacity
-                onPress={() => setEditing(!editing)}
+                onPress={() => {
+                  setEditing(!editing);
+                  if (editing) {
+                    setShowPasswordSection(false);
+                    setNewPassword("");
+                    setConfirmPassword("");
+                  }
+                }}
                 style={dm.editCircle}
               >
                 <Ionicons
-                  name={editing ? "checkmark" : "pencil"}
+                  name={editing ? "close" : "pencil"}
                   size={16}
                   color="#fff"
                 />
@@ -406,6 +488,7 @@ function WorkerDetailModal({
           <ScrollView style={dm.body} showsVerticalScrollIndicator={false}>
             {editing ? (
               <>
+                {/* ── Profile Fields ── */}
                 <Text style={dm.sectionLabel}>EDIT DETAILS</Text>
                 {[
                   {
@@ -452,7 +535,9 @@ function WorkerDetailModal({
                     />
                   </View>
                 ))}
-                <Text style={[dm.sectionLabel, { marginTop: 8 }]}>
+
+                {/* ── Designation Chips ── */}
+                <Text style={[dm.sectionLabel, { marginTop: 4 }]}>
                   DESIGNATION
                 </Text>
                 <ScrollView
@@ -482,6 +567,153 @@ function WorkerDetailModal({
                     </TouchableOpacity>
                   ))}
                 </ScrollView>
+
+                {/* ── Change Password Section ── */}
+                <TouchableOpacity
+                  style={dm.pwdToggleRow}
+                  onPress={() => {
+                    setShowPasswordSection((v) => !v);
+                    if (showPasswordSection) {
+                      setNewPassword("");
+                      setConfirmPassword("");
+                    }
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={dm.pwdToggleLeft}>
+                    <View style={dm.pwdIconBox}>
+                      <Ionicons name="key-outline" size={15} color="#b45309" />
+                    </View>
+                    <View>
+                      <Text style={dm.pwdToggleTitle}>Change Password</Text>
+                      <Text style={dm.pwdToggleSub}>
+                        {showPasswordSection
+                          ? "Tap to cancel"
+                          : "Set a new password for this worker"}
+                      </Text>
+                    </View>
+                  </View>
+                  <Ionicons
+                    name={showPasswordSection ? "chevron-up" : "chevron-down"}
+                    size={16}
+                    color="#b45309"
+                  />
+                </TouchableOpacity>
+
+                {showPasswordSection && (
+                  <View style={dm.pwdSection}>
+                    {/* New Password */}
+                    <View style={dm.inputRow}>
+                      <Ionicons
+                        name="lock-closed-outline"
+                        size={16}
+                        color="#888"
+                        style={dm.inputIcon}
+                      />
+                      <TextInput
+                        style={dm.input}
+                        placeholder="New Password"
+                        placeholderTextColor="#bbb"
+                        value={newPassword}
+                        onChangeText={setNewPassword}
+                        secureTextEntry={!showNewPwd}
+                        autoCapitalize="none"
+                      />
+                      <TouchableOpacity
+                        onPress={() => setShowNewPwd((v) => !v)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        style={dm.eyeBtn}
+                      >
+                        <Ionicons
+                          name={showNewPwd ? "eye-off-outline" : "eye-outline"}
+                          size={18}
+                          color={showNewPwd ? "#2d6a4f" : "#aaa"}
+                        />
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Confirm Password */}
+                    <View style={dm.inputRow}>
+                      <Ionicons
+                        name="lock-closed-outline"
+                        size={16}
+                        color="#888"
+                        style={dm.inputIcon}
+                      />
+                      <TextInput
+                        style={dm.input}
+                        placeholder="Confirm Password"
+                        placeholderTextColor="#bbb"
+                        value={confirmPassword}
+                        onChangeText={setConfirmPassword}
+                        secureTextEntry={!showConfirmPwd}
+                        autoCapitalize="none"
+                      />
+                      <TouchableOpacity
+                        onPress={() => setShowConfirmPwd((v) => !v)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        style={dm.eyeBtn}
+                      >
+                        <Ionicons
+                          name={
+                            showConfirmPwd ? "eye-off-outline" : "eye-outline"
+                          }
+                          size={18}
+                          color={showConfirmPwd ? "#2d6a4f" : "#aaa"}
+                        />
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Password match indicator */}
+                    {newPassword.length > 0 && confirmPassword.length > 0 && (
+                      <View style={dm.pwdMatchRow}>
+                        <Ionicons
+                          name={
+                            newPassword === confirmPassword
+                              ? "checkmark-circle"
+                              : "close-circle"
+                          }
+                          size={14}
+                          color={
+                            newPassword === confirmPassword
+                              ? "#16a34a"
+                              : "#dc2626"
+                          }
+                        />
+                        <Text
+                          style={[
+                            dm.pwdMatchText,
+                            {
+                              color:
+                                newPassword === confirmPassword
+                                  ? "#16a34a"
+                                  : "#dc2626",
+                            },
+                          ]}
+                        >
+                          {newPassword === confirmPassword
+                            ? "Passwords match"
+                            : "Passwords do not match"}
+                        </Text>
+                      </View>
+                    )}
+
+                    {newPassword.length > 0 && newPassword.length < 6 && (
+                      <View style={dm.pwdMatchRow}>
+                        <Ionicons
+                          name="alert-circle"
+                          size={14}
+                          color="#d97706"
+                        />
+                        <Text style={[dm.pwdMatchText, { color: "#d97706" }]}>
+                          Minimum 6 characters required
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                )}
+
+                {/* ── Save Button ── */}
                 <TouchableOpacity
                   style={[dm.saveBtn, saving && { opacity: 0.6 }]}
                   onPress={handleSave}
@@ -507,9 +739,30 @@ function WorkerDetailModal({
                     )}
                   </LinearGradient>
                 </TouchableOpacity>
+
+                {/* ── Delete Worker Button ── */}
+                <TouchableOpacity
+                  style={[dm.deleteBtn, deleting && { opacity: 0.6 }]}
+                  onPress={handleDelete}
+                  disabled={deleting}
+                >
+                  {deleting ? (
+                    <ActivityIndicator color="#dc2626" size="small" />
+                  ) : (
+                    <>
+                      <Ionicons
+                        name="trash-outline"
+                        size={16}
+                        color="#dc2626"
+                      />
+                      <Text style={dm.deleteBtnText}>Delete Worker</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
               </>
             ) : (
               <>
+                {/* ── View Mode ── */}
                 <Text style={dm.sectionLabel}>DETAILS</Text>
                 {[
                   { icon: "mail-outline", label: "Email", val: worker.email },
@@ -596,11 +849,9 @@ function WorkerDetailModal({
                     <Text style={dm.noTasksText}>No extra tasks recorded</Text>
                   </View>
                 ) : (
-                  <>
-                    {extraTasks.map((task, idx) => (
-                      <ExtraTaskItem key={task.id} task={task} index={idx} />
-                    ))}
-                  </>
+                  extraTasks.map((task, idx) => (
+                    <ExtraTaskItem key={task.id} task={task} index={idx} />
+                  ))
                 )}
               </>
             )}
@@ -746,6 +997,13 @@ const dm = StyleSheet.create({
   },
   inputIcon: { marginRight: 8 },
   input: { flex: 1, paddingVertical: 13, fontSize: 15, color: "#1a1a1a" },
+  eyeBtn: {
+    width: 32,
+    height: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 16,
+  },
   chip: {
     borderWidth: 1.5,
     borderColor: "#e0e0e0",
@@ -758,7 +1016,12 @@ const dm = StyleSheet.create({
   chipActive: { borderColor: "#2d6a4f", backgroundColor: "#f0fdf4" },
   chipText: { fontSize: 12, fontWeight: "600", color: "#888" },
   chipTextActive: { color: "#2d6a4f" },
-  saveBtn: { borderRadius: 16, overflow: "hidden", marginTop: 4 },
+  saveBtn: {
+    borderRadius: 16,
+    overflow: "hidden",
+    marginTop: 4,
+    marginBottom: 10,
+  },
   saveBtnGrad: {
     flexDirection: "row",
     alignItems: "center",
@@ -767,6 +1030,67 @@ const dm = StyleSheet.create({
     paddingVertical: 15,
   },
   saveBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
+
+  // ── Password section
+  pwdToggleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#fffbeb",
+    borderWidth: 1.5,
+    borderColor: "#fde68a",
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 12,
+  },
+  pwdToggleLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    flex: 1,
+  },
+  pwdIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: "#fef3c7",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pwdToggleTitle: { fontSize: 13, fontWeight: "700", color: "#92400e" },
+  pwdToggleSub: { fontSize: 11, color: "#b45309", marginTop: 1 },
+  pwdSection: {
+    backgroundColor: "#fffbeb",
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#fde68a",
+  },
+  pwdMatchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginTop: 2,
+    marginBottom: 6,
+    paddingHorizontal: 4,
+  },
+  pwdMatchText: { fontSize: 12, fontWeight: "600" },
+
+  // ── Delete button
+  deleteBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderWidth: 1.5,
+    borderColor: "#fecaca",
+    borderRadius: 16,
+    paddingVertical: 14,
+    backgroundColor: "#fff5f5",
+    marginBottom: 4,
+  },
+  deleteBtnText: { color: "#dc2626", fontSize: 14, fontWeight: "700" },
 
   // Extra Tasks styles
   extraTasksDivider: {
@@ -780,11 +1104,7 @@ const dm = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 12,
   },
-  extraTasksHeaderLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
+  extraTasksHeaderLeft: { flexDirection: "row", alignItems: "center", gap: 8 },
   extraTasksIconBox: {
     width: 30,
     height: 30,
@@ -807,11 +1127,7 @@ const dm = StyleSheet.create({
     minWidth: 22,
     alignItems: "center",
   },
-  extraTasksCountText: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: "#fff",
-  },
+  extraTasksCountText: { fontSize: 11, fontWeight: "800", color: "#fff" },
   tasksLoading: {
     flexDirection: "row",
     alignItems: "center",
@@ -819,21 +1135,9 @@ const dm = StyleSheet.create({
     paddingVertical: 16,
     justifyContent: "center",
   },
-  tasksLoadingText: {
-    fontSize: 13,
-    color: "#999",
-    fontWeight: "500",
-  },
-  noTasksBox: {
-    alignItems: "center",
-    paddingVertical: 20,
-    gap: 8,
-  },
-  noTasksText: {
-    fontSize: 13,
-    color: "#bbb",
-    fontWeight: "500",
-  },
+  tasksLoadingText: { fontSize: 13, color: "#999", fontWeight: "500" },
+  noTasksBox: { alignItems: "center", paddingVertical: 20, gap: 8 },
+  noTasksText: { fontSize: 13, color: "#bbb", fontWeight: "500" },
 });
 
 // ── Worker Card
@@ -1040,20 +1344,27 @@ export default function WorkersScreen() {
     }
   };
 
-  // ── Update worker ──
-  const handleUpdateWorker = async (id: string, data: Partial<Worker>) => {
+  // ── Update worker (including optional password)
+  const handleUpdateWorker = async (
+    id: string,
+    data: Partial<Worker> & { password?: string },
+  ) => {
     try {
       await api.updateWorker(id, data);
-      setWorkers((ws) => ws.map((w) => (w.id === id ? { ...w, ...data } : w)));
+      // Don't persist password in local state
+      const { password: _pw, ...safeData } = data;
+      setWorkers((ws) =>
+        ws.map((w) => (w.id === id ? { ...w, ...safeData } : w)),
+      );
       if (selectedWorker?.id === id)
-        setSelectedWorker((w) => (w ? { ...w, ...data } : w));
+        setSelectedWorker((w) => (w ? { ...w, ...safeData } : w));
       showToast("Worker updated!", "success");
     } catch (e: any) {
       showToast(e?.message || "Update failed", "error");
     }
   };
 
-  // ── Toggle active ──
+  // ── Toggle active
   const handleToggleActive = async (id: string, active: boolean) => {
     try {
       await api.updateWorker(id, { is_active: active });
@@ -1068,6 +1379,19 @@ export default function WorkersScreen() {
       );
     } catch (e: any) {
       showToast(e?.message || "Failed to update status", "error");
+    }
+  };
+
+  // ── Delete worker
+  const handleDeleteWorker = async (id: string) => {
+    try {
+      await api.deleteWorker(id);
+      setWorkers((ws) => ws.filter((w) => w.id !== id));
+      setDetailVisible(false);
+      setSelectedWorker(null);
+      showToast("Worker deleted", "info");
+    } catch (e: any) {
+      showToast(e?.message || "Failed to delete worker", "error");
     }
   };
 
@@ -1095,6 +1419,7 @@ export default function WorkersScreen() {
         ? -1
         : 1;
   });
+
   const sortMeta: Record<
     SortOption,
     { label: string; icon: keyof typeof Ionicons.glyphMap }
@@ -1103,7 +1428,10 @@ export default function WorkersScreen() {
     name_desc: { label: "Name Z-A", icon: "text-outline" },
     active_first: { label: "Active First", icon: "checkmark-circle-outline" },
     inactive_first: { label: "Inactive First", icon: "close-circle-outline" },
-    verified_first: { label: "Verified First", icon: "shield-checkmark-outline" },
+    verified_first: {
+      label: "Verified First",
+      icon: "shield-checkmark-outline",
+    },
   };
 
   return (
@@ -1155,6 +1483,8 @@ export default function WorkersScreen() {
           </LinearGradient>
         </TouchableOpacity>
       </LinearGradient>
+
+      {/* Sort Modal */}
       <Modal
         visible={sortVisible}
         transparent
@@ -1212,7 +1542,9 @@ export default function WorkersScreen() {
         <View style={styles.statsBar}>
           <View style={styles.statChip}>
             <Ionicons name="people" size={13} color="#2d6a4f" />
-            <Text style={styles.statChipText}>{visibleWorkers.length} Workers</Text>
+            <Text style={styles.statChipText}>
+              {visibleWorkers.length} Workers
+            </Text>
           </View>
           <View style={[styles.statChip, { backgroundColor: "#dcfce7" }]}>
             <View style={[styles.statusDot, { backgroundColor: "#16a34a" }]} />
@@ -1276,13 +1608,14 @@ export default function WorkersScreen() {
         />
       )}
 
-      {/* Worker Detail / Edit Modal */}
+      {/* Worker Detail / Edit / Delete Modal */}
       <WorkerDetailModal
         worker={selectedWorker}
         visible={detailVisible}
         onClose={() => setDetailVisible(false)}
         onSave={handleUpdateWorker}
         onToggleActive={handleToggleActive}
+        onDelete={handleDeleteWorker}
       />
 
       {/* Create Worker Modal */}
@@ -1358,13 +1691,13 @@ export default function WorkersScreen() {
                     {f.secure && (
                       <TouchableOpacity
                         style={styles.passwordEyeBtn}
-                        onPress={() => setShowPassword((visible) => !visible)}
+                        onPress={() => setShowPassword((v) => !v)}
                         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        accessibilityRole="button"
-                        accessibilityLabel={showPassword ? "Hide password" : "Show password"}
                       >
                         <Ionicons
-                          name={showPassword ? "eye-off-outline" : "eye-outline"}
+                          name={
+                            showPassword ? "eye-off-outline" : "eye-outline"
+                          }
                           size={20}
                           color={showPassword ? "#2d6a4f" : "#777"}
                         />
@@ -1475,7 +1808,6 @@ const STATUS_BAR_HEIGHT = IS_IOS ? 0 : (StatusBar.currentHeight ?? 0);
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#FFF8F0" },
-
   header: {
     flexDirection: "row",
     alignItems: "center",

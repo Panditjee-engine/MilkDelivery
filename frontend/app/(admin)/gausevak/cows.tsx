@@ -34,6 +34,7 @@ type CowType = "mature" | "newborn" | "bull";
 type PregnancyStatus = "pregnant" | "not_pregnant" | "unknown";
 type SortOption = "newest" | "oldest" | "name_asc" | "name_desc";
 type DateRangeOption = "all_time" | "last_week" | "last_month" | "last_year";
+type Gender = "male" | "female";
 
 interface Cow {
   id: string;
@@ -75,6 +76,7 @@ interface Cow {
   soldReason?: string;
   qrLinkedData?: string;
   isBarcodeLinked?: boolean;
+  gender?: Gender;
 }
 
 interface Insurance {
@@ -124,6 +126,7 @@ interface CowForm {
   soldReason: string;
   scannedQrData: string;
   isBarcodeLinked: boolean;
+  gender: Gender | "";
 }
 
 // ── Assets
@@ -172,6 +175,7 @@ const EMPTY_FORM: CowForm = {
   soldReason: "",
   scannedQrData: "",
   isBarcodeLinked: false,
+  gender: "",
 };
 
 const STATUS = {
@@ -913,6 +917,7 @@ const BREEDS = [
   { name: "Rathi", image: cowImg, origin: "Rajasthan" },
   { name: "Kankrej", image: cowImg, origin: "Gujarat" },
   { name: "Badri / Pahadi", image: cowImg, origin: "Uttarakhand" },
+  { name: "Haryani", image: cowImg, origin: "Haryana" },
 ];
 
 function BreedSelector({
@@ -1162,6 +1167,62 @@ function PurposeSelector({
           </TouchableOpacity>
         ))}
       </View>
+    </View>
+  );
+}
+
+function GenderSelector({
+  value,
+  onChange,
+}: {
+  value: Gender | "";
+  onChange: (v: Gender) => void;
+}) {
+  const options: { key: Gender; label: string; icon: any; color: string }[] = [
+    { key: "male", label: "Male", icon: "male", color: "#2563eb" },
+    { key: "female", label: "Female", icon: "female", color: "#db2777" },
+  ];
+  return (
+    <View style={f.wrap}>
+      <Text style={f.label}>Gender</Text>
+      <View style={{ flexDirection: "row", gap: 8 }}>
+        {options.map((o) => (
+          <TouchableOpacity
+            key={o.key}
+            onPress={() => onChange(o.key)}
+            style={[
+              f.purposeChip,
+              value === o.key && {
+                backgroundColor: o.color + "18",
+                borderColor: o.color,
+              },
+            ]}
+          >
+            <Ionicons
+              name={o.icon}
+              size={14}
+              color={value === o.key ? o.color : "#C4A882"}
+            />
+            <Text
+              style={[f.purposeText, value === o.key && { color: o.color }]}
+            >
+              {o.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      {!value && (
+        <Text
+          style={{
+            fontSize: 11,
+            color: "#dc2626",
+            fontWeight: "600",
+            marginTop: 6,
+          }}
+        >
+          Required — determines what this calf grows into
+        </Text>
+      )}
     </View>
   );
 }
@@ -1548,6 +1609,9 @@ function CowFormFields({
             icon="male-outline"
           />
           {form.type === "newborn" && (
+            <GenderSelector value={form.gender} onChange={setF("gender")} />
+          )}
+          {form.type === "newborn" && (
             <View style={f.wrap}>
               <Text style={f.label}>Mother (Dam)</Text>
               <View style={f.row}>
@@ -1776,6 +1840,8 @@ function AddCowModal({
             form.type === "mature" ? form.boughtDate || undefined : undefined,
           bornDate:
             form.type === "newborn" ? form.bornDate || undefined : undefined,
+          gender:
+            form.type === "newborn" && form.gender ? form.gender : undefined,
         }),
       };
       const created: Cow = await api.createCow(payload);
@@ -2051,6 +2117,7 @@ function EditCowModal({
         breed: cow.breed,
         weight: cow.weight?.replace(" kg", "") ?? "",
         size: cow.size ?? "",
+        gender: (cow.gender as Gender) ?? "",
         father: cow.father ?? "",
         mother: (cow as any).mother ?? "",
         boughtDate: cow.boughtDate ?? "",
@@ -2162,6 +2229,8 @@ function EditCowModal({
             form.type === "mature" ? form.boughtDate || undefined : undefined,
           bornDate:
             form.type === "newborn" ? form.bornDate || undefined : undefined,
+          gender:
+            form.type === "newborn" && form.gender ? form.gender : undefined,
         }),
       };
       const updated: Cow = await api.updateCow(cow.id, payload);
@@ -2573,6 +2642,7 @@ function CowCard({
   );
   const [insuranceLoading, setInsuranceLoading] = useState(false);
   const insuranceFetched = useRef(false);
+  const [promoting, setPromoting] = useState(false);
 
   const st = STATUS[derivedStatus(item)];
   const isBull = item.type === "bull";
@@ -2619,6 +2689,49 @@ function CowCard({
         .finally(() => setInsuranceLoading(false));
     }
   }, [expanded]);
+
+  const handlePromote = () => {
+    if (!item.gender) {
+      showAlert({
+        title: "Set Gender First",
+        message: `Please set ${item.name}'s gender in Edit before promoting — this decides whether it becomes a Bull or a Mature Cow.`,
+        type: "warning",
+      });
+      return;
+    }
+    const willBecomeBull = item.gender === "male";
+    showAlert({
+      title: willBecomeBull ? "Promote to Bull" : "Promote to Mature Cow",
+      message: willBecomeBull
+        ? `Mark ${item.name} as fully grown? This updates its image to a bull and moves it into the Bulls list.`
+        : `Mark ${item.name} as fully grown? This updates its image to a mature cow, enables milk recording, and moves it into the Cows list.`,
+      type: "confirm",
+      confirmText: "Promote",
+      cancelText: "Not Yet",
+      onConfirm: async () => {
+        setPromoting(true);
+        try {
+          const updated: Cow = await api.promoteNewbornCow(item.id);
+          onUpdate(updated);
+          showAlert({
+            title: "Promoted ✓",
+            message: willBecomeBull
+              ? `${item.name} is now registered as a bull.`
+              : `${item.name} is now a mature cow and ready for milk recording.`,
+            type: "success",
+          });
+        } catch (err: any) {
+          showAlert({
+            title: "Promotion Failed",
+            message: err.message ?? "Failed to promote this animal.",
+            type: "error",
+          });
+        } finally {
+          setPromoting(false);
+        }
+      },
+    });
+  };
 
   const navigateToInsurance = () => {
     router.push({
@@ -2675,6 +2788,36 @@ function CowCard({
                       { backgroundColor: "#fdf4ff", borderColor: "#e9d5ff" },
                     ]}
                   >
+                    {item.type === "newborn" && item.gender && (
+                      <View
+                        style={[
+                          cv.badge,
+                          {
+                            backgroundColor:
+                              item.gender === "male" ? "#eff6ff" : "#fdf2f8",
+                            borderColor:
+                              item.gender === "male" ? "#bfdbfe" : "#fbcfe8",
+                          },
+                        ]}
+                      >
+                        <Ionicons
+                          name={item.gender === "male" ? "male" : "female"}
+                          size={9}
+                          color={item.gender === "male" ? "#2563eb" : "#db2777"}
+                        />
+                        <Text
+                          style={[
+                            cv.badgeText,
+                            {
+                              color:
+                                item.gender === "male" ? "#2563eb" : "#db2777",
+                            },
+                          ]}
+                        >
+                          {item.gender === "male" ? "Male" : "Female"}
+                        </Text>
+                      </View>
+                    )}
                     <Text style={{ fontSize: 9 }}>🤰</Text>
                     <Text style={[cv.badgeText, { color: "#9333ea" }]}>
                       Pregnant
@@ -2694,6 +2837,45 @@ function CowCard({
                     </Text>
                   </View>
                 )}
+                {item.type === "newborn" &&
+                  item.isActive &&
+                  !item.isSold &&
+                  !item.isTransferred && (
+                    <View style={pr.banner}>
+                      <View style={pr.iconWrap}>
+                        <Ionicons
+                          name="trending-up-outline"
+                          size={18}
+                          color="#16a34a"
+                        />
+                      </View>
+                      <View style={{ flex: 1, marginLeft: 10 }}>
+                        {/* <Text style={pr.title}>Fully grown?</Text> */}
+                        {/* <Text style={pr.sub}>
+          Promote to a mature
+        </Text> */}
+                        <TouchableOpacity
+                          style={[pr.btn, promoting && { opacity: 0.7 }]}
+                          onPress={handlePromote}
+                          disabled={promoting}
+                          activeOpacity={0.85}
+                        >
+                          {promoting ? (
+                            <ActivityIndicator color="#fff" size="small" />
+                          ) : (
+                            <>
+                              <Ionicons
+                                name="arrow-up-circle-outline"
+                                size={14}
+                                color="#fff"
+                              />
+                              <Text style={pr.btnText}>Promote to Mature</Text>
+                            </>
+                          )}
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  )}
                 {item.isTransferred && (
                   <View
                     style={[
@@ -2825,6 +3007,64 @@ function CowCard({
                 <Text style={[cv.infoBannerTitle, { color: "#7c3aed" }]}>
                   Transferred
                 </Text>
+
+                {item.type === "newborn" &&
+                  item.isActive &&
+                  !item.isSold &&
+                  !item.isTransferred && (
+                    <View style={pr.banner}>
+                      <View style={pr.iconWrap}>
+                        <Ionicons
+                          name={
+                            item.gender === "male"
+                              ? "male-outline"
+                              : "trending-up-outline"
+                          }
+                          size={18}
+                          color="#16a34a"
+                        />
+                      </View>
+                      <View style={{ flex: 1, marginLeft: 10 }}>
+                        <Text style={pr.title}>
+                          {item.gender ? "Fully grown?" : "Gender not set"}
+                        </Text>
+                        <Text style={pr.sub}>
+                          {item.gender === "male"
+                            ? "This calf will grow into a Bull."
+                            : item.gender === "female"
+                              ? "This calf will grow into a Mature Cow, eligible for milking."
+                              : "Edit this calf and set its gender to enable promotion."}
+                        </Text>
+                        <TouchableOpacity
+                          style={[
+                            pr.btn,
+                            (promoting || !item.gender) && { opacity: 0.6 },
+                          ]}
+                          onPress={handlePromote}
+                          disabled={promoting}
+                          activeOpacity={0.85}
+                        >
+                          {promoting ? (
+                            <ActivityIndicator color="#fff" size="small" />
+                          ) : (
+                            <>
+                              <Ionicons
+                                name="arrow-up-circle-outline"
+                                size={14}
+                                color="#fff"
+                              />
+                              <Text style={pr.btnText}>
+                                {item.gender === "male"
+                                  ? "Promote to Bull"
+                                  : "Promote to Mature"}
+                              </Text>
+                            </>
+                          )}
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  )}
+
                 {item.transferGaushalaName ? (
                   <Text style={[cv.infoBannerSub, { color: "#7c3aed" }]}>
                     To: {item.transferGaushalaName}
@@ -3459,6 +3699,7 @@ export default function CowsScreen() {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [promoting, setPromoting] = useState(false);
 
   // Scanner state
   const [scannerVisible, setScannerVisible] = useState(false);
@@ -4699,7 +4940,7 @@ const m = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#f3dbbc",
+    backgroundColor: "#16a34a",
     borderRadius: 14,
     paddingVertical: 15,
     gap: 8,
@@ -5389,4 +5630,48 @@ const qa = StyleSheet.create({
     marginTop: 12,
   },
   linkBtnText: { fontSize: 15, fontWeight: "800", color: "#fff" },
+});
+
+const pr = StyleSheet.create({
+  banner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    backgroundColor: "#f0fdf4",
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: "#bbf7d0",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 12,
+  },
+  iconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: "#dcfce7",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  title: { fontSize: 13, fontWeight: "800", color: "#15803d" },
+  sub: {
+    fontSize: 11.5,
+    color: "#4ade80",
+    fontWeight: "500",
+    marginTop: 2,
+    marginBottom: 10,
+    lineHeight: 16,
+  },
+  btn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    alignSelf: "flex-start",
+    backgroundColor: "#16a34a",
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  btnText: { fontSize: 12, fontWeight: "700", color: "#fff" },
 });

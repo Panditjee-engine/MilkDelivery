@@ -74,6 +74,14 @@ interface Order {
   subscription_id?: string;
 }
 
+interface SubscriptionItem {
+  product_id: string;
+  product_name?: string; // ← stored on backend
+  quantity: number;
+  price: number;
+  amount: number;
+}
+
 interface Subscription {
   id: string;
   user_id: string;
@@ -87,18 +95,23 @@ interface Subscription {
   custom_days?: number[];
   total_amount?: number;
   total_quantity?: number;
-  items: {
-    product_id: string;
-    quantity: number;
-    price: number;
-    amount: number;
-  }[];
+  items: SubscriptionItem[];
   customer_name?: string;
   customer_phone?: string;
   created_at?: string;
 }
 
-// ─── Order Item Helpers ───────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/** Resolve product name: stored name → cache → product_id */
+const resolveItemName = (
+  item: SubscriptionItem,
+  productNames: Record<string, string>
+): string =>
+  item.product_name ||
+  productNames[item.product_id] ||
+  item.product_id ||
+  "Product";
 
 const getOrderItemName = (item: Order["items"][number]) =>
   item.product_name || item.product?.name || item.name || "";
@@ -118,7 +131,7 @@ const normalizeName = (value: string) => value.trim().toLowerCase();
 const itemMatchesProduct = (
   item: Order["items"][number],
   product: string,
-  productMeta?: any,
+  productMeta?: any
 ) => {
   if (product === "ALL") return true;
   const productId = getProductId(productMeta);
@@ -185,10 +198,11 @@ async function resolveProductName(productId: string): Promise<string> {
 }
 
 async function resolveProductNames(
-  productIds: string[],
+  productIds: string[]
 ): Promise<Record<string, string>> {
+  // Only fetch for IDs that don't have a stored product_name
   const unresolved = [...new Set(productIds)].filter(
-    (id) => !productNameCache[id],
+    (id) => !productNameCache[id]
   );
   await Promise.all(unresolved.map(resolveProductName));
   const result: Record<string, string> = {};
@@ -262,6 +276,12 @@ const PATTERN_CONFIG: Record<
     icon: "calendar",
     label: "Custom",
   },
+  weekly: {
+    color: "#0891b2",
+    bg: "#ECFEFF",
+    icon: "calendar-number",
+    label: "Weekly",
+  },
 };
 
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -314,7 +334,7 @@ function CancelModal({
     ?.map((i) =>
       i.quantity
         ? `${getOrderItemName(i)} ×${i.quantity}`
-        : getOrderItemName(i),
+        : getOrderItemName(i)
     )
     .join(", ");
 
@@ -438,18 +458,21 @@ function SubscriptionDetailModal({
     daily: "Daily",
     alternate: "Alternate Days",
     custom: "Custom Days",
+    weekly: "Weekly",
     buy_once: "One-Time",
   };
   const patternColor: Record<string, string> = {
     daily: "#BB6B3F",
     alternate: "#FF9675",
     custom: "#FFBF55",
+    weekly: "#0891b2",
     buy_once: "#8B6854",
   };
   const patternBg: Record<string, string> = {
     daily: "#FFF3E8",
     alternate: "#FFF0EB",
     custom: "#FFF8E8",
+    weekly: "#ECFEFF",
     buy_once: "#F5EDE8",
   };
 
@@ -505,8 +528,8 @@ function SubscriptionDetailModal({
             showsVerticalScrollIndicator={false}
             renderItem={() => (
               <View style={sm.body}>
-                {(subscription.customer_name ||
-                  subscription.customer_phone) && (
+                {/* Customer */}
+                {(subscription.customer_name || subscription.customer_phone) && (
                   <View style={sm.section}>
                     <Text style={sm.sectionLabel}>CUSTOMER</Text>
                     <View style={sm.infoRow}>
@@ -536,6 +559,7 @@ function SubscriptionDetailModal({
                   </View>
                 )}
 
+                {/* Schedule */}
                 <View style={sm.section}>
                   <Text style={sm.sectionLabel}>SCHEDULE</Text>
                   <View style={sm.scheduleGrid}>
@@ -611,12 +635,12 @@ function SubscriptionDetailModal({
                     )}
                 </View>
 
+                {/* Items — FIXED: uses resolveItemName */}
                 <View style={sm.section}>
                   <Text style={sm.sectionLabel}>ITEMS</Text>
                   <View style={sm.itemsCard}>
                     {subscription.items?.map((item, i) => {
-                      const name =
-                        productNames[item.product_id] ?? item.product_id;
+                      const name = resolveItemName(item, productNames);
                       return (
                         <View
                           key={i}
@@ -649,6 +673,7 @@ function SubscriptionDetailModal({
                   </View>
                 </View>
 
+                {/* Status */}
                 <View
                   style={[
                     sm.statusBanner,
@@ -708,10 +733,11 @@ function SubscriptionRow({
   const pc = PATTERN_CONFIG[item.pattern] ?? PATTERN_CONFIG.daily;
   const itemCount = item.items?.length ?? 0;
 
+  // FIXED: use resolveItemName for summary line
   const itemSummaryLine = item.items
     ?.slice(0, 2)
     .map((p) => {
-      const name = productNames[p.product_id] ?? p.product_id;
+      const name = resolveItemName(p, productNames);
       const short = name.length > 14 ? name.slice(0, 13) + "…" : name;
       return `${short} ×${p.quantity}`;
     })
@@ -757,6 +783,7 @@ function SubscriptionRow({
           </View>
         </View>
 
+        {/* Customer */}
         {item.customer_name && (
           <View style={ss.customerRow}>
             <Ionicons name="person-outline" size={12} color="#8B6854" />
@@ -767,6 +794,7 @@ function SubscriptionRow({
           </View>
         )}
 
+        {/* Item summary — FIXED: shows product_name */}
         {itemSummaryLine ? (
           <View style={ss.itemSummaryRow}>
             <Ionicons name="bag-outline" size={12} color="#FFBF55" />
@@ -795,6 +823,7 @@ function SubscriptionRow({
         </View>
       </TouchableOpacity>
 
+      {/* Expanded section — FIXED: uses resolveItemName */}
       {expanded && (
         <View style={ss.expanded}>
           <View style={ss.divider} />
@@ -839,7 +868,8 @@ function SubscriptionRow({
           </Text>
           <View style={ss.itemsCard}>
             {item.items?.map((p, i) => {
-              const name = productNames[p.product_id] ?? p.product_id;
+              // FIXED: resolveItemName used here
+              const name = resolveItemName(p, productNames);
               return (
                 <View
                   key={i}
@@ -898,29 +928,25 @@ function SubscriptionRow({
 export default function AdminOrdersScreen() {
   const isFocused = useIsFocused();
 
-  // ── Tab state
   const [activeTab, setActiveTab] = useState<"orders" | "subscriptions">(
-    "orders",
+    "orders"
   );
   const tabAnim = useRef(new Animated.Value(0)).current;
 
-  // ── Admin identity
   const [currentAdmin, setCurrentAdmin] = useState<{
     id: string;
     name?: string;
   } | null>(null);
   const [globalLoading, setGlobalLoading] = useState(true);
 
-  // ── Orders state
   const [allOrders, setAllOrders] = useState<Order[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [ordersRefreshing, setOrdersRefreshing] = useState(false);
   const [expandedOrderIds, setExpandedOrderIds] = useState<Set<string>>(
-    new Set(),
+    new Set()
   );
 
-  // ── Orders filter state
   const [filter, setFilter] = useState<"ALL" | "PENDING" | "DELIVERED">("ALL");
   const [dateFilter, setDateFilter] =
     useState<(typeof DATE_FILTERS)[number]>("ALL");
@@ -934,25 +960,22 @@ export default function AdminOrdersScreen() {
   >(null);
   const [filterSheetVisible, setFilterSheetVisible] = useState(false);
 
-  // ── Cancel modal
   const [cancelTarget, setCancelTarget] = useState<Order | null>(null);
   const [cancelLoading, setCancelLoading] = useState(false);
 
-  // ── Subscriptions state
   const [allSubscriptions, setAllSubscriptions] = useState<Subscription[]>([]);
   const [subsLoading, setSubsLoading] = useState(false);
   const [subsRefreshing, setSubsRefreshing] = useState(false);
   const [subFilter, setSubFilter] = useState<"ALL" | "ACTIVE" | "INACTIVE">(
-    "ALL",
+    "ALL"
   );
   const [expandedSubIds, setExpandedSubIds] = useState<Set<string>>(new Set());
   const [selectedSub, setSelectedSub] = useState<Subscription | null>(null);
 
-  // ── Product name resolution (for subscriptions)
   const [productNames, setProductNames] = useState<Record<string, string>>({});
   const [resolvingNames, setResolvingNames] = useState(false);
 
-  // ── 1. Load admin identity
+  // ── Load admin identity
   useEffect(() => {
     async function loadAdmin() {
       try {
@@ -967,7 +990,6 @@ export default function AdminOrdersScreen() {
     loadAdmin();
   }, []);
 
-  // ── Tab switch animation
   const switchTab = (tab: "orders" | "subscriptions") => {
     setActiveTab(tab);
     Animated.spring(tabAnim, {
@@ -978,7 +1000,7 @@ export default function AdminOrdersScreen() {
     }).start();
   };
 
-  // ── 2. Fetch orders
+  // ── Fetch orders
   const fetchOrders = useCallback(async () => {
     try {
       const date =
@@ -1007,7 +1029,7 @@ export default function AdminOrdersScreen() {
     }
   }, [currentAdmin, dateFilter, customStartDate, customEndDate]);
 
-  // ── 3. Fetch subscriptions
+  // ── Fetch subscriptions
   const fetchSubscriptions = useCallback(async () => {
     if (!currentAdmin) return;
     try {
@@ -1017,19 +1039,15 @@ export default function AdminOrdersScreen() {
       } catch (e1: any) {
         console.warn(
           "[AdminOrders] getAdminSubscriptionsAll failed:",
-          e1?.message,
+          e1?.message
         );
         try {
-          // data = await api.getAdminSubscriptions(currentAdmin.id);
-        } catch (e2: any) {
-          console.warn(
-            "[AdminOrders] getAdminSubscriptions failed:",
-            e2?.message,
-          );
           const all = await api.getSubscriptions();
           data = all.filter(
-            (s: Subscription) => s.admin_id === currentAdmin.id,
+            (s: Subscription) => s.admin_id === currentAdmin.id
           );
+        } catch (e2: any) {
+          console.warn("[AdminOrders] fallback failed:", e2?.message);
         }
       }
 
@@ -1040,13 +1058,17 @@ export default function AdminOrdersScreen() {
 
       setAllSubscriptions(recurring);
 
-      const allProductIds = recurring.flatMap((s) =>
-        (s.items ?? []).map((item) => item.product_id),
+      // Only resolve names for items that DON'T have product_name stored
+      const needsResolution = recurring.flatMap((s) =>
+        (s.items ?? [])
+          .filter((item) => !item.product_name)
+          .map((item) => item.product_id)
       );
-      if (allProductIds.length > 0) {
+
+      if (needsResolution.length > 0) {
         setResolvingNames(true);
         try {
-          const names = await resolveProductNames(allProductIds);
+          const names = await resolveProductNames(needsResolution);
           setProductNames((prev) => ({ ...prev, ...names }));
         } finally {
           setResolvingNames(false);
@@ -1055,7 +1077,7 @@ export default function AdminOrdersScreen() {
     } catch (e: any) {
       console.error(
         "[AdminOrders] fetchSubscriptions FAILED:",
-        e?.message ?? e,
+        e?.message ?? e
       );
     } finally {
       setSubsLoading(false);
@@ -1063,7 +1085,7 @@ export default function AdminOrdersScreen() {
     }
   }, [currentAdmin]);
 
-  // ── Effect: fetch on tab/focus change
+  // ── Fetch on tab/focus change
   useEffect(() => {
     if (!isFocused || globalLoading || !currentAdmin) return;
 
@@ -1085,7 +1107,6 @@ export default function AdminOrdersScreen() {
     fetchSubscriptions,
   ]);
 
-  // ── Refresh handlers
   const onOrdersRefresh = useCallback(() => {
     setOrdersRefreshing(true);
     fetchOrders();
@@ -1096,7 +1117,6 @@ export default function AdminOrdersScreen() {
     fetchSubscriptions();
   }, [fetchSubscriptions]);
 
-  // ── Expand toggles
   const toggleOrderExpand = (id: string) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setExpandedOrderIds((prev) => {
@@ -1115,7 +1135,6 @@ export default function AdminOrdersScreen() {
     });
   };
 
-  // ── Cancel order
   const handleCancelConfirm = async () => {
     if (!cancelTarget) return;
     setCancelLoading(true);
@@ -1125,8 +1144,8 @@ export default function AdminOrdersScreen() {
         prev.map((o) =>
           o.id === cancelTarget.id
             ? { ...o, status: "cancelled" as OrderStatus }
-            : o,
-        ),
+            : o
+        )
       );
       setCancelTarget(null);
     } catch (e) {
@@ -1136,7 +1155,6 @@ export default function AdminOrdersScreen() {
     }
   };
 
-  // ── Helpers
   const isCancellable = (o: Order) => {
     const s = o.status?.toLowerCase();
     return s !== "delivered" && s !== "cancelled";
@@ -1144,21 +1162,9 @@ export default function AdminOrdersScreen() {
   const isDelivered = (o: Order) => o.status?.toLowerCase() === "delivered";
   const isCancelled = (o: Order) => o.status?.toLowerCase() === "cancelled";
 
-  const getItemSummary = (items: Order["items"]) => {
-    if (!items?.length) return "No items";
-    return items
-      .map((i) =>
-        i.quantity
-          ? `${getOrderItemName(i)} ×${i.quantity}`
-          : getOrderItemName(i),
-      )
-      .join("  ·  ");
-  };
-
-  // ── Product tabs (from orders + fetched products)
   const productTabs = useMemo(() => {
     const fromOrders = allOrders.flatMap((order) =>
-      (order.items || []).map((item) => getOrderItemName(item)).filter(Boolean),
+      (order.items || []).map((item) => getOrderItemName(item)).filter(Boolean)
     );
     return [
       "ALL",
@@ -1166,18 +1172,16 @@ export default function AdminOrdersScreen() {
     ];
   }, [allOrders, products]);
 
-  // ── Customer options
   const customerOptions = useMemo(() => {
     const names = allOrders
       .map(
         (order) =>
-          order.customer_name || order.customer_phone || "Unknown Customer",
+          order.customer_name || order.customer_phone || "Unknown Customer"
       )
       .filter(Boolean);
     return ["ALL", ...Array.from(new Set(names))];
   }, [allOrders]);
 
-  // ── Advanced filtered orders
   const filteredOrders = useMemo(() => {
     const selectedProductMeta = products.find((product) => {
       const productValue = normalizeName(product.name || "");
@@ -1202,7 +1206,7 @@ export default function AdminOrdersScreen() {
       const productMatch =
         productFilter === "ALL" ||
         order.items?.some((item) =>
-          itemMatchesProduct(item, productFilter, selectedProductMeta),
+          itemMatchesProduct(item, productFilter, selectedProductMeta)
         );
       const dateMatch =
         dateFilter === "ALL" ||
@@ -1228,14 +1232,12 @@ export default function AdminOrdersScreen() {
     customEndDate,
   ]);
 
-  // ── Filtered subscriptions
   const filteredSubs = allSubscriptions.filter((s) => {
     if (subFilter === "ACTIVE") return s.is_active === true;
     if (subFilter === "INACTIVE") return s.is_active === false;
     return true;
   });
 
-  // ── Filter helpers
   const activeFilterCount = [
     filter !== "ALL",
     dateFilter !== "ALL",
@@ -1267,7 +1269,6 @@ export default function AdminOrdersScreen() {
     }
   };
 
-  // ── Counts
   const ordersCount = allOrders.filter((o) => {
     const s = o.status?.toLowerCase();
     return s !== "delivered" && s !== "cancelled";
@@ -1299,7 +1300,6 @@ export default function AdminOrdersScreen() {
           onPress={() => toggleOrderExpand(item.id)}
           style={styles.summary}
         >
-          {/* Header row */}
           <View style={styles.cardHeader}>
             <View style={styles.orderIdRow}>
               <View
@@ -1334,7 +1334,6 @@ export default function AdminOrdersScreen() {
             </View>
           </View>
 
-          {/* Customer name */}
           {item.customer_name && (
             <View style={styles.customerRow}>
               <Ionicons name="person-outline" size={12} color="#8B6854" />
@@ -1342,7 +1341,6 @@ export default function AdminOrdersScreen() {
             </View>
           )}
 
-          {/* Item tags */}
           <View style={styles.itemTagsRow}>
             {item.items?.map((p, i) => (
               <View
@@ -1360,7 +1358,6 @@ export default function AdminOrdersScreen() {
             ))}
           </View>
 
-          {/* Footer */}
           <View style={styles.summaryFooter}>
             {!delivered && !cancelled && item.admin_otp ? (
               <View style={styles.otpPill}>
@@ -1435,7 +1432,6 @@ export default function AdminOrdersScreen() {
           </View>
         </TouchableOpacity>
 
-        {/* Expanded detail */}
         {expanded && (
           <View style={styles.expandedSection}>
             <View style={styles.divider} />
@@ -1599,7 +1595,6 @@ export default function AdminOrdersScreen() {
     />
   );
 
-  // ══  MAIN RENDER  ══
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <CancelModal
@@ -1617,7 +1612,7 @@ export default function AdminOrdersScreen() {
         onDismiss={() => setSelectedSub(null)}
       />
 
-      {/* ── Header ── */}
+      {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <Text style={styles.title}>
@@ -1664,7 +1659,7 @@ export default function AdminOrdersScreen() {
         </View>
       </View>
 
-      {/* ── Tab Switcher ── */}
+      {/* Tab Switcher */}
       <View style={tabStyles.tabContainer}>
         <Animated.View
           style={[tabStyles.tabIndicator, { left: tabIndicatorLeft }]}
@@ -1712,10 +1707,9 @@ export default function AdminOrdersScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* ══  ORDERS TAB  ══ */}
+      {/* ORDERS TAB */}
       {activeTab === "orders" && (
         <>
-          {/* Product filter tabs */}
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -1788,7 +1782,7 @@ export default function AdminOrdersScreen() {
         </>
       )}
 
-      {/* ══  SUBSCRIPTIONS TAB  ══ */}
+      {/* SUBSCRIPTIONS TAB */}
       {activeTab === "subscriptions" && (
         <>
           <View style={styles.filterRow}>
@@ -1850,7 +1844,7 @@ export default function AdminOrdersScreen() {
         </>
       )}
 
-      {/* ── Filter Sheet Modal ── */}
+      {/* Filter Sheet Modal */}
       <Modal
         visible={filterSheetVisible}
         transparent
@@ -1870,7 +1864,6 @@ export default function AdminOrdersScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Customer filter */}
             <Text style={styles.sheetLabel}>Customer</Text>
             <TouchableOpacity
               style={styles.customerDropdown}
@@ -1932,7 +1925,6 @@ export default function AdminOrdersScreen() {
               </View>
             )}
 
-            {/* Status filter */}
             <Text style={styles.sheetLabel}>Status</Text>
             <View style={styles.filterRowSheet}>
               {ORDER_FILTERS.map((f) => (
@@ -1956,7 +1948,6 @@ export default function AdminOrdersScreen() {
               ))}
             </View>
 
-            {/* Date filter */}
             <Text style={styles.sheetLabel}>Date</Text>
             <View style={styles.filterRowSheet}>
               {DATE_FILTERS.map((f) => (
@@ -2012,7 +2003,7 @@ export default function AdminOrdersScreen() {
                           ? customStartDate || getLocalDateKey()
                           : customEndDate ||
                               customStartDate ||
-                              getLocalDateKey(),
+                              getLocalDateKey()
                       )}
                       mode="date"
                       display={Platform.OS === "ios" ? "inline" : "default"}
@@ -2551,7 +2542,6 @@ const ss = StyleSheet.create({
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#FFF8F4" },
-
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -2621,8 +2611,6 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   countText: { fontSize: 13, fontWeight: "800", color: "#FF9675" },
-
-  // Product filter tabs
   productFilterScroll: { flexGrow: 0, maxHeight: 52 },
   productFilterContent: {
     paddingHorizontal: 20,
@@ -2643,8 +2631,6 @@ const styles = StyleSheet.create({
   },
   productFilterText: { fontSize: 12, fontWeight: "800", color: "#8B6854" },
   productFilterTextActive: { color: "#fff" },
-
-  // Subscription / basic filter row
   filterRow: {
     flexDirection: "row",
     paddingHorizontal: 16,
@@ -2663,8 +2649,6 @@ const styles = StyleSheet.create({
   filterChipActive: { backgroundColor: "#FF967512", borderColor: "#FF9675" },
   filterText: { fontSize: 13, fontWeight: "600", color: "#8B6854" },
   filterTextActive: { color: "#FF9675" },
-
-  // Filter sheet
   sheetOverlay: {
     flex: 1,
     backgroundColor: "rgba(61,31,10,0.35)",
@@ -2718,8 +2702,6 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 8,
   },
-
-  // Customer dropdown
   customerDropdown: {
     marginBottom: 10,
     backgroundColor: "#fff",
@@ -2765,8 +2747,6 @@ const styles = StyleSheet.create({
     color: "#8B6854",
   },
   customerOptionTextActive: { color: "#BB6B3F", fontWeight: "900" },
-
-  // Date range picker
   dateRangeRow: { flexDirection: "row", gap: 10, marginBottom: 10 },
   dateRangeBtn: {
     flex: 1,
@@ -2802,8 +2782,6 @@ const styles = StyleSheet.create({
     margin: 10,
   },
   datePickerDoneText: { fontSize: 13, fontWeight: "900", color: "#fff" },
-
-  // Sheet actions
   sheetActions: { flexDirection: "row", gap: 10, marginTop: 12 },
   resetBtn: {
     flex: 1,
@@ -2825,8 +2803,6 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   applyBtnText: { fontSize: 14, fontWeight: "900", color: "#fff" },
-
-  // Order card
   orderList: { flex: 1 },
   list: { paddingHorizontal: 16, paddingBottom: 30 },
   card: {
