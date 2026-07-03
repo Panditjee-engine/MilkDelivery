@@ -277,7 +277,8 @@ function HomeBannerSlider({ banners }: { banners: BannerSlide[] }) {
             style={[s.bannerDot, activeIndex === index && s.bannerDotActive]}
           />
         ))}
-      </View>
+      </View> 
+      
     </View>
   );
 }

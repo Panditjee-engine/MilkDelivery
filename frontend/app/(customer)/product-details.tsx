@@ -79,6 +79,7 @@ export default function ProductDetailsScreen() {
   const [customDays, setCustomDays] = useState<number[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState("");
+  const [feedbackType, setFeedbackType] = useState<"address" | "balance" | null>(null);
   const productId = params.id?.toString() || product?.id || product?._id;
 
   useEffect(() => {
@@ -133,6 +134,7 @@ export default function ProductDetailsScreen() {
     const latestUser = await api.getMe();
     if (hasCompleteDeliveryAddress(latestUser?.address)) return true;
     setFeedback("Please add delivery address from Profile before ordering.");
+    setFeedbackType("address");
     return false;
   };
 
@@ -140,34 +142,31 @@ export default function ProductDetailsScreen() {
     if (!product || !productId) return;
     if (pattern === "custom" && customDays.length === 0) {
       setFeedback("Please choose at least one custom delivery day.");
+      setFeedbackType(null);
       return;
     }
     const stock = product.stock ?? Infinity;
     if (pattern === "buy_once" && quantity > stock) {
       setFeedback(`Only ${stock} item available.`);
+      setFeedbackType(null);
       return;
     }
     setSubmitting(true);
     setFeedback("");
+    setFeedbackType(null);
     try {
       if (!(await ensureAddress())) return;
       const wallet = await api.getWallet();
       if ((wallet.balance ?? 0) < orderTotal) {
-        setFeedback("Wallet balance is low. Please recharge wallet first.");
+        setFeedback("Wallet balance is low.Tap the arrow to recharge your wallet.");
+        setFeedbackType("balance");
         return;
       }
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
       const startDate = tomorrow.toISOString().split("T")[0];
       await api.createSubscription({
-        items: [
-          {
-            product_id: productId,
-            quantity,
-            price: Number(product.price) || 0,
-            amount: orderTotal,
-          },
-        ],
+        items: [{ product_id: productId, quantity, price: Number(product.price) || 0, amount: orderTotal }],
         pattern,
         custom_days: pattern === "custom" ? customDays : null,
         start_date: startDate,
@@ -175,9 +174,11 @@ export default function ProductDetailsScreen() {
         delivery_slot: "morning",
       });
       setFeedback(pattern === "buy_once" ? "Added successfully." : "Subscription activated.");
+      setFeedbackType(null);
       setTimeout(() => setBuySheetVisible(false), 700);
     } catch (error: any) {
       setFeedback(error?.message || "Could not place order. Please try again.");
+      setFeedbackType(null);
     } finally {
       setSubmitting(false);
     }
@@ -374,7 +375,27 @@ export default function ProductDetailsScreen() {
               <Text style={s.totalLabel}>Total</Text>
               <Text style={s.totalValue}>₹{orderTotal.toFixed(2)}</Text>
             </View>
-            {feedback ? <Text style={s.feedback}>{feedback}</Text> : null}
+            {feedback ? (
+              <View style={s.feedbackRow}>
+                <Text style={s.feedbackFlex}>{feedback}</Text>
+                {feedbackType && (
+                  <TouchableOpacity
+                    style={s.feedbackArrow}
+                    onPress={() => {
+                      setBuySheetVisible(false);
+                      router.push(
+                        (feedbackType === "address"
+                          ? "/(customer)/profile"
+                          : "/(customer)/wallet") as any
+                      );
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="arrow-forward-circle" size={22} color="#B45309" />
+                  </TouchableOpacity>
+                )}
+              </View>
+            ) : null}
 
             <TouchableOpacity
               style={[s.submitBtn, submitting && { opacity: 0.65 }]}
@@ -463,4 +484,7 @@ const s = StyleSheet.create({
   emptyTitle: { fontSize: 16, fontWeight: "900", color: "#111827" },
   backAction: { backgroundColor: Colors.primary, borderRadius: 14, paddingHorizontal: 18, paddingVertical: 11 },
   backActionText: { color: "#fff", fontSize: 14, fontWeight: "900" },
+  feedbackRow: { flexDirection: "row", alignItems: "center", marginTop: 10, gap: 8 },
+  feedbackFlex: { flex: 1, color: "#B45309", fontSize: 12.5, fontWeight: "800" },
+  feedbackArrow: { padding: 2 },
 });
