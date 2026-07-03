@@ -27,7 +27,9 @@ import { getAuthDevicePayload } from "../../src/utils/deviceToken";
 type ToastType = "error" | "success" | "warn";
 
 function looksLikePhone(value: string): boolean {
-  return /^\d/.test(value.trim());
+  const trimmed = value.trim();
+  if (trimmed.includes("@")) return false;
+  return /^\d+$/.test(trimmed);
 }
 
 function isValidIndianPhone(value: string): boolean {

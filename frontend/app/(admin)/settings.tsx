@@ -371,7 +371,8 @@ function ShareModal({
       setQrData({
         admin_id: String(adminUser?.id || "000"),
         admin_name: adminUser?.name || "GAU",
-        qr_value: "https://play.google.com/store/apps/details?id=com.badal_12.frontend",
+        qr_value:
+          "https://play.google.com/store/apps/details?id=com.badal_12.frontend",
         referral_code: "GAU100",
       });
     } finally {
@@ -410,7 +411,12 @@ function ShareModal({
       .toUpperCase();
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
       <View style={mS.overlay}>
         <View style={mS.sheet}>
           <View style={mS.drag} />
@@ -434,13 +440,20 @@ function ShareModal({
             ) : (
               <>
                 <View style={qrS.infoBanner}>
-                  <Ionicons name="information-circle-outline" size={16} color={C.dark} />
+                  <Ionicons
+                    name="information-circle-outline"
+                    size={16}
+                    color={C.dark}
+                  />
                   <Text style={qrS.infoBannerText}>
-                    The customer who uses your referral code will only see your Gaushala's products.
+                    The customer who uses your referral code will only see your
+                    Gaushala's products.
                   </Text>
                 </View>
                 <ViewShot
-                  ref={(ref) => { captureRefContainer.current = ref; }}
+                  ref={(ref) => {
+                    captureRefContainer.current = ref;
+                  }}
                   style={qrS.shotWrap}
                 >
                   <View style={qrS.card}>
@@ -450,18 +463,33 @@ function ShareModal({
                       </View>
                       <Text style={qrS.gaushaalaName}>{displayName}</Text>
                     </View>
-                    <Text style={qrS.cardTitle}>Scan Our QR To Connect With Us</Text>
+                    <Text style={qrS.cardTitle}>
+                      Scan Our QR To Connect With Us
+                    </Text>
                     <Text style={qrS.cardSubtitle}>
-                      Scan the QR code to download our app and use the referral code to connect directly with the{"\n"}farm and explore fresh products.
+                      Scan the QR code to download our app and use the referral
+                      code to connect directly with the{"\n"}farm and explore
+                      fresh products.
                     </Text>
                     <View style={qrS.qrBox}>
-                      <QRCode value={qrValue} size={180} backgroundColor="white" color={C.dark} />
+                      <QRCode
+                        value={qrValue}
+                        size={180}
+                        backgroundColor="white"
+                        color={C.dark}
+                      />
                     </View>
                     <View style={qrS.cardFooter}>
                       <View style={qrS.footerDivider} />
                       <View style={qrS.footerRow}>
-                        <Ionicons name="shield-checkmark" size={11} color={C.muted} />
-                        <Text style={qrS.footerText}>GauSatv · Pure & Fresh</Text>
+                        <Ionicons
+                          name="shield-checkmark"
+                          size={11}
+                          color={C.muted}
+                        />
+                        <Text style={qrS.footerText}>
+                          GauSatv · Pure & Fresh
+                        </Text>
                       </View>
                     </View>
                   </View>
@@ -478,8 +506,14 @@ function ShareModal({
                   activeOpacity={0.8}
                   disabled={sharing}
                 >
-                  <Ionicons name="share-social-outline" size={18} color="#fff" />
-                  <Text style={mS.saveTxt}>{sharing ? "Sharing..." : "Share QR"}</Text>
+                  <Ionicons
+                    name="share-social-outline"
+                    size={18}
+                    color="#fff"
+                  />
+                  <Text style={mS.saveTxt}>
+                    {sharing ? "Sharing..." : "Share QR"}
+                  </Text>
                 </TouchableOpacity>
               </>
             )}
@@ -509,9 +543,19 @@ function SettingRow({
 }) {
   const pressAnim = useRef(new Animated.Value(1)).current;
   const onPressIn = () =>
-    Animated.spring(pressAnim, { toValue: 0.97, useNativeDriver: true, tension: 300, friction: 10 }).start();
+    Animated.spring(pressAnim, {
+      toValue: 0.97,
+      useNativeDriver: true,
+      tension: 300,
+      friction: 10,
+    }).start();
   const onPressOut = () =>
-    Animated.spring(pressAnim, { toValue: 1, useNativeDriver: true, tension: 300, friction: 10 }).start();
+    Animated.spring(pressAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      tension: 300,
+      friction: 10,
+    }).start();
 
   return (
     <Animated.View style={{ transform: [{ scale: pressAnim }] }}>
@@ -527,7 +571,9 @@ function SettingRow({
         </View>
         <View style={s.settingInfo}>
           <Text style={s.settingLabel}>{label}</Text>
-          <Text style={s.settingValue} numberOfLines={1}>{value}</Text>
+          <Text style={s.settingValue} numberOfLines={1}>
+            {value}
+          </Text>
         </View>
         <View style={s.chevronWrap}>
           <Ionicons name="chevron-forward" size={15} color={C.light} />
@@ -566,8 +612,13 @@ function OtpInput({
       {[0, 1, 2, 3, 4, 5].map((i) => (
         <TextInput
           key={i}
-          ref={(ref) => { inputs.current[i] = ref; }}
-          style={[mS.otpBox, value[i] && value[i] !== " " ? mS.otpBoxFilled : null]}
+          ref={(ref) => {
+            inputs.current[i] = ref;
+          }}
+          style={[
+            mS.otpBox,
+            value[i] && value[i] !== " " ? mS.otpBoxFilled : null,
+          ]}
           value={value[i] && value[i] !== " " ? value[i] : ""}
           onChangeText={(t) => handleChange(t, i)}
           onKeyPress={(e) => handleKeyPress(e, i)}
@@ -625,8 +676,11 @@ export default function AdminSettingsScreen() {
     deliveryEndMin: "00",
     deliveryEndAmPm: "AM",
     gracePeriod: "1 day",
-    businessName: "GauSatva",
-    supportContact: "+91 9999999999",
+    // businessName / supportContact are kept in sync with the real admin
+    // profile (user.name / user.phone) via the useEffect below — these
+    // defaults only matter before `user` has loaded.
+    businessName: user?.name ?? "GauSatva",
+    supportContact: (user as any)?.phone ?? "+91 9999999999",
   });
   const [draft, setDraft] = useState<Settings>(settings);
   const [profileDraft, setProfileDraft] = useState({
@@ -661,13 +715,37 @@ export default function AdminSettingsScreen() {
     is_active: boolean;
   }>({ id: null, title: "", description: "", images: [], is_active: true });
 
+  // ── Load non-profile settings (cutoff/delivery/grace) from AsyncStorage.
+  //    businessName / supportContact are deliberately excluded here — they
+  //    are always derived live from `user`, never from the cache, so a
+  //    stale cached value can never override the real admin profile.
   useEffect(() => {
     AsyncStorage.getItem("APP_SETTINGS").then((data) => {
-      if (data) setSettings(JSON.parse(data));
+      if (data) {
+        const parsed = JSON.parse(data);
+        const { businessName, supportContact, ...rest } = parsed;
+        setSettings((s) => ({ ...s, ...rest }));
+      }
     });
-    Animated.timing(headerAnim, { toValue: 1, duration: 600, useNativeDriver: true }).start();
+    Animated.timing(headerAnim, {
+      toValue: 1,
+      duration: 600,
+      useNativeDriver: true,
+    }).start();
     loadContent();
   }, []);
+
+  // ── Business Name & Support Contact always mirror the admin's real profile.
+  //    Any time `user` changes (e.g. after saveProfile/saveBusinessName/
+  //    saveSupportContact updates it via updateUser), these two settings
+  //    fields update to match automatically.
+  useEffect(() => {
+    setSettings((s) => ({
+      ...s,
+      businessName: user?.name ?? s.businessName,
+      supportContact: (user as any)?.phone ?? s.supportContact,
+    }));
+  }, [user]);
 
   // Resend countdown
   useEffect(() => {
@@ -706,7 +784,13 @@ export default function AdminSettingsScreen() {
   };
 
   const resetContentDraft = () =>
-    setContentDraft({ id: null, title: "", description: "", images: [], is_active: true });
+    setContentDraft({
+      id: null,
+      title: "",
+      description: "",
+      images: [],
+      is_active: true,
+    });
 
   const loadContent = async () => {
     setContentLoading(true);
@@ -714,7 +798,14 @@ export default function AdminSettingsScreen() {
       const res = await api.getContent();
       setContentItems(Array.isArray(res?.data) ? res.data : []);
     } catch (error: any) {
-      showAlert("Content Load Failed", error?.message || "Could not load content right now.", undefined, "alert-circle-outline", C.deepPeach, C.amber);
+      showAlert(
+        "Content Load Failed",
+        error?.message || "Could not load content right now.",
+        undefined,
+        "alert-circle-outline",
+        C.deepPeach,
+        C.amber,
+      );
     } finally {
       setContentLoading(false);
     }
@@ -725,7 +816,14 @@ export default function AdminSettingsScreen() {
   const pickContentImages = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      showAlert("Permission Needed", "Please allow photo access to add content images.", undefined, "image-outline", C.deepPeach, C.dark);
+      showAlert(
+        "Permission Needed",
+        "Please allow photo access to add content images.",
+        undefined,
+        "image-outline",
+        C.deepPeach,
+        C.dark,
+      );
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -735,13 +833,25 @@ export default function AdminSettingsScreen() {
       quality: 0.72,
     });
     if (result.canceled) return;
-    const images = result.assets.map((asset) => asset.base64).filter(Boolean) as string[];
-    setContentDraft((draft) => ({ ...draft, images: [...draft.images, ...images] }));
+    const images = result.assets
+      .map((asset) => asset.base64)
+      .filter(Boolean) as string[];
+    setContentDraft((draft) => ({
+      ...draft,
+      images: [...draft.images, ...images],
+    }));
   };
 
   const saveContent = async () => {
     if (!contentDraft.title.trim() || !contentDraft.description.trim()) {
-      showAlert("Missing Details", "Please enter both title and description.", undefined, "document-text-outline", C.deepPeach, C.dark);
+      showAlert(
+        "Missing Details",
+        "Please enter both title and description.",
+        undefined,
+        "document-text-outline",
+        C.deepPeach,
+        C.dark,
+      );
       return;
     }
     setContentSaving(true);
@@ -763,29 +873,50 @@ export default function AdminSettingsScreen() {
       }
       resetContentDraft();
       await loadContent();
-      showAlert("Saved", "Content saved successfully.", undefined, "checkmark-circle", "#E8F5E9", "#388E3C");
+      showAlert(
+        "Saved",
+        "Content saved successfully.",
+        undefined,
+        "checkmark-circle",
+        "#E8F5E9",
+        "#388E3C",
+      );
     } catch (error: any) {
-      showAlert("Save Failed", error?.message || "Could not save content.", undefined, "alert-circle-outline", C.deepPeach, C.amber);
+      showAlert(
+        "Save Failed",
+        error?.message || "Could not save content.",
+        undefined,
+        "alert-circle-outline",
+        C.deepPeach,
+        C.amber,
+      );
     } finally {
       setContentSaving(false);
     }
   };
 
   const editContent = (item: AdminContent) => {
-    showAlert("Edit Content?", "This will load the selected content into the form for editing.", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Edit",
-        onPress: () =>
-          setContentDraft({
-            id: getContentId(item),
-            title: item.title || "",
-            description: item.description || "",
-            images: item.images || [],
-            is_active: item.is_active ?? true,
-          }),
-      },
-    ], "pencil-outline", C.deepPeach, C.dark);
+    showAlert(
+      "Edit Content?",
+      "This will load the selected content into the form for editing.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Edit",
+          onPress: () =>
+            setContentDraft({
+              id: getContentId(item),
+              title: item.title || "",
+              description: item.description || "",
+              images: item.images || [],
+              is_active: item.is_active ?? true,
+            }),
+        },
+      ],
+      "pencil-outline",
+      C.deepPeach,
+      C.dark,
+    );
   };
 
   const toggleContent = async (item: AdminContent) => {
@@ -794,47 +925,92 @@ export default function AdminSettingsScreen() {
     const willActivate = item.is_active === false;
     showAlert(
       willActivate ? "Activate Content?" : "Deactivate Content?",
-      willActivate ? "This content will become visible again." : "This content will be hidden from active content.",
+      willActivate
+        ? "This content will become visible again."
+        : "This content will be hidden from active content.",
       [
         { text: "Cancel", style: "cancel" },
         {
           text: willActivate ? "Activate" : "Deactivate",
           onPress: async () => {
-            try { await api.toggleContentStatus(id); await loadContent(); }
-            catch (error: any) { showAlert("Update Failed", error?.message || "Could not update status."); }
+            try {
+              await api.toggleContentStatus(id);
+              await loadContent();
+            } catch (error: any) {
+              showAlert(
+                "Update Failed",
+                error?.message || "Could not update status.",
+              );
+            }
           },
         },
       ],
-      "power-outline", C.deepPeach, C.dark,
+      "power-outline",
+      C.deepPeach,
+      C.dark,
     );
   };
 
   const deleteContent = (item: AdminContent) => {
     const id = getContentId(item);
     if (!id) return;
-    showAlert("Delete Content?", "This content will be permanently deleted.", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: async () => {
-          try { await api.deleteContent(id); await loadContent(); }
-          catch (error: any) { showAlert("Delete Failed", error?.message || "Could not delete content."); }
+    showAlert(
+      "Delete Content?",
+      "This content will be permanently deleted.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await api.deleteContent(id);
+              await loadContent();
+            } catch (error: any) {
+              showAlert(
+                "Delete Failed",
+                error?.message || "Could not delete content.",
+              );
+            }
+          },
         },
-      },
-    ], "trash-outline", "#FEE2E2", "#dc2626");
+      ],
+      "trash-outline",
+      "#FEE2E2",
+      "#dc2626",
+    );
   };
 
+  // Generic settings save — used only by cutoff / delivery / grace.
+  // businessName & supportContact are intentionally excluded: they are
+  // saved via saveBusinessName / saveSupportContact against the real
+  // admin profile instead of the local AsyncStorage cache.
   const saveSettings = async () => {
-    setSettings({ ...draft });
-    await AsyncStorage.setItem("APP_SETTINGS", JSON.stringify(draft));
+    const { businessName, supportContact, ...rest } = draft;
+    const next = { ...settings, ...rest };
+    setSettings(next);
+    await AsyncStorage.setItem("APP_SETTINGS", JSON.stringify(next));
     setActiveModal(null);
-    showAlert("Saved", "Settings updated successfully.", undefined, "checkmark-circle", "#E8F5E9", "#388E3C");
+    showAlert(
+      "Saved",
+      "Settings updated successfully.",
+      undefined,
+      "checkmark-circle",
+      "#E8F5E9",
+      "#388E3C",
+    );
   };
 
   const saveProfile = async () => {
     if (!profileDraft.name.trim()) {
-      showAlert("Missing Name", "Name cannot be empty.", undefined, "alert-circle-outline", C.deepPeach, C.amber);
+      showAlert(
+        "Missing Name",
+        "Name cannot be empty.",
+        undefined,
+        "alert-circle-outline",
+        C.deepPeach,
+        C.amber,
+      );
       return;
     }
     setIsSaving(true);
@@ -845,17 +1021,141 @@ export default function AdminSettingsScreen() {
         phone: profileDraft.phone.trim(),
       };
       const result = await api.updateProfile(payload);
-      const updatedUser = result && typeof result === "object" ? result : payload;
+      const updatedUser =
+        result && typeof result === "object" ? result : payload;
       updateUser?.(updatedUser);
       const cached = await AsyncStorage.getItem("user_data");
       if (cached) {
         const parsed = JSON.parse(cached);
-        await AsyncStorage.setItem("user_data", JSON.stringify({ ...parsed, ...updatedUser }));
+        await AsyncStorage.setItem(
+          "user_data",
+          JSON.stringify({ ...parsed, ...updatedUser }),
+        );
       }
       setActiveModal(null);
-      showAlert("Profile Updated", "Your profile has been updated.", undefined, "person-circle", C.deepPeach, C.dark);
+      showAlert(
+        "Profile Updated",
+        "Your profile has been updated.",
+        undefined,
+        "person-circle",
+        C.deepPeach,
+        C.dark,
+      );
     } catch (error: any) {
-      showAlert("Update Failed", error?.message || "Something went wrong. Please try again.", undefined, "alert-circle-outline", C.deepPeach, C.amber);
+      showAlert(
+        "Update Failed",
+        error?.message || "Something went wrong. Please try again.",
+        undefined,
+        "alert-circle-outline",
+        C.deepPeach,
+        C.amber,
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // ─────────────────────────────────────────────
+  // Business Name → updates the admin's real `name` field
+  // ─────────────────────────────────────────────
+  const saveBusinessName = async () => {
+    const trimmed = draft.businessName.trim();
+    if (!trimmed) {
+      showAlert(
+        "Missing Name",
+        "Business name cannot be empty.",
+        undefined,
+        "alert-circle-outline",
+        C.deepPeach,
+        C.amber,
+      );
+      return;
+    }
+    setIsSaving(true);
+    try {
+      const result = await api.updateProfile({ name: trimmed });
+      const updatedUser =
+        result && typeof result === "object" ? result : { name: trimmed };
+      updateUser?.(updatedUser);
+      const cached = await AsyncStorage.getItem("user_data");
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        await AsyncStorage.setItem(
+          "user_data",
+          JSON.stringify({ ...parsed, ...updatedUser }),
+        );
+      }
+      setActiveModal(null);
+      showAlert(
+        "Saved",
+        "Business name updated.",
+        undefined,
+        "checkmark-circle",
+        "#E8F5E9",
+        "#388E3C",
+      );
+    } catch (error: any) {
+      showAlert(
+        "Update Failed",
+        error?.message || "Could not update business name.",
+        undefined,
+        "alert-circle-outline",
+        C.deepPeach,
+        C.amber,
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // ─────────────────────────────────────────────
+  // Support Contact → updates the admin's real `phone` field
+  // ─────────────────────────────────────────────
+  const saveSupportContact = async () => {
+    const trimmed = draft.supportContact.trim();
+    if (!trimmed) {
+      showAlert(
+        "Missing Number",
+        "Support contact cannot be empty.",
+        undefined,
+        "alert-circle-outline",
+        C.deepPeach,
+        C.amber,
+      );
+      return;
+    }
+    setIsSaving(true);
+    try {
+      const result = await api.updateProfile({ phone: trimmed });
+      const updatedUser =
+        result && typeof result === "object" ? result : { phone: trimmed };
+      updateUser?.(updatedUser);
+      const cached = await AsyncStorage.getItem("user_data");
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        await AsyncStorage.setItem(
+          "user_data",
+          JSON.stringify({ ...parsed, ...updatedUser }),
+        );
+      }
+      setActiveModal(null);
+      showAlert(
+        "Saved",
+        "Support contact updated.",
+        undefined,
+        "checkmark-circle",
+        "#E8F5E9",
+        "#388E3C",
+      );
+    } catch (error: any) {
+      showAlert(
+        "Update Failed",
+        error?.message || "Could not update support contact.",
+        undefined,
+        "alert-circle-outline",
+        C.deepPeach,
+        C.amber,
+      );
     } finally {
       setIsSaving(false);
     }
@@ -868,7 +1168,7 @@ export default function AdminSettingsScreen() {
     setPwLoading(true);
     try {
       const res = await api.requestChangePasswordOtp();
-      setScreenOtp(res.otp);          // show it on screen
+      setScreenOtp(res.otp); // show it on screen
       setEnteredOtp("");
       setOtpStep("verify");
       setOtpResendTimer(30);
@@ -898,7 +1198,14 @@ export default function AdminSettingsScreen() {
       setEnteredOtp("");
       setOtpResendTimer(30);
     } catch (err: any) {
-      showAlert("Resend Failed", err?.message || "Could not resend OTP.", undefined, "alert-circle-outline", C.deepPeach, C.amber);
+      showAlert(
+        "Resend Failed",
+        err?.message || "Could not resend OTP.",
+        undefined,
+        "alert-circle-outline",
+        C.deepPeach,
+        C.amber,
+      );
     } finally {
       setPwLoading(false);
     }
@@ -909,7 +1216,14 @@ export default function AdminSettingsScreen() {
   // ─────────────────────────────────────────────
   const handleVerifyOtp = async () => {
     if (enteredOtp.trim().length < 6) {
-      showAlert("Incomplete OTP", "Please enter all 6 digits.", undefined, "alert-circle-outline", C.deepPeach, C.amber);
+      showAlert(
+        "Incomplete OTP",
+        "Please enter all 6 digits.",
+        undefined,
+        "alert-circle-outline",
+        C.deepPeach,
+        C.amber,
+      );
       return;
     }
     setPwLoading(true);
@@ -917,7 +1231,14 @@ export default function AdminSettingsScreen() {
       await api.verifyChangePasswordOtp(enteredOtp.trim());
       setOtpStep("change");
     } catch (err: any) {
-      showAlert("Invalid OTP", err?.message || "The OTP you entered is incorrect.", undefined, "close-circle-outline", "#FFE8D6", "#E53935");
+      showAlert(
+        "Invalid OTP",
+        err?.message || "The OTP you entered is incorrect.",
+        undefined,
+        "close-circle-outline",
+        "#FFE8D6",
+        "#E53935",
+      );
       setEnteredOtp("");
     } finally {
       setPwLoading(false);
@@ -929,38 +1250,83 @@ export default function AdminSettingsScreen() {
   // ─────────────────────────────────────────────
   const handleSavePassword = async () => {
     if (!pwDraft.newPw || !pwDraft.confirm) {
-      showAlert("Fill All Fields", "Please fill in both password fields.", undefined, "lock-closed-outline", C.deepPeach, C.amber);
+      showAlert(
+        "Fill All Fields",
+        "Please fill in both password fields.",
+        undefined,
+        "lock-closed-outline",
+        C.deepPeach,
+        C.amber,
+      );
       return;
     }
     if (pwDraft.newPw.length < 6) {
-      showAlert("Too Short", "Password must be at least 6 characters.", undefined, "alert-circle-outline", C.deepPeach, C.amber);
+      showAlert(
+        "Too Short",
+        "Password must be at least 6 characters.",
+        undefined,
+        "alert-circle-outline",
+        C.deepPeach,
+        C.amber,
+      );
       return;
     }
     if (pwDraft.newPw !== pwDraft.confirm) {
-      showAlert("Mismatch", "Passwords do not match.", undefined, "alert-circle-outline", C.deepPeach, C.amber);
+      showAlert(
+        "Mismatch",
+        "Passwords do not match.",
+        undefined,
+        "alert-circle-outline",
+        C.deepPeach,
+        C.amber,
+      );
       return;
     }
     setPwLoading(true);
     try {
       await api.confirmChangePassword(pwDraft.newPw, pwDraft.confirm);
       setActiveModal(null);
-      showAlert("Password Changed", "Your password has been updated successfully.", undefined, "shield-checkmark", C.deepPeach, C.dark);
+      showAlert(
+        "Password Changed",
+        "Your password has been updated successfully.",
+        undefined,
+        "shield-checkmark",
+        C.deepPeach,
+        C.dark,
+      );
     } catch (err: any) {
-      showAlert("Failed", err?.message || "Could not update password.", undefined, "alert-circle-outline", C.deepPeach, C.amber);
+      showAlert(
+        "Failed",
+        err?.message || "Could not update password.",
+        undefined,
+        "alert-circle-outline",
+        C.deepPeach,
+        C.amber,
+      );
     } finally {
       setPwLoading(false);
     }
   };
 
   const handleLogout = () => {
-    showAlert("Logout", "Are you sure you want to logout?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Logout",
-        style: "destructive",
-        onPress: async () => { await logout(); router.replace("/"); },
-      },
-    ], "log-out-outline", "#FFE8D6", C.primary);
+    showAlert(
+      "Logout",
+      "Are you sure you want to logout?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Logout",
+          style: "destructive",
+          onPress: async () => {
+            await logout();
+            router.replace("/");
+          },
+        },
+      ],
+      "log-out-outline",
+      "#FFE8D6",
+      C.primary,
+    );
   };
 
   const handleDeleteAccount = () => {
@@ -970,7 +1336,14 @@ export default function AdminSettingsScreen() {
 
   const confirmDeleteAccount = () => {
     if (!deletePassword.trim()) {
-      showAlert("Password Required", "Enter your password to delete your account.", undefined, "alert-circle-outline", "#FEF2F2", "#dc2626");
+      showAlert(
+        "Password Required",
+        "Enter your password to delete your account.",
+        undefined,
+        "alert-circle-outline",
+        "#FEF2F2",
+        "#dc2626",
+      );
       return;
     }
     showAlert(
@@ -988,14 +1361,23 @@ export default function AdminSettingsScreen() {
               setDeleteModal(false);
               router.replace("/(auth)/login");
             } catch (err: any) {
-              showAlert("Delete Failed", err?.message ?? "Could not delete account.", undefined, "alert-circle-outline", "#FEF2F2", "#dc2626");
+              showAlert(
+                "Delete Failed",
+                err?.message ?? "Could not delete account.",
+                undefined,
+                "alert-circle-outline",
+                "#FEF2F2",
+                "#dc2626",
+              );
             } finally {
               setDeletingAccount(false);
             }
           },
         },
       ],
-      "trash-outline", "#FEF2F2", "#dc2626",
+      "trash-outline",
+      "#FEF2F2",
+      "#dc2626",
     );
   };
 
@@ -1004,9 +1386,11 @@ export default function AdminSettingsScreen() {
   const deliveryDisplay = `${settings.deliveryStartHour}:${settings.deliveryStartMin} ${settings.deliveryStartAmPm} – ${settings.deliveryEndHour}:${settings.deliveryEndMin} ${settings.deliveryEndAmPm}`;
 
   const pwStepTitle =
-    otpStep === "request" ? "Change Password" :
-    otpStep === "verify"  ? "Enter OTP"       :
-                            "Set New Password";
+    otpStep === "request"
+      ? "Change Password"
+      : otpStep === "verify"
+        ? "Enter OTP"
+        : "Set New Password";
 
   const initials = (user?.name ?? "A")
     .split(" ")
@@ -1021,13 +1405,26 @@ export default function AdminSettingsScreen() {
       <StatusBar barStyle="dark-content" backgroundColor={C.bg} />
       <CustomAlert cfg={alertCfg} onDismiss={dismissAlert} />
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 40 }}
+      >
         {/* ── Top Bar */}
         <Animated.View
-          style={[s.topBar, {
-            opacity: headerAnim,
-            transform: [{ translateY: headerAnim.interpolate({ inputRange: [0, 1], outputRange: [-12, 0] }) }],
-          }]}
+          style={[
+            s.topBar,
+            {
+              opacity: headerAnim,
+              transform: [
+                {
+                  translateY: headerAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [-12, 0],
+                  }),
+                },
+              ],
+            },
+          ]}
         >
           <Text style={s.topBarTitle}>Settings</Text>
           <View style={s.topBarRight}>
@@ -1037,10 +1434,20 @@ export default function AdminSettingsScreen() {
 
         {/* ── Hero Profile Card */}
         <Animated.View
-          style={[s.heroCard, {
-            opacity: headerAnim,
-            transform: [{ translateY: headerAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }],
-          }]}
+          style={[
+            s.heroCard,
+            {
+              opacity: headerAnim,
+              transform: [
+                {
+                  translateY: headerAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [20, 0],
+                  }),
+                },
+              ],
+            },
+          ]}
         >
           <View style={s.heroBubble1} />
           <View style={s.heroBubble2} />
@@ -1059,14 +1466,28 @@ export default function AdminSettingsScreen() {
           <Text style={s.heroEmail}>{user?.email ?? ""}</Text>
           <View style={s.heroDivider} />
           <View style={s.heroBtnRow}>
-            <TouchableOpacity style={s.heroBtn} onPress={() => openModal("profile")} activeOpacity={0.85}>
+            <TouchableOpacity
+              style={s.heroBtn}
+              onPress={() => openModal("profile")}
+              activeOpacity={0.85}
+            >
               <Ionicons name="pencil-outline" size={14} color={C.dark} />
               <Text style={s.heroBtnTxt}>Edit Profile</Text>
             </TouchableOpacity>
             <View style={s.heroBtnSep} />
-            <TouchableOpacity style={[s.heroBtn, s.heroBtnDark]} onPress={() => openModal("password")} activeOpacity={0.85}>
-              <Ionicons name="lock-closed-outline" size={14} color="rgba(255,255,255,0.9)" />
-              <Text style={[s.heroBtnTxt, { color: "rgba(255,255,255,0.9)" }]}>Password</Text>
+            <TouchableOpacity
+              style={[s.heroBtn, s.heroBtnDark]}
+              onPress={() => openModal("password")}
+              activeOpacity={0.85}
+            >
+              <Ionicons
+                name="lock-closed-outline"
+                size={14}
+                color="rgba(255,255,255,0.9)"
+              />
+              <Text style={[s.heroBtnTxt, { color: "rgba(255,255,255,0.9)" }]}>
+                Password
+              </Text>
             </TouchableOpacity>
           </View>
         </Animated.View>
@@ -1074,7 +1495,10 @@ export default function AdminSettingsScreen() {
         {/* ── Referral & Share */}
         <View style={s.referralCard}>
           <TouchableOpacity
-            style={[s.referralHeader, referralExpanded ? s.referralHeaderExpanded : null]}
+            style={[
+              s.referralHeader,
+              referralExpanded ? s.referralHeaderExpanded : null,
+            ]}
             activeOpacity={0.85}
             onPress={() => setReferralExpanded((prev) => !prev)}
           >
@@ -1083,10 +1507,16 @@ export default function AdminSettingsScreen() {
             </View>
             <View style={s.referralContent}>
               <Text style={s.referralTitle}>Referral & Share</Text>
-              <Text style={s.referralSubtitle}>Share your farm QR and referral code with customers.</Text>
+              <Text style={s.referralSubtitle}>
+                Share your farm QR and referral code with customers.
+              </Text>
             </View>
             <View style={s.referralToggleBtn}>
-              <Ionicons name={referralExpanded ? "remove" : "add"} size={18} color={C.dark} />
+              <Ionicons
+                name={referralExpanded ? "remove" : "add"}
+                size={18}
+                color={C.dark}
+              />
             </View>
           </TouchableOpacity>
           {referralExpanded ? (
@@ -1097,7 +1527,11 @@ export default function AdminSettingsScreen() {
                   <Text style={s.referralCodeValue}>{referralCode}</Text>
                 </View>
               </View>
-              <TouchableOpacity style={s.referralShareBtn} activeOpacity={0.85} onPress={() => openModal("share")}>
+              <TouchableOpacity
+                style={s.referralShareBtn}
+                activeOpacity={0.85}
+                onPress={() => openModal("share")}
+              >
                 <Ionicons name="share-social-outline" size={15} color="#fff" />
                 <Text style={s.referralShareTxt}>Share</Text>
               </TouchableOpacity>
@@ -1113,13 +1547,19 @@ export default function AdminSettingsScreen() {
             </View>
             <View style={s.contentCardBody}>
               <Text style={s.contentCardTitle}>App Content</Text>
-              <Text style={s.contentCardSubtitle}>Add image content for customer app banners and highlights.</Text>
+              <Text style={s.contentCardSubtitle}>
+                Add image content for customer app banners and highlights.
+              </Text>
             </View>
             <View style={s.contentCountPill}>
               <Text style={s.contentCountText}>{contentItems.length}</Text>
             </View>
           </View>
-          <TouchableOpacity style={s.contentManageBtn} activeOpacity={0.85} onPress={openContentModal}>
+          <TouchableOpacity
+            style={s.contentManageBtn}
+            activeOpacity={0.85}
+            onPress={openContentModal}
+          >
             <Ionicons name="create-outline" size={15} color="#fff" />
             <Text style={s.contentManageText}>Manage Content</Text>
           </TouchableOpacity>
@@ -1133,7 +1573,9 @@ export default function AdminSettingsScreen() {
             </View>
             <View style={s.contentCardBody}>
               <Text style={s.contentCardTitle}>Wallet Payment</Text>
-              <Text style={s.contentCardSubtitle}>Upload payment QR and manage customer recharge requests.</Text>
+              <Text style={s.contentCardSubtitle}>
+                Upload payment QR and manage customer recharge requests.
+              </Text>
             </View>
             <View style={s.contentCountPill}>
               <Ionicons name="wallet-outline" size={16} color={C.dark} />
@@ -1153,11 +1595,32 @@ export default function AdminSettingsScreen() {
         <View style={s.section}>
           <SectionHeader title="System Configuration" />
           <View style={s.card}>
-            <SettingRow icon="time-outline" iconBg="#FFF8E8" iconColor={C.amber} label="Order Cut-off Time" value={cutoffDisplay} onPress={() => openModal("cutoff")} />
+            <SettingRow
+              icon="time-outline"
+              iconBg="#FFF8E8"
+              iconColor={C.amber}
+              label="Order Cut-off Time"
+              value={cutoffDisplay}
+              onPress={() => openModal("cutoff")}
+            />
             <View style={s.divider} />
-            <SettingRow icon="bicycle-outline" iconBg={C.peach} iconColor={C.primary} label="Delivery Window" value={deliveryDisplay} onPress={() => openModal("delivery")} />
+            <SettingRow
+              icon="bicycle-outline"
+              iconBg={C.peach}
+              iconColor={C.primary}
+              label="Delivery Window"
+              value={deliveryDisplay}
+              onPress={() => openModal("delivery")}
+            />
             <View style={s.divider} />
-            <SettingRow icon="wallet-outline" iconBg="#F5EDE8" iconColor={C.dark} label="Grace Period" value={settings.gracePeriod} onPress={() => openModal("grace")} />
+            <SettingRow
+              icon="wallet-outline"
+              iconBg="#F5EDE8"
+              iconColor={C.dark}
+              label="Grace Period"
+              value={settings.gracePeriod}
+              onPress={() => openModal("grace")}
+            />
           </View>
         </View>
 
@@ -1165,9 +1628,23 @@ export default function AdminSettingsScreen() {
         <View style={s.section}>
           <SectionHeader title="Business Information" />
           <View style={s.card}>
-            <SettingRow icon="storefront-outline" iconBg="#FFF0E8" iconColor={C.accent} label="Business Name" value={settings.businessName} onPress={() => openModal("business")} />
+            <SettingRow
+              icon="storefront-outline"
+              iconBg="#FFF0E8"
+              iconColor={C.accent}
+              label="Business Name"
+              value={settings.businessName}
+              onPress={() => openModal("business")}
+            />
             <View style={s.divider} />
-            <SettingRow icon="call-outline" iconBg="#FFF8E8" iconColor={C.accent} label="Support Contact" value={settings.supportContact} onPress={() => openModal("contact")} />
+            <SettingRow
+              icon="call-outline"
+              iconBg="#FFF8E8"
+              iconColor={C.accent}
+              label="Support Contact"
+              value={settings.supportContact}
+              onPress={() => openModal("contact")}
+            />
           </View>
         </View>
 
@@ -1176,30 +1653,55 @@ export default function AdminSettingsScreen() {
           <Text style={s.versionTxt}>GauSatva v1.0.0</Text>
         </View>
 
-        <TouchableOpacity style={s.logoutBtn} onPress={handleLogout} activeOpacity={0.8}>
+        <TouchableOpacity
+          style={s.logoutBtn}
+          onPress={handleLogout}
+          activeOpacity={0.8}
+        >
           <View style={s.logoutIconWrap}>
             <Ionicons name="log-out-outline" size={18} color={C.dark} />
           </View>
           <Text style={s.logoutTxt}>Logout</Text>
-          <Ionicons name="chevron-forward" size={15} color={C.light} style={{ marginLeft: "auto" }} />
+          <Ionicons
+            name="chevron-forward"
+            size={15}
+            color={C.light}
+            style={{ marginLeft: "auto" }}
+          />
         </TouchableOpacity>
 
-        <TouchableOpacity style={s.deleteAccountBtn} onPress={handleDeleteAccount} activeOpacity={0.8}>
+        <TouchableOpacity
+          style={s.deleteAccountBtn}
+          onPress={handleDeleteAccount}
+          activeOpacity={0.8}
+        >
           <View style={s.deleteIconWrap}>
             <Ionicons name="trash-outline" size={18} color="#dc2626" />
           </View>
           <Text style={s.deleteAccountTxt}>Delete Account</Text>
-          <Ionicons name="chevron-forward" size={15} color="#FCA5A5" style={{ marginLeft: "auto" }} />
+          <Ionicons
+            name="chevron-forward"
+            size={15}
+            color="#FCA5A5"
+            style={{ marginLeft: "auto" }}
+          />
         </TouchableOpacity>
       </ScrollView>
 
       {/* ── Share Modal */}
-      <ShareModal visible={activeModal === "share"} onClose={closeModal} adminUser={user} />
+      <ShareModal
+        visible={activeModal === "share"}
+        onClose={closeModal}
+        adminUser={user}
+      />
 
       {/* ── Delete Account Modal */}
       <Modal visible={deleteModal} animationType="slide" transparent>
         <View style={mS.overlay}>
-          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={mS.sheet}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            style={mS.sheet}
+          >
             <View style={mS.drag} />
             <View style={mS.header}>
               <View style={mS.headerLeft}>
@@ -1208,12 +1710,17 @@ export default function AdminSettingsScreen() {
                 </View>
                 <Text style={mS.headerTitle}>Delete Account</Text>
               </View>
-              <TouchableOpacity style={mS.closeBtn} onPress={() => setDeleteModal(false)}>
+              <TouchableOpacity
+                style={mS.closeBtn}
+                onPress={() => setDeleteModal(false)}
+              >
                 <Ionicons name="close" size={16} color={C.dark} />
               </TouchableOpacity>
             </View>
             <View style={mS.body}>
-              <Text style={mS.shareSubtitle}>Enter your password to confirm permanent account deletion.</Text>
+              <Text style={mS.shareSubtitle}>
+                Enter your password to confirm permanent account deletion.
+              </Text>
               <TextInput
                 style={mS.input}
                 value={deletePassword}
@@ -1228,7 +1735,11 @@ export default function AdminSettingsScreen() {
                 disabled={deletingAccount}
                 activeOpacity={0.8}
               >
-                {deletingAccount ? <ActivityIndicator color="#fff" /> : <Text style={mS.saveTxt}>Continue</Text>}
+                {deletingAccount ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={mS.saveTxt}>Continue</Text>
+                )}
               </TouchableOpacity>
               <View style={{ height: 16 }} />
             </View>
@@ -1237,84 +1748,253 @@ export default function AdminSettingsScreen() {
       </Modal>
 
       {/* ── Modal: Order Cut-off */}
-      <SettingModal visible={activeModal === "cutoff"} title="Order Cut-off Time" icon="time-outline" onClose={closeModal} onSave={saveSettings}>
-        <PickerRow label="Hour" options={HOURS_12} selected={draft.cutoffHour} onSelect={(v) => setDraft((d) => ({ ...d, cutoffHour: v }))} />
-        <PickerRow label="Minute" options={MINUTES} selected={draft.cutoffMin} onSelect={(v) => setDraft((d) => ({ ...d, cutoffMin: v }))} />
-        <PickerRow label="AM / PM" options={["AM", "PM"]} selected={draft.cutoffAmPm} onSelect={(v) => setDraft((d) => ({ ...d, cutoffAmPm: v as "AM" | "PM" }))} />
-        <TouchableOpacity style={mS.saveBtn} onPress={saveSettings} activeOpacity={0.8}>
+      <SettingModal
+        visible={activeModal === "cutoff"}
+        title="Order Cut-off Time"
+        icon="time-outline"
+        onClose={closeModal}
+        onSave={saveSettings}
+      >
+        <PickerRow
+          label="Hour"
+          options={HOURS_12}
+          selected={draft.cutoffHour}
+          onSelect={(v) => setDraft((d) => ({ ...d, cutoffHour: v }))}
+        />
+        <PickerRow
+          label="Minute"
+          options={MINUTES}
+          selected={draft.cutoffMin}
+          onSelect={(v) => setDraft((d) => ({ ...d, cutoffMin: v }))}
+        />
+        <PickerRow
+          label="AM / PM"
+          options={["AM", "PM"]}
+          selected={draft.cutoffAmPm}
+          onSelect={(v) =>
+            setDraft((d) => ({ ...d, cutoffAmPm: v as "AM" | "PM" }))
+          }
+        />
+        <TouchableOpacity
+          style={mS.saveBtn}
+          onPress={saveSettings}
+          activeOpacity={0.8}
+        >
           <Ionicons name="checkmark-circle" size={18} color="#fff" />
           <Text style={mS.saveTxt}>Save Changes</Text>
         </TouchableOpacity>
       </SettingModal>
 
       {/* ── Modal: Delivery Window */}
-      <SettingModal visible={activeModal === "delivery"} title="Delivery Window" icon="bicycle-outline" onClose={closeModal} onSave={saveSettings}>
+      <SettingModal
+        visible={activeModal === "delivery"}
+        title="Delivery Window"
+        icon="bicycle-outline"
+        onClose={closeModal}
+        onSave={saveSettings}
+      >
         <Text style={mS.subHeading}>Start Time</Text>
-        <PickerRow label="Hour" options={HOURS_12} selected={draft.deliveryStartHour} onSelect={(v) => setDraft((d) => ({ ...d, deliveryStartHour: v }))} />
-        <PickerRow label="Minute" options={MINUTES} selected={draft.deliveryStartMin} onSelect={(v) => setDraft((d) => ({ ...d, deliveryStartMin: v }))} />
-        <PickerRow label="AM / PM" options={["AM", "PM"]} selected={draft.deliveryStartAmPm} onSelect={(v) => setDraft((d) => ({ ...d, deliveryStartAmPm: v as "AM" | "PM" }))} />
+        <PickerRow
+          label="Hour"
+          options={HOURS_12}
+          selected={draft.deliveryStartHour}
+          onSelect={(v) => setDraft((d) => ({ ...d, deliveryStartHour: v }))}
+        />
+        <PickerRow
+          label="Minute"
+          options={MINUTES}
+          selected={draft.deliveryStartMin}
+          onSelect={(v) => setDraft((d) => ({ ...d, deliveryStartMin: v }))}
+        />
+        <PickerRow
+          label="AM / PM"
+          options={["AM", "PM"]}
+          selected={draft.deliveryStartAmPm}
+          onSelect={(v) =>
+            setDraft((d) => ({ ...d, deliveryStartAmPm: v as "AM" | "PM" }))
+          }
+        />
         <View style={mS.separator} />
         <Text style={mS.subHeading}>End Time</Text>
-        <PickerRow label="Hour" options={HOURS_12} selected={draft.deliveryEndHour} onSelect={(v) => setDraft((d) => ({ ...d, deliveryEndHour: v }))} />
-        <PickerRow label="Minute" options={MINUTES} selected={draft.deliveryEndMin} onSelect={(v) => setDraft((d) => ({ ...d, deliveryEndMin: v }))} />
-        <PickerRow label="AM / PM" options={["AM", "PM"]} selected={draft.deliveryEndAmPm} onSelect={(v) => setDraft((d) => ({ ...d, deliveryEndAmPm: v as "AM" | "PM" }))} />
-        <TouchableOpacity style={mS.saveBtn} onPress={saveSettings} activeOpacity={0.8}>
+        <PickerRow
+          label="Hour"
+          options={HOURS_12}
+          selected={draft.deliveryEndHour}
+          onSelect={(v) => setDraft((d) => ({ ...d, deliveryEndHour: v }))}
+        />
+        <PickerRow
+          label="Minute"
+          options={MINUTES}
+          selected={draft.deliveryEndMin}
+          onSelect={(v) => setDraft((d) => ({ ...d, deliveryEndMin: v }))}
+        />
+        <PickerRow
+          label="AM / PM"
+          options={["AM", "PM"]}
+          selected={draft.deliveryEndAmPm}
+          onSelect={(v) =>
+            setDraft((d) => ({ ...d, deliveryEndAmPm: v as "AM" | "PM" }))
+          }
+        />
+        <TouchableOpacity
+          style={mS.saveBtn}
+          onPress={saveSettings}
+          activeOpacity={0.8}
+        >
           <Ionicons name="checkmark-circle" size={18} color="#fff" />
           <Text style={mS.saveTxt}>Save Changes</Text>
         </TouchableOpacity>
       </SettingModal>
 
       {/* ── Modal: Grace Period */}
-      <SettingModal visible={activeModal === "grace"} title="Grace Period" icon="wallet-outline" onClose={closeModal} onSave={saveSettings}>
+      <SettingModal
+        visible={activeModal === "grace"}
+        title="Grace Period"
+        icon="wallet-outline"
+        onClose={closeModal}
+        onSave={saveSettings}
+      >
         <Text style={mS.fieldLabel}>Allowed Negative Balance Duration</Text>
         <View style={mS.graceGrid}>
           {GRACE_OPTIONS.map((opt) => (
-            <TouchableOpacity key={opt} style={[mS.chip, draft.gracePeriod === opt && mS.chipActive]} onPress={() => setDraft((d) => ({ ...d, gracePeriod: opt }))}>
-              <Text style={[mS.chipTxt, draft.gracePeriod === opt && mS.chipTxtActive]}>{opt}</Text>
+            <TouchableOpacity
+              key={opt}
+              style={[mS.chip, draft.gracePeriod === opt && mS.chipActive]}
+              onPress={() => setDraft((d) => ({ ...d, gracePeriod: opt }))}
+            >
+              <Text
+                style={[
+                  mS.chipTxt,
+                  draft.gracePeriod === opt && mS.chipTxtActive,
+                ]}
+              >
+                {opt}
+              </Text>
             </TouchableOpacity>
           ))}
         </View>
-        <TouchableOpacity style={mS.saveBtn} onPress={saveSettings} activeOpacity={0.8}>
+        <TouchableOpacity
+          style={mS.saveBtn}
+          onPress={saveSettings}
+          activeOpacity={0.8}
+        >
           <Ionicons name="checkmark-circle" size={18} color="#fff" />
           <Text style={mS.saveTxt}>Save Changes</Text>
         </TouchableOpacity>
       </SettingModal>
 
-      {/* ── Modal: Business Name */}
-      <SettingModal visible={activeModal === "business"} title="Business Name" icon="storefront-outline" onClose={closeModal} onSave={saveSettings}>
+      {/* ── Modal: Business Name (writes to admin's real `name`) */}
+      <SettingModal
+        visible={activeModal === "business"}
+        title="Business Name"
+        icon="storefront-outline"
+        onClose={closeModal}
+        onSave={saveBusinessName}
+      >
         <Text style={mS.fieldLabel}>Business Name</Text>
-        <TextInput style={mS.input} value={draft.businessName} onChangeText={(v) => setDraft((d) => ({ ...d, businessName: v }))} placeholder="Enter business name" placeholderTextColor={C.light} autoFocus />
-        <TouchableOpacity style={mS.saveBtn} onPress={saveSettings} activeOpacity={0.8}>
-          <Ionicons name="checkmark-circle" size={18} color="#fff" />
-          <Text style={mS.saveTxt}>Save Changes</Text>
+        <TextInput
+          style={mS.input}
+          value={draft.businessName}
+          onChangeText={(v) => setDraft((d) => ({ ...d, businessName: v }))}
+          placeholder="Enter business name"
+          placeholderTextColor={C.light}
+          autoFocus
+        />
+        <TouchableOpacity
+          style={[mS.saveBtn, isSaving && mS.saveBtnDisabled]}
+          onPress={saveBusinessName}
+          activeOpacity={0.8}
+          disabled={isSaving}
+        >
+          {isSaving ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <>
+              <Ionicons name="checkmark-circle" size={18} color="#fff" />
+              <Text style={mS.saveTxt}>Save Changes</Text>
+            </>
+          )}
         </TouchableOpacity>
       </SettingModal>
 
-      {/* ── Modal: Support Contact */}
-      <SettingModal visible={activeModal === "contact"} title="Support Contact" icon="call-outline" onClose={closeModal} onSave={saveSettings}>
+      {/* ── Modal: Support Contact (writes to admin's real `phone`) */}
+      <SettingModal
+        visible={activeModal === "contact"}
+        title="Support Contact"
+        icon="call-outline"
+        onClose={closeModal}
+        onSave={saveSupportContact}
+      >
         <Text style={mS.fieldLabel}>Phone Number</Text>
-        <TextInput style={mS.input} value={draft.supportContact} onChangeText={(v) => setDraft((d) => ({ ...d, supportContact: v }))} placeholder="+91 XXXXXXXXXX" placeholderTextColor={C.light} keyboardType="phone-pad" autoFocus />
-        <TouchableOpacity style={mS.saveBtn} onPress={saveSettings} activeOpacity={0.8}>
-          <Ionicons name="checkmark-circle" size={18} color="#fff" />
-          <Text style={mS.saveTxt}>Save Changes</Text>
+        <TextInput
+          style={mS.input}
+          value={draft.supportContact}
+          onChangeText={(v) => setDraft((d) => ({ ...d, supportContact: v }))}
+          placeholder="+91 XXXXXXXXXX"
+          placeholderTextColor={C.light}
+          keyboardType="phone-pad"
+          autoFocus
+        />
+        <TouchableOpacity
+          style={[mS.saveBtn, isSaving && mS.saveBtnDisabled]}
+          onPress={saveSupportContact}
+          activeOpacity={0.8}
+          disabled={isSaving}
+        >
+          {isSaving ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <>
+              <Ionicons name="checkmark-circle" size={18} color="#fff" />
+              <Text style={mS.saveTxt}>Save Changes</Text>
+            </>
+          )}
         </TouchableOpacity>
       </SettingModal>
 
       {/* ── Modal: Edit Profile */}
-      <SettingModal visible={activeModal === "profile"} title="Edit Profile" icon="person-outline" onClose={closeModal} onSave={saveProfile}>
+      <SettingModal
+        visible={activeModal === "profile"}
+        title="Edit Profile"
+        icon="person-outline"
+        onClose={closeModal}
+        onSave={saveProfile}
+      >
         <View style={mS.profilePreview}>
           <View style={mS.profilePreviewAvatar}>
             <Text style={mS.profilePreviewInitials}>{initials}</Text>
           </View>
           <View>
-            <Text style={mS.profilePreviewName}>{profileDraft.name || "Your Name"}</Text>
-            <Text style={mS.profilePreviewEmail}>{profileDraft.email || "your@email.com"}</Text>
+            <Text style={mS.profilePreviewName}>
+              {profileDraft.name || "Your Name"}
+            </Text>
+            <Text style={mS.profilePreviewEmail}>
+              {profileDraft.email || "your@email.com"}
+            </Text>
           </View>
         </View>
         {[
-          { label: "Full Name", key: "name", placeholder: "Your name", keyboard: "default", icon: "person-outline" },
-          { label: "Email Address", key: "email", placeholder: "your@email.com", keyboard: "email-address", icon: "mail-outline" },
-          { label: "Phone Number", key: "phone", placeholder: "+91 XXXXXXXXXX", keyboard: "phone-pad", icon: "call-outline" },
+          {
+            label: "Full Name",
+            key: "name",
+            placeholder: "Your name",
+            keyboard: "default",
+            icon: "person-outline",
+          },
+          {
+            label: "Email Address",
+            key: "email",
+            placeholder: "your@email.com",
+            keyboard: "email-address",
+            icon: "mail-outline",
+          },
+          {
+            label: "Phone Number",
+            key: "phone",
+            placeholder: "+91 XXXXXXXXXX",
+            keyboard: "phone-pad",
+            icon: "call-outline",
+          },
         ].map((f) => (
           <View key={f.key} style={{ marginBottom: 4 }}>
             <Text style={mS.fieldLabel}>{f.label}</Text>
@@ -1325,7 +2005,9 @@ export default function AdminSettingsScreen() {
               <TextInput
                 style={[mS.input, mS.inputWithIcon]}
                 value={profileDraft[f.key as keyof typeof profileDraft]}
-                onChangeText={(v) => setProfileDraft((p) => ({ ...p, [f.key]: v }))}
+                onChangeText={(v) =>
+                  setProfileDraft((p) => ({ ...p, [f.key]: v }))
+                }
                 placeholder={f.placeholder}
                 placeholderTextColor={C.light}
                 keyboardType={f.keyboard as any}
@@ -1334,9 +2016,20 @@ export default function AdminSettingsScreen() {
             </View>
           </View>
         ))}
-        <TouchableOpacity style={[mS.saveBtn, isSaving && mS.saveBtnDisabled]} onPress={saveProfile} activeOpacity={0.8} disabled={isSaving}>
-          <Ionicons name={isSaving ? "hourglass-outline" : "checkmark-circle"} size={18} color="#fff" />
-          <Text style={mS.saveTxt}>{isSaving ? "Saving..." : "Save Changes"}</Text>
+        <TouchableOpacity
+          style={[mS.saveBtn, isSaving && mS.saveBtnDisabled]}
+          onPress={saveProfile}
+          activeOpacity={0.8}
+          disabled={isSaving}
+        >
+          <Ionicons
+            name={isSaving ? "hourglass-outline" : "checkmark-circle"}
+            size={18}
+            color="#fff"
+          />
+          <Text style={mS.saveTxt}>
+            {isSaving ? "Saving..." : "Save Changes"}
+          </Text>
         </TouchableOpacity>
       </SettingModal>
 
@@ -1354,18 +2047,27 @@ export default function AdminSettingsScreen() {
         <View style={mS.stepRow}>
           {(["request", "verify", "change"] as OtpStep[]).map((step, i) => {
             const done =
-              (otpStep === "verify"  && i === 0) ||
-              (otpStep === "change"  && i <= 1);
+              (otpStep === "verify" && i === 0) ||
+              (otpStep === "change" && i <= 1);
             const active = otpStep === step;
             return (
               <React.Fragment key={step}>
-                <View style={[mS.stepDot, active && mS.stepDotActive, done && mS.stepDotDone]}>
-                  {done
-                    ? <Ionicons name="checkmark" size={10} color="#fff" />
-                    : <Text style={mS.stepDotTxt}>{i + 1}</Text>
-                  }
+                <View
+                  style={[
+                    mS.stepDot,
+                    active && mS.stepDotActive,
+                    done && mS.stepDotDone,
+                  ]}
+                >
+                  {done ? (
+                    <Ionicons name="checkmark" size={10} color="#fff" />
+                  ) : (
+                    <Text style={mS.stepDotTxt}>{i + 1}</Text>
+                  )}
                 </View>
-                {i < 2 && <View style={[mS.stepLine, done && mS.stepLineDone]} />}
+                {i < 2 && (
+                  <View style={[mS.stepLine, done && mS.stepLineDone]} />
+                )}
               </React.Fragment>
             );
           })}
@@ -1380,7 +2082,8 @@ export default function AdminSettingsScreen() {
               </View>
               <Text style={mS.stepInfoTitle}>Verify your identity</Text>
               <Text style={mS.stepInfoDesc}>
-                Tap the button below to generate a one-time password. It will appear on-screen for you to use.
+                Tap the button below to generate a one-time password. It will
+                appear on-screen for you to use.
               </Text>
             </View>
             <TouchableOpacity
@@ -1389,13 +2092,14 @@ export default function AdminSettingsScreen() {
               activeOpacity={0.8}
               disabled={pwLoading}
             >
-              {pwLoading
-                ? <ActivityIndicator color="#fff" />
-                : <>
-                    <Ionicons name="key-outline" size={17} color="#fff" />
-                    <Text style={mS.saveTxt}>Generate OTP</Text>
-                  </>
-              }
+              {pwLoading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="key-outline" size={17} color="#fff" />
+                  <Text style={mS.saveTxt}>Generate OTP</Text>
+                </>
+              )}
             </TouchableOpacity>
           </View>
         )}
@@ -1424,7 +2128,10 @@ export default function AdminSettingsScreen() {
                 <Ionicons name="keypad-outline" size={28} color={C.primary} />
               </View>
               <Text style={mS.stepInfoTitle}>Enter the OTP above</Text>
-              <Text style={mS.stepInfoDesc}>Type the 6-digit code shown in the box above into the input below.</Text>
+              <Text style={mS.stepInfoDesc}>
+                Type the 6-digit code shown in the box above into the input
+                below.
+              </Text>
             </View>
 
             <Text style={mS.fieldLabel}>Enter OTP</Text>
@@ -1433,9 +2140,19 @@ export default function AdminSettingsScreen() {
             {/* Resend row */}
             <View style={mS.resendRow}>
               <Text style={mS.resendLabel}>Need a new code?</Text>
-              <TouchableOpacity onPress={handleResendOtp} disabled={otpResendTimer > 0 || pwLoading}>
-                <Text style={[mS.resendBtn, (otpResendTimer > 0 || pwLoading) && mS.resendBtnDisabled]}>
-                  {otpResendTimer > 0 ? `Resend in ${otpResendTimer}s` : "Regenerate OTP"}
+              <TouchableOpacity
+                onPress={handleResendOtp}
+                disabled={otpResendTimer > 0 || pwLoading}
+              >
+                <Text
+                  style={[
+                    mS.resendBtn,
+                    (otpResendTimer > 0 || pwLoading) && mS.resendBtnDisabled,
+                  ]}
+                >
+                  {otpResendTimer > 0
+                    ? `Resend in ${otpResendTimer}s`
+                    : "Regenerate OTP"}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -1446,16 +2163,24 @@ export default function AdminSettingsScreen() {
               activeOpacity={0.8}
               disabled={pwLoading}
             >
-              {pwLoading
-                ? <ActivityIndicator color="#fff" />
-                : <>
-                    <Ionicons name="checkmark-circle" size={18} color="#fff" />
-                    <Text style={mS.saveTxt}>Verify OTP</Text>
-                  </>
-              }
+              {pwLoading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="checkmark-circle" size={18} color="#fff" />
+                  <Text style={mS.saveTxt}>Verify OTP</Text>
+                </>
+              )}
             </TouchableOpacity>
 
-            <TouchableOpacity style={mS.backBtn} onPress={() => { setOtpStep("request"); setScreenOtp(""); setEnteredOtp(""); }}>
+            <TouchableOpacity
+              style={mS.backBtn}
+              onPress={() => {
+                setOtpStep("request");
+                setScreenOtp("");
+                setEnteredOtp("");
+              }}
+            >
               <Ionicons name="arrow-back-outline" size={14} color={C.muted} />
               <Text style={mS.backTxt}>Go back</Text>
             </TouchableOpacity>
@@ -1467,36 +2192,61 @@ export default function AdminSettingsScreen() {
           <View>
             <View style={mS.stepInfo}>
               <View style={mS.stepInfoIconWrap}>
-                <Ionicons name="lock-open-outline" size={28} color={C.primary} />
+                <Ionicons
+                  name="lock-open-outline"
+                  size={28}
+                  color={C.primary}
+                />
               </View>
               <Text style={mS.stepInfoTitle}>Set new password</Text>
-              <Text style={mS.stepInfoDesc}>OTP verified. Enter your new password below.</Text>
+              <Text style={mS.stepInfoDesc}>
+                OTP verified. Enter your new password below.
+              </Text>
             </View>
-            {([
-              { label: "New Password", key: "newPw" },
-              { label: "Confirm New Password", key: "confirm" },
-            ] as const).map((f) => (
+            {(
+              [
+                { label: "New Password", key: "newPw" },
+                { label: "Confirm New Password", key: "confirm" },
+              ] as const
+            ).map((f) => (
               <View key={f.key}>
                 <Text style={mS.fieldLabel}>{f.label}</Text>
                 <View style={mS.pwRow}>
                   <TextInput
                     style={[mS.input, { flex: 1, marginBottom: 0 }]}
                     value={pwDraft[f.key]}
-                    onChangeText={(v) => setPwDraft((p) => ({ ...p, [f.key]: v }))}
+                    onChangeText={(v) =>
+                      setPwDraft((p) => ({ ...p, [f.key]: v }))
+                    }
                     placeholder="••••••••"
                     placeholderTextColor={C.light}
                     secureTextEntry={!showPw[f.key]}
                   />
-                  <TouchableOpacity style={mS.eyeBtn} onPress={() => setShowPw((p) => ({ ...p, [f.key]: !p[f.key] }))}>
-                    <Ionicons name={showPw[f.key] ? "eye-off-outline" : "eye-outline"} size={18} color={C.accent} />
+                  <TouchableOpacity
+                    style={mS.eyeBtn}
+                    onPress={() =>
+                      setShowPw((p) => ({ ...p, [f.key]: !p[f.key] }))
+                    }
+                  >
+                    <Ionicons
+                      name={showPw[f.key] ? "eye-off-outline" : "eye-outline"}
+                      size={18}
+                      color={C.accent}
+                    />
                   </TouchableOpacity>
                 </View>
                 <View style={{ height: 12 }} />
               </View>
             ))}
             <View style={mS.pwHint}>
-              <Ionicons name="information-circle-outline" size={14} color={C.muted} />
-              <Text style={mS.pwHintTxt}>Password must be at least 6 characters</Text>
+              <Ionicons
+                name="information-circle-outline"
+                size={14}
+                color={C.muted}
+              />
+              <Text style={mS.pwHintTxt}>
+                Password must be at least 6 characters
+              </Text>
             </View>
             <TouchableOpacity
               style={[mS.saveBtn, pwLoading && mS.saveBtnDisabled]}
@@ -1504,13 +2254,14 @@ export default function AdminSettingsScreen() {
               activeOpacity={0.8}
               disabled={pwLoading}
             >
-              {pwLoading
-                ? <ActivityIndicator color="#fff" />
-                : <>
-                    <Ionicons name="shield-checkmark" size={18} color="#fff" />
-                    <Text style={mS.saveTxt}>Update Password</Text>
-                  </>
-              }
+              {pwLoading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="shield-checkmark" size={18} color="#fff" />
+                  <Text style={mS.saveTxt}>Update Password</Text>
+                </>
+              )}
             </TouchableOpacity>
           </View>
         )}
@@ -1524,13 +2275,59 @@ export default function AdminSettingsScreen() {
 // ─────────────────────────────────────────────
 
 const aS = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: "rgba(61,31,10,0.5)", justifyContent: "center", alignItems: "center", paddingHorizontal: 28 },
-  box: { width: "100%", backgroundColor: "#FFF8EF", borderRadius: 28, paddingTop: 28, paddingBottom: 22, paddingHorizontal: 24, alignItems: "center", shadowColor: "#BB6B3F", shadowOpacity: 0.2, shadowRadius: 24, shadowOffset: { width: 0, height: 8 }, elevation: 10 },
-  iconWrap: { width: 56, height: 56, borderRadius: 18, justifyContent: "center", alignItems: "center", marginBottom: 14 },
-  title: { fontSize: 17, fontWeight: "800", color: "#3D1F0A", textAlign: "center", marginBottom: 6, letterSpacing: -0.3 },
-  msg: { fontSize: 14, color: "#A07850", textAlign: "center", lineHeight: 20, marginBottom: 16, fontWeight: "500" },
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(61,31,10,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 28,
+  },
+  box: {
+    width: "100%",
+    backgroundColor: "#FFF8EF",
+    borderRadius: 28,
+    paddingTop: 28,
+    paddingBottom: 22,
+    paddingHorizontal: 24,
+    alignItems: "center",
+    shadowColor: "#BB6B3F",
+    shadowOpacity: 0.2,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 10,
+  },
+  iconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 14,
+  },
+  title: {
+    fontSize: 17,
+    fontWeight: "800",
+    color: "#3D1F0A",
+    textAlign: "center",
+    marginBottom: 6,
+    letterSpacing: -0.3,
+  },
+  msg: {
+    fontSize: 14,
+    color: "#A07850",
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: 16,
+    fontWeight: "500",
+  },
   btnRow: { flexDirection: "row", gap: 10, width: "100%", marginTop: 4 },
-  btn: { flex: 1, paddingVertical: 13, borderRadius: 14, backgroundColor: "#FFE8D6", alignItems: "center" },
+  btn: {
+    flex: 1,
+    paddingVertical: 13,
+    borderRadius: 14,
+    backgroundColor: "#FFE8D6",
+    alignItems: "center",
+  },
   btnCancel: { backgroundColor: "#FFF3DC" },
   btnDest: { backgroundColor: "#FF9675" },
   btnTxt: { fontSize: 14, fontWeight: "700", color: "#BB6B3F" },
@@ -1539,59 +2336,266 @@ const aS = StyleSheet.create({
 });
 
 const mS = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: "rgba(61,31,10,0.4)", justifyContent: "flex-end" },
-  sheet: { backgroundColor: "#FFF8EF", borderTopLeftRadius: 32, borderTopRightRadius: 32, maxHeight: "92%" },
-  drag: { width: 36, height: 4, backgroundColor: "#D4B896", borderRadius: 2, alignSelf: "center", marginTop: 14, marginBottom: 16 },
-  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: "#FFE8C8" },
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(61,31,10,0.4)",
+    justifyContent: "flex-end",
+  },
+  sheet: {
+    backgroundColor: "#FFF8EF",
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    maxHeight: "92%",
+  },
+  drag: {
+    width: 36,
+    height: 4,
+    backgroundColor: "#D4B896",
+    borderRadius: 2,
+    alignSelf: "center",
+    marginTop: 14,
+    marginBottom: 16,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#FFE8C8",
+  },
   headerLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
-  headerIcon: { width: 34, height: 34, borderRadius: 11, backgroundColor: "#FFE8D6", justifyContent: "center", alignItems: "center" },
+  headerIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 11,
+    backgroundColor: "#FFE8D6",
+    justifyContent: "center",
+    alignItems: "center",
+  },
   headerTitle: { fontSize: 17, fontWeight: "800", color: "#3D1F0A" },
-  closeBtn: { width: 34, height: 34, borderRadius: 11, backgroundColor: "#FFE8D6", justifyContent: "center", alignItems: "center" },
+  closeBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 11,
+    backgroundColor: "#FFE8D6",
+    justifyContent: "center",
+    alignItems: "center",
+  },
   body: { padding: 20 },
-  fieldLabel: { fontSize: 11, fontWeight: "700", color: "#BB6B3F", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8 },
-  subHeading: { fontSize: 13, fontWeight: "800", color: "#3D1F0A", marginBottom: 10, marginTop: 4 },
+  fieldLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#BB6B3F",
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    marginBottom: 8,
+  },
+  subHeading: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#3D1F0A",
+    marginBottom: 10,
+    marginTop: 4,
+  },
   separator: { height: 1, backgroundColor: "#FFE8C8", marginVertical: 16 },
-  chip: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 20, borderWidth: 1.5, borderColor: "#FFE8D6", backgroundColor: "#FFF8EF", marginRight: 8, marginBottom: 8 },
+  chip: {
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: "#FFE8D6",
+    backgroundColor: "#FFF8EF",
+    marginRight: 8,
+    marginBottom: 8,
+  },
   chipActive: { backgroundColor: "#FF9675", borderColor: "#FF9675" },
   chipTxt: { fontSize: 13, fontWeight: "600", color: "#8B6854" },
   chipTxtActive: { color: "#fff", fontWeight: "700" },
   graceGrid: { flexDirection: "row", flexWrap: "wrap", marginBottom: 4 },
   inputWrap: { position: "relative", marginBottom: 12 },
-  inputIcon: { position: "absolute", left: 14, top: 0, bottom: 0, justifyContent: "center", zIndex: 1 },
-  input: { backgroundColor: "#fff", padding: 14, borderRadius: 14, marginBottom: 12, fontSize: 15, color: "#3D1F0A", borderWidth: 1.5, borderColor: "#FFE8C8", fontWeight: "500" },
+  inputIcon: {
+    position: "absolute",
+    left: 14,
+    top: 0,
+    bottom: 0,
+    justifyContent: "center",
+    zIndex: 1,
+  },
+  input: {
+    backgroundColor: "#fff",
+    padding: 14,
+    borderRadius: 14,
+    marginBottom: 12,
+    fontSize: 15,
+    color: "#3D1F0A",
+    borderWidth: 1.5,
+    borderColor: "#FFE8C8",
+    fontWeight: "500",
+  },
   inputWithIcon: { paddingLeft: 42, marginBottom: 0 },
-  saveBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: "#FF9675", borderRadius: 14, paddingVertical: 15, marginTop: 8, shadowColor: "#FF9675", shadowOpacity: 0.35, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 4 },
+  saveBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "#FF9675",
+    borderRadius: 14,
+    paddingVertical: 15,
+    marginTop: 8,
+    shadowColor: "#FF9675",
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
   saveBtnDisabled: { backgroundColor: "#FFBF9E", shadowOpacity: 0 },
   saveTxt: { fontSize: 15, fontWeight: "800", color: "#fff" },
-  shareSubtitle: { fontSize: 13, color: "#A07850", lineHeight: 18, marginBottom: 16, fontWeight: "500" },
+  shareSubtitle: {
+    fontSize: 13,
+    color: "#A07850",
+    lineHeight: 18,
+    marginBottom: 16,
+    fontWeight: "500",
+  },
   pwRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  eyeBtn: { width: 50, height: 50, justifyContent: "center", alignItems: "center", backgroundColor: "#fff", borderRadius: 14, borderWidth: 1.5, borderColor: "#FFE8C8" },
-  pwHint: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4, marginBottom: 8 },
+  eyeBtn: {
+    width: 50,
+    height: 50,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: "#FFE8C8",
+  },
+  pwHint: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 4,
+    marginBottom: 8,
+  },
   pwHintTxt: { fontSize: 12, color: "#A07850", fontWeight: "500" },
-  profilePreview: { flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: "#FFF0E4", borderRadius: 16, padding: 14, marginBottom: 20 },
-  profilePreviewAvatar: { width: 44, height: 44, borderRadius: 14, backgroundColor: "#FF9675", justifyContent: "center", alignItems: "center" },
+  profilePreview: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    backgroundColor: "#FFF0E4",
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 20,
+  },
+  profilePreviewAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: "#FF9675",
+    justifyContent: "center",
+    alignItems: "center",
+  },
   profilePreviewInitials: { fontSize: 16, fontWeight: "800", color: "#fff" },
   profilePreviewName: { fontSize: 15, fontWeight: "700", color: "#3D1F0A" },
   profilePreviewEmail: { fontSize: 12, color: "#A07850", marginTop: 2 },
-  stepRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", marginBottom: 24 },
-  stepDot: { width: 30, height: 30, borderRadius: 15, backgroundColor: "#FFE8D6", borderWidth: 1.5, borderColor: "#FFD4B0", justifyContent: "center", alignItems: "center" },
+  stepRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 24,
+  },
+  stepDot: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: "#FFE8D6",
+    borderWidth: 1.5,
+    borderColor: "#FFD4B0",
+    justifyContent: "center",
+    alignItems: "center",
+  },
   stepDotActive: { backgroundColor: "#FF9675", borderColor: "#FF9675" },
   stepDotDone: { backgroundColor: "#BB6B3F", borderColor: "#BB6B3F" },
   stepDotTxt: { fontSize: 12, fontWeight: "800", color: "#BB6B3F" },
-  stepLine: { flex: 1, height: 2, backgroundColor: "#FFE8D6", marginHorizontal: 4, maxWidth: 44 },
+  stepLine: {
+    flex: 1,
+    height: 2,
+    backgroundColor: "#FFE8D6",
+    marginHorizontal: 4,
+    maxWidth: 44,
+  },
   stepLineDone: { backgroundColor: "#BB6B3F" },
-  stepInfo: { alignItems: "center", backgroundColor: "#FFF0E4", borderRadius: 18, padding: 20, marginBottom: 20 },
-  stepInfoIconWrap: { width: 54, height: 54, borderRadius: 18, backgroundColor: C.deepPeach, justifyContent: "center", alignItems: "center", marginBottom: 10 },
-  stepInfoTitle: { fontSize: 16, fontWeight: "800", color: "#3D1F0A", marginBottom: 6 },
-  stepInfoDesc: { fontSize: 13, color: "#A07850", textAlign: "center", lineHeight: 19, fontWeight: "500" },
-  otpRow: { flexDirection: "row", justifyContent: "space-between", gap: 8, marginBottom: 16 },
-  otpBox: { flex: 1, height: 56, borderRadius: 14, backgroundColor: "#fff", borderWidth: 1.5, borderColor: "#FFE8C8", fontSize: 22, fontWeight: "800", color: "#3D1F0A", textAlign: "center" },
+  stepInfo: {
+    alignItems: "center",
+    backgroundColor: "#FFF0E4",
+    borderRadius: 18,
+    padding: 20,
+    marginBottom: 20,
+  },
+  stepInfoIconWrap: {
+    width: 54,
+    height: 54,
+    borderRadius: 18,
+    backgroundColor: C.deepPeach,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  stepInfoTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#3D1F0A",
+    marginBottom: 6,
+  },
+  stepInfoDesc: {
+    fontSize: 13,
+    color: "#A07850",
+    textAlign: "center",
+    lineHeight: 19,
+    fontWeight: "500",
+  },
+  otpRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 8,
+    marginBottom: 16,
+  },
+  otpBox: {
+    flex: 1,
+    height: 56,
+    borderRadius: 14,
+    backgroundColor: "#fff",
+    borderWidth: 1.5,
+    borderColor: "#FFE8C8",
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#3D1F0A",
+    textAlign: "center",
+  },
   otpBoxFilled: { borderColor: "#FF9675", backgroundColor: "#FFF8EF" },
-  resendRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginBottom: 16 },
+  resendRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    marginBottom: 16,
+  },
   resendLabel: { fontSize: 13, color: "#A07850" },
-  resendBtn: { fontSize: 13, fontWeight: "700", color: "#BB6B3F", textDecorationLine: "underline" },
+  resendBtn: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#BB6B3F",
+    textDecorationLine: "underline",
+  },
   resendBtnDisabled: { color: "#C9A882", textDecorationLine: "none" },
-  backBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 14, paddingVertical: 8 },
+  backBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    marginTop: 14,
+    paddingVertical: 8,
+  },
   backTxt: { fontSize: 13, color: "#A07850", fontWeight: "600" },
 });
 
@@ -1654,94 +2658,501 @@ const pw = StyleSheet.create({
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#FFF8F4" },
-  topBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 22, paddingTop: 10, paddingBottom: 6 },
-  topBarTitle: { fontSize: 28, fontWeight: "900", color: "#1A1A1A", letterSpacing: -0.8 },
+  topBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 22,
+    paddingTop: 10,
+    paddingBottom: 6,
+  },
+  topBarTitle: {
+    fontSize: 28,
+    fontWeight: "900",
+    color: "#1A1A1A",
+    letterSpacing: -0.8,
+  },
   topBarRight: { flexDirection: "row", gap: 8 },
-  infoPill: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: C.deepPeach, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
+  infoPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: C.deepPeach,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
   infoPillTxt: { fontSize: 11, fontWeight: "700", color: C.muted },
-  heroCard: { marginHorizontal: 16, marginBottom: 18, marginTop: 8, backgroundColor: C.primary, borderRadius: 28, padding: 24, alignItems: "center", overflow: "hidden", shadowColor: "#BB6B3F", shadowOpacity: 0.35, shadowRadius: 20, shadowOffset: { width: 0, height: 8 }, elevation: 8 },
-  heroBubble1: { position: "absolute", width: 120, height: 120, borderRadius: 60, backgroundColor: "rgba(255,255,255,0.08)", top: -30, right: -20 },
-  heroBubble2: { position: "absolute", width: 80, height: 80, borderRadius: 40, backgroundColor: "rgba(255,255,255,0.06)", bottom: -20, left: 20 },
+  heroCard: {
+    marginHorizontal: 16,
+    marginBottom: 18,
+    marginTop: 8,
+    backgroundColor: C.primary,
+    borderRadius: 28,
+    padding: 24,
+    alignItems: "center",
+    overflow: "hidden",
+    shadowColor: "#BB6B3F",
+    shadowOpacity: 0.35,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 8,
+  },
+  heroBubble1: {
+    position: "absolute",
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    top: -30,
+    right: -20,
+  },
+  heroBubble2: {
+    position: "absolute",
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    bottom: -20,
+    left: 20,
+  },
   heroAvatarRow: { alignItems: "center", marginBottom: 12 },
-  heroAvatarRing: { width: 80, height: 80, borderRadius: 40, borderWidth: 2.5, borderColor: "rgba(255,255,255,0.35)", justifyContent: "center", alignItems: "center" },
-  heroAvatar: { width: 68, height: 68, borderRadius: 34, backgroundColor: "rgba(255,255,255,0.22)", justifyContent: "center", alignItems: "center" },
-  heroAvatarTxt: { fontSize: 24, fontWeight: "900", color: "#fff", letterSpacing: -0.5 },
-  heroBadge: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(187,107,63,0.55)", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, marginTop: 8 },
-  heroBadgeTxt: { fontSize: 10, fontWeight: "800", color: "#fff", letterSpacing: 0.5 },
-  heroName: { fontSize: 20, fontWeight: "900", color: "#fff", letterSpacing: -0.4, marginBottom: 4 },
-  heroEmail: { fontSize: 13, color: "rgba(255,255,255,0.72)", fontWeight: "500" },
-  heroDivider: { width: "80%", height: 1, backgroundColor: "rgba(255,255,255,0.18)", marginVertical: 16 },
-  heroBtnRow: { flexDirection: "row", alignItems: "center", gap: 0, width: "100%" },
-  heroBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: "rgba(255,255,255,0.9)", borderRadius: 14, paddingVertical: 11 },
+  heroAvatarRing: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 2.5,
+    borderColor: "rgba(255,255,255,0.35)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  heroAvatar: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: "rgba(255,255,255,0.22)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  heroAvatarTxt: {
+    fontSize: 24,
+    fontWeight: "900",
+    color: "#fff",
+    letterSpacing: -0.5,
+  },
+  heroBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "rgba(187,107,63,0.55)",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginTop: 8,
+  },
+  heroBadgeTxt: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#fff",
+    letterSpacing: 0.5,
+  },
+  heroName: {
+    fontSize: 20,
+    fontWeight: "900",
+    color: "#fff",
+    letterSpacing: -0.4,
+    marginBottom: 4,
+  },
+  heroEmail: {
+    fontSize: 13,
+    color: "rgba(255,255,255,0.72)",
+    fontWeight: "500",
+  },
+  heroDivider: {
+    width: "80%",
+    height: 1,
+    backgroundColor: "rgba(255,255,255,0.18)",
+    marginVertical: 16,
+  },
+  heroBtnRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 0,
+    width: "100%",
+  },
+  heroBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "rgba(255,255,255,0.9)",
+    borderRadius: 14,
+    paddingVertical: 11,
+  },
   heroBtnDark: { backgroundColor: "rgba(255,255,255,0.15)" },
   heroBtnSep: { width: 10 },
   heroBtnTxt: { fontSize: 13, fontWeight: "700", color: C.dark },
-  referralCard: { backgroundColor: "#fff", marginHorizontal: 16, marginBottom: 18, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 14, borderWidth: 1, borderColor: C.deepPeach, shadowColor: "#BB6B3F", shadowOpacity: 0.08, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
+  referralCard: {
+    backgroundColor: "#fff",
+    marginHorizontal: 16,
+    marginBottom: 18,
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: C.deepPeach,
+    shadowColor: "#BB6B3F",
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
   referralHeader: { flexDirection: "row", alignItems: "center", gap: 12 },
   referralHeaderExpanded: { marginBottom: 12 },
-  referralIconWrap: { width: 36, height: 36, borderRadius: 12, backgroundColor: C.peach, justifyContent: "center", alignItems: "center" },
+  referralIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: C.peach,
+    justifyContent: "center",
+    alignItems: "center",
+  },
   referralContent: { flex: 1 },
-  referralTitle: { fontSize: 15, fontWeight: "800", color: C.text, letterSpacing: -0.2, marginBottom: 2 },
-  referralSubtitle: { fontSize: 11, lineHeight: 16, color: C.muted, fontWeight: "500" },
-  referralToggleBtn: { width: 32, height: 32, borderRadius: 10, backgroundColor: C.peach, justifyContent: "center", alignItems: "center" },
-  referralRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
+  referralTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: C.text,
+    letterSpacing: -0.2,
+    marginBottom: 2,
+  },
+  referralSubtitle: {
+    fontSize: 11,
+    lineHeight: 16,
+    color: C.muted,
+    fontWeight: "500",
+  },
+  referralToggleBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: C.peach,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  referralRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
   referralCodeBlock: { flex: 1, gap: 8 },
-  referralLabel: { fontSize: 10, fontWeight: "700", color: C.accent, textTransform: "uppercase", letterSpacing: 0.7 },
-  referralCodePill: { alignSelf: "flex-start", backgroundColor: "#FFF6EE", borderRadius: 14, borderWidth: 1, borderColor: C.deepPeach, paddingHorizontal: 12, paddingVertical: 8 },
-  referralCodeValue: { fontSize: 16, fontWeight: "800", color: C.dark, letterSpacing: 1 },
-  referralShareBtn: { minWidth: 90, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, backgroundColor: C.primary, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10 },
+  referralLabel: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: C.accent,
+    textTransform: "uppercase",
+    letterSpacing: 0.7,
+  },
+  referralCodePill: {
+    alignSelf: "flex-start",
+    backgroundColor: "#FFF6EE",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: C.deepPeach,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  referralCodeValue: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: C.dark,
+    letterSpacing: 1,
+  },
+  referralShareBtn: {
+    minWidth: 90,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    backgroundColor: C.primary,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
   referralShareTxt: { fontSize: 12, fontWeight: "800", color: "#fff" },
-  contentCard: { backgroundColor: "#fff", marginHorizontal: 16, marginBottom: 18, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 14, borderWidth: 1, borderColor: C.deepPeach, shadowColor: "#BB6B3F", shadowOpacity: 0.08, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
+  contentCard: {
+    backgroundColor: "#fff",
+    marginHorizontal: 16,
+    marginBottom: 18,
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: C.deepPeach,
+    shadowColor: "#BB6B3F",
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
   contentCardHeader: { flexDirection: "row", alignItems: "center", gap: 12 },
-  contentIconWrap: { width: 36, height: 36, borderRadius: 12, backgroundColor: C.peach, justifyContent: "center", alignItems: "center" },
+  contentIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: C.peach,
+    justifyContent: "center",
+    alignItems: "center",
+  },
   contentCardBody: { flex: 1 },
-  contentCardTitle: { fontSize: 15, fontWeight: "800", color: C.text, letterSpacing: -0.2, marginBottom: 2 },
-  contentCardSubtitle: { fontSize: 11, lineHeight: 16, color: C.muted, fontWeight: "500" },
-  contentCountPill: { minWidth: 32, height: 32, borderRadius: 10, backgroundColor: C.peach, justifyContent: "center", alignItems: "center", paddingHorizontal: 8 },
+  contentCardTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: C.text,
+    letterSpacing: -0.2,
+    marginBottom: 2,
+  },
+  contentCardSubtitle: {
+    fontSize: 11,
+    lineHeight: 16,
+    color: C.muted,
+    fontWeight: "500",
+  },
+  contentCountPill: {
+    minWidth: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: C.peach,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 8,
+  },
   contentCountText: { fontSize: 13, fontWeight: "900", color: C.dark },
-  contentManageBtn: { marginTop: 14, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, backgroundColor: C.primary, borderRadius: 14, paddingVertical: 11 },
+  contentManageBtn: {
+    marginTop: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    backgroundColor: C.primary,
+    borderRadius: 14,
+    paddingVertical: 11,
+  },
   contentManageText: { fontSize: 12, fontWeight: "800", color: "#fff" },
   section: { marginBottom: 8, paddingHorizontal: 16 },
-  sectionHeaderRow: { flexDirection: "row", alignItems: "center", marginBottom: 10, gap: 10 },
-  sectionTitle: { fontSize: 11, fontWeight: "800", color: C.dark, textTransform: "uppercase", letterSpacing: 1 },
+  sectionHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 10,
+    gap: 10,
+  },
+  sectionTitle: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: C.dark,
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
   sectionLine: { flex: 1, height: 1, backgroundColor: "#FFE4CE" },
-  card: { backgroundColor: "#fff", borderRadius: 20, paddingHorizontal: 4, shadowColor: "#BB6B3F", shadowOpacity: 0.07, shadowRadius: 12, shadowOffset: { width: 0, height: 3 }, elevation: 2 },
+  card: {
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    paddingHorizontal: 4,
+    shadowColor: "#BB6B3F",
+    shadowOpacity: 0.07,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
+  },
   divider: { height: 1, backgroundColor: "#FFF4EC", marginLeft: 60 },
-  settingRow: { flexDirection: "row", alignItems: "center", paddingVertical: 14, paddingHorizontal: 12, gap: 14 },
-  iconBox: { width: 38, height: 38, borderRadius: 12, justifyContent: "center", alignItems: "center" },
+  settingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    gap: 14,
+  },
+  iconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+  },
   settingInfo: { flex: 1 },
   settingLabel: { fontSize: 14, fontWeight: "700", color: "#1A1A1A" },
-  settingValue: { fontSize: 12, color: "#8B6854", marginTop: 2, fontWeight: "500" },
-  chevronWrap: { width: 28, height: 28, borderRadius: 8, backgroundColor: "#FFF4EC", justifyContent: "center", alignItems: "center" },
-  versionStrip: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 12, marginBottom: 4 },
+  settingValue: {
+    fontSize: 12,
+    color: "#8B6854",
+    marginTop: 2,
+    fontWeight: "500",
+  },
+  chevronWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: "#FFF4EC",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  versionStrip: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 12,
+    marginBottom: 4,
+  },
   versionTxt: { fontSize: 12, color: C.light, fontWeight: "600" },
-  logoutBtn: { flexDirection: "row", alignItems: "center", marginHorizontal: 16, padding: 16, backgroundColor: "#FFF4EE", borderRadius: 20, gap: 12, borderWidth: 1.5, borderColor: "#FFE4CE" },
-  logoutIconWrap: { width: 36, height: 36, borderRadius: 11, backgroundColor: C.deepPeach, justifyContent: "center", alignItems: "center" },
+  logoutBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginHorizontal: 16,
+    padding: 16,
+    backgroundColor: "#FFF4EE",
+    borderRadius: 20,
+    gap: 12,
+    borderWidth: 1.5,
+    borderColor: "#FFE4CE",
+  },
+  logoutIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 11,
+    backgroundColor: C.deepPeach,
+    justifyContent: "center",
+    alignItems: "center",
+  },
   logoutTxt: { fontSize: 15, fontWeight: "700", color: "#BB6B3F" },
-  deleteAccountBtn: { flexDirection: "row", alignItems: "center", marginHorizontal: 16, marginTop: 12, padding: 16, backgroundColor: "#FEF2F2", borderRadius: 20, gap: 12, borderWidth: 1.5, borderColor: "#FECACA" },
-  deleteIconWrap: { width: 36, height: 36, borderRadius: 11, backgroundColor: "#FEE2E2", justifyContent: "center", alignItems: "center" },
+  deleteAccountBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginHorizontal: 16,
+    marginTop: 12,
+    padding: 16,
+    backgroundColor: "#FEF2F2",
+    borderRadius: 20,
+    gap: 12,
+    borderWidth: 1.5,
+    borderColor: "#FECACA",
+  },
+  deleteIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 11,
+    backgroundColor: "#FEE2E2",
+    justifyContent: "center",
+    alignItems: "center",
+  },
   deleteAccountTxt: { fontSize: 15, fontWeight: "800", color: "#dc2626" },
 });
 
 const qrS = StyleSheet.create({
   loadingBox: { alignItems: "center", paddingVertical: 60, gap: 16 },
   loadingText: { fontSize: 14, color: C.muted, fontWeight: "600" },
-  infoBanner: { flexDirection: "row", alignItems: "flex-start", gap: 10, backgroundColor: C.peach, borderRadius: 14, padding: 14, marginBottom: 18, borderWidth: 1, borderColor: C.deepPeach },
-  infoBannerText: { flex: 1, fontSize: 13, fontWeight: "500", color: C.dark, lineHeight: 19 },
+  infoBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    backgroundColor: C.peach,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 18,
+    borderWidth: 1,
+    borderColor: C.deepPeach,
+  },
+  infoBannerText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "500",
+    color: C.dark,
+    lineHeight: 19,
+  },
   shotWrap: { borderRadius: 22, overflow: "hidden", marginBottom: 14 },
-  card: { backgroundColor: "#fff", borderRadius: 22, padding: 24, alignItems: "center", borderWidth: 1.5, borderColor: C.deepPeach },
-  cardHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 14 },
-  leafBadge: { width: 28, height: 28, borderRadius: 9, backgroundColor: C.primary, justifyContent: "center", alignItems: "center" },
-  gaushaalaName: { fontSize: 16, fontWeight: "800", color: C.dark, letterSpacing: -0.3 },
-  cardTitle: { fontSize: 18, fontWeight: "800", color: C.text, marginBottom: 6, letterSpacing: -0.3 },
-  cardSubtitle: { fontSize: 12, color: C.muted, textAlign: "center", lineHeight: 18, fontWeight: "500", marginBottom: 4 },
-  qrBox: { padding: 16, backgroundColor: "#fff", borderRadius: 16, borderWidth: 2, borderColor: C.deepPeach, marginVertical: 18, shadowColor: C.dark, shadowOpacity: 0.08, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 3 },
+  card: {
+    backgroundColor: "#fff",
+    borderRadius: 22,
+    padding: 24,
+    alignItems: "center",
+    borderWidth: 1.5,
+    borderColor: C.deepPeach,
+  },
+  cardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 14,
+  },
+  leafBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 9,
+    backgroundColor: C.primary,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  gaushaalaName: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: C.dark,
+    letterSpacing: -0.3,
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: C.text,
+    marginBottom: 6,
+    letterSpacing: -0.3,
+  },
+  cardSubtitle: {
+    fontSize: 12,
+    color: C.muted,
+    textAlign: "center",
+    lineHeight: 18,
+    fontWeight: "500",
+    marginBottom: 4,
+  },
+  qrBox: {
+    padding: 16,
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: C.deepPeach,
+    marginVertical: 18,
+    shadowColor: C.dark,
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
   cardFooter: { width: "100%", alignItems: "center", gap: 10 },
   footerDivider: { width: "80%", height: 1, backgroundColor: C.deepPeach },
   footerRow: { flexDirection: "row", alignItems: "center", gap: 5 },
-  footerText: { fontSize: 11, fontWeight: "600", color: C.muted, letterSpacing: 0.3 },
-  codeRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 14 },
+  footerText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: C.muted,
+    letterSpacing: 0.3,
+  },
+  codeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginBottom: 14,
+  },
   codeLabel: { fontSize: 15, color: C.muted, fontWeight: "600" },
-  codePill: { backgroundColor: C.deepPeach, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 5 },
-  codeValue: { fontSize: 15, fontWeight: "800", color: C.dark, letterSpacing: 1.5 },
+  codePill: {
+    backgroundColor: C.deepPeach,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+  },
+  codeValue: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: C.dark,
+    letterSpacing: 1.5,
+  },
 });
