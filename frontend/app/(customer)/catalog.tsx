@@ -694,11 +694,13 @@ function WalletErrorModal({
   walletBalance,
   orderTotal,
   onClose,
+  onAddMoney,
 }: {
   visible: boolean;
   walletBalance: number;
   orderTotal: number;
   onClose: () => void;
+  onAddMoney: () => void;
 }) {
   return (
     <Modal visible={visible} transparent animationType="fade">
@@ -726,9 +728,15 @@ function WalletErrorModal({
           </Text>
           <TouchableOpacity
             style={[mBase.btn, { backgroundColor: T.orange }]}
-            onPress={onClose}
+            onPress={onAddMoney}
           >
-            <Text style={mBase.btnTxt}>OK</Text>
+            <View style={mBase.btnContent}>
+              <Ionicons name="add-circle-outline" size={18} color="#fff" />
+              <Text style={mBase.btnTxt}>Add Money</Text>
+            </View>
+          </TouchableOpacity>
+          <TouchableOpacity style={mBase.cancelBtn} onPress={onClose}>
+            <Text style={mBase.cancelBtnTxt}>Not now</Text>
           </TouchableOpacity>
         </AnimCard>
       </View>
@@ -765,6 +773,14 @@ const mBase = StyleSheet.create({
     alignItems: "center",
     marginBottom: 20,
   },
+  btnContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+  },
+  cancelBtn: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 2 },
+  cancelBtnTxt: { fontSize: 13, fontWeight: "700", color: T.muted },
   title: {
     fontSize: 18,
     fontWeight: "800",
@@ -2021,13 +2037,15 @@ function SubscribeModal({
                       Balance is below order amount. Recharge before confirming.
                     </Text>
                     <TouchableOpacity
+                      style={reviewS.addMoneyBtn}
                       onPress={() => {
                         onClose();
                         router.push("/(customer)/wallet" as any);
                       }}
                       activeOpacity={0.8}
                     >
-                      <Ionicons name="arrow-forward-circle" size={22} color={T.orange} />
+                      <Ionicons name="add-circle-outline" size={14} color="#fff" />
+                      <Text style={reviewS.addMoneyTxt}>Add Money</Text>
                     </TouchableOpacity>
                   </View>
                 )}
@@ -2270,6 +2288,16 @@ const reviewS = StyleSheet.create({
     flex: 1,
     lineHeight: 16,
   },
+  addMoneyBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: T.orange,
+    borderRadius: 7,
+    paddingHorizontal: 9,
+    paddingVertical: 7,
+  },
+  addMoneyTxt: { color: "#fff", fontSize: 10, fontWeight: "800" },
 });
 
 // ─── Shared sheet styles ────────────────────────────────────────────────────
@@ -2592,13 +2620,15 @@ function CartSheet({
                     Insufficient balance. Recharge to order.
                   </Text>
                   <TouchableOpacity
+                    style={cartS.addMoneyBtn}
                     onPress={() => {
                       onClose();
                       router.push("/(customer)/wallet" as any);
                     }}
                     activeOpacity={0.8}
                   >
-                    <Ionicons name="arrow-forward-circle" size={20} color={T.orange} />
+                    <Ionicons name="add-circle-outline" size={13} color="#fff" />
+                    <Text style={cartS.addMoneyTxt}>Add Money</Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -2734,6 +2764,16 @@ const cartS = StyleSheet.create({
     marginBottom: 10,
   },
   lowBalTxt: { fontSize: 11, fontWeight: "600", color: T.orange, flex: 1 },
+  addMoneyBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: T.orange,
+    borderRadius: 7,
+    paddingHorizontal: 9,
+    paddingVertical: 7,
+  },
+  addMoneyTxt: { color: "#fff", fontSize: 10, fontWeight: "800" },
   empty: {
     alignItems: "center",
     paddingVertical: 60,
@@ -3072,6 +3112,7 @@ export default function CatalogScreen() {
     });
 
     showToast(p.name, false);
+    setTimeout(() => setCartVisible(true), 300);
   };
 
   const openProductDetails = (product: any) => {
@@ -3143,6 +3184,7 @@ export default function CatalogScreen() {
 
     setQuickAddVisible(false);
     showToast(quickAddProduct.name, false);
+    setTimeout(() => setCartVisible(true), 300);
     setQuickAddSubmitting(false);
   };
 
@@ -3471,6 +3513,11 @@ export default function CatalogScreen() {
         walletBalance={walletBalance}
         orderTotal={cartTotal}
         onClose={() => setWalletErrorVisible(false)}
+        onAddMoney={() => {
+          setWalletErrorVisible(false);
+          setCartVisible(false);
+          router.push("/(customer)/wallet" as any);
+        }}
       />
       <AddedToCartToast
         visible={toastVisible}
