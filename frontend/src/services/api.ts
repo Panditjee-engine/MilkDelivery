@@ -336,6 +336,33 @@ export interface FeedStockOperationResult {
   transaction: FeedStockTransaction;
 }
 
+//farm sale phone intefaces by golu
+export interface FarmSaleCreate {
+  customer_name: string;
+  product_name: string;
+  quantity: number;
+  unit: string; // "kg" | "L" | "piece"
+  price_per_unit: number;
+  date: string; // YYYY-MM-DD
+  notes?: string;
+}
+
+export interface FarmSale {
+  id: string;
+  admin_id: string;
+  worker_id: string;
+  worker_name: string;
+  customer_name: string;
+  product_name: string;
+  quantity: number;
+  unit: string;
+  price_per_unit: number;
+  total_amount: number;
+  date: string;
+  notes?: string;
+  created_at: string;
+}
+
 class ApiService {
   private token: string | null = null;
 
@@ -2386,6 +2413,28 @@ async resetVeterinarianPassword(id: string, new_password: string) {
     return data;
   }
 
+  async vetUpdateHealth(data: {
+  cow_id: string;
+  cow_name: string;
+  cow_tag: string;
+  condition: string;
+  date: string;
+}) {
+  const token = await AsyncStorage.getItem("vet_token");
+  const response = await fetch(`${API_BASE}/api/vet/health-update`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+  const result = await response.json();
+  if (!response.ok)
+    throw new Error(result.detail || "Failed to update health status");
+  return result;
+}
+
   async getVetInseminationRecords() {
     const token = await AsyncStorage.getItem("vet_token");
     const response = await fetch(`${API_BASE}/api/vet/insemination-records`, {
@@ -2418,10 +2467,10 @@ async resetVeterinarianPassword(id: string, new_password: string) {
     return data;
   }
 
-  async getAnimalMedicineRecords(animalId: string) {
+async getAnimalMedicineRecords(animalId: string) {
     const token = await AsyncStorage.getItem("vet_token");
     const response = await fetch(
-      `${API_BASE}/api/vet/animals/${animalId}/medicine-records`,
+      `${API_BASE}/api/vet/cow/${animalId}/medicine`,
       {
         headers: { Authorization: `Bearer ${token}` },
       },
@@ -2432,10 +2481,10 @@ async resetVeterinarianPassword(id: string, new_password: string) {
     return data;
   }
 
-  async getAnimalHealthRecords(animalId: string) {
+async getAnimalHealthRecords(animalId: string) {
     const token = await AsyncStorage.getItem("vet_token");
     const response = await fetch(
-      `${API_BASE}/api/vet/animals/${animalId}/health-records`,
+      `${API_BASE}/api/vet/cow/${animalId}/health`,
       {
         headers: { Authorization: `Bearer ${token}` },
       },
@@ -2446,10 +2495,10 @@ async resetVeterinarianPassword(id: string, new_password: string) {
     return data;
   }
 
-  async getAnimalMilkRecords(animalId: string) {
+async getAnimalMilkRecords(animalId: string) {
     const token = await AsyncStorage.getItem("vet_token");
     const response = await fetch(
-      `${API_BASE}/api/vet/animals/${animalId}/milk-records`,
+      `${API_BASE}/api/vet/cow/${animalId}/milk`,
       {
         headers: { Authorization: `Bearer ${token}` },
       },
@@ -2460,10 +2509,10 @@ async resetVeterinarianPassword(id: string, new_password: string) {
     return data;
   }
 
-  async getAnimalFeedRecords(animalId: string) {
+async getAnimalFeedRecords(animalId: string) {
     const token = await AsyncStorage.getItem("vet_token");
     const response = await fetch(
-      `${API_BASE}/api/vet/animals/${animalId}/feed-records`,
+      `${API_BASE}/api/vet/cow/${animalId}/feed`,
       {
         headers: { Authorization: `Bearer ${token}` },
       },
@@ -2511,19 +2560,20 @@ async resetVeterinarianPassword(id: string, new_password: string) {
       method: "PATCH",
     });
   }
-  async vetGetHealthLogs(date?: string) {
+
+async vetGetHealthLogs(date?: string) {
     const token = await AsyncStorage.getItem("vet_token");
-    const today = date ?? new Date().toISOString().split("T")[0];
-    const response = await fetch(
-      `${API_BASE}/api/worker/health?date=${today}`,
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      },
-    );
+    const response = await fetch(`${API_BASE}/api/vet/health-records`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
     const data = await response.json();
     if (!response.ok)
       throw new Error(data.detail || "Failed to fetch health logs");
-    return data;
+    // /vet/health-records returns ALL logs, not just today — filter client-side
+    const target = date ?? new Date().toISOString().split("T")[0];
+    return Array.isArray(data)
+      ? data.filter((r: any) => (r.date || "").startsWith(target))
+      : data;
   }
 
   async createMedicine(data: MedicineCreate): Promise<Medicine> {
@@ -2810,6 +2860,203 @@ async resetVeterinarianPassword(id: string, new_password: string) {
     return this.request("/auth/confirm-change-password", {
       method: "POST",
       body: JSON.stringify({ new_password, confirm_password }),
+    });
+  }
+
+
+  //vet milk reocrd and fee dreocrd by anurag
+  async vetAddMilk(data: {
+    cow_id: string;
+    cow_name: string;
+    cow_tag: string;
+    quantity: number;
+    shift: "morning" | "evening";
+    date: string;
+    notes?: string;
+  }) {
+    const token = await AsyncStorage.getItem("vet_token");
+    const response = await fetch(`${API_BASE}/api/vet/milk`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(data),
+    });
+    const result = await response.json();
+    if (!response.ok)
+      throw new Error(result.detail || "Failed to save milk entry");
+    return result;
+  }
+ 
+  async vetGetTodayMilk() {
+    const token = await AsyncStorage.getItem("vet_token");
+    const response = await fetch(`${API_BASE}/api/vet/milk/today`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await response.json();
+    if (!response.ok)
+      throw new Error(data.detail || "Failed to fetch today's milk");
+    return data;
+  }
+ 
+  async vetDeleteMilkEntry(entryId: string): Promise<{
+    success: boolean;
+    deleted_entry: {
+      id: string;
+      cow_id: string;
+      cow_name: string;
+      cow_tag: string;
+      quantity: number;
+      shift: "morning" | "evening";
+      date: string;
+      worker_name: string;
+    };
+  }> {
+    const token = await AsyncStorage.getItem("vet_token");
+    const response = await fetch(`${API_BASE}/api/vet/milk/${entryId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const result = await response.json();
+    if (!response.ok)
+      throw new Error(result.detail || "Failed to delete milk entry");
+    return result;
+  }
+ 
+  // ── Vet Feed ─────────────────────────────────────────
+ 
+  async vetGetFeedStatus(date: string, shift: "morning" | "evening") {
+    const token = await AsyncStorage.getItem("vet_token");
+    const response = await fetch(
+      `${API_BASE}/api/vet/feed?date=${date}&shift=${shift}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    const data = await response.json();
+    if (!response.ok)
+      throw new Error(data.detail || "Failed to fetch feed status");
+    return data;
+  }
+ 
+  async vetMarkFed(data: {
+    cow_id: string;
+    cow_name: string;
+    cow_tag: string;
+    date: string;
+    shift: "morning" | "evening";
+  }) {
+    const token = await AsyncStorage.getItem("vet_token");
+    const response = await fetch(`${API_BASE}/api/vet/feed`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(data),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.detail || "Failed to mark fed");
+    return result;
+  }
+ 
+  async vetUnmarkFed(
+    cow_id: string,
+    date: string,
+    shift: "morning" | "evening",
+  ) {
+    const token = await AsyncStorage.getItem("vet_token");
+    const response = await fetch(
+      `${API_BASE}/api/vet/feed?cow_id=${cow_id}&date=${date}&shift=${shift}`,
+      { method: "DELETE", headers: { Authorization: `Bearer ${token}` } },
+    );
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.detail || "Failed to unmark fed");
+    return result;
+  }
+
+//farm sale by worker by golu
+// ── Farm Sale ─────────────────────────────────────────
+
+  async workerCreateFarmSale(data: FarmSaleCreate): Promise<FarmSale> {
+    const token = await AsyncStorage.getItem("worker_token");
+    const response = await fetch(`${API_BASE}/api/worker/farm-sale`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(data),
+    });
+    const result = await response.json();
+    if (!response.ok)
+      throw new Error(result.detail || "Failed to save farm sale entry");
+    return result;
+  }
+
+  async workerGetFarmSales(date?: string): Promise<FarmSale[]> {
+    const token = await AsyncStorage.getItem("worker_token");
+    const q = date ? `?date=${date}` : "";
+    const response = await fetch(`${API_BASE}/api/worker/farm-sale${q}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await response.json();
+    if (!response.ok)
+      throw new Error(data.detail || "Failed to fetch farm sale entries");
+    return data;
+  }
+
+  async workerDeleteFarmSale(saleId: string): Promise<{
+    success: boolean;
+    deleted_entry: FarmSale;
+  }> {
+    const token = await AsyncStorage.getItem("worker_token");
+    const response = await fetch(
+      `${API_BASE}/api/worker/farm-sale/${saleId}`,
+      {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    );
+    const result = await response.json();
+    if (!response.ok)
+      throw new Error(result.detail || "Failed to delete farm sale entry");
+    return result;
+  }
+
+  async getAdminFarmSales(params?: { date?: string; worker_id?: string }) {
+    const p = new URLSearchParams();
+    if (params?.date) p.append("date", params.date);
+    if (params?.worker_id) p.append("worker_id", params.worker_id);
+    const q = p.toString() ? `?${p.toString()}` : "";
+    return this.request<{
+      date: string | null;
+      total_sales: number;
+      total_amount: number;
+      by_product: Record<string, number>;
+      sales: FarmSale[];
+    }>(`/admin/farm-sales${q}`);
+  }
+
+  async adminUpdateFarmSale(
+    saleId: string,
+    data: Partial<{
+      customer_name: string;
+      product_name: string;
+      quantity: number;
+      unit: string;
+      price_per_unit: number;
+      notes: string;
+    }>,
+  ): Promise<FarmSale> {
+    return this.request<FarmSale>(`/admin/farm-sales/${saleId}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async adminDeleteFarmSale(saleId: string): Promise<{ success: boolean; id: string }> {
+    return this.request<{ success: boolean; id: string }>(`/admin/farm-sales/${saleId}`, {
+      method: "DELETE",
     });
   }
 

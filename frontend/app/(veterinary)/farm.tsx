@@ -91,9 +91,26 @@ interface AnimalRow {
   milkTotal?: number;
   milkWorkerMorning?: string | null;
   milkWorkerEvening?: string | null;
+  milkEligible: boolean;
   feedMorning?: boolean;
   feedEvening?: boolean;
   feedWorker?: string | null;
+}
+
+interface MilkEntryRow {
+  id: string;
+  cow_id: string;
+  quantity: number;
+  shift: "morning" | "evening";
+  worker_name?: string;
+  date: string;
+}
+
+interface FeedLogRow {
+  cow_id: string;
+  shift: "morning" | "evening";
+  fed_at: string | null;
+  worker_name?: string | null;
 }
 
 // ── Helpers 
@@ -247,11 +264,11 @@ function HealthModal({
     if (!animal) return;
     setSaving(true);
     try {
-      await api.workerAddHealthLog({
+      await api.vetUpdateHealth({
         cow_id: animal.id,
         cow_name: animal.name,
         cow_tag: animal.tag_number,
-        status: selected,
+        condition: selected,
         date: TODAY,
       });
       onUpdated(animal.id, selected);
@@ -437,6 +454,413 @@ const hm = StyleSheet.create({
   saveBtnText: { fontSize: 15, fontWeight: "800", color: "#fff" },
 });
 
+// ── Milk + Feed Modal (with Undo) 
+const mf = StyleSheet.create({
+  shiftRow: { flexDirection: "row", gap: 8, marginBottom: 14 },
+  shiftChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    flex: 1,
+    borderWidth: 1.5,
+    borderColor: C.cardBorder,
+    borderRadius: 12,
+    paddingVertical: 10,
+    backgroundColor: "#fff",
+  },
+  shiftChipActive: { backgroundColor: C.milkBlue, borderColor: C.milkBlue },
+  shiftChipText: { fontSize: 12, fontWeight: "700", color: C.textMuted },
+  shiftChipTextActive: { color: "#fff" },
+
+  input: {
+    borderWidth: 1.5,
+    borderColor: C.cardBorder,
+    borderRadius: 14,
+    padding: 14,
+    fontSize: 15,
+    color: C.text,
+    marginBottom: 12,
+    backgroundColor: "#fff",
+  },
+
+  entryRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#eff6ff",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#bfdbfe",
+    padding: 10,
+    marginBottom: 6,
+  },
+  entryIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  entryQty: { fontSize: 13, fontWeight: "800", color: C.milkBlue },
+  entryMeta: { fontSize: 10, color: C.textMuted, fontWeight: "600" },
+  undoBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#fff",
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: "#fca5a5",
+  },
+  undoBtnText: { fontSize: 10, fontWeight: "700", color: C.sick },
+
+  feedRow: { flexDirection: "row", gap: 8, marginTop: 4 },
+  feedBox: {
+    flex: 1,
+    borderRadius: 12,
+    padding: 12,
+    alignItems: "center",
+    gap: 5,
+    borderWidth: 1.5,
+  },
+  feedBoxFed: { backgroundColor: "#f0fdf4", borderColor: "#86efac" },
+  feedBoxNotFed: { backgroundColor: "#fff", borderColor: C.cardBorder },
+  feedBoxLabel: { fontSize: 11, fontWeight: "700" },
+  feedBoxWorker: { fontSize: 9, color: C.textMuted, fontWeight: "500" },
+  feedBoxAction: { fontSize: 10, fontWeight: "700", marginTop: 2 },
+
+  emptyRow: {
+    fontSize: 11,
+    color: C.textLight,
+    fontStyle: "italic",
+    paddingVertical: 6,
+    textAlign: "center",
+  },
+});
+
+function MilkFeedModal({
+  visible,
+  animal,
+  onClose,
+  onSaved,
+}: {
+  visible: boolean;
+  animal: AnimalRow | null;
+  onClose: () => void;
+  onSaved: () => void; // tells the parent card to refresh its expanded data
+}) {
+  const [shift, setShift] = useState<"morning" | "evening">("morning");
+  const [quantity, setQuantity] = useState("");
+  const [savingMilk, setSavingMilk] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const [feedStatus, setFeedStatus] = useState<{
+    morning: FeedLogRow | null;
+    evening: FeedLogRow | null;
+  }>({ morning: null, evening: null });
+  const [feedBusy, setFeedBusy] = useState<"morning" | "evening" | null>(null);
+
+  const [entries, setEntries] = useState<MilkEntryRow[]>([]);
+  const [loadingData, setLoadingData] = useState(false);
+
+  const loadData = useCallback(async () => {
+    if (!animal) return;
+    setLoadingData(true);
+    try {
+      const [milkAll, morningFeed, eveningFeed] = await Promise.all([
+        api.vetGetTodayMilk().catch(() => []),
+        api.vetGetFeedStatus(TODAY, "morning").catch(() => []),
+        api.vetGetFeedStatus(TODAY, "evening").catch(() => []),
+      ]);
+
+      const milkArr: MilkEntryRow[] = Array.isArray(milkAll) ? milkAll : [];
+      setEntries(milkArr.filter((m) => m.cow_id === animal.id));
+
+      const mArr: FeedLogRow[] = Array.isArray(morningFeed) ? morningFeed : [];
+      const eArr: FeedLogRow[] = Array.isArray(eveningFeed) ? eveningFeed : [];
+      const mRow = mArr.find((f) => f.cow_id === animal.id) || null;
+      const eRow = eArr.find((f) => f.cow_id === animal.id) || null;
+
+      setFeedStatus({
+        morning: mRow && mRow.fed_at ? mRow : null,
+        evening: eRow && eRow.fed_at ? eRow : null,
+      });
+    } catch {
+      setEntries([]);
+    } finally {
+      setLoadingData(false);
+    }
+  }, [animal]);
+
+  useEffect(() => {
+    if (visible) {
+      setQuantity("");
+      setShift("morning");
+      loadData();
+    }
+  }, [visible, loadData]);
+
+  const saveMilk = async () => {
+    if (!animal || !quantity || Number(quantity) <= 0) return;
+    setSavingMilk(true);
+    try {
+      await api.vetAddMilk({
+        cow_id: animal.id,
+        cow_name: animal.name,
+        cow_tag: animal.tag_number,
+        quantity: parseFloat(quantity),
+        shift,
+        date: TODAY,
+      });
+      setQuantity("");
+      await loadData();
+      onSaved();
+    } catch (e: any) {
+      console.error("Vet milk entry error:", e.message);
+    } finally {
+      setSavingMilk(false);
+    }
+  };
+
+  const undoMilk = async (entryId: string) => {
+    setDeletingId(entryId);
+    try {
+      await api.vetDeleteMilkEntry(entryId);
+      setEntries((prev) => prev.filter((e) => e.id !== entryId));
+      onSaved();
+    } catch (e: any) {
+      console.error("Undo milk error:", e.message);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const toggleFeed = async (fedShift: "morning" | "evening") => {
+    if (!animal) return;
+    setFeedBusy(fedShift);
+    try {
+      const isFed = !!feedStatus[fedShift];
+      if (isFed) {
+        await api.vetUnmarkFed(animal.id, TODAY, fedShift);
+        setFeedStatus((prev) => ({ ...prev, [fedShift]: null }));
+      } else {
+        const doc = await api.vetMarkFed({
+          cow_id: animal.id,
+          cow_name: animal.name,
+          cow_tag: animal.tag_number,
+          date: TODAY,
+          shift: fedShift,
+        });
+        setFeedStatus((prev) => ({ ...prev, [fedShift]: doc }));
+      }
+      onSaved();
+    } catch (e: any) {
+      console.error("Feed toggle error:", e.message);
+    } finally {
+      setFeedBusy(null);
+    }
+  };
+
+  if (!animal) return null;
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <View style={hm.overlay}>
+        <TouchableOpacity
+          style={StyleSheet.absoluteFillObject}
+          onPress={onClose}
+        />
+        <View style={[hm.sheet, { maxHeight: "88%" }]}>
+          <View style={hm.handle} />
+
+          <ScrollView showsVerticalScrollIndicator={false}>
+            {/* Animal info */}
+            <View style={hm.animalRow}>
+              <View style={hm.avatar}>
+                <Image
+                  source={getCowImage(animal.type)}
+                  style={{ width: 32, height: 32, resizeMode: "contain" }}
+                />
+              </View>
+              <View>
+                <Text style={hm.animalName}>{animal.name}</Text>
+                <Text style={hm.animalTag}>
+                  #{animal.tag_number} · {animal.breed || "—"}
+                </Text>
+              </View>
+            </View>
+
+            {/* ── Add Milk ── */}
+            <SectionHead icon="water-outline" label="ADD MILK RECORD" color={C.milkBlue} />
+
+            <View style={mf.shiftRow}>
+              {(["morning", "evening"] as const).map((sh) => {
+                const active = shift === sh;
+                return (
+                  <TouchableOpacity
+                    key={sh}
+                    onPress={() => setShift(sh)}
+                    style={[mf.shiftChip, active && mf.shiftChipActive]}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons
+                      name={sh === "morning" ? "sunny-outline" : "moon-outline"}
+                      size={14}
+                      color={active ? "#fff" : C.textMuted}
+                    />
+                    <Text
+                      style={[
+                        mf.shiftChipText,
+                        active && mf.shiftChipTextActive,
+                      ]}
+                    >
+                      {sh === "morning" ? "Morning" : "Evening"}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <TextInput
+              style={mf.input}
+              placeholder="Quantity in litres"
+              placeholderTextColor={C.textLight}
+              keyboardType="decimal-pad"
+              value={quantity}
+              onChangeText={setQuantity}
+            />
+
+            <TouchableOpacity
+              style={[
+                hm.saveBtn,
+                (savingMilk || !quantity) && { opacity: 0.6 },
+              ]}
+              onPress={saveMilk}
+              disabled={savingMilk || !quantity}
+              activeOpacity={0.85}
+            >
+              {savingMilk ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={hm.saveBtnText}>Save Milk Entry</Text>
+              )}
+            </TouchableOpacity>
+
+            {/* ── Today's entries with Undo ── */}
+            <View style={{ marginTop: 18 }}>
+              <SectionHead icon="time-outline" label="TODAY'S MILK ENTRIES" color={C.dark} />
+              {loadingData ? (
+                <ActivityIndicator size="small" color={C.primary} style={{ marginVertical: 10 }} />
+              ) : entries.length === 0 ? (
+                <Text style={mf.emptyRow}>No milk entries logged today</Text>
+              ) : (
+                entries
+                  .slice()
+                  .sort((a, b) => (a.shift === b.shift ? 0 : a.shift === "morning" ? -1 : 1))
+                  .map((e) => (
+                    <View key={e.id} style={mf.entryRow}>
+                      <View style={mf.entryIcon}>
+                        <Ionicons
+                          name={e.shift === "morning" ? "sunny-outline" : "moon-outline"}
+                          size={14}
+                          color={C.milkBlue}
+                        />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={mf.entryQty}>{e.quantity} L</Text>
+                        <Text style={mf.entryMeta}>
+                          {e.shift === "morning" ? "Morning" : "Evening"}
+                          {e.worker_name ? ` · ${e.worker_name}` : ""}
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        style={mf.undoBtn}
+                        onPress={() => undoMilk(e.id)}
+                        disabled={deletingId === e.id}
+                        activeOpacity={0.8}
+                      >
+                        {deletingId === e.id ? (
+                          <ActivityIndicator size="small" color={C.sick} />
+                        ) : (
+                          <>
+                            <Ionicons name="arrow-undo-outline" size={12} color={C.sick} />
+                            <Text style={mf.undoBtnText}>Undo</Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  ))
+              )}
+            </View>
+
+            {/* ── Feed status ── */}
+            <View style={{ marginTop: 18, marginBottom: 4 }}>
+              <SectionHead icon="leaf-outline" label="TODAY'S FEED" color={C.feedGreen} />
+              <View style={mf.feedRow}>
+                {(["morning", "evening"] as const).map((sh) => {
+                  const fed = !!feedStatus[sh];
+                  const busy = feedBusy === sh;
+                  return (
+                    <TouchableOpacity
+                      key={sh}
+                      style={[mf.feedBox, fed ? mf.feedBoxFed : mf.feedBoxNotFed]}
+                      onPress={() => toggleFeed(sh)}
+                      disabled={busy}
+                      activeOpacity={0.8}
+                    >
+                      {busy ? (
+                        <ActivityIndicator size="small" color={fed ? C.feedGreen : C.textMuted} />
+                      ) : (
+                        <>
+                          <Ionicons
+                            name={fed ? "checkmark-circle" : (sh === "morning" ? "sunny-outline" : "moon-outline")}
+                            size={20}
+                            color={fed ? C.feedGreen : C.textMuted}
+                          />
+                          <Text
+                            style={[
+                              mf.feedBoxLabel,
+                              { color: fed ? C.feedGreen : C.text },
+                            ]}
+                          >
+                            {sh === "morning" ? "Morning" : "Evening"}
+                          </Text>
+                          {fed && feedStatus[sh]?.worker_name ? (
+                            <Text style={mf.feedBoxWorker}>
+                              {feedStatus[sh]?.worker_name}
+                            </Text>
+                          ) : null}
+                          <Text
+                            style={[
+                              mf.feedBoxAction,
+                              { color: fed ? C.sick : C.feedGreen },
+                            ]}
+                          >
+                            {fed ? "Tap to undo" : "Tap to mark fed"}
+                          </Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 // ── Detail Row 
 function DR({
   icon,
@@ -522,10 +946,14 @@ function AnimalCard({
   item,
   index,
   onHealthPress,
+  onMilkFeedPress,
+  refreshToken,
 }: {
   item: AnimalRow;
   index: number;
   onHealthPress: (a: AnimalRow) => void;
+  onMilkFeedPress: (a: AnimalRow) => void;
+  refreshToken: number;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [loadingExtra, setLoadingExtra] = useState(false);
@@ -564,8 +992,8 @@ function AnimalCard({
     ]).start();
   }, []);
 
-  const loadExtra = async () => {
-    if (extraData) return;
+  const loadExtra = async (force = false) => {
+    if (extraData && !force) return;
     setLoadingExtra(true);
     try {
       const [milkRaw, feedRaw] = await Promise.all([
@@ -573,25 +1001,32 @@ function AnimalCard({
         api.getAnimalFeedRecords(item.id).catch(() => []),
       ]);
 
-      // milk: find today's record
+      // milk: /vet/cow/{id}/milk returns one row per day, shape:
+      // { cow_id, cow_name, morning, evening, total, date, worker_name }
       const milkArr: any[] = Array.isArray(milkRaw) ? milkRaw : [];
-      const todayMilk = milkArr.find((m: any) =>
+      const todayMilkRows = milkArr.filter((m: any) =>
         (m.date || "").startsWith(TODAY),
       );
-      const morning = todayMilk?.morning_liters ?? 0;
-      const evening = todayMilk?.evening_liters ?? 0;
-      const total = todayMilk?.total_liters ?? morning + evening;
-      const mWorker = todayMilk?.morning_worker ?? null;
-      const eWorker = todayMilk?.evening_worker ?? null;
+      const morningEntry = todayMilkRows.find((m: any) => m.shift === "morning");
+      const eveningEntry = todayMilkRows.find((m: any) => m.shift === "evening");
+      const morning = morningEntry?.quantity ?? 0;
+      const evening = eveningEntry?.quantity ?? 0;
+      const total = morning + evening;
+      const mWorker = morningEntry?.worker_name ?? null;
+      const eWorker = eveningEntry?.worker_name ?? null;
 
-      // feed: check today
+      // feed: /vet/cow/{id}/feed returns one row PER SHIFT, shape:
+      // { cow_id, cow_name, feed_type, quantity, unit, date, shift, worker_name }
+      // "fed" isn't a boolean field here — presence of a today+shift row means fed
       const feedArr: any[] = Array.isArray(feedRaw) ? feedRaw : [];
-      const todayFeed = feedArr.find((f: any) =>
+      const todayFeedRows = feedArr.filter((f: any) =>
         (f.date || "").startsWith(TODAY),
       );
-      const feedMorning = todayFeed?.morning_fed ?? false;
-      const feedEvening = todayFeed?.evening_fed ?? false;
-      const feedWorker = todayFeed?.worker_name ?? null;
+      const morningRow = todayFeedRows.find((f: any) => f.shift === "morning");
+      const eveningRow = todayFeedRows.find((f: any) => f.shift === "evening");
+      const feedMorning = !!morningRow;
+      const feedEvening = !!eveningRow;
+      const feedWorker = morningRow?.worker_name ?? eveningRow?.worker_name ?? null;
 
       setExtraData({
         milk: { morning, evening, total, mWorker, eWorker },
@@ -616,6 +1051,12 @@ function AnimalCard({
     if (!expanded) loadExtra();
     setExpanded(!expanded);
   };
+
+  // Re-pull milk/feed data after a vet saves an entry for this cow via MilkFeedModal
+  useEffect(() => {
+    if (expanded) loadExtra(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshToken]);
 
   const hCfg = healthCfg(item.healthStatus);
   const rotate = rotateAnim.interpolate({
@@ -762,6 +1203,26 @@ function AnimalCard({
             <Text style={ac.updateBtnText}>Update</Text>
           </TouchableOpacity>
 
+          {/* Log Milk/Feed button */}
+ {item.milkEligible && (
+            <TouchableOpacity
+              style={[
+                ac.updateBtn,
+                {
+                  backgroundColor: C.milkBlue + "18",
+                  borderColor: C.milkBlue + "44",
+                },
+              ]}
+              onPress={() => onMilkFeedPress(item)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="water-outline" size={12} color={C.milkBlue} />
+              <Text style={[ac.updateBtnText, { color: C.milkBlue }]}>
+                Log Milk/Feed
+              </Text>
+            </TouchableOpacity>
+          )}
+
           {item.workerName ? (
             <View style={ac.workerPill}>
               <Ionicons name="person-outline" size={9} color={C.textLight} />
@@ -848,6 +1309,8 @@ function AnimalCard({
                 ) : null}
 
                 {/* Today's Milk */}
+                 {item.milkEligible && (
+                <>
                 <SectionHead
                   icon="water-outline"
                   label="TODAY'S MILK"
@@ -896,8 +1359,10 @@ function AnimalCard({
                       </Text>
                     </View>
                   </View>
-                ) : (
+               ) : (
                   <Text style={ac.noDataTxt}>No milk records for today</Text>
+                )}
+                </>
                 )}
 
                 {/* Today's Feed */}
@@ -1211,6 +1676,13 @@ export default function FarmPage() {
     visible: boolean;
     animal: AnimalRow | null;
   }>({ visible: false, animal: null });
+  const [milkFeedModal, setMilkFeedModal] = useState<{
+    visible: boolean;
+    animal: AnimalRow | null;
+  }>({ visible: false, animal: null });
+  const [refreshTokens, setRefreshTokens] = useState<Record<string, number>>(
+    {},
+  );
 
   const scrollY = useRef(new Animated.Value(0)).current;
   const isMountedRef = useRef(true);
@@ -1273,23 +1745,30 @@ export default function FarmPage() {
           };
       });
 
-      const safeList: any[] = Array.isArray(cowsList) ? cowsList : [];
+       const safeList: any[] = Array.isArray(cowsList) ? cowsList : [];
       const merged: AnimalRow[] = safeList.map((c: any) => {
         const id = c.id ?? c.cow_id ?? "";
         const h = healthMap[id] ?? {
           status: "not_reported",
           worker_name: null,
         };
+        const animalType = c.type ?? c.cow_type ?? "mature";
+        // Bulls and newborn calves aren't milked; also respect explicit milkActive flag
+        const milkEligible =
+          (c.milkActive ?? c.milk_active ?? true) &&
+          animalType !== "bull" &&
+          animalType !== "newborn";
         return {
           id,
           tag_number: c.tag_number ?? c.tag ?? "",
           name: c.name ?? c.cow_name ?? "—",
           breed: c.breed ?? "",
-          type: c.type ?? c.cow_type ?? "mature",
+          type: animalType,
           gender: c.gender ?? "",
           age: c.age ?? null,
           isActive: c.isActive ?? c.is_active ?? true,
           isSold: c.isSold ?? c.is_sold ?? false,
+          milkEligible,
           healthStatus: h.status,
           workerName: h.worker_name,
         };
@@ -1353,6 +1832,14 @@ export default function FarmPage() {
     [animals],
   );
 
+  // ── Milk/Feed saved callback: bump this cow's refresh token so its
+  // expanded card re-pulls milk/feed data from the server
+  const handleMilkFeedSaved = useCallback(() => {
+    const id = milkFeedModal.animal?.id;
+    if (!id) return;
+    setRefreshTokens((prev) => ({ ...prev, [id]: (prev[id] ?? 0) + 1 }));
+  }, [milkFeedModal.animal]);
+
   // ── Filter 
   const q = search.toLowerCase().trim();
   const filtered = animals.filter((r) => {
@@ -1409,9 +1896,11 @@ export default function FarmPage() {
         item={item}
         index={index}
         onHealthPress={(a) => setHealthModal({ visible: true, animal: a })}
+        onMilkFeedPress={(a) => setMilkFeedModal({ visible: true, animal: a })}
+        refreshToken={refreshTokens[item.id] ?? 0}
       />
     ),
-    [],
+    [refreshTokens],
   );
 
   return (
@@ -1500,60 +1989,6 @@ export default function FarmPage() {
               </TouchableOpacity>
             )}
           </View>
-
-          {/* Filter chips
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={s.filterScroll}
-          >
-            {FILTERS.map((fl) => {
-              const active = filter === fl.key;
-              return (
-                <TouchableOpacity
-                  key={fl.key}
-                  onPress={() => setFilter(fl.key)}
-                  style={[
-                    s.filterChip,
-                    active && {
-                      backgroundColor: "rgba(255,255,255,0.9)",
-                      borderColor: "transparent",
-                    },
-                  ]}
-                  activeOpacity={0.78}
-                >
-                  <Ionicons
-                    name={fl.icon}
-                    size={11}
-                    color={active ? fl.color : "rgba(255,255,255,0.7)"}
-                  />
-                  <Text
-                    style={[
-                      s.filterChipText,
-                      { color: active ? fl.color : "rgba(255,255,255,0.85)" },
-                    ]}
-                  >
-                    {fl.label}
-                  </Text>
-                  <View
-                    style={[
-                      s.filterBadge,
-                      active && { backgroundColor: fl.color + "22" },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        s.filterBadgeText,
-                        { color: active ? fl.color : "rgba(255,255,255,0.7)" },
-                      ]}
-                    >
-                      {fl.count}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView> */}
         </Animated.View>
       </Animated.View>
 
@@ -1614,6 +2049,14 @@ export default function FarmPage() {
         animal={healthModal.animal}
         onClose={() => setHealthModal({ visible: false, animal: null })}
         onUpdated={handleHealthUpdated}
+      />
+
+      {/* ── Milk + Feed Modal ── */}
+      <MilkFeedModal
+        visible={milkFeedModal.visible}
+        animal={milkFeedModal.animal}
+        onClose={() => setMilkFeedModal({ visible: false, animal: null })}
+        onSaved={handleMilkFeedSaved}
       />
     </View>
   );

@@ -63,6 +63,12 @@ interface HealthSummary {
   under_observation: number;
 }
 
+interface FarmSaleSummary {
+  total_sales: number;
+  total_amount: number;
+  by_product: Record<string, number>;
+}
+
 const today = () => new Date().toISOString().split("T")[0];
 const currentShift = (): "morning" | "evening" => {
   const h = new Date().getHours();
@@ -79,6 +85,7 @@ const TABS = [
   { key: "feed", label: "Feed", icon: "leaf" as const, color: C.green },
   { key: "milk", label: "Milk", icon: "water" as const, color: C.blue },
   { key: "health", label: "Health", icon: "heart" as const, color: C.red },
+   { key: "farmSale", label: "Sales", icon: "cash" as const, color: C.purple },
 ] as const;
 type TabKey = typeof TABS[number]["key"];
 
@@ -470,6 +477,80 @@ function HealthPanel({ loading, summary, date }: {
   );
 }
 
+function FarmSalePanel({ loading, summary, date }: {
+  loading: boolean; summary: FarmSaleSummary | null; date: string;
+}) {
+  const router = useRouter();
+  const products = summary ? Object.entries(summary.by_product) : [];
+
+  return (
+    <Card accentColor={C.purple}>
+      <SectionHeader
+        icon="cash"
+        title="Farm Sales"
+        subtitle={`Today  ·  ${date}`}
+        accentColor={C.purple}
+        route="/(admin)/gausevak/farmsale"
+      />
+      {loading ? (
+        <View style={{ height: 66, backgroundColor: C.border, borderRadius: 12 }} />
+      ) : summary ? (
+        <>
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <StatPill
+              label="Revenue"
+              value={`₹${summary.total_amount.toFixed(0)}`}
+              color={C.purple}
+              bgColor="#F5F3FF"
+              borderColor="#DDD6FE"
+              icon="cash-outline"
+            />
+            <StatPill
+              label="Sales"
+              value={summary.total_sales ?? 0}
+              color={C.textMuted}
+              bgColor={C.bg}
+              borderColor={C.border}
+              icon="receipt-outline"
+            />
+          </View>
+
+          {products.length > 0 && (
+            <View style={styles.productRow}>
+              {products.slice(0, 4).map(([product, qty]) => (
+                <View key={product} style={styles.productChip}>
+                  <Text style={styles.productChipText}>
+                    {product}: {qty}
+                  </Text>
+                </View>
+              ))}
+              {products.length > 4 && (
+                <View style={styles.productChip}>
+                  <Text style={styles.productChipText}>+{products.length - 4} more</Text>
+                </View>
+              )}
+            </View>
+          )}
+
+          <View style={styles.progressRow}>
+            <View style={[styles.dot, { backgroundColor: C.purple }]} />
+            <Text style={styles.progressHint}>
+              {summary.total_sales > 0
+                ? `${summary.total_sales} sale${summary.total_sales !== 1 ? "s" : ""} logged today`
+                : "No sales yet today"}
+            </Text>
+          </View>
+        </>
+      ) : (
+        <View style={styles.emptyState}>
+          <Ionicons name="cash-outline" size={28} color={C.border} />
+          <Text style={styles.emptyText}>No farm sales for today</Text>
+        </View>
+      )}
+    </Card>
+  );
+}
+
 // ─── Parse health summary from API response
 function parseHealthSummary(logs: any[]): HealthSummary {
   const summary: HealthSummary = { total: 0, healthy: 0, sick: 0, under_observation: 0 };
@@ -502,6 +583,9 @@ export default function GausevakTabs() {
   const [feedSummary, setFeedSummary] = useState<FeedSummary | null>(null);
   const [milkSummary, setMilkSummary] = useState<MilkSummary | null>(null);
   const [healthSummary, setHealthSummary] = useState<HealthSummary | null>(null);
+
+  const [farmSaleLoading, setFarmSaleLoading] = useState(true);
+const [farmSaleSummary, setFarmSaleSummary] = useState<FarmSaleSummary | null>(null);
 
   // ── Smooth swipe with animation
   const translateX = useRef(new Animated.Value(0)).current;
@@ -603,17 +687,30 @@ export default function GausevakTabs() {
     finally { setHealthLoading(false); }
   }, [dateStr]);
 
-  useEffect(() => { loadFeed(); loadMilk(); loadHealth(); }, [loadFeed, loadMilk, loadHealth]);
+  const loadFarmSale = useCallback(async () => {
+  try {
+    setFarmSaleLoading(true);
+    const res = await api.getAdminFarmSales({ date: dateStr });
+    setFarmSaleSummary({
+      total_sales: res.total_sales ?? 0,
+      total_amount: res.total_amount ?? 0,
+      by_product: res.by_product ?? {},
+    });
+  } catch (e) { console.log("Farm sale error", e); }
+  finally { setFarmSaleLoading(false); }
+}, [dateStr]);
 
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await Promise.all([loadFeed(), loadMilk(), loadHealth()]);
-    setRefreshing(false);
-  }, [loadFeed, loadMilk, loadHealth]);
+useEffect(() => { loadFeed(); loadMilk(); loadHealth(); loadFarmSale(); }, [loadFeed, loadMilk, loadHealth, loadFarmSale]);
+
+const onRefresh = useCallback(async () => {
+  setRefreshing(true);
+  await Promise.all([loadFeed(), loadMilk(), loadHealth(), loadFarmSale()]);
+  setRefreshing(false);
+}, [loadFeed, loadMilk, loadHealth, loadFarmSale]);
 
   const dateLabel = new Date().toLocaleDateString("en-IN", { day: "numeric", month: "short" });
   const activeTabConfig = TABS.find((t) => t.key === activeTab)!;
-  const isAllLoading = feedLoading && milkLoading && healthLoading;
+  const isAllLoading = feedLoading && milkLoading && healthLoading && farmSaleLoading;
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
@@ -683,6 +780,13 @@ export default function GausevakTabs() {
             </Text>
             <Text style={styles.stripLabel}>Healthy</Text>
           </TouchableOpacity>
+          <View style={styles.stripDivider} />
+<TouchableOpacity style={styles.stripItem} onPress={() => switchTab("farmSale")} activeOpacity={0.7}>
+  <Text style={[styles.stripValue, { color: C.purple }]}>
+    ₹{farmSaleSummary?.total_amount.toFixed(0) ?? "—"}
+  </Text>
+  <Text style={styles.stripLabel}>Sales</Text>
+</TouchableOpacity>
         </View>
 
         {/* ── Tab Bar ── */}
@@ -706,6 +810,10 @@ export default function GausevakTabs() {
               {activeTab === "health" && (
                 <HealthPanel loading={healthLoading} summary={healthSummary} date={dateLabel} />
               )}
+
+              {activeTab === "farmSale" && (
+  <FarmSalePanel loading={farmSaleLoading} summary={farmSaleSummary} date={dateLabel} />
+)}
             </Animated.View>
           )}
         </View>
@@ -905,4 +1013,20 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   footerText: { fontSize: 10, color: C.textLight, fontWeight: "500" },
+
+  productRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: 10,
+  },
+  productChip: {
+    backgroundColor: "#F5F3FF",
+    borderWidth: 1,
+    borderColor: "#DDD6FE",
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+  },
+  productChipText: { fontSize: 11, fontWeight: "600", color: C.purple },
 });

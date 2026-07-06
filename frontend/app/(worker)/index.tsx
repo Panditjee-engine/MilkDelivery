@@ -33,6 +33,7 @@ import FeedScreen from "./feed";
 // @ts-ignore
 import HealthScreen from "./health";
 import Scanner from "../../src/components/Scanner";
+import FarmSaleScreen from "./farm-sale";
 
 if (
   Platform.OS === "android" &&
@@ -56,7 +57,7 @@ const PALETTE = {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type QuickAction = "milk" | "feed" | "health" | null;
+type QuickAction = "milk" | "feed" | "health" | "farmSale" | null;
 type CowTab = "milk" | "feed" | "health";
 type ExtraTaskType =
   | "cleaning"
@@ -129,12 +130,17 @@ function formatPointTime(value?: string) {
 // ─── Icon helpers for actions ─────────────────────────────────────────────────
 // Instead of emojis, we define icon configs for each action
 const ACTION_ICON: Record<
-  "milk" | "feed" | "health",
-  { library: "MaterialCommunity" | "FontAwesome5" | "Ionicons"; name: string; size: number }
+  "milk" | "feed" | "health" | "farmSale",
+  {
+    library: "MaterialCommunity" | "FontAwesome5" | "Ionicons";
+    name: string;
+    size: number;
+  }
 > = {
   milk: { library: "MaterialCommunity", name: "water", size: 28 },
   feed: { library: "FontAwesome5", name: "seedling", size: 24 },
   health: { library: "MaterialCommunity", name: "heart-pulse", size: 28 },
+  farmSale: { library: "MaterialCommunity", name: "cash-register", size: 26 },
 };
 
 function ActionIcon({
@@ -142,7 +148,7 @@ function ActionIcon({
   size,
   color,
 }: {
-  actionKey: "milk" | "feed" | "health";
+  actionKey: "milk" | "feed" | "health" | "farmSale";
   size?: number;
   color?: string;
 }) {
@@ -160,7 +166,11 @@ function ActionIcon({
   }
   if (icon.library === "FontAwesome5") {
     return (
-      <FontAwesome5 name={icon.name as any} size={finalSize} color={finalColor} />
+      <FontAwesome5
+        name={icon.name as any}
+        size={finalSize}
+        color={finalColor}
+      />
     );
   }
   return (
@@ -225,6 +235,11 @@ const ACTION_KEYS = {
     color: "#dc2626",
     gradient: ["#ef4444", "#dc2626"] as const,
     bg: "#fef2f2",
+  },
+  farmSale: {
+    color: "#0891b2",
+    gradient: ["#0891b2", "#0e7490"] as const,
+    bg: "#ecfeff",
   },
 };
 
@@ -316,6 +331,11 @@ function useActionMeta() {
       label: t("healthLabel"),
       desc: t("healthDesc"),
     },
+    farmSale: {
+      ...ACTION_KEYS.farmSale,
+      label: t("farmSaleLabel") ?? "Farm Sale",
+      desc: t("farmSaleDesc") ?? "Record product sold on farm",
+    },
   };
 }
 
@@ -375,7 +395,7 @@ function buildStatusMap(
   cows: Cow[],
   milkData: any,
   feedData: any[],
-  healthData: any[]
+  healthData: any[],
 ): Record<string, CowStatus> {
   const map: Record<string, CowStatus> = {};
   cows.forEach((c) => {
@@ -383,7 +403,7 @@ function buildStatusMap(
   });
   const milkEntries: any[] = Array.isArray(milkData)
     ? milkData
-    : milkData?.entries ?? milkData?.cows ?? [];
+    : (milkData?.entries ?? milkData?.cows ?? []);
   milkEntries.forEach((e: any) => {
     const id = e.cow_id ?? e.id;
     if (map[id]) map[id].milkDone = true;
@@ -521,16 +541,16 @@ function SingleCowMilk({ cow, onDone }: { cow: Cow; onDone: () => void }) {
       .then((entries: any) => {
         const arr: any[] = Array.isArray(entries)
           ? entries
-          : entries?.entries ?? entries?.cows ?? [];
+          : (entries?.entries ?? entries?.cows ?? []);
         const entry = arr.find(
-          (e: any) => e.cow_id === cow.id && e.shift === shift
+          (e: any) => e.cow_id === cow.id && e.shift === shift,
         );
         if (entry) {
           setSaved(true);
           setSavedQty(entry.quantity);
         }
       })
-      .catch(() => { });
+      .catch(() => {});
   }, []);
 
   const commit = () => {
@@ -577,8 +597,7 @@ function SingleCowMilk({ cow, onDone }: { cow: Cow; onDone: () => void }) {
         <Text style={smk.doneTitle}>{t("milkRecorded")}</Text>
         <Text style={smk.doneSub}>
           {savedQty.toFixed(1)} L —{" "}
-          {isMorning ? t("morningLabel") : t("eveningLabel")}{" "}
-          {t("shiftSuffix")}
+          {isMorning ? t("morningLabel") : t("eveningLabel")} {t("shiftSuffix")}
         </Text>
       </View>
     );
@@ -709,7 +728,7 @@ function SingleCowFeed({ cow, onDone }: { cow: Cow; onDone: () => void }) {
             ]);
         }
       })
-      .catch(() => { })
+      .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 
@@ -862,11 +881,11 @@ function SingleCowHealth({ cow, onDone }: { cow: Cow; onDone: () => void }) {
       .workerGetTodayHealthLogs()
       .then((logs: any[]) => {
         const log = (Array.isArray(logs) ? logs : []).find(
-          (l: any) => l.cow_id === cow.id
+          (l: any) => l.cow_id === cow.id,
         );
         if (log) setStatus(log.status as HealthKey);
       })
-      .catch(() => { })
+      .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 
@@ -1002,8 +1021,8 @@ function ScannedCowScreen({
     iconName: string;
     iconLib: "MaterialCommunity" | "FontAwesome5" | "Ionicons";
   }[] = [
-      ...(cow.milkActive
-        ? [
+    ...(cow.milkActive
+      ? [
           {
             key: "milk" as CowTab,
             label: t("tabMilk"),
@@ -1012,22 +1031,22 @@ function ScannedCowScreen({
             iconLib: "MaterialCommunity" as const,
           },
         ]
-        : []),
-      {
-        key: "feed" as CowTab,
-        label: t("tabFeed"),
-        doneKey: "feedDone" as keyof CowStatus,
-        iconName: "seedling",
-        iconLib: "FontAwesome5" as const,
-      },
-      {
-        key: "health" as CowTab,
-        label: t("tabHealth"),
-        doneKey: "healthDone" as keyof CowStatus,
-        iconName: "heart-pulse",
-        iconLib: "MaterialCommunity" as const,
-      },
-    ];
+      : []),
+    {
+      key: "feed" as CowTab,
+      label: t("tabFeed"),
+      doneKey: "feedDone" as keyof CowStatus,
+      iconName: "seedling",
+      iconLib: "FontAwesome5" as const,
+    },
+    {
+      key: "health" as CowTab,
+      label: t("tabHealth"),
+      doneKey: "healthDone" as keyof CowStatus,
+      iconName: "heart-pulse",
+      iconLib: "MaterialCommunity" as const,
+    },
+  ];
 
   const [tab, setTab] = useState<CowTab>(cow.milkActive ? "milk" : "feed");
   const [status, setStatus] = useState<CowStatus>(initialStatus);
@@ -1049,12 +1068,18 @@ function ScannedCowScreen({
   const renderTabIcon = (
     iconName: string,
     iconLib: "MaterialCommunity" | "FontAwesome5" | "Ionicons",
-    isActive: boolean
+    isActive: boolean,
   ) => {
     const color = isActive ? "#16a34a" : "rgba(255,255,255,0.65)";
     const size = 18;
     if (iconLib === "MaterialCommunity")
-      return <MaterialCommunityIcons name={iconName as any} size={size} color={color} />;
+      return (
+        <MaterialCommunityIcons
+          name={iconName as any}
+          size={size}
+          color={color}
+        />
+      );
     if (iconLib === "FontAwesome5")
       return <FontAwesome5 name={iconName as any} size={size} color={color} />;
     return <Ionicons name={iconName as any} size={size} color={color} />;
@@ -1098,9 +1123,7 @@ function ScannedCowScreen({
                   onPress={() => setTab(tb.key)}
                 >
                   {renderTabIcon(tb.iconName, tb.iconLib, isActive)}
-                  <Text
-                    style={[scs.tabLabel, isActive && scs.tabLabelActive]}
-                  >
+                  <Text style={[scs.tabLabel, isActive && scs.tabLabelActive]}>
                     {tb.label}
                   </Text>
                   {isDone && (
@@ -1136,10 +1159,7 @@ function ScannedCowScreen({
             <SingleCowFeed cow={cow} onDone={() => markDone("feedDone")} />
           )}
           {tab === "health" && (
-            <SingleCowHealth
-              cow={cow}
-              onDone={() => markDone("healthDone")}
-            />
+            <SingleCowHealth cow={cow} onDone={() => markDone("healthDone")} />
           )}
         </ScrollView>
       </View>
@@ -1364,6 +1384,7 @@ function FullScreenModal({
           )}
           {action === "feed" && <FeedScreen onFedCountChange={onFedCount} />}
           {action === "health" && <HealthScreen />}
+          {action === "farmSale" && <FarmSaleScreen />}
         </View>
       </View>
     </Modal>
@@ -1435,9 +1456,7 @@ export function ExtraWorkModal({
     cancelBtn: isHindi ? "रद्द करें" : "Cancel",
     deleteBtn: isHindi ? "हटाएं" : "Delete",
     taskNameLabel: isHindi ? "कार्य का नाम" : "Task Name",
-    taskNamePlaceholder: isHindi
-      ? "अपना कार्य टाइप करें…"
-      : "Type your task…",
+    taskNamePlaceholder: isHindi ? "अपना कार्य टाइप करें…" : "Type your task…",
     orSelectLabel: isHindi ? "— या नीचे से चुनें —" : "— or choose below —",
     errorRequired: isHindi
       ? "कृपया कार्य का प्रकार चुनें या नाम दर्ज करें।"
@@ -1446,7 +1465,9 @@ export function ExtraWorkModal({
       ? "फोटो चुनने में समस्या हुई।"
       : "Could not select the image.",
     errorSave: isHindi ? "कार्य सहेजा नहीं जा सका।" : "Could not save task.",
-    errorDelete: isHindi ? "कार्य हटाया नहीं जा सका।" : "Could not delete task.",
+    errorDelete: isHindi
+      ? "कार्य हटाया नहीं जा सका।"
+      : "Could not delete task.",
     statusPending: isHindi ? "वेरिफिकेशन बाकी" : "Pending verification",
     statusVerified: isHindi ? "वेरिफाइड" : "Verified",
     pointsAdded: isHindi ? "पॉइंट्स जुड़ गए" : "Points awarded",
@@ -1483,7 +1504,8 @@ export function ExtraWorkModal({
 
   const pickImage = async () => {
     try {
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      const permission =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
         setAlert({
           visible: true,
@@ -1630,7 +1652,11 @@ export function ExtraWorkModal({
           </TouchableOpacity>
           <View style={ew.headerTitleWrap}>
             <View style={ew.headerIconCircle}>
-              <MaterialCommunityIcons name="clipboard-list-outline" size={20} color="#fff" />
+              <MaterialCommunityIcons
+                name="clipboard-list-outline"
+                size={20}
+                color="#fff"
+              />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={ew.headerTitle}>{labels.modalTitle}</Text>
@@ -1672,7 +1698,11 @@ export function ExtraWorkModal({
                 <Text style={ew.inputLabel}>{labels.taskNameLabel}</Text>
                 <View style={ew.customInputRow}>
                   <View style={ew.customInputIcon}>
-                    <Ionicons name="create-outline" size={18} color={PALETTE.accent} />
+                    <Ionicons
+                      name="create-outline"
+                      size={18}
+                      color={PALETTE.accent}
+                    />
                   </View>
                   <TextInput
                     style={ew.customInput}
@@ -1709,7 +1739,9 @@ export function ExtraWorkModal({
                           ew.typeChip,
                           {
                             borderColor: isSelected ? meta.color : PALETTE.mid,
-                            backgroundColor: isSelected ? meta.bg : PALETTE.cream,
+                            backgroundColor: isSelected
+                              ? meta.bg
+                              : PALETTE.cream,
                           },
                         ]}
                         onPress={() => {
@@ -1718,7 +1750,16 @@ export function ExtraWorkModal({
                         }}
                         activeOpacity={0.75}
                       >
-                        <View style={[ew.typeChipIconWrap, { backgroundColor: isSelected ? meta.color + "20" : PALETTE.light }]}>
+                        <View
+                          style={[
+                            ew.typeChipIconWrap,
+                            {
+                              backgroundColor: isSelected
+                                ? meta.color + "20"
+                                : PALETTE.light,
+                            },
+                          ]}
+                        >
                           <TaskIcon
                             taskType={key}
                             size={20}
@@ -1728,7 +1769,11 @@ export function ExtraWorkModal({
                         <Text
                           style={[
                             ew.typeChipLabel,
-                            { color: isSelected ? meta.color : PALETTE.deepBrown },
+                            {
+                              color: isSelected
+                                ? meta.color
+                                : PALETTE.deepBrown,
+                            },
                           ]}
                           numberOfLines={2}
                         >
@@ -1794,16 +1839,28 @@ export function ExtraWorkModal({
                         onPress={pickImage}
                         activeOpacity={0.8}
                       >
-                        <Ionicons name="images-outline" size={16} color={PALETTE.accent} />
-                        <Text style={ew.imageActionText}>{labels.imageChange}</Text>
+                        <Ionicons
+                          name="images-outline"
+                          size={16}
+                          color={PALETTE.accent}
+                        />
+                        <Text style={ew.imageActionText}>
+                          {labels.imageChange}
+                        </Text>
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={ew.imageActionBtn}
                         onPress={() => setImageBase64(null)}
                         activeOpacity={0.8}
                       >
-                        <Ionicons name="trash-outline" size={16} color="#dc2626" />
-                        <Text style={[ew.imageActionText, { color: "#dc2626" }]}>
+                        <Ionicons
+                          name="trash-outline"
+                          size={16}
+                          color="#dc2626"
+                        />
+                        <Text
+                          style={[ew.imageActionText, { color: "#dc2626" }]}
+                        >
                           {labels.imageRemove}
                         </Text>
                       </TouchableOpacity>
@@ -1816,7 +1873,11 @@ export function ExtraWorkModal({
                     activeOpacity={0.85}
                   >
                     <View style={ew.imagePickerIcon}>
-                      <Ionicons name="camera-outline" size={20} color={PALETTE.accent} />
+                      <Ionicons
+                        name="camera-outline"
+                        size={20}
+                        color={PALETTE.accent}
+                      />
                     </View>
                     <Text style={ew.imagePickerText}>{labels.imageAdd}</Text>
                   </TouchableOpacity>
@@ -1827,7 +1888,7 @@ export function ExtraWorkModal({
                 style={[
                   ew.saveBtn,
                   {
-                    opacity: (selectedType || customLabel.trim()) ? 1 : 0.5,
+                    opacity: selectedType || customLabel.trim() ? 1 : 0.5,
                   },
                 ]}
                 onPress={handleSave}
@@ -1906,10 +1967,7 @@ export function ExtraWorkModal({
                     ]}
                   >
                     <View
-                      style={[
-                        ew.taskColorBar,
-                        { backgroundColor: meta.color },
-                      ]}
+                      style={[ew.taskColorBar, { backgroundColor: meta.color }]}
                     />
                     <View style={ew.taskEmojiWrap}>
                       <TaskIcon
@@ -1964,9 +2022,20 @@ export function ExtraWorkModal({
                           </View>
                         ) : null}
                         {task.points_awarded ? (
-                          <View style={[ew.taskMetaPill, { backgroundColor: "#ecfdf5" }]}>
-                            <Ionicons name="sparkles-outline" size={12} color="#15803d" />
-                            <Text style={[ew.taskMetaText, { color: "#15803d" }]}>
+                          <View
+                            style={[
+                              ew.taskMetaPill,
+                              { backgroundColor: "#ecfdf5" },
+                            ]}
+                          >
+                            <Ionicons
+                              name="sparkles-outline"
+                              size={12}
+                              color="#15803d"
+                            />
+                            <Text
+                              style={[ew.taskMetaText, { color: "#15803d" }]}
+                            >
                               {labels.pointsAdded}
                             </Text>
                           </View>
@@ -2016,25 +2085,42 @@ function PointsHistoryModal({
   const recent = points?.recent ?? [];
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent
+      onRequestClose={onClose}
+    >
       <View style={pm.overlay}>
         <View style={pm.sheet}>
           <View style={pm.header}>
             <View>
-              <Text style={pm.title}>{isHindi ? "पॉइंट्स हिस्ट्री" : "Points History"}</Text>
+              <Text style={pm.title}>
+                {isHindi ? "पॉइंट्स हिस्ट्री" : "Points History"}
+              </Text>
               <Text style={pm.subtitle}>
-                {isHindi ? "हाल की गतिविधियाँ और आपके पॉइंट्स" : "Recent activities and your earned points"}
+                {isHindi
+                  ? "हाल की गतिविधियाँ और आपके पॉइंट्स"
+                  : "Recent activities and your earned points"}
               </Text>
             </View>
-            <TouchableOpacity style={pm.closeBtn} onPress={onClose} activeOpacity={0.8}>
+            <TouchableOpacity
+              style={pm.closeBtn}
+              onPress={onClose}
+              activeOpacity={0.8}
+            >
               <Ionicons name="close" size={18} color={PALETTE.deepBrown} />
             </TouchableOpacity>
           </View>
 
           <View style={pm.summaryRow}>
             <View style={pm.summaryCard}>
-              <Text style={pm.summaryLabel}>{isHindi ? "Redeemable" : "Redeemable"}</Text>
-              <Text style={pm.summaryValue}>{points?.redeemable_points ?? 0}</Text>
+              <Text style={pm.summaryLabel}>
+                {isHindi ? "Redeemable" : "Redeemable"}
+              </Text>
+              <Text style={pm.summaryValue}>
+                {points?.redeemable_points ?? 0}
+              </Text>
             </View>
             <View style={pm.summaryCard}>
               <Text style={pm.summaryLabel}>{isHindi ? "आज" : "Today"}</Text>
@@ -2049,12 +2135,22 @@ function PointsHistoryModal({
           {loading ? (
             <View style={pm.stateWrap}>
               <ActivityIndicator color={PALETTE.accent} />
-              <Text style={pm.stateText}>{isHindi ? "पॉइंट्स लोड हो रहे हैं…" : "Loading points…"}</Text>
+              <Text style={pm.stateText}>
+                {isHindi ? "पॉइंट्स लोड हो रहे हैं…" : "Loading points…"}
+              </Text>
             </View>
           ) : !points ? (
             <View style={pm.stateWrap}>
-              <MaterialCommunityIcons name="alert-circle-outline" size={28} color={PALETTE.mutedBrown} />
-              <Text style={pm.stateTitle}>{isHindi ? "पॉइंट्स अभी उपलब्ध नहीं हैं" : "Points are not available yet"}</Text>
+              <MaterialCommunityIcons
+                name="alert-circle-outline"
+                size={28}
+                color={PALETTE.mutedBrown}
+              />
+              <Text style={pm.stateTitle}>
+                {isHindi
+                  ? "पॉइंट्स अभी उपलब्ध नहीं हैं"
+                  : "Points are not available yet"}
+              </Text>
               <Text style={pm.stateText}>
                 {isHindi
                   ? "लगता है live backend पर points endpoint अभी deploy नहीं है।"
@@ -2063,29 +2159,55 @@ function PointsHistoryModal({
             </View>
           ) : recent.length === 0 ? (
             <View style={pm.stateWrap}>
-              <MaterialCommunityIcons name="star-four-points-outline" size={28} color={PALETTE.mutedBrown} />
-              <Text style={pm.stateTitle}>{isHindi ? "अभी कोई recent entry नहीं" : "No recent entries yet"}</Text>
+              <MaterialCommunityIcons
+                name="star-four-points-outline"
+                size={28}
+                color={PALETTE.mutedBrown}
+              />
+              <Text style={pm.stateTitle}>
+                {isHindi
+                  ? "अभी कोई recent entry नहीं"
+                  : "No recent entries yet"}
+              </Text>
               <Text style={pm.stateText}>
-                {isHindi ? "जैसे ही काम वेरिफाई होंगे, यहां history दिखेगी।" : "Verified work will start appearing here."}
+                {isHindi
+                  ? "जैसे ही काम वेरिफाई होंगे, यहां history दिखेगी।"
+                  : "Verified work will start appearing here."}
               </Text>
             </View>
           ) : (
-            <ScrollView style={pm.list} contentContainerStyle={pm.listContent} showsVerticalScrollIndicator={false}>
+            <ScrollView
+              style={pm.list}
+              contentContainerStyle={pm.listContent}
+              showsVerticalScrollIndicator={false}
+            >
               {recent.map((item, index) => (
-                <View key={item.id ?? `${item.activity_type}-${index}`} style={pm.activityCard}>
+                <View
+                  key={item.id ?? `${item.activity_type}-${index}`}
+                  style={pm.activityCard}
+                >
                   <View style={pm.activityPoints}>
-                    <Text style={pm.activityPointsValue}>+{item.points ?? 0}</Text>
+                    <Text style={pm.activityPointsValue}>
+                      +{item.points ?? 0}
+                    </Text>
                   </View>
                   <View style={pm.activityInfo}>
                     <Text style={pm.activityTitle}>
-                      {item.reference_name || item.activity_type || (isHindi ? "गतिविधि" : "Activity")}
+                      {item.reference_name ||
+                        item.activity_type ||
+                        (isHindi ? "गतिविधि" : "Activity")}
                     </Text>
                     <Text style={pm.activityMeta}>
-                      {[item.activity_type, formatPointTime(item.created_at || item.date)]
+                      {[
+                        item.activity_type,
+                        formatPointTime(item.created_at || item.date),
+                      ]
                         .filter(Boolean)
                         .join(" • ")}
                     </Text>
-                    {item.note ? <Text style={pm.activityNote}>{item.note}</Text> : null}
+                    {item.note ? (
+                      <Text style={pm.activityNote}>{item.note}</Text>
+                    ) : null}
                   </View>
                 </View>
               ))}
@@ -2119,10 +2241,18 @@ function ExtraTasksSummaryCard({
   if (!loading && tasks.length === 0) return null;
 
   return (
-    <TouchableOpacity style={s.extraSummaryCard} activeOpacity={0.88} onPress={onPress}>
+    <TouchableOpacity
+      style={s.extraSummaryCard}
+      activeOpacity={0.88}
+      onPress={onPress}
+    >
       <View style={s.extraSummaryHeader}>
         <View style={s.extraSummaryIcon}>
-          <MaterialCommunityIcons name="clipboard-clock-outline" size={22} color="#b45309" />
+          <MaterialCommunityIcons
+            name="clipboard-clock-outline"
+            size={22}
+            color="#b45309"
+          />
         </View>
         <View style={{ flex: 1 }}>
           <Text style={s.extraSummaryTitle}>
@@ -2130,8 +2260,12 @@ function ExtraTasksSummaryCard({
           </Text>
           <Text style={s.extraSummarySub}>
             {loading
-              ? isHindi ? "कार्य लोड हो रहे हैं..." : "Loading tasks..."
-              : isHindi ? "आज के अतिरिक्त कार्य" : "Today's extra work"}
+              ? isHindi
+                ? "कार्य लोड हो रहे हैं..."
+                : "Loading tasks..."
+              : isHindi
+                ? "आज के अतिरिक्त कार्य"
+                : "Today's extra work"}
           </Text>
         </View>
         <Ionicons name="chevron-forward" size={20} color="#9a3412" />
@@ -2144,29 +2278,64 @@ function ExtraTasksSummaryCard({
       ) : (
         <>
           <View style={s.extraCountRow}>
-            <View style={[s.extraCountCard, { backgroundColor: "#fff7ed", borderColor: "#fed7aa" }]}>
-              <Text style={[s.extraCountValue, { color: "#c2410c" }]}>{pending}</Text>
-              <Text style={s.extraCountLabel}>{isHindi ? "पेंडिंग" : "Pending"}</Text>
+            <View
+              style={[
+                s.extraCountCard,
+                { backgroundColor: "#fff7ed", borderColor: "#fed7aa" },
+              ]}
+            >
+              <Text style={[s.extraCountValue, { color: "#c2410c" }]}>
+                {pending}
+              </Text>
+              <Text style={s.extraCountLabel}>
+                {isHindi ? "पेंडिंग" : "Pending"}
+              </Text>
             </View>
-            <View style={[s.extraCountCard, { backgroundColor: "#ecfdf5", borderColor: "#bbf7d0" }]}>
-              <Text style={[s.extraCountValue, { color: "#15803d" }]}>{completed}</Text>
-              <Text style={s.extraCountLabel}>{isHindi ? "पूर्ण" : "Completed"}</Text>
+            <View
+              style={[
+                s.extraCountCard,
+                { backgroundColor: "#ecfdf5", borderColor: "#bbf7d0" },
+              ]}
+            >
+              <Text style={[s.extraCountValue, { color: "#15803d" }]}>
+                {completed}
+              </Text>
+              <Text style={s.extraCountLabel}>
+                {isHindi ? "पूर्ण" : "Completed"}
+              </Text>
             </View>
           </View>
 
           <View style={s.extraTaskList}>
             {visibleTasks.map((task) => {
               const meta = TASK_META[task.task_type] ?? TASK_META.custom;
-              const done = task.verification_status === "verified" || task.points_awarded;
+              const done =
+                task.verification_status === "verified" || task.points_awarded;
               const label = task.custom_label || task.description || meta.label;
               return (
                 <View key={task.id} style={s.extraTaskRow}>
-                  <View style={[s.extraTaskDot, { backgroundColor: done ? "#16a34a" : meta.color }]} />
+                  <View
+                    style={[
+                      s.extraTaskDot,
+                      { backgroundColor: done ? "#16a34a" : meta.color },
+                    ]}
+                  />
                   <Text style={s.extraTaskName} numberOfLines={1}>
                     {label}
                   </Text>
-                  <Text style={[s.extraTaskStatus, { color: done ? "#15803d" : "#b45309" }]}>
-                    {done ? (isHindi ? "पूर्ण" : "Done") : (isHindi ? "बाकी" : "Pending")}
+                  <Text
+                    style={[
+                      s.extraTaskStatus,
+                      { color: done ? "#15803d" : "#b45309" },
+                    ]}
+                  >
+                    {done
+                      ? isHindi
+                        ? "पूर्ण"
+                        : "Done"
+                      : isHindi
+                        ? "बाकी"
+                        : "Pending"}
                   </Text>
                 </View>
               );
@@ -2197,9 +2366,7 @@ function DashboardContent() {
   const [milkTotal, setMilkTotal] = useState(0);
   const [fedDone, setFedDone] = useState(0);
   const [fedTotal, setFedTotal] = useState(0);
-  const [cowStatuses, setCowStatuses] = useState<Record<string, CowStatus>>(
-    {}
-  );
+  const [cowStatuses, setCowStatuses] = useState<Record<string, CowStatus>>({});
 
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scannedCow, setScannedCow] = useState<Cow | null>(null);
@@ -2220,7 +2387,7 @@ function DashboardContent() {
       const data = await api.workerGetCows();
       setCows(data);
       setFedTotal(
-        data.filter((c: Cow) => c.isActive !== false && !c.isSold).length
+        data.filter((c: Cow) => c.isActive !== false && !c.isSold).length,
       );
     } catch (e) {
       console.log("fetchCows error:", e);
@@ -2246,11 +2413,11 @@ function DashboardContent() {
 
       const milkArr: any[] = Array.isArray(milk)
         ? milk
-        : milk?.entries ?? milk?.cows ?? [];
+        : (milk?.entries ?? milk?.cows ?? []);
       const total = milkArr.reduce(
         (s: number, e: any) =>
           s + (e.quantity ?? e.morning_liters ?? e.evening_liters ?? 0),
-        0
+        0,
       );
       if (total > 0) setMilkTotal(total);
 
@@ -2262,8 +2429,8 @@ function DashboardContent() {
           cowList,
           milk,
           feedArr,
-          Array.isArray(health) ? health : []
-        )
+          Array.isArray(health) ? health : [],
+        ),
       );
     } catch (e) {
       console.log("fetchStatuses error:", e);
@@ -2326,8 +2493,7 @@ function DashboardContent() {
     setScanError(null);
     const trimmed = data.trim();
     const matched = activeCows.find(
-      (c) =>
-        c.tag === trimmed || c.id === trimmed || c.tag_id === trimmed
+      (c) => c.tag === trimmed || c.id === trimmed || c.tag_id === trimmed,
     );
     if (matched) {
       setScannedCow(matched);
@@ -2382,9 +2548,11 @@ function DashboardContent() {
               <Ionicons name="sparkles" size={14} color="#b45309" />
             </View>
             <View>
-              <Text style={s.pointsLabel}>{lang === "hi" ? "पॉइंट्स" : "Points"}</Text>
+              <Text style={s.pointsLabel}>
+                {lang === "hi" ? "पॉइंट्स" : "Points"}
+              </Text>
               <Text style={s.pointsValue}>
-                {pointsLoading ? "…" : points?.redeemable_points ?? 0}
+                {pointsLoading ? "…" : (points?.redeemable_points ?? 0)}
               </Text>
             </View>
           </TouchableOpacity>
@@ -2447,10 +2615,9 @@ function DashboardContent() {
           <MaterialCommunityIcons name="water" size={20} color="#3b82f6" />
           <Text style={[s.statValue, { color: "#3b82f6" }]}>
             {milkTotal > 0
-              ? `${Number.isInteger(milkTotal)
-                ? milkTotal
-                : milkTotal.toFixed(1)
-              }L`
+              ? `${
+                  Number.isInteger(milkTotal) ? milkTotal : milkTotal.toFixed(1)
+                }L`
               : "--"}
           </Text>
           <Text style={s.statLabel}>{t("milkToday")}</Text>
@@ -2483,9 +2650,7 @@ function DashboardContent() {
       )}
 
       {/* ── Quick Entry ── */}
-      <Text style={[s.sectionLabel, { marginTop: 24 }]}>
-        {t("quickEntry")}
-      </Text>
+      <Text style={[s.sectionLabel, { marginTop: 24 }]}>{t("quickEntry")}</Text>
       <BigActionButton
         actionKey="milk"
         delay={0}
@@ -2500,6 +2665,12 @@ function DashboardContent() {
         actionKey="health"
         delay={160}
         onPress={() => setActiveAction("health")}
+      />
+
+      <BigActionButton
+        actionKey="farmSale"
+        delay={240}
+        onPress={() => setActiveAction("farmSale")}
       />
 
       <View style={{ height: 40 }} />
