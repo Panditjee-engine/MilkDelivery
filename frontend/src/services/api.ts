@@ -3062,6 +3062,13 @@ async vetGetHealthLogs(date?: string) {
     });
   }
 
+  async adminCreateFarmSale(data: FarmSaleCreate): Promise<FarmSale> {
+    return this.request<FarmSale>("/admin/farm-sales", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
   async adminDeleteFarmSale(saleId: string): Promise<{ success: boolean; id: string }> {
     return this.request<{ success: boolean; id: string }>(`/admin/farm-sales/${saleId}`, {
       method: "DELETE",
