@@ -22,7 +22,6 @@ import { Colors } from "../../src/constants/colors";
 import Input from "../../src/components/Input";
 import Button from "../../src/components/Button";
 import { api } from "../../src/services/api";
-import { getAuthDevicePayload } from "../../src/utils/deviceToken";
 
 type ToastType = "error" | "success" | "warn";
 
@@ -1224,13 +1223,11 @@ export default function LoginScreen() {
 
     try {
       const loginId = buildLoginIdentifier(val);
-      const { device_token, platform } = await getAuthDevicePayload();
-      const devicePayload = { device_token, platform };
       const loginMethod = isPhoneInput ? "phone" : "email";
 
       // ── Step 1: Try USER login 
       try {
-        await login(loginId, password, devicePayload, loginMethod);
+        await login(loginId, password, {}, loginMethod);
         showToast("Welcome ", "success");
         setTimeout(() => router.replace("/"), 800);
         return;

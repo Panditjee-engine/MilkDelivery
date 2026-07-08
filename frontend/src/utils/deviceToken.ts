@@ -1,13 +1,22 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import Constants from "expo-constants";
 import { Platform } from "react-native";
-import * as Notifications from "expo-notifications";
 
 const NH_REG_ID_KEY = "GAUSATVA_NH_REG_ID";
 
 // ── Get real FCM / APNs device token ─────────────────────────────────────────
 
-export async function getAuthDevicePayload(): Promise<Record<string, string | null>> {
+export async function getAuthDevicePayload(): Promise<Record<string, string>> {
   try {
+    if (Constants.appOwnership === "expo") {
+      console.warn(
+        "Native push token is not available in Expo Go. Use a development build or production build.",
+      );
+      return {};
+    }
+
+    const Notifications = require("expo-notifications");
+
     // Request permission first
     const { status } = await Notifications.requestPermissionsAsync();
     if (status !== "granted") {
@@ -21,13 +30,9 @@ export async function getAuthDevicePayload(): Promise<Record<string, string | nu
 
     console.log("✅ Real FCM Token:", deviceToken);
 
-    // Send stored NH registration ID if available (so Azure updates instead of creating duplicate)
-    const nhRegId = await AsyncStorage.getItem(NH_REG_ID_KEY);
-
     return {
       device_token: deviceToken,
       platform: Platform.OS === "ios" ? "apns" : "fcm",
-      nh_registration_id: nhRegId || null,
     };
 
   } catch (error) {
