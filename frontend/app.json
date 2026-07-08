@@ -26,7 +26,8 @@
       },
       "package": "com.badal_12.frontend",
       "permissions": [
-        "android.permission.CAMERA"
+        "android.permission.CAMERA",
+        "android.permission.POST_NOTIFICATIONS"
       ]
     },
     "web": {
@@ -47,6 +48,7 @@
   ],
   "expo-font",
   "expo-web-browser",
+  "expo-notifications",
   "react-native-vision-camera",
   "@react-native-community/datetimepicker"
 ],

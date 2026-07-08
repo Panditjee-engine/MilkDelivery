@@ -22,7 +22,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { LinearGradient } from "expo-linear-gradient";
 import { api } from "../../src/services/api";
-import { getAuthDevicePayload } from "../../src/utils/deviceToken";
 
 // ── Brand Colors
 const C = {
@@ -696,14 +695,12 @@ export default function RegisterScreen() {
 
     setLoading(true);
     try {
-      const devicePayload = await getAuthDevicePayload();
       await register({
         name: name.trim(),
         email: email.trim().toLowerCase(),
         phone: fullPhone,
         password,
         role,
-        ...devicePayload,
         referral_admin_id: referralAdminId ?? undefined,
       });
       showToast("Account created! Welcome 🎉", "success");
