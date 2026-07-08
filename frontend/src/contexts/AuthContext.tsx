@@ -3,6 +3,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from '../services/api';
 import { notificationService } from '../services/notificationService'; // ← NEW
+import { getAuthDevicePayload, saveNhRegistrationId, clearNhRegistrationId } from '../utils/deviceToken';
 
 interface User {
   id: string;
@@ -115,7 +116,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     extraData: Record<string, any> = {},
     method: 'email' | 'phone' = 'email',
   ) => {
-    const response = await api.login(identifier, password, method, extraData);
+    const devicePayload = await getAuthDevicePayload();
+    const response = await api.login(identifier, password, method, { ...extraData, ...devicePayload });
+    await saveNhRegistrationId(response.nh_registration_id);  // ← save real NH ID
     await AsyncStorage.setItem('access_token', response.access_token);
     setToken(response.access_token);
     setUser(response.user);
@@ -134,14 +137,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const register = async (data: any) => {
-    const response = await api.register(data);
+    const devicePayload = await getAuthDevicePayload();
+    const response = await api.register({ ...data, ...devicePayload });
+    await saveNhRegistrationId(response.nh_registration_id); 
     await AsyncStorage.setItem('access_token', response.access_token);
     setToken(response.access_token);
     setUser(response.user);
-  };
+  };  
 
   const logout = async () => {
     console.log('LOGOUT FUNCTION CALLED');
+    await clearNhRegistrationId();  // ← clear NH ID
+    
 
     notificationService.stopPolling(); // ← NEW: logout pe polling band karo
 

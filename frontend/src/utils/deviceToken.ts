@@ -1,54 +1,52 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import Constants from "expo-constants";
 import { Platform } from "react-native";
+import * as Notifications from "expo-notifications";
 
-const DEVICE_ID_KEY = "GAUSATVA_DEVICE_ID";
-const AUTH_PLATFORM = "fcm";
+const NH_REG_ID_KEY = "GAUSATVA_NH_REG_ID";
 
-export async function getDeviceId(): Promise<string> {
-  const existing = await AsyncStorage.getItem(DEVICE_ID_KEY);
-  if (existing) return existing;
+// ── Get real FCM / APNs device token ─────────────────────────────────────────
 
-  const generated = `${Platform.OS}-${Date.now()}-${Math.random()
-    .toString(36)
-    .slice(2, 12)}`;
-  await AsyncStorage.setItem(DEVICE_ID_KEY, generated);
-  return generated;
-}
-
-async function getExpoPushToken(fallbackToken: string): Promise<string> {
+export async function getAuthDevicePayload(): Promise<Record<string, string | null>> {
   try {
-    const Notifications = require("expo-notifications");
-    const current = await Notifications.getPermissionsAsync();
-    let status = current?.status;
-
+    // Request permission first
+    const { status } = await Notifications.requestPermissionsAsync();
     if (status !== "granted") {
-      const requested = await Notifications.requestPermissionsAsync();
-      status = requested?.status;
+      console.warn("⚠️ Notification permission not granted");
+      return {};
     }
 
-    if (status !== "granted") return fallbackToken;
+    // ✅ getDevicePushTokenAsync returns the REAL FCM token (not Expo token)
+    const tokenResult = await Notifications.getDevicePushTokenAsync();
+    const deviceToken: string = tokenResult.data;
 
-    const projectId =
-      Constants.expoConfig?.extra?.eas?.projectId ||
-      (Constants as any).easConfig?.projectId;
-    const tokenResult = await Notifications.getExpoPushTokenAsync(
-      projectId ? { projectId } : undefined,
-    );
+    console.log("✅ Real FCM Token:", deviceToken);
 
-    return tokenResult?.data || fallbackToken;
-  } catch {
-    return fallbackToken;
+    // Send stored NH registration ID if available (so Azure updates instead of creating duplicate)
+    const nhRegId = await AsyncStorage.getItem(NH_REG_ID_KEY);
+
+    return {
+      device_token: deviceToken,
+      platform: Platform.OS === "ios" ? "apns" : "fcm",
+      nh_registration_id: nhRegId || null,
+    };
+
+  } catch (error) {
+    console.error("❌ Failed to get device token:", error);
+    return {};
   }
 }
 
-export async function getAuthDevicePayload() {
-  const deviceId = await getDeviceId();
-  const deviceToken = await getExpoPushToken(deviceId);
+// ── Save NH registration ID returned from backend after login ─────────────────
 
-  return {
-    device_type: Platform.OS,
-    device_token: deviceToken,
-    platform: AUTH_PLATFORM,
-  };
+export async function saveNhRegistrationId(nhRegId: string | null): Promise<void> {
+  if (nhRegId) {
+    await AsyncStorage.setItem(NH_REG_ID_KEY, nhRegId);
+    console.log("✅ NH Registration ID saved:", nhRegId);
+  }
+}
+
+// ── Clear NH registration ID on logout ────────────────────────────────────────
+
+export async function clearNhRegistrationId(): Promise<void> {
+  await AsyncStorage.removeItem(NH_REG_ID_KEY);
 }
