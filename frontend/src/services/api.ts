@@ -3023,9 +3023,17 @@ async vetGetHealthLogs(date?: string) {
     return result;
   }
 
-  async getAdminFarmSales(params?: { date?: string; worker_id?: string }) {
+ async getAdminFarmSales(params?: {
+    date?: string;
+    worker_id?: string;
+    all?: boolean;
+  }) {
     const p = new URLSearchParams();
-    if (params?.date) p.append("date", params.date);
+    if (params?.all) {
+      p.append("all_time", "true");
+    } else if (params?.date) {
+      p.append("date", params.date);
+    }
     if (params?.worker_id) p.append("worker_id", params.worker_id);
     const q = p.toString() ? `?${p.toString()}` : "";
     return this.request<{
@@ -3037,7 +3045,7 @@ async vetGetHealthLogs(date?: string) {
     }>(`/admin/farm-sales${q}`);
   }
 
-  async adminUpdateFarmSale(
+ async adminUpdateFarmSale(
     saleId: string,
     data: Partial<{
       customer_name: string;
@@ -3059,6 +3067,7 @@ async vetGetHealthLogs(date?: string) {
       method: "DELETE",
     });
   }
+  
 
   // Logout
   logout = async () => {

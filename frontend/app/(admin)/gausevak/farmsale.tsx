@@ -22,7 +22,7 @@ import React, {
   useCallback,
   useMemo,
 } from "react";
-import { api, FarmSale } from "../../../src/services/api";
+import { api, FarmSale, FarmSaleCreate } from "../../../src/services/api";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -51,13 +51,14 @@ function formatDisplayDate(dateStr: string) {
 }
 
 function formatGroupHeader(dateStr: string) {
+  if (dateStr === todayStr()) return "Today";
   if (dateStr === yesterdayStr()) return "Yesterday";
   return formatDisplayDate(dateStr);
 }
 
 const UNIT_OPTIONS = ["L", "kg", "piece"] as const;
 
-// ─── Modern Alert ─────────────────────────────────────────────────────────────
+// ─── Alert (shared config/hook) ────────────────────────────────────────────
 
 interface AlertConfig {
   visible: boolean;
@@ -68,6 +69,25 @@ interface AlertConfig {
   iconBg?: string;
 }
 
+function useModernAlert() {
+  const [config, setConfig] = useState<AlertConfig>({
+    visible: false,
+    title: "",
+    message: "",
+  });
+  const show = (
+    title: string,
+    message: string,
+    icon?: string,
+    iconColor?: string,
+    iconBg?: string,
+  ) => setConfig({ visible: true, title, message, icon, iconColor, iconBg });
+  const hide = () => setConfig((p) => ({ ...p, visible: false }));
+  return { config, show, hide };
+}
+
+// Modal-based alert — safe to use at the TOP LEVEL of the screen, where no
+// other <Modal> is simultaneously visible.
 function ModernAlert({
   config,
   onClose,
@@ -136,21 +156,73 @@ function ModernAlert({
   );
 }
 
-function useModernAlert() {
-  const [config, setConfig] = useState<AlertConfig>({
-    visible: false,
-    title: "",
-    message: "",
-  });
-  const show = (
-    title: string,
-    message: string,
-    icon?: string,
-    iconColor?: string,
-    iconBg?: string,
-  ) => setConfig({ visible: true, title, message, icon, iconColor, iconBg });
-  const hide = () => setConfig((p) => ({ ...p, visible: false }));
-  return { config, show, hide };
+// View-based alert — use this INSIDE another full-screen <Modal> (like
+// EditSaleModal / AddSaleModal). Nesting two native <Modal> components at
+// once is unreliable on Android (the second one can render behind the
+// first, or eat touches oddly). This renders as a plain absolute overlay
+// inside the same modal instead, so there's only ever one native Modal
+// mounted at a time.
+function InlineAlert({
+  config,
+  onClose,
+}: {
+  config: AlertConfig;
+  onClose: () => void;
+}) {
+  const scaleAnim = useRef(new Animated.Value(0.85)).current;
+  const opacityAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (config.visible) {
+      scaleAnim.setValue(0.85);
+      opacityAnim.setValue(0);
+      Animated.parallel([
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          useNativeDriver: true,
+          damping: 15,
+          stiffness: 200,
+        }),
+        Animated.timing(opacityAnim, {
+          toValue: 1,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [config.visible]);
+
+  if (!config.visible) return null;
+
+  return (
+    <View style={al.inlineOverlay} pointerEvents="box-none">
+      <View style={StyleSheet.absoluteFillObject} pointerEvents="auto" />
+      <Animated.View
+        style={[
+          al.card,
+          { opacity: opacityAnim, transform: [{ scale: scaleAnim }] },
+        ]}
+      >
+        <View
+          style={[
+            al.iconWrap,
+            { backgroundColor: config.iconBg ?? "#fee2e2" },
+          ]}
+        >
+          <Ionicons
+            name={(config.icon ?? "alert-circle-outline") as any}
+            size={28}
+            color={config.iconColor ?? "#ef4444"}
+          />
+        </View>
+        <Text style={al.title}>{config.title}</Text>
+        <Text style={al.message}>{config.message}</Text>
+        <TouchableOpacity style={al.btn} onPress={onClose} activeOpacity={0.85}>
+          <Text style={al.btnText}>OK</Text>
+        </TouchableOpacity>
+      </Animated.View>
+    </View>
+  );
 }
 
 const al = StyleSheet.create({
@@ -160,6 +232,15 @@ const al = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     padding: 32,
+  },
+  inlineOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 32,
+    zIndex: 999,
+    elevation: 999,
   },
   card: {
     backgroundColor: "#fff",
@@ -487,7 +568,7 @@ function EditSaleModal({
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <View style={em.container}>
-        <ModernAlert config={alertConfig} onClose={hideAlert} />
+        <InlineAlert config={alertConfig} onClose={hideAlert} />
 
         <LinearGradient colors={["#0891b2", "#0e7490"]} style={em.header}>
           <TouchableOpacity style={em.backBtn} onPress={onClose}>
@@ -710,6 +791,268 @@ const em = StyleSheet.create({
   saveBtnText: { fontSize: 15, fontWeight: "800", color: "#fff" },
 });
 
+// ─── Add Sale Modal (admin) ─────────────────────────────────────────────────
+
+function AddSaleModal({
+  visible,
+  onClose,
+  onSaved,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  onSaved: (created: FarmSale) => void;
+}) {
+  const [customerName, setCustomerName] = useState("");
+  const [productName, setProductName] = useState("");
+  const [quantity, setQuantity] = useState("");
+  const [unit, setUnit] = useState<string>("L");
+  const [pricePerUnit, setPricePerUnit] = useState("");
+  const [notes, setNotes] = useState("");
+  const [date, setDate] = useState(todayStr());
+  const [dateCalendarVisible, setDateCalendarVisible] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const {
+    config: alertConfig,
+    show: showAlert,
+    hide: hideAlert,
+  } = useModernAlert();
+
+  const resetForm = () => {
+    setCustomerName("");
+    setProductName("");
+    setQuantity("");
+    setUnit("L");
+    setPricePerUnit("");
+    setNotes("");
+    setDate(todayStr());
+  };
+
+  useEffect(() => {
+    if (visible) resetForm();
+  }, [visible]);
+
+  const qtyNum = parseFloat(quantity) || 0;
+  const priceNum = parseFloat(pricePerUnit) || 0;
+  const computedTotal = Math.round(qtyNum * priceNum * 100) / 100;
+
+  const canSave =
+    customerName.trim().length > 0 &&
+    productName.trim().length > 0 &&
+    qtyNum > 0 &&
+    priceNum > 0 &&
+    !saving;
+
+  const handleSave = async () => {
+    if (!canSave) return;
+    setSaving(true);
+    try {
+      const payload: FarmSaleCreate = {
+        customer_name: customerName.trim(),
+        product_name: productName.trim(),
+        quantity: qtyNum,
+        unit,
+        price_per_unit: priceNum,
+        date,
+        notes: notes.trim() || undefined,
+      };
+      const created = await api.adminCreateFarmSale(payload);
+      onSaved(created);
+      onClose();
+    } catch (err: any) {
+      showAlert(
+        "Could Not Add Sale",
+        err?.message ?? "Something went wrong while saving this sale entry.",
+        "alert-circle-outline",
+        "#ef4444",
+        "#fee2e2",
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+      <View style={em.container}>
+        <InlineAlert config={alertConfig} onClose={hideAlert} />
+
+        <CalendarModal
+          visible={dateCalendarVisible}
+          initialDate={date}
+          onSelect={(d) => {
+            setDate(d);
+            setDateCalendarVisible(false);
+          }}
+          onClose={() => setDateCalendarVisible(false)}
+        />
+
+        <LinearGradient colors={["#16a34a", "#15803d"]} style={em.header}>
+          <TouchableOpacity style={em.backBtn} onPress={onClose}>
+            <Ionicons name="arrow-back" size={22} color="#fff" />
+          </TouchableOpacity>
+          <View style={{ flex: 1 }}>
+            <Text style={em.headerTitle}>Add Sale</Text>
+            <Text style={em.headerSub}>Recorded by admin</Text>
+          </View>
+        </LinearGradient>
+
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          keyboardVerticalOffset={80}
+        >
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={em.scrollContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            <Text style={em.label}>Sale Date</Text>
+            <TouchableOpacity
+              style={as.dateBtn}
+              onPress={() => setDateCalendarVisible(true)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="calendar-outline" size={16} color="#16a34a" />
+              <Text style={as.dateBtnText}>{formatDisplayDate(date)}</Text>
+            </TouchableOpacity>
+
+            <Text style={em.label}>Customer Name</Text>
+            <TextInput
+              style={em.input}
+              value={customerName}
+              onChangeText={setCustomerName}
+              placeholder="Customer name"
+              placeholderTextColor="#9ca3af"
+            />
+
+            <Text style={em.label}>Product Name</Text>
+            <TextInput
+              style={em.input}
+              value={productName}
+              onChangeText={setProductName}
+              placeholder="Product name"
+              placeholderTextColor="#9ca3af"
+            />
+
+            <View style={em.row2}>
+              <View style={{ flex: 1 }}>
+                <Text style={em.label}>Quantity</Text>
+                <TextInput
+                  style={em.input}
+                  value={quantity}
+                  onChangeText={setQuantity}
+                  placeholder="0"
+                  placeholderTextColor="#9ca3af"
+                  keyboardType="decimal-pad"
+                />
+              </View>
+              <View style={{ width: 12 }} />
+              <View style={{ flex: 1 }}>
+                <Text style={em.label}>Unit</Text>
+                <View style={em.unitRow}>
+                  {UNIT_OPTIONS.map((u) => {
+                    const active = unit === u;
+                    return (
+                      <TouchableOpacity
+                        key={u}
+                        style={[em.unitChip, active && { backgroundColor: "#16a34a", borderColor: "#16a34a" }]}
+                        onPress={() => setUnit(u)}
+                        activeOpacity={0.8}
+                      >
+                        <Text
+                          style={[em.unitChipText, active && { color: "#fff" }]}
+                        >
+                          {u}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            </View>
+
+            <Text style={em.label}>Price per {unit}</Text>
+            <View style={em.priceInputWrap}>
+              <Text style={em.rupee}>₹</Text>
+              <TextInput
+                style={em.priceInput}
+                value={pricePerUnit}
+                onChangeText={setPricePerUnit}
+                placeholder="0"
+                placeholderTextColor="#9ca3af"
+                keyboardType="decimal-pad"
+              />
+            </View>
+
+            <Text style={em.label}>Notes (optional)</Text>
+            <TextInput
+              style={[em.input, { minHeight: 70, textAlignVertical: "top" }]}
+              value={notes}
+              onChangeText={setNotes}
+              placeholder="Add any note about this sale"
+              placeholderTextColor="#9ca3af"
+              multiline
+            />
+
+            <View
+              style={[
+                em.totalPreview,
+                { backgroundColor: "#f0fdf4", borderColor: "#16a34a30" },
+              ]}
+            >
+              <Text style={[em.totalPreviewLabel, { color: "#16a34a" }]}>
+                Total
+              </Text>
+              <Text style={[em.totalPreviewValue, { color: "#16a34a" }]}>
+                ₹{computedTotal.toFixed(2)}
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={[
+                em.saveBtn,
+                { backgroundColor: "#16a34a" },
+                !canSave && em.saveBtnDisabled,
+              ]}
+              onPress={handleSave}
+              disabled={!canSave}
+              activeOpacity={0.85}
+            >
+              {saving ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="add-circle-outline" size={18} color="#fff" />
+                  <Text style={em.saveBtnText}>Add Sale</Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            <View style={{ height: 40 }} />
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </View>
+    </Modal>
+  );
+}
+
+const as = StyleSheet.create({
+  dateBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderWidth: 1.5,
+    borderColor: "#bbf7d0",
+    backgroundColor: "#f0fdf4",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  dateBtnText: { fontSize: 14, fontWeight: "800", color: "#15803d" },
+});
+
 // ─── Calendar Modal ─────────────────────────────────────────────────────────────
 
 function CalendarModal({
@@ -892,7 +1235,7 @@ const cal = StyleSheet.create({
 
 // ─── Filter Sheet Modal (bottom sheet triggered by filter icon) ────────────────
 
-type FilterMode = "all" | "yesterday" | "custom";
+type FilterMode = "all" | "today" | "yesterday" | "custom";
 
 function FilterSheetModal({
   visible,
@@ -942,7 +1285,13 @@ function FilterSheetModal({
       key: "all",
       label: "All Time",
       icon: "layers-outline",
-      sub: "Show every past sale",
+      sub: "Show every sale on record",
+    },
+    {
+      key: "today",
+      label: "Today",
+      icon: "sunny-outline",
+      sub: formatDisplayDate(todayStr()),
     },
     {
       key: "yesterday",
@@ -969,7 +1318,7 @@ function FilterSheetModal({
           style={[fs.sheet, { transform: [{ translateY: slideAnim }] }]}
         >
           <View style={fs.handle} />
-          <Text style={fs.title}>Filter Past Sales</Text>
+          <Text style={fs.title}>Filter Sales</Text>
 
           {OPTIONS.map((opt) => {
             const active = activeMode === opt.key;
@@ -1025,7 +1374,7 @@ function FilterSheetModal({
               <Text style={fs.optionSub}>
                 {activeMode === "custom" && activeCustomDate
                   ? formatDisplayDate(activeCustomDate)
-                  : "Choose any past date"}
+                  : "Choose any date"}
               </Text>
             </View>
             {activeMode === "custom" && (
@@ -1165,23 +1514,17 @@ function SaleCard({
 function AdminFarmSaleScreenInner() {
   const router = useRouter();
 
-  const [todayData, setTodayData] = useState<{
-    total_amount: number;
-    sales: FarmSale[];
-  } | null>(null);
-  const [pastData, setPastData] = useState<{
-    total_amount: number;
-    sales: FarmSale[];
-  } | null>(null);
+  // Single source of truth — fetched once as "all time", filtered client-side.
+  const [allSales, setAllSales] = useState<FarmSale[]>([]);
 
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
   const [customDate, setCustomDate] = useState<string | null>(null);
 
   const [filterSheetVisible, setFilterSheetVisible] = useState(false);
   const [calendarVisible, setCalendarVisible] = useState(false);
+  const [addSaleVisible, setAddSaleVisible] = useState(false);
 
   const [loading, setLoading] = useState(true);
-  const [pastLoading, setPastLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   const [editTarget, setEditTarget] = useState<FarmSale | null>(null);
@@ -1194,75 +1537,71 @@ function AdminFarmSaleScreenInner() {
     hide: hideAlert,
   } = useModernAlert();
 
-  // ── Fetch today's sales (always fixed to today) ──
-  const fetchToday = useCallback(async () => {
-    const res = await api.getAdminFarmSales({ date: todayStr() });
-    setTodayData({ total_amount: res.total_amount, sales: res.sales });
+  // ── Fetch every sale on record, once ──
+  const fetchAllSales = useCallback(async () => {
+    const res = await api.getAdminFarmSales({ all: true });
+    setAllSales(res.sales);
   }, []);
-
-  // ── Fetch past sales based on active filter ──
-  const fetchPast = useCallback(async () => {
-    let res;
-    if (filterMode === "yesterday") {
-      res = await api.getAdminFarmSales({ date: yesterdayStr() });
-      setPastData({ total_amount: res.total_amount, sales: res.sales });
-    } else if (filterMode === "custom" && customDate) {
-      res = await api.getAdminFarmSales({ date: customDate });
-      setPastData({ total_amount: res.total_amount, sales: res.sales });
-    } else {
-      // All Time — fetch everything, exclude today's date client-side
-      res = await api.getAdminFarmSales({ all: true });
-      const past = res.sales.filter((sale) => sale.date !== todayStr());
-      const total = past.reduce((sum, sale) => sum + sale.total_amount, 0);
-      setPastData({ total_amount: total, sales: past });
-    }
-  }, [filterMode, customDate]);
-
-  const fetchAll = useCallback(async () => {
-    await Promise.all([fetchToday(), fetchPast()]);
-  }, [fetchToday, fetchPast]);
 
   useEffect(() => {
     setLoading(true);
-    fetchAll().finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => {
-    if (loading) return; // skip on initial mount, fetchAll already covers it
-    setPastLoading(true);
-    fetchPast().finally(() => setPastLoading(false));
-  }, [filterMode, customDate]);
+    fetchAllSales().finally(() => setLoading(false));
+  }, [fetchAllSales]);
 
   const onRefresh = () => {
     setRefreshing(true);
-    fetchAll().finally(() => setRefreshing(false));
+    fetchAllSales().finally(() => setRefreshing(false));
   };
 
-  const handleEditSaved = (updated: FarmSale) => {
-    const isToday = updated.date === todayStr();
-    if (isToday) {
-      setTodayData((prev) => {
-        if (!prev) return prev;
-        const nextSales = prev.sales.map((sl) =>
-          sl.id === updated.id ? updated : sl,
-        );
-        return {
-          total_amount: nextSales.reduce((sum, sl) => sum + sl.total_amount, 0),
-          sales: nextSales,
-        };
-      });
-    } else {
-      setPastData((prev) => {
-        if (!prev) return prev;
-        const nextSales = prev.sales.map((sl) =>
-          sl.id === updated.id ? updated : sl,
-        );
-        return {
-          total_amount: nextSales.reduce((sum, sl) => sum + sl.total_amount, 0),
-          sales: nextSales,
-        };
-      });
+  // ── Client-side filtering ──
+  const filteredSales = useMemo(() => {
+    if (filterMode === "today") {
+      return allSales.filter((sl) => sl.date === todayStr());
     }
+    if (filterMode === "yesterday") {
+      return allSales.filter((sl) => sl.date === yesterdayStr());
+    }
+    if (filterMode === "custom" && customDate) {
+      return allSales.filter((sl) => sl.date === customDate);
+    }
+    return allSales;
+  }, [allSales, filterMode, customDate]);
+
+  // Group by date, newest first
+  const groupedSales = useMemo(() => {
+    const map: Record<string, FarmSale[]> = {};
+    filteredSales.forEach((sale) => {
+      const key = sale.date || "unknown";
+      if (!map[key]) map[key] = [];
+      map[key].push(sale);
+    });
+    return Object.entries(map).sort((a, b) => (a[0] < b[0] ? 1 : -1));
+  }, [filteredSales]);
+
+  const filterLabel =
+    filterMode === "today"
+      ? "Today"
+      : filterMode === "yesterday"
+        ? `Yesterday · ${formatDisplayDate(yesterdayStr())}`
+        : filterMode === "custom"
+          ? formatDisplayDate(customDate ?? todayStr())
+          : "All Time";
+
+  const totalAmount = useMemo(
+    () => filteredSales.reduce((sum, sl) => sum + sl.total_amount, 0),
+    [filteredSales],
+  );
+
+  // ── CRUD handlers, all against the single allSales list ──
+
+  const handleEditSaved = (updated: FarmSale) => {
+    setAllSales((prev) =>
+      prev.map((sl) => (sl.id === updated.id ? updated : sl)),
+    );
+  };
+
+  const handleAddSaved = (created: FarmSale) => {
+    setAllSales((prev) => [created, ...prev]);
   };
 
   const handleDeleteConfirm = async () => {
@@ -1270,36 +1609,7 @@ function AdminFarmSaleScreenInner() {
     setDeleting(true);
     try {
       await api.adminDeleteFarmSale(deleteTarget.id);
-      const isToday = deleteTarget.date === todayStr();
-      if (isToday) {
-        setTodayData((prev) => {
-          if (!prev) return prev;
-          const nextSales = prev.sales.filter(
-            (sl) => sl.id !== deleteTarget.id,
-          );
-          return {
-            total_amount: nextSales.reduce(
-              (sum, sl) => sum + sl.total_amount,
-              0,
-            ),
-            sales: nextSales,
-          };
-        });
-      } else {
-        setPastData((prev) => {
-          if (!prev) return prev;
-          const nextSales = prev.sales.filter(
-            (sl) => sl.id !== deleteTarget.id,
-          );
-          return {
-            total_amount: nextSales.reduce(
-              (sum, sl) => sum + sl.total_amount,
-              0,
-            ),
-            sales: nextSales,
-          };
-        });
-      }
+      setAllSales((prev) => prev.filter((sl) => sl.id !== deleteTarget.id));
       setDeleteTarget(null);
     } catch (err: any) {
       setDeleteTarget(null);
@@ -1314,28 +1624,6 @@ function AdminFarmSaleScreenInner() {
       setDeleting(false);
     }
   };
-
-  const todaySales = todayData?.sales ?? [];
-  const pastSales = pastData?.sales ?? [];
-
-  // Group past sales by date, newest first, only when in "All Time" mode
-  const groupedPast = useMemo(() => {
-    if (filterMode !== "all") return null;
-    const map: Record<string, FarmSale[]> = {};
-    pastSales.forEach((sale) => {
-      const key = sale.date || "unknown";
-      if (!map[key]) map[key] = [];
-      map[key].push(sale);
-    });
-    return Object.entries(map).sort((a, b) => (a[0] < b[0] ? 1 : -1));
-  }, [pastSales, filterMode]);
-
-  const pastSectionLabel =
-    filterMode === "yesterday"
-      ? `Yesterday · ${formatDisplayDate(yesterdayStr())}`
-      : filterMode === "custom"
-        ? formatDisplayDate(customDate ?? todayStr())
-        : "All Time";
 
   if (loading) {
     return (
@@ -1354,6 +1642,11 @@ function AdminFarmSaleScreenInner() {
         sale={editTarget}
         onClose={() => setEditTarget(null)}
         onSaved={handleEditSaved}
+      />
+      <AddSaleModal
+        visible={addSaleVisible}
+        onClose={() => setAddSaleVisible(false)}
+        onSaved={handleAddSaved}
       />
       <DeleteConfirmModal
         visible={!!deleteTarget}
@@ -1399,7 +1692,7 @@ function AdminFarmSaleScreenInner() {
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
             <Text style={s.topBarTitle}>Farm Sales</Text>
-            <Text style={s.topBarDate}>{formatDisplayDate(todayStr())}</Text>
+            <Text style={s.topBarDate}>{filterLabel}</Text>
           </View>
           <TouchableOpacity
             style={s.iconBtn}
@@ -1422,7 +1715,7 @@ function AdminFarmSaleScreenInner() {
             />
           }
         >
-          {/* ══════════════ TODAY'S SALES ══════════════ */}
+          {/* ══════════════ SUMMARY BANNER ══════════════ */}
 
           <LinearGradient
             colors={["#ecfeff", "#cffafe"]}
@@ -1438,55 +1731,23 @@ function AdminFarmSaleScreenInner() {
               </View>
               <View>
                 <Text style={[s.bannerTitle, { color: "#0891b2" }]}>
-                  Today's Revenue
+                  {filterLabel} Revenue
                 </Text>
                 <Text style={s.bannerSub}>
-                  {todaySales.length} sale{todaySales.length !== 1 ? "s" : ""}{" "}
-                  today
+                  {filteredSales.length} sale
+                  {filteredSales.length !== 1 ? "s" : ""}
                 </Text>
               </View>
             </View>
             <Text style={[s.totalNum, { color: "#0891b2" }]}>
-              ₹{(todayData?.total_amount ?? 0).toFixed(0)}
+              ₹{totalAmount.toFixed(0)}
             </Text>
           </LinearGradient>
 
           <View style={s.sectionHeaderRow}>
-            <Text style={s.sectionTitle}>Today's Sales</Text>
-            <View style={s.todayPill}>
-              <View style={s.liveDot} />
-              <Text style={s.todayPillText}>Live</Text>
-            </View>
-          </View>
-
-          {todaySales.length === 0 ? (
-            <View style={s.emptyWrapSmall}>
-              <MaterialCommunityIcons
-                name="cart-outline"
-                size={36}
-                color="#d1d5db"
-              />
-              <Text style={s.emptySubSmall}>No sales logged yet today</Text>
-            </View>
-          ) : (
-            todaySales.map((sale) => (
-              <SaleCard
-                key={sale.id}
-                sale={sale}
-                onEdit={() => setEditTarget(sale)}
-                onDelete={() => setDeleteTarget(sale)}
-              />
-            ))
-          )}
-
-          {/* ══════════════ PAST SALES ══════════════ */}
-
-          <View style={s.pastDivider} />
-
-          <View style={s.sectionHeaderRow}>
             <View>
-              <Text style={s.sectionTitle}>Past Sales</Text>
-              <Text style={s.sectionSubLabel}>{pastSectionLabel}</Text>
+              <Text style={s.sectionTitle}>Sales</Text>
+              <Text style={s.sectionSubLabel}>{filterLabel}</Text>
             </View>
             <TouchableOpacity
               style={s.filterPill}
@@ -1498,33 +1759,22 @@ function AdminFarmSaleScreenInner() {
             </TouchableOpacity>
           </View>
 
-          {pastData && (
-            <View style={s.pastTotalRow}>
-              <Text style={s.pastTotalLabel}>Total for this period</Text>
-              <Text style={s.pastTotalValue}>
-                ₹{pastData.total_amount.toFixed(0)}
-              </Text>
-            </View>
-          )}
+          {/* ══════════════ SALES LIST ══════════════ */}
 
-          {pastLoading ? (
-            <View style={s.emptyWrapSmall}>
-              <ActivityIndicator size="small" color="#0891b2" />
-            </View>
-          ) : pastSales.length === 0 ? (
+          {filteredSales.length === 0 ? (
             <View style={s.emptyWrap}>
               <MaterialCommunityIcons
                 name="cart-off"
                 size={48}
                 color="#d1d5db"
               />
-              <Text style={s.emptyTitle}>No past sales found</Text>
+              <Text style={s.emptyTitle}>No sales found</Text>
               <Text style={s.emptySub}>
-                Try a different filter to see more history.
+                Try a different filter, or add a sale using the + button.
               </Text>
             </View>
-          ) : groupedPast ? (
-            groupedPast.map(([dateKey, group]) => {
+          ) : (
+            groupedSales.map(([dateKey, group]) => {
               const groupTotal = group.reduce(
                 (sum, sl) => sum + sl.total_amount,
                 0,
@@ -1550,19 +1800,19 @@ function AdminFarmSaleScreenInner() {
                 </View>
               );
             })
-          ) : (
-            pastSales.map((sale) => (
-              <SaleCard
-                key={sale.id}
-                sale={sale}
-                onEdit={() => setEditTarget(sale)}
-                onDelete={() => setDeleteTarget(sale)}
-              />
-            ))
           )}
 
-          <View style={{ height: 40 }} />
+          <View style={{ height: 100 }} />
         </ScrollView>
+
+        {/* ── Add Sale FAB ── */}
+        <TouchableOpacity
+          style={s.fab}
+          onPress={() => setAddSaleVisible(true)}
+          activeOpacity={0.85}
+        >
+          <Ionicons name="add" size={28} color="#fff" />
+        </TouchableOpacity>
       </View>
     </>
   );
@@ -1643,20 +1893,6 @@ const s = StyleSheet.create({
     fontWeight: "600",
   },
 
-  todayPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    backgroundColor: "#f0fdf4",
-    borderWidth: 1,
-    borderColor: "#86efac",
-    borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#16a34a" },
-  todayPillText: { fontSize: 11, fontWeight: "800", color: "#16a34a" },
-
   filterPill: {
     flexDirection: "row",
     alignItems: "center",
@@ -1670,25 +1906,19 @@ const s = StyleSheet.create({
   },
   filterPillText: { fontSize: 12, fontWeight: "800", color: "#0891b2" },
 
-  pastDivider: {
-    height: 8,
-    backgroundColor: "#f9fafb",
-    marginVertical: 18,
-    marginHorizontal: -16,
-  },
-
-  pastTotalRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
+  emptyWrap: {
     alignItems: "center",
-    backgroundColor: "#f9fafb",
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginBottom: 14,
+    justifyContent: "center",
+    paddingVertical: 40,
+    gap: 8,
   },
-  pastTotalLabel: { fontSize: 12, fontWeight: "700", color: "#6b7280" },
-  pastTotalValue: { fontSize: 14, fontWeight: "900", color: "#0891b2" },
+  emptyTitle: { fontSize: 15, fontWeight: "700", color: "#6b7280" },
+  emptySub: {
+    fontSize: 12,
+    color: "#9ca3af",
+    textAlign: "center",
+    paddingHorizontal: 32,
+  },
 
   groupHeader: {
     flexDirection: "row",
@@ -1703,27 +1933,6 @@ const s = StyleSheet.create({
   },
   groupHeaderText: { fontSize: 13, fontWeight: "800", color: "#374151" },
   groupHeaderTotal: { fontSize: 13, fontWeight: "900", color: "#0891b2" },
-
-  emptyWrap: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 40,
-    gap: 8,
-  },
-  emptyWrapSmall: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 24,
-    gap: 6,
-  },
-  emptyTitle: { fontSize: 15, fontWeight: "700", color: "#6b7280" },
-  emptySub: {
-    fontSize: 12,
-    color: "#9ca3af",
-    textAlign: "center",
-    paddingHorizontal: 32,
-  },
-  emptySubSmall: { fontSize: 12, color: "#9ca3af", fontWeight: "600" },
 
   saleCard: {
     backgroundColor: "#fff",
@@ -1784,5 +1993,22 @@ const s = StyleSheet.create({
     borderColor: "#fca5a5",
     alignItems: "center",
     justifyContent: "center",
+  },
+
+  fab: {
+    position: "absolute",
+    right: 20,
+    bottom: 24,
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: "#16a34a",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 10,
   },
 });
