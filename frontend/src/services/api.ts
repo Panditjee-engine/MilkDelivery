@@ -1187,6 +1187,9 @@ class ApiService {
     doctorName?: string;
     medicineName?: string;
     notes?: string;
+    lastDewormingDate?: string;
+    nextDewormingDate?: string;
+    dewormingMedicine?: string;
   }) {
     return this.request<any>("/gausevak/medical", {
       method: "POST",
@@ -2993,17 +2996,26 @@ async vetGetHealthLogs(date?: string) {
     return result;
   }
 
-  async workerGetFarmSales(date?: string): Promise<FarmSale[]> {
-    const token = await AsyncStorage.getItem("worker_token");
-    const q = date ? `?date=${date}` : "";
-    const response = await fetch(`${API_BASE}/api/worker/farm-sale${q}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const data = await response.json();
-    if (!response.ok)
-      throw new Error(data.detail || "Failed to fetch farm sale entries");
-    return data;
+async workerGetFarmSales(params?: {
+  date?: string;
+  all_time?: boolean;
+}): Promise<FarmSale[]> {
+  const token = await AsyncStorage.getItem("worker_token");
+  const p = new URLSearchParams();
+  if (params?.all_time) {
+    p.append("all_time", "true");
+  } else if (params?.date) {
+    p.append("date", params.date);
   }
+  const q = p.toString() ? `?${p.toString()}` : "";
+  const response = await fetch(`${API_BASE}/api/worker/farm-sale${q}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await response.json();
+  if (!response.ok)
+    throw new Error(data.detail || "Failed to fetch farm sale entries");
+  return data;
+}
 
   async workerDeleteFarmSale(saleId: string): Promise<{
     success: boolean;

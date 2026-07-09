@@ -13,8 +13,10 @@ import {
   Platform,
   StatusBar,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { useAuth } from "../../src/contexts/AuthContext";
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { api, FarmSale } from "../../src/services/api";
@@ -28,6 +30,10 @@ function todayStr() {
 function parseUTCDate(dateString: string): Date {
   const hasTimezone = /Z$|[+-]\d{2}:?\d{2}$/.test(dateString);
   return new Date(hasTimezone ? dateString : dateString + "Z");
+}
+
+function fmtDate(d: Date): string {
+  return d.toISOString().split("T")[0];
 }
 
 const PRODUCT_OPTIONS = [
@@ -404,6 +410,247 @@ const uc = StyleSheet.create({
   confirmTxt: { fontSize: 14, fontWeight: "800", color: "#fff" },
 });
 
+// ─── Date Filter Modal ────────────────────────────────────────────────────────
+
+function DateFilterModal({
+  visible,
+  onClose,
+  onSelect,
+  currentDate,
+  isHindi,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  onSelect: (date: string | null) => void;
+  currentDate: string | null;
+  isHindi: boolean;
+}) {
+  const [showPicker, setShowPicker] = useState(false);
+  const [pickedDate, setPickedDate] = useState(new Date());
+
+  const scaleAnim = useRef(new Animated.Value(0.9)).current;
+  const opacityAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (visible) {
+      setShowPicker(false);
+      scaleAnim.setValue(0.9);
+      opacityAnim.setValue(0);
+      Animated.parallel([
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          useNativeDriver: true,
+          damping: 15,
+          stiffness: 200,
+        }),
+        Animated.timing(opacityAnim, {
+          toValue: 1,
+          duration: 160,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [visible]);
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="none"
+      onRequestClose={onClose}
+    >
+      <TouchableOpacity style={fm.overlay} activeOpacity={1} onPress={onClose}>
+        <Animated.View
+          style={[
+            fm.card,
+            { opacity: opacityAnim, transform: [{ scale: scaleAnim }] },
+          ]}
+          onStartShouldSetResponder={() => true}
+        >
+          <View style={fm.header}>
+            <View style={fm.headerIconWrap}>
+              <Ionicons name="filter" size={16} color="#16a34a" />
+            </View>
+            <Text style={fm.title}>
+              {isHindi ? "बिक्री फ़िल्टर करें" : "Filter Sales"}
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            style={[fm.option, !currentDate && fm.optionActive]}
+            onPress={() => onSelect(null)}
+            activeOpacity={0.8}
+          >
+            <Ionicons
+              name="infinite-outline"
+              size={17}
+              color={!currentDate ? "#16a34a" : "#6b7280"}
+            />
+            <Text style={[fm.optionText, !currentDate && fm.optionTextActive]}>
+              {isHindi ? "सभी समय" : "All Time"}
+            </Text>
+            {!currentDate && (
+              <Ionicons name="checkmark-circle" size={17} color="#16a34a" />
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[fm.option, currentDate === todayStr() && fm.optionActive]}
+            onPress={() => onSelect(todayStr())}
+            activeOpacity={0.8}
+          >
+            <Ionicons
+              name="today-outline"
+              size={17}
+              color={currentDate === todayStr() ? "#16a34a" : "#6b7280"}
+            />
+            <Text
+              style={[
+                fm.optionText,
+                currentDate === todayStr() && fm.optionTextActive,
+              ]}
+            >
+              {isHindi ? "आज" : "Today"}
+            </Text>
+            {currentDate === todayStr() && (
+              <Ionicons name="checkmark-circle" size={17} color="#16a34a" />
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              fm.option,
+              currentDate && currentDate !== todayStr() && fm.optionActive,
+            ]}
+            onPress={() => {
+              setPickedDate(
+                currentDate && currentDate !== todayStr()
+                  ? new Date(currentDate)
+                  : new Date(),
+              );
+              setShowPicker(true);
+            }}
+            activeOpacity={0.8}
+          >
+            <Ionicons
+              name="calendar-outline"
+              size={17}
+              color={
+                currentDate && currentDate !== todayStr()
+                  ? "#16a34a"
+                  : "#6b7280"
+              }
+            />
+            <Text
+              style={[
+                fm.optionText,
+                currentDate &&
+                  currentDate !== todayStr() &&
+                  fm.optionTextActive,
+              ]}
+            >
+              {currentDate && currentDate !== todayStr()
+                ? currentDate
+                : isHindi
+                  ? "विशिष्ट तिथि चुनें"
+                  : "Pick a specific date"}
+            </Text>
+            <Ionicons name="chevron-forward" size={15} color="#d1d5db" />
+          </TouchableOpacity>
+
+          {showPicker && (
+            <View style={fm.pickerWrap}>
+              <DateTimePicker
+                value={pickedDate}
+                mode="date"
+                display={Platform.OS === "ios" ? "spinner" : "default"}
+                maximumDate={new Date()}
+                onChange={(_e, selected) => {
+                  if (Platform.OS === "android") {
+                    setShowPicker(false);
+                    if (selected) onSelect(fmtDate(selected));
+                    return;
+                  }
+                  if (selected) setPickedDate(selected);
+                }}
+              />
+              {Platform.OS === "ios" && (
+                <TouchableOpacity
+                  style={fm.confirmBtn}
+                  onPress={() => onSelect(fmtDate(pickedDate))}
+                  activeOpacity={0.85}
+                >
+                  <Text style={fm.confirmBtnText}>
+                    {isHindi ? "लागू करें" : "Apply"}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+        </Animated.View>
+      </TouchableOpacity>
+    </Modal>
+  );
+}
+
+const fm = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "center",
+    padding: 28,
+  },
+  card: {
+    backgroundColor: "#fff",
+    borderRadius: 22,
+    padding: 16,
+    shadowColor: "#000",
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 16,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 14,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f3f4f6",
+  },
+  headerIconWrap: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    backgroundColor: "#f0fdf4",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  title: { fontSize: 15, fontWeight: "900", color: "#111827" },
+  option: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 13,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    marginBottom: 4,
+  },
+  optionActive: { backgroundColor: "#f0fdf4" },
+  optionText: { flex: 1, fontSize: 13, fontWeight: "700", color: "#374151" },
+  optionTextActive: { color: "#16a34a" },
+  pickerWrap: { marginTop: 4 },
+  confirmBtn: {
+    backgroundColor: "#16a34a",
+    borderRadius: 12,
+    paddingVertical: 13,
+    alignItems: "center",
+    marginTop: 8,
+  },
+  confirmBtnText: { color: "#fff", fontWeight: "800", fontSize: 14 },
+});
+
 // ─── Add Sale Modal ────────────────────────────────────────────────────────────
 
 function AddSaleModal({
@@ -772,19 +1019,86 @@ const am = StyleSheet.create({
   saveBtnText: { fontSize: 15, fontWeight: "800", color: "#fff" },
 });
 
+// ─── Sale Card (shared) ────────────────────────────────────────────────────────
+
+function SaleCard({
+  sale,
+  myWorkerId,
+  onUndo,
+  undoLabel,
+  showDate = false,
+}: {
+  sale: FarmSale;
+  myWorkerId: string | null;
+  onUndo: () => void;
+  undoLabel: string;
+  showDate?: boolean;
+}) {
+  return (
+    <View style={s.saleCard}>
+      <View style={s.saleTop}>
+        <View style={s.saleAvatar}>
+          <Ionicons name="person" size={18} color="#16a34a" />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={s.saleCustomer}>{sale.customer_name}</Text>
+          <Text style={s.saleMeta}>
+            {sale.product_name} · {sale.quantity} {sale.unit} × ₹
+            {sale.price_per_unit}
+          </Text>
+        </View>
+        <Text style={s.saleAmount}>₹{sale.total_amount.toFixed(0)}</Text>
+      </View>
+
+      <View style={s.saleFooter}>
+        <Text style={s.saleTime}>
+          {showDate ? `${sale.date} · ` : ""}
+          {parseUTCDate(sale.created_at).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          })}
+        </Text>
+        {sale.worker_id === myWorkerId ? (
+          <TouchableOpacity
+            style={s.undoBtn}
+            onPress={onUndo}
+            activeOpacity={0.75}
+          >
+            <Ionicons name="arrow-undo" size={13} color="#ef4444" />
+            <Text style={s.undoBtnText}>{undoLabel}</Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={s.addedByBadge}>
+            <Text style={s.addedByText}>{sale.worker_name}</Text>
+          </View>
+        )}
+      </View>
+    </View>
+  );
+}
+
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 function FarmSaleScreenInner() {
   const { workerToken } = useAuth();
 
-  const [sales, setSales] = useState<FarmSale[]>([]);
+  const [todaySales, setTodaySales] = useState<FarmSale[]>([]);
+  const [allSales, setAllSales] = useState<FarmSale[]>([]);
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [allLoading, setAllLoading] = useState(true);
+  const [allRefreshing, setAllRefreshing] = useState(false);
+
   const [showAddModal, setShowAddModal] = useState(false);
   const [isHindi, setIsHindi] = useState(false);
 
+  const [filterDate, setFilterDate] = useState<string | null>(null); // null = All Time
+  const [filterVisible, setFilterVisible] = useState(false);
+
   const [undoTarget, setUndoTarget] = useState<FarmSale | null>(null);
   const [undoing, setUndoing] = useState(false);
+  const [myWorkerId, setMyWorkerId] = useState<string | null>(null);
 
   const {
     config: alertConfig,
@@ -798,10 +1112,14 @@ function FarmSaleScreenInner() {
     salesToday: (n: number) =>
       isHindi ? `आज ${n} बिक्री` : `${n} sale${n !== 1 ? "s" : ""} today`,
     sectionTitle: isHindi ? "आज की बिक्री" : "Today's Sales",
+    allSalesTitle: isHindi ? "सभी बिक्री" : "All Sales",
     emptyTitle: isHindi ? "अभी कोई बिक्री नहीं" : "No sales recorded yet",
     emptySub: isHindi
       ? "ऊपर + बटन दबाकर नई बिक्री जोड़ें"
       : "Tap the + button above to add a new sale",
+    emptyAllTitle: isHindi
+      ? "इस अवधि में कोई बिक्री नहीं"
+      : "No sales in this period",
     undo: isHindi ? "पूर्ववत करें" : "Undo",
     undoFailTitle: isHindi ? "पूर्ववत नहीं हो सका" : "Undo Failed",
     undoFailMsg: isHindi
@@ -810,33 +1128,67 @@ function FarmSaleScreenInner() {
     loadingText: isHindi
       ? "बिक्री रिकॉर्ड लोड हो रहे हैं…"
       : "Loading sale records…",
+    allTime: isHindi ? "सभी समय" : "All Time",
+    today: isHindi ? "आज" : "Today",
   };
 
-  const fetchSales = useCallback(async () => {
+  const fetchToday = useCallback(async () => {
     try {
-      const data = await api.workerGetFarmSales(todayStr());
-      setSales(data);
+      const data = await api.workerGetFarmSales({ date: todayStr() });
+      setTodaySales(data);
     } catch (e) {
-      console.log("farm sale fetch error:", e);
+      console.log("today sales fetch error:", e);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   }, [workerToken]);
 
-  useEffect(() => {
-    fetchSales();
+  const fetchAll = useCallback(async (date: string | null) => {
+    setAllLoading(true);
+    try {
+      const data = date
+        ? await api.workerGetFarmSales({ date })
+        : await api.workerGetFarmSales({ all_time: true });
+      setAllSales(data);
+    } catch (e) {
+      console.log("all sales fetch error:", e);
+    } finally {
+      setAllLoading(false);
+      setAllRefreshing(false);
+    }
   }, []);
 
-  const onRefresh = () => {
+  useEffect(() => {
+    fetchToday();
+    fetchAll(null);
+  }, []);
+
+  useEffect(() => {
+    AsyncStorage.getItem("worker_data").then((raw) => {
+      if (raw) {
+        try {
+          const w = JSON.parse(raw);
+          setMyWorkerId(w.id ?? null);
+        } catch {}
+      }
+    });
+  }, []);
+
+  const onRefreshTop = () => {
     setRefreshing(true);
-    fetchSales();
+    setAllRefreshing(true);
+    fetchToday();
+    fetchAll(filterDate);
   };
 
-  const totalRevenue = sales.reduce((s, e) => s + e.total_amount, 0);
+  const totalRevenue = todaySales.reduce((s, e) => s + e.total_amount, 0);
 
   const handleSaved = (entry: FarmSale) => {
-    setSales((prev) => [entry, ...prev]);
+    setTodaySales((prev) => [entry, ...prev]);
+    if (!filterDate || filterDate === todayStr()) {
+      setAllSales((prev) => [entry, ...prev]);
+    }
   };
 
   const handleUndoConfirm = async () => {
@@ -844,7 +1196,8 @@ function FarmSaleScreenInner() {
     setUndoing(true);
     try {
       await api.workerDeleteFarmSale(undoTarget.id);
-      setSales((prev) => prev.filter((s) => s.id !== undoTarget.id));
+      setTodaySales((prev) => prev.filter((s) => s.id !== undoTarget.id));
+      setAllSales((prev) => prev.filter((s) => s.id !== undoTarget.id));
       setUndoTarget(null);
     } catch (err: any) {
       setUndoTarget(null);
@@ -859,6 +1212,18 @@ function FarmSaleScreenInner() {
       setUndoing(false);
     }
   };
+
+  const applyDateFilter = (date: string | null) => {
+    setFilterDate(date);
+    setFilterVisible(false);
+    fetchAll(date);
+  };
+
+  const filterLabel = filterDate
+    ? filterDate === todayStr()
+      ? labels.today
+      : filterDate
+    : labels.allTime;
 
   if (loading) {
     return (
@@ -884,6 +1249,13 @@ function FarmSaleScreenInner() {
         visible={showAddModal}
         onClose={() => setShowAddModal(false)}
         onSaved={handleSaved}
+        isHindi={isHindi}
+      />
+      <DateFilterModal
+        visible={filterVisible}
+        onClose={() => setFilterVisible(false)}
+        onSelect={applyDateFilter}
+        currentDate={filterDate}
         isHindi={isHindi}
       />
 
@@ -918,13 +1290,13 @@ function FarmSaleScreenInner() {
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
+              refreshing={refreshing || allRefreshing}
+              onRefresh={onRefreshTop}
               tintColor="#16a34a"
             />
           }
         >
-          {/* ── Revenue Banner ── */}
+          {/* ── Revenue Banner (Today) ── */}
           <LinearGradient
             colors={["#f0fdf4", "#dcfce7"]}
             style={[s.banner, { borderColor: "#16a34a40" }]}
@@ -942,7 +1314,7 @@ function FarmSaleScreenInner() {
                   {labels.revenueLbl}
                 </Text>
                 <Text style={s.bannerSub}>
-                  {labels.salesToday(sales.length)}
+                  {labels.salesToday(todaySales.length)}
                 </Text>
               </View>
             </View>
@@ -951,14 +1323,14 @@ function FarmSaleScreenInner() {
             </Text>
           </LinearGradient>
 
-          {/* ── Sales List ── */}
+          {/* ── Today's Sales ── */}
           <Text style={s.sectionTitle}>{labels.sectionTitle}</Text>
 
-          {sales.length === 0 ? (
+          {todaySales.length === 0 ? (
             <View style={s.emptyWrap}>
               <MaterialCommunityIcons
                 name="cart-off"
-                size={48}
+                size={44}
                 color="#d1d5db"
               />
               <Text style={s.emptyTitle}>{labels.emptyTitle}</Text>
@@ -975,41 +1347,60 @@ function FarmSaleScreenInner() {
               </TouchableOpacity>
             </View>
           ) : (
-            sales.map((sale) => (
-              <View key={sale.id} style={s.saleCard}>
-                <View style={s.saleTop}>
-                  <View style={s.saleAvatar}>
-                    <Ionicons name="person" size={18} color="#16a34a" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.saleCustomer}>{sale.customer_name}</Text>
-                    <Text style={s.saleMeta}>
-                      {sale.product_name} · {sale.quantity} {sale.unit} × ₹
-                      {sale.price_per_unit}
-                    </Text>
-                  </View>
-                  <Text style={s.saleAmount}>
-                    ₹{sale.total_amount.toFixed(0)}
-                  </Text>
-                </View>
+            todaySales.map((sale) => (
+              <SaleCard
+                key={sale.id}
+                sale={sale}
+                myWorkerId={myWorkerId}
+                onUndo={() => setUndoTarget(sale)}
+                undoLabel={labels.undo}
+              />
+            ))
+          )}
 
-                <View style={s.saleFooter}>
-                  <Text style={s.saleTime}>
-                    {parseUTCDate(sale.created_at).toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </Text>
-                  <TouchableOpacity
-                    style={s.undoBtn}
-                    onPress={() => setUndoTarget(sale)}
-                    activeOpacity={0.75}
-                  >
-                    <Ionicons name="arrow-undo" size={13} color="#ef4444" />
-                    <Text style={s.undoBtnText}>{labels.undo}</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
+          {/* ── Divider ── */}
+          <View style={s.sectionDivider} />
+
+          {/* ── All Sales (with filter) ── */}
+          <View style={s.allHeaderRow}>
+            <Text style={[s.sectionTitle, { marginBottom: 0 }]}>
+              {labels.allSalesTitle}
+            </Text>
+            <TouchableOpacity
+              style={s.filterBtn}
+              onPress={() => setFilterVisible(true)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="filter" size={13} color="#16a34a" />
+              <Text style={s.filterBtnText}>{filterLabel}</Text>
+              <Ionicons name="chevron-down" size={12} color="#16a34a" />
+            </TouchableOpacity>
+          </View>
+
+          {allLoading ? (
+            <ActivityIndicator
+              color="#16a34a"
+              style={{ marginTop: 24, marginBottom: 24 }}
+            />
+          ) : allSales.length === 0 ? (
+            <View style={s.emptyWrap}>
+              <MaterialCommunityIcons
+                name="cart-off"
+                size={40}
+                color="#d1d5db"
+              />
+              <Text style={s.emptyTitle}>{labels.emptyAllTitle}</Text>
+            </View>
+          ) : (
+            allSales.map((sale) => (
+              <SaleCard
+                key={sale.id}
+                sale={sale}
+                myWorkerId={myWorkerId}
+                onUndo={() => setUndoTarget(sale)}
+                undoLabel={labels.undo}
+                showDate
+              />
             ))
           )}
 
@@ -1098,10 +1489,34 @@ const s = StyleSheet.create({
     marginBottom: 10,
   },
 
+  sectionDivider: {
+    height: 1,
+    backgroundColor: "#f3f4f6",
+    marginVertical: 22,
+  },
+  allHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  filterBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "#f0fdf4",
+    borderWidth: 1,
+    borderColor: "#bbf7d0",
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  filterBtnText: { fontSize: 12, fontWeight: "800", color: "#16a34a" },
+
   emptyWrap: {
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 48,
+    paddingVertical: 40,
     gap: 8,
   },
   emptyTitle: { fontSize: 15, fontWeight: "700", color: "#6b7280" },
@@ -1165,4 +1580,12 @@ const s = StyleSheet.create({
     paddingVertical: 5,
   },
   undoBtnText: { fontSize: 12, fontWeight: "800", color: "#ef4444" },
+
+  addedByBadge: {
+    backgroundColor: "#f3f4f6",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  addedByText: { fontSize: 11, fontWeight: "700", color: "#6b7280" },
 });

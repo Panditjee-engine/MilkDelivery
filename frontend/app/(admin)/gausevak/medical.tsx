@@ -15,7 +15,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   Alert,
-  Image
+  Image,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -47,6 +47,9 @@ interface MedicalRecord {
   doctorName?: string;
   medicineName?: string;
   notes?: string;
+  lastDewormingDate?: string;
+  nextDewormingDate?: string;
+  dewormingMedicine?: string;
   created_at: string;
 }
 
@@ -86,6 +89,9 @@ interface MedicalForm {
   doctorName: string;
   medicineName: string;
   notes: string;
+  lastDewormingDate: string;
+  nextDewormingDate: string;
+  dewormingMedicine: string;
 }
 
 type MedicineCategory =
@@ -170,6 +176,9 @@ const EMPTY_FORM: MedicalForm = {
   doctorName: "",
   medicineName: "",
   notes: "",
+  lastDewormingDate: "",
+  nextDewormingDate: "",
+  dewormingMedicine: "",
 };
 
 const EMPTY_MED_FORM: MedicineCreate = {
@@ -532,15 +541,12 @@ function IssuePicker({
                 size={12}
                 color={active ? issue.color : "#9ca3af"}
               />
-              <Text
-                style={[
-                  ip.chipLabel,
-                  active && { color: issue.color },
-                ]}
-              >
+              <Text style={[ip.chipLabel, active && { color: issue.color }]}>
                 {issue.label}
               </Text>
-              {active && <Ionicons name="checkmark" size={11} color={issue.color} />}
+              {active && (
+                <Ionicons name="checkmark" size={11} color={issue.color} />
+              )}
             </TouchableOpacity>
           );
         })}
@@ -565,7 +571,12 @@ function IssuePicker({
           </TouchableOpacity>
         )}
       </View>
-      <View style={[ip.inputRow, focused && { borderColor: accentColor, backgroundColor: "#fff" }]}>
+      <View
+        style={[
+          ip.inputRow,
+          focused && { borderColor: accentColor, backgroundColor: "#fff" },
+        ]}
+      >
         <Ionicons
           name="bandage-outline"
           size={14}
@@ -647,7 +658,9 @@ function DateField({
       <TouchableOpacity
         style={[
           df.row,
-          value ? { borderColor: color + "55", backgroundColor: color + "08" } : {},
+          value
+            ? { borderColor: color + "55", backgroundColor: color + "08" }
+            : {},
         ]}
         onPress={() => setShowPicker(true)}
         activeOpacity={0.8}
@@ -675,9 +688,13 @@ function DateField({
           <Ionicons name="chevron-down" size={14} color="#9ca3af" />
         )}
       </TouchableOpacity>
-      {showPicker && (
-        Platform.OS === "ios" ? (
-          <Modal transparent animationType="fade" onRequestClose={() => setShowPicker(false)}>
+      {showPicker &&
+        (Platform.OS === "ios" ? (
+          <Modal
+            transparent
+            animationType="fade"
+            onRequestClose={() => setShowPicker(false)}
+          >
             <TouchableOpacity
               style={df.overlay}
               activeOpacity={1}
@@ -710,8 +727,7 @@ function DateField({
             display="default"
             onChange={handleDateChange}
           />
-        )
-      )}
+        ))}
     </View>
   );
 }
@@ -851,7 +867,7 @@ function CowSelector({
             <TouchableOpacity
               activeOpacity={1}
               style={cs.sheet}
-              onPress={() => { }}
+              onPress={() => {}}
             >
               <View style={cs.sheetHeader}>
                 <Text style={cs.sheetTitle}>Select Cow</Text>
@@ -1128,6 +1144,33 @@ function MedicalFormBody({
           />
         </View>
       </View>
+      <Sec title="Deworming" icon="bug-outline" color="#65a30d" />
+      <Field
+        label="Deworming Medicine"
+        value={form.dewormingMedicine}
+        onChange={setF("dewormingMedicine")}
+        placeholder="e.g. Albendazole"
+        icon="flask-outline"
+        color="#65a30d"
+      />
+      <View style={f.twoCol}>
+        <View style={{ flex: 1 }}>
+          <DateField
+            label="Last Deworming"
+            value={form.lastDewormingDate}
+            onChange={setF("lastDewormingDate")}
+            color="#65a30d"
+          />
+        </View>
+        <View style={{ flex: 1 }}>
+          <DateField
+            label="Next Deworming"
+            value={form.nextDewormingDate}
+            onChange={setF("nextDewormingDate")}
+            color="#65a30d"
+          />
+        </View>
+      </View>
       <Sec title="Health Issues" icon="alert-circle-outline" color="#ea580c" />
       <IssuePicker
         label="LAST ISSUE"
@@ -1265,6 +1308,9 @@ function MedicalFormModal({
         doctorName: editRecord.doctorName ?? "",
         medicineName: editRecord.medicineName ?? "",
         notes: editRecord.notes ?? "",
+        lastDewormingDate: editRecord.lastDewormingDate ?? "",
+        nextDewormingDate: editRecord.nextDewormingDate ?? "",
+        dewormingMedicine: editRecord.dewormingMedicine ?? "",
       });
     } else {
       setForm(EMPTY_FORM);
@@ -1313,6 +1359,9 @@ function MedicalFormModal({
         doctorName: n(form.doctorName),
         medicineName: n(form.medicineName),
         notes: n(form.notes),
+        lastDewormingDate: n(form.lastDewormingDate),
+        nextDewormingDate: n(form.nextDewormingDate),
+        dewormingMedicine: n(form.dewormingMedicine),
       };
       const result: MedicalRecord =
         isEdit && editRecord
@@ -1671,12 +1720,19 @@ function MedicalCard({
           activeOpacity={0.85}
         >
           <View style={c.topRow}>
-            <View style={[c.avatar, { borderColor: statusBorder, backgroundColor: statusBg }]}>
+            <View
+              style={[
+                c.avatar,
+                { borderColor: statusBorder, backgroundColor: statusBg },
+              ]}
+            >
               <Image
                 source={
-                  item.cowType === "bull" ? bullImg :
-                    item.cowType === "newborn" ? calfImg :
-                      cowImg
+                  item.cowType === "bull"
+                    ? bullImg
+                    : item.cowType === "newborn"
+                      ? calfImg
+                      : cowImg
                 }
                 style={{ width: 32, height: 32, resizeMode: "contain" }}
               />
@@ -1776,6 +1832,19 @@ function MedicalCard({
                 </Text>
               </View>
             )}
+            {item.nextDewormingDate && (
+              <View
+                style={[
+                  c.chip,
+                  { backgroundColor: "#f7fee7", borderColor: "#d9f99d" },
+                ]}
+              >
+                <Ionicons name="bug-outline" size={10} color="#65a30d" />
+                <Text style={[c.chipText, { color: "#65a30d" }]}>
+                  Deworm: {item.nextDewormingDate}
+                </Text>
+              </View>
+            )}
             {item.treatmentGiven && (
               <View
                 style={[
@@ -1783,7 +1852,11 @@ function MedicalCard({
                   { backgroundColor: treatBg, borderColor: treatBorder },
                 ]}
               >
-                <Ionicons name="medical-outline" size={10} color={treatmentColor} />
+                <Ionicons
+                  name="medical-outline"
+                  size={10}
+                  color={treatmentColor}
+                />
                 <Text style={[c.chipText, { color: treatmentColor }]}>
                   {item.treatmentGiven}
                 </Text>
@@ -2947,8 +3020,7 @@ export default function MedicalScreen() {
     if (range === "all_time") return true;
     const created = new Date(createdAt);
     if (Number.isNaN(created.getTime())) return true;
-    const diffDays =
-      (Date.now() - created.getTime()) / (1000 * 60 * 60 * 24);
+    const diffDays = (Date.now() - created.getTime()) / (1000 * 60 * 60 * 24);
     if (range === "last_week") return diffDays <= 7;
     if (range === "last_month") return diffDays <= 30;
     return diffDays <= 365;
@@ -3215,7 +3287,11 @@ export default function MedicalScreen() {
               onPress={() => setSortVisible(true)}
               style={s.sortBtn}
             >
-              <Ionicons name={sortMeta[sortBy].icon} size={16} color="#16a34a" />
+              <Ionicons
+                name={sortMeta[sortBy].icon}
+                size={16}
+                color="#16a34a"
+              />
             </TouchableOpacity>
             <View style={s.countBadge}>
               <Text style={s.countText}>{visibleGroupedRecords.length}</Text>
@@ -3477,7 +3553,9 @@ export default function MedicalScreen() {
                   ListEmptyComponent={
                     <View style={s.empty}>
                       <Text style={{ fontSize: 44 }}>🏥</Text>
-                      <Text style={s.emptyText}>No cow medical records found</Text>
+                      <Text style={s.emptyText}>
+                        No cow medical records found
+                      </Text>
                       <TouchableOpacity
                         onPress={() => {
                           setEditRecord(null);
@@ -3859,7 +3937,10 @@ export default function MedicalScreen() {
               <TouchableOpacity
                 key={opt}
                 style={[s.sortOption, sortBy === opt && s.sortOptionActive]}
-                onPress={() => { setSortBy(opt); setSortVisible(false); }}
+                onPress={() => {
+                  setSortBy(opt);
+                  setSortVisible(false);
+                }}
                 activeOpacity={0.8}
               >
                 <Ionicons
@@ -3867,11 +3948,21 @@ export default function MedicalScreen() {
                   size={15}
                   color={sortBy === opt ? "#16a34a" : "#64748b"}
                 />
-                <Text style={[s.sortOptionText, sortBy === opt && s.sortOptionTextActive]}>
+                <Text
+                  style={[
+                    s.sortOptionText,
+                    sortBy === opt && s.sortOptionTextActive,
+                  ]}
+                >
                   {sortMeta[opt].label}
                 </Text>
                 {sortBy === opt && (
-                  <Ionicons name="checkmark" size={15} color="#16a34a" style={{ marginLeft: "auto" as any }} />
+                  <Ionicons
+                    name="checkmark"
+                    size={15}
+                    color="#16a34a"
+                    style={{ marginLeft: "auto" as any }}
+                  />
                 )}
               </TouchableOpacity>
             ))}
@@ -3880,7 +3971,10 @@ export default function MedicalScreen() {
               <TouchableOpacity
                 key={opt}
                 style={[s.sortOption, dateRange === opt && s.sortOptionActive]}
-                onPress={() => { setDateRange(opt); setSortVisible(false); }}
+                onPress={() => {
+                  setDateRange(opt);
+                  setSortVisible(false);
+                }}
                 activeOpacity={0.8}
               >
                 <Ionicons
@@ -3888,11 +3982,21 @@ export default function MedicalScreen() {
                   size={15}
                   color={dateRange === opt ? "#16a34a" : "#64748b"}
                 />
-                <Text style={[s.sortOptionText, dateRange === opt && s.sortOptionTextActive]}>
+                <Text
+                  style={[
+                    s.sortOptionText,
+                    dateRange === opt && s.sortOptionTextActive,
+                  ]}
+                >
                   {dateRangeMeta[opt].label}
                 </Text>
                 {dateRange === opt && (
-                  <Ionicons name="checkmark" size={15} color="#16a34a" style={{ marginLeft: "auto" as any }} />
+                  <Ionicons
+                    name="checkmark"
+                    size={15}
+                    color="#16a34a"
+                    style={{ marginLeft: "auto" as any }}
+                  />
                 )}
               </TouchableOpacity>
             ))}
@@ -4287,7 +4391,12 @@ const c = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 6,
   },
-  historyHint: { fontSize: 11, color: "#16a34a", fontWeight: "700", marginBottom: 6 },
+  historyHint: {
+    fontSize: 11,
+    color: "#16a34a",
+    fontWeight: "700",
+    marginBottom: 6,
+  },
   agePill: {
     flexDirection: "row",
     alignItems: "center",
