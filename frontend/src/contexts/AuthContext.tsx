@@ -159,7 +159,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setWorkerToken(null);
     setWorker(null);
-  };
+  };  
 
   const updateUser = (data: Partial<User>) => {
     if (user) {
