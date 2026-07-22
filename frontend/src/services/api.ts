@@ -472,7 +472,7 @@ class ApiService {
   }
 
   async requestAuthOtp(data: { phone: string }) {
-    return this.request<{ message: string }>("/auth/send-register-otp", {
+    return this.request<{ message: string; dev_code?: string }>("/auth/send-register-otp", {
       method: "POST",
       body: JSON.stringify(data),
     });
