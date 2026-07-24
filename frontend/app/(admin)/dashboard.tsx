@@ -9,6 +9,7 @@ import {
   Modal,
   FlatList,
   Pressable,
+  Linking,
 } from "react-native";
 import {
   SafeAreaView,
@@ -330,16 +331,10 @@ export default function AdminDashboard() {
     }
   };
 
-  useEffect(() => {
-    if (!isFocused) return;
-
-    fetchData();
-    const interval = setInterval(() => {
-      fetchData();
-    }, 2000);
-
-    return () => clearInterval(interval);
-  }, [isFocused]);
+useEffect(() => {
+  if (!isFocused) return;
+  fetchData();
+}, [isFocused]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -394,6 +389,8 @@ export default function AdminDashboard() {
           </View>
         </View>
 
+
+
         {/* ── Revenue Card ── */}
         <View style={styles.revenueCard}>
           <View style={styles.revenueLeft}>
@@ -410,6 +407,25 @@ export default function AdminDashboard() {
             <Ionicons name="cash" size={42} color={C.deep} />
           </View>
         </View>
+
+<TouchableOpacity
+  style={styles.todayOrderCard}
+  activeOpacity={0.82}
+  onPress={() => Linking.openURL("https://gausatv.com/admin-dashboard")}
+>
+  <View style={styles.todayOrderLeft}>
+    <View style={styles.todayOrderIcon}>
+      <Ionicons name="globe-outline" size={22} color={C.dark} />
+    </View>
+    <View style={{ flex: 1 }}>
+      <Text style={styles.todayOrderTitle}>Open Web Dashboard</Text>
+      <Text style={styles.todayOrderSub}>
+        Access more tools and reports on cockpit
+      </Text>
+    </View>
+  </View>
+  <Ionicons name="open-outline" size={18} color={C.dark} />
+</TouchableOpacity>
 
         <TouchableOpacity
           style={styles.todayOrderCard}

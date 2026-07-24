@@ -51,7 +51,7 @@ const REGISTER_STEPS: Array<{ key: Step; label: string }> = [
   { key: "otp", label: "OTP" },
   { key: "details", label: "Details" },
 ];
-// ── Validation helpers 
+// ── Validation helpers
 
 /** Indian mobile: 10 digits, starts 6-9, not all same digit */
 function validateIndianMobile(num: string): { ok: boolean; reason?: string } {
@@ -62,9 +62,9 @@ function validateIndianMobile(num: string): { ok: boolean; reason?: string } {
       reason: `${10 - num.length} more digit${10 - num.length > 1 ? "s" : ""} needed`,
     };
   if (!/^[6-9]/.test(num))
-    return { ok: false, reason: "Indian numbers must start with 6, 7, 8 or 9" };
+    return { ok: false, reason: "Wrong number" };
   if (/^(.)\1{9}$/.test(num))
-    return { ok: false, reason: "Enter a real mobile number" };
+    return { ok: false, reason: "Enter a valid mobile number" };
   return { ok: true };
 }
 
@@ -181,7 +181,9 @@ function FieldError({ msg }: { msg?: string }) {
       }}
     >
       <Ionicons name="alert-circle" size={13} color={C.error} />
-      <Text style={{ fontSize: 12, color: C.error, fontWeight: "500", flex: 1 }}>
+      <Text
+        style={{ fontSize: 12, color: C.error, fontWeight: "500", flex: 1 }}
+      >
         {msg}
       </Text>
     </View>
@@ -207,7 +209,10 @@ function friendlyAuthError(error: any, fallback: string): string {
   if (!raw) return fallback;
 
   let parsed: any = null;
-  if ((raw.startsWith("{") && raw.endsWith("}")) || (raw.startsWith("[") && raw.endsWith("]"))) {
+  if (
+    (raw.startsWith("{") && raw.endsWith("}")) ||
+    (raw.startsWith("[") && raw.endsWith("]"))
+  ) {
     try {
       parsed = JSON.parse(raw);
     } catch {
@@ -231,7 +236,10 @@ function friendlyAuthError(error: any, fallback: string): string {
   if (lower.includes("already") && lower.includes("email")) {
     return "This email is already registered. Try signing in instead.";
   }
-  if (lower.includes("already") && (lower.includes("phone") || lower.includes("mobile"))) {
+  if (
+    lower.includes("already") &&
+    (lower.includes("phone") || lower.includes("mobile"))
+  ) {
     return "This mobile number is already registered. Try signing in instead.";
   }
   if (lower.includes("otp") || lower.includes("code")) {
@@ -264,12 +272,20 @@ function FloatInput({
 
   const onFocus = () => {
     setFocused(true);
-    Animated.timing(anim, { toValue: 1, duration: 180, useNativeDriver: false }).start();
+    Animated.timing(anim, {
+      toValue: 1,
+      duration: 180,
+      useNativeDriver: false,
+    }).start();
   };
   const onBlur = () => {
     setFocused(false);
     if (!value)
-      Animated.timing(anim, { toValue: 0, duration: 180, useNativeDriver: false }).start();
+      Animated.timing(anim, {
+        toValue: 0,
+        duration: 180,
+        useNativeDriver: false,
+      }).start();
     extBlur?.();
   };
 
@@ -281,17 +297,31 @@ function FloatInput({
         ? C.primary
         : C.border;
 
-  const labelTop = anim.interpolate({ inputRange: [0, 1], outputRange: [14, -9] });
-  const labelSize = anim.interpolate({ inputRange: [0, 1], outputRange: [15, 11] });
+  const labelTop = anim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [14, -9],
+  });
+  const labelSize = anim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [15, 11],
+  });
   const labelColor = anim.interpolate({
     inputRange: [0, 1],
-    outputRange: [C.textLight, error ? C.error : focused ? C.primary : C.textSub],
+    outputRange: [
+      C.textLight,
+      error ? C.error : focused ? C.primary : C.textSub,
+    ],
   });
 
   return (
     <>
       <View style={[fi.wrap, { borderColor }]}>
-        <Animated.Text style={[fi.label, { top: labelTop, fontSize: labelSize, color: labelColor }]}>
+        <Animated.Text
+          style={[
+            fi.label,
+            { top: labelTop, fontSize: labelSize, color: labelColor },
+          ]}
+        >
           {label}
         </Animated.Text>
         <View style={fi.row}>
@@ -307,9 +337,15 @@ function FloatInput({
             autoCapitalize={autoCapitalize ?? "sentences"}
             placeholderTextColor="transparent"
           />
-          {status === "checking" && <ActivityIndicator size="small" color={C.primary} />}
-          {status === "ok" && !rightIcon && <Ionicons name="checkmark-circle" size={20} color={C.success} />}
-          {status === "error" && !rightIcon && <Ionicons name="close-circle" size={20} color={C.error} />}
+          {status === "checking" && (
+            <ActivityIndicator size="small" color={C.primary} />
+          )}
+          {status === "ok" && !rightIcon && (
+            <Ionicons name="checkmark-circle" size={20} color={C.success} />
+          )}
+          {status === "error" && !rightIcon && (
+            <Ionicons name="close-circle" size={20} color={C.error} />
+          )}
           {rightIcon}
         </View>
       </View>
@@ -344,14 +380,31 @@ const fi = StyleSheet.create({
 });
 
 const ROLES = [
-  { value: "customer" as Role, label: "Customer", emoji: "🛒", desc: "Order essentials" },
-  { value: "delivery_partner" as Role, label: "Delivery", emoji: "🚴", desc: "Earn on your ride" },
-  { value: "admin" as Role, label: "Admin", emoji: "🛡️", desc: "Manage platform" },
+  {
+    value: "customer" as Role,
+    label: "Customer",
+    emoji: "🛒",
+    desc: "Order essentials",
+  },
+  {
+    value: "delivery_partner" as Role,
+    label: "Delivery",
+    emoji: "🚴",
+    desc: "Earn on your ride",
+  },
+  {
+    value: "admin" as Role,
+    label: "Admin",
+    emoji: "🛡️",
+    desc: "Manage platform",
+  },
 ];
 
 export default function RegisterScreen() {
   // ── QR se aaya referral code
-  const { referral_code: qrReferralCode } = useLocalSearchParams<{ referral_code?: string }>();
+  const { referral_code: qrReferralCode } = useLocalSearchParams<{
+    referral_code?: string;
+  }>();
 
   const [step, setStep] = useState<Step>("phone");
   const otpInputRef = useRef<TextInput | null>(null);
@@ -373,10 +426,12 @@ export default function RegisterScreen() {
 
   // ── Referral state — QR code se initialize
   const [scannerVisible, setScannerVisible] = useState(false);
-  const [cameraPermission, setCameraPermission] = useState<boolean | null>(null);
+  const [cameraPermission, setCameraPermission] = useState<boolean | null>(
+    null,
+  );
   const [referralAdminId, setReferralAdminId] = useState<string | null>(null);
   const [referralCode, setReferralCode] = useState(
-    qrReferralCode ? qrReferralCode.toUpperCase().trim() : ""
+    qrReferralCode ? qrReferralCode.toUpperCase().trim() : "",
   );
   const [referralStatus, setReferralStatus] = useState<
     "idle" | "checking" | "valid" | "invalid"
@@ -397,7 +452,11 @@ export default function RegisterScreen() {
   const phoneTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const emailTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [toast, setToast] = useState({ visible: false, message: "", type: "error" as ToastType });
+  const [toast, setToast] = useState({
+    visible: false,
+    message: "",
+    type: "error" as ToastType,
+  });
   const showToast = (message: string, type: ToastType = "error") =>
     setToast({ visible: true, message, type });
   const hideToast = () => setToast((t) => ({ ...t, visible: false }));
@@ -419,7 +478,8 @@ export default function RegisterScreen() {
     setReferralCode(upper);
     setReferralStatus("checking");
 
-    api.getAdminByReferral(upper)
+    api
+      .getAdminByReferral(upper)
       .then((result) => {
         if (result.found && result.admin_id) {
           setReferralAdminId(result.admin_id);
@@ -481,7 +541,10 @@ export default function RegisterScreen() {
 
     setEmailSt("checking");
     emailTimer.current = setTimeout(async () => {
-      const exists = await api.checkDuplicate("email", val.trim().toLowerCase());
+      const exists = await api.checkDuplicate(
+        "email",
+        val.trim().toLowerCase(),
+      );
       if (exists) {
         setEmailErr("Email already registered — try signing in instead.");
         setEmailSt("error");
@@ -539,7 +602,7 @@ export default function RegisterScreen() {
         handleReferralCodeChange(code.toUpperCase().trim());
         return;
       }
-    } catch { }
+    } catch {}
     handleReferralCodeChange(data.toUpperCase().trim());
   };
 
@@ -585,7 +648,9 @@ export default function RegisterScreen() {
       setResendIn(30);
       setOtp("");
       showToast(
-        isResend ? "OTP sent again to your phone" : "OTP sent to your mobile number",
+        isResend
+          ? "OTP sent again to your phone"
+          : "OTP sent to your mobile number",
         "success",
       );
       if (!isResend) {
@@ -593,7 +658,10 @@ export default function RegisterScreen() {
         setTimeout(() => otpInputRef.current?.focus(), 350);
       }
     } catch (error: any) {
-      showToast(friendlyAuthError(error, "Could not send OTP. Please try again."), "error");
+      showToast(
+        friendlyAuthError(error, "Could not send OTP. Please try again."),
+        "error",
+      );
     } finally {
       setOtpSending(false);
     }
@@ -608,8 +676,14 @@ export default function RegisterScreen() {
       showToast(reason!, "error");
       return;
     }
-    if (phoneSt === "checking") { showToast("Checking number, please wait…", "warn"); return; }
-    if (phoneSt === "error") { showToast(phoneErr || "Fix the phone number", "error"); return; }
+    if (phoneSt === "checking") {
+      showToast("Checking number, please wait…", "warn");
+      return;
+    }
+    if (phoneSt === "error") {
+      showToast(phoneErr || "Fix the phone number", "error");
+      return;
+    }
 
     if (phoneSt === "idle") {
       setPhoneSt("checking");
@@ -648,7 +722,10 @@ export default function RegisterScreen() {
       showToast("Phone number verified successfully", "success");
       goToDetails();
     } catch (error: any) {
-      const message = friendlyAuthError(error, "Could not verify OTP. Please try again.");
+      const message = friendlyAuthError(
+        error,
+        "Could not verify OTP. Please try again.",
+      );
       setOtpErr(message);
       showToast(message, "error");
     } finally {
@@ -666,25 +743,49 @@ export default function RegisterScreen() {
       showToast("Verify OTP before entering details", "warn");
       return;
     }
-    if (!name.trim()) { setNameErr("Full name is required"); hasErr = true; }
+    if (!name.trim()) {
+      setNameErr("Full name is required");
+      hasErr = true;
+    }
     if (!email.trim()) {
-      setEmailErr("Email is required"); setEmailSt("error"); hasErr = true;
+      setEmailErr("Email is required");
+      setEmailSt("error");
+      hasErr = true;
     } else if (!validateEmail(email)) {
-      setEmailErr("Enter a valid email address"); setEmailSt("error"); hasErr = true;
+      setEmailErr("Enter a valid email address");
+      setEmailSt("error");
+      hasErr = true;
     }
     if (!password) {
-      setPassErr("Password is required"); hasErr = true;
+      setPassErr("Password is required");
+      hasErr = true;
     } else if (password.length < 6) {
-      setPassErr("Min 6 characters required"); hasErr = true;
+      setPassErr("Min 6 characters required");
+      hasErr = true;
     }
-    if (password !== confirmPassword) { setConfErr("Passwords do not match"); hasErr = true; }
+    if (password !== confirmPassword) {
+      setConfErr("Passwords do not match");
+      hasErr = true;
+    }
 
-    if (hasErr) { showToast("Please fix the errors below", "error"); return; }
-    if (emailSt === "checking") { showToast("Verifying email, please wait…", "warn"); return; }
-    if (emailSt === "error") { showToast(emailErr || "Fix the email first", "error"); return; }
+    if (hasErr) {
+      showToast("Please fix the errors below", "error");
+      return;
+    }
+    if (emailSt === "checking") {
+      showToast("Verifying email, please wait…", "warn");
+      return;
+    }
+    if (emailSt === "error") {
+      showToast(emailErr || "Fix the email first", "error");
+      return;
+    }
 
     if (emailSt === "idle") {
-      const exists = await api.checkDuplicate("email", email.trim().toLowerCase());
+      const exists = await api.checkDuplicate(
+        "email",
+        email.trim().toLowerCase(),
+      );
       if (exists) {
         setEmailErr("Email already registered — try signing in instead.");
         setEmailSt("error");
@@ -703,15 +804,23 @@ export default function RegisterScreen() {
         role,
         referral_admin_id: referralAdminId ?? undefined,
       });
-      showToast("Account created! Welcome 🎉", "success");
+      showToast("Account created! Welcome ", "success");
       setTimeout(() => router.replace("/"), 1200);
     } catch (error: any) {
       const rawMsg: string = error?.message ?? "";
-      const msg = friendlyAuthError(error, "Could not create account. Please try again.");
-      if (/email/i.test(msg)) { setEmailErr("This email is already registered."); setEmailSt("error"); }
-      else if (/phone|mobile/i.test(rawMsg + msg)) {
+      const msg = friendlyAuthError(
+        error,
+        "Could not create account. Please try again.",
+      );
+      if (/email/i.test(msg)) {
+        setEmailErr("This email is already registered.");
+        setEmailSt("error");
+      } else if (/phone|mobile/i.test(rawMsg + msg)) {
         goToPhone();
-        setTimeout(() => { setPhoneErr("This number is already registered."); setPhoneSt("error"); }, 400);
+        setTimeout(() => {
+          setPhoneErr("This number is already registered.");
+          setPhoneSt("error");
+        }, 400);
       }
       showToast(msg, "error");
     } finally {
@@ -735,11 +844,21 @@ export default function RegisterScreen() {
 
   return (
     <SafeAreaView style={s.container}>
-      <Toast message={toast.message} type={toast.type} visible={toast.visible} onHide={hideToast} />
+      <Toast
+        message={toast.message}
+        type={toast.type}
+        visible={toast.visible}
+        onHide={hideToast}
+      />
 
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
-
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
+      >
+        <ScrollView
+          contentContainerStyle={s.scroll}
+          showsVerticalScrollIndicator={false}
+        >
           {/* Header */}
           <LinearGradient
             colors={[C.primary, C.accent, "#FFD580"]}
@@ -761,8 +880,13 @@ export default function RegisterScreen() {
             </TouchableOpacity>
             <View style={s.logoArea}>
               <Image
-                source={require("../../assets/images/icon.png")} 
-                style={{ width: 64, height: 64, borderRadius: 16, marginBottom: 4 }}
+                source={require("../../assets/images/icon.png")}
+                style={{
+                  width: 64,
+                  height: 64,
+                  borderRadius: 16,
+                  marginBottom: 4,
+                }}
                 resizeMode="contain"
               />
               <Text style={s.logoText}>GauSatv</Text>
@@ -776,13 +900,13 @@ export default function RegisterScreen() {
                       s.pill,
                       step === item.key && s.pillActive,
                       ((step === "otp" || step === "details") && i === 0) ||
-                        (step === "details" && i === 1)
+                      (step === "details" && i === 1)
                         ? s.pillDone
                         : null,
                     ]}
                   >
-                    {(((step === "otp" || step === "details") && i === 0) ||
-                      (step === "details" && i === 1)) ? (
+                    {((step === "otp" || step === "details") && i === 0) ||
+                    (step === "details" && i === 1) ? (
                       <Ionicons name="checkmark" size={12} color="#fff" />
                     ) : (
                       <Text style={s.pillNum}>{i + 1}</Text>
@@ -802,7 +926,7 @@ export default function RegisterScreen() {
                       style={[
                         s.pillLine,
                         ((step === "otp" || step === "details") && i === 0) ||
-                          (step === "details" && i === 1)
+                        (step === "details" && i === 1)
                           ? s.pillLineDone
                           : null,
                       ]}
@@ -813,22 +937,35 @@ export default function RegisterScreen() {
             </View>
           </LinearGradient>
 
-          <Animated.View style={[s.body, { transform: [{ translateX: slideAnim }] }]}>
-
+          <Animated.View
+            style={[s.body, { transform: [{ translateX: slideAnim }] }]}
+          >
             {/* ══ STEP 1 ══ */}
             {step === "phone" && (
               <View>
                 <Text style={s.stepTitle}>What is your number?</Text>
-                <Text style={s.stepSub}>We will keep it safe. No spam, ever.</Text>
+                <Text style={s.stepSub}>
+                  We will keep it safe. No spam, ever.
+                </Text>
 
-                <View style={[s.phoneCard, phoneSt === "error" && s.phoneCardErr, phoneSt === "ok" && s.phoneCardOk]}>
+                <View
+                  style={[
+                    s.phoneCard,
+                    phoneSt === "error" && s.phoneCardErr,
+                    phoneSt === "ok" && s.phoneCardOk,
+                  ]}
+                >
                   <View style={s.phoneRow}>
                     <View style={s.countryChip}>
                       <Text style={s.countryCode}>+91</Text>
-                      <Ionicons name="chevron-down" size={14} color={C.textSub} />
+                      <Ionicons
+                        name="chevron-down"
+                        size={14}
+                        color={C.textSub}
+                      />
                     </View>
                     <TextInput
-                    style={s.phoneInput}
+                      style={s.phoneInput}
                       placeholder="mobile number"
                       placeholderTextColor={C.textLight}
                       value={phone}
@@ -836,32 +973,62 @@ export default function RegisterScreen() {
                       keyboardType="number-pad"
                       maxLength={10}
                     />
-                    {phoneSt === "checking" && <ActivityIndicator size="small" color={C.primary} />}
-                    {phoneSt === "ok" && <Ionicons name="checkmark-circle" size={24} color={C.success} />}
-                    {phoneSt === "error" && <Ionicons name="close-circle" size={24} color={C.error} />}
+                    {phoneSt === "checking" && (
+                      <ActivityIndicator size="small" color={C.primary} />
+                    )}
+                    {phoneSt === "ok" && (
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={24}
+                        color={C.success}
+                      />
+                    )}
+                    {phoneSt === "error" && (
+                      <Ionicons name="close-circle" size={24} color={C.error} />
+                    )}
                   </View>
 
                   <View style={s.dotsRow}>
                     {Array.from({ length: 10 }).map((_, i) => (
-                      <View key={i} style={[s.dot, i < phone.length && (phoneSt === "error" ? s.dotErr : s.dotFilled)]} />
+                      <View
+                        key={i}
+                        style={[
+                          s.dot,
+                          i < phone.length &&
+                            (phoneSt === "error" ? s.dotErr : s.dotFilled),
+                        ]}
+                      />
                     ))}
                   </View>
 
                   {phoneErr ? (
                     <View style={s.phoneBanner}>
                       <Ionicons name="alert-circle" size={15} color={C.error} />
-                      <Text style={[s.phoneBannerText, { color: C.error }]}>{phoneErr}</Text>
+                      <Text style={[s.phoneBannerText, { color: C.error }]}>
+                        {phoneErr}
+                      </Text>
                     </View>
                   ) : phoneSt === "ok" ? (
-                    <View style={[s.phoneBanner, { backgroundColor: C.successBg }]}>
-                      <Ionicons name="shield-checkmark" size={15} color={C.success} />
-                      <Text style={[s.phoneBannerText, { color: C.success }]}>Number is available</Text>
+                    <View
+                      style={[s.phoneBanner, { backgroundColor: C.successBg }]}
+                    >
+                      <Ionicons
+                        name="shield-checkmark"
+                        size={15}
+                        color={C.success}
+                      />
+                      <Text style={[s.phoneBannerText, { color: C.success }]}>
+                        Number is available
+                      </Text>
                     </View>
                   ) : phone.length > 0 && phone.length < 10 ? (
-                    <View style={[s.phoneBanner, { backgroundColor: "#FFF9EC" }]}>
+                    <View
+                      style={[s.phoneBanner, { backgroundColor: "#FFF9EC" }]}
+                    >
                       <Ionicons name="keypad" size={15} color={C.warn} />
                       <Text style={[s.phoneBannerText, { color: C.warn }]}>
-                        {10 - phone.length} more digit{10 - phone.length !== 1 ? "s" : ""} to go
+                        {10 - phone.length} more digit
+                        {10 - phone.length !== 1 ? "s" : ""} to go
                       </Text>
                     </View>
                   ) : null}
@@ -869,9 +1036,13 @@ export default function RegisterScreen() {
 
                 <Text style={s.hint}>
                   By continuing you agree to our{" "}
-                  <Text style={{ color: C.primary, fontWeight: "600" }}>Terms</Text>
-                  {" "}and{" "}
-                  <Text style={{ color: C.primary, fontWeight: "600" }}>Privacy Policy</Text>
+                  <Text style={{ color: C.primary, fontWeight: "600" }}>
+                    Terms
+                  </Text>{" "}
+                  and{" "}
+                  <Text style={{ color: C.primary, fontWeight: "600" }}>
+                    Privacy Policy
+                  </Text>
                 </Text>
 
                 <TouchableOpacity
@@ -880,7 +1051,11 @@ export default function RegisterScreen() {
                   activeOpacity={0.85}
                 >
                   <LinearGradient
-                    colors={phoneSt === "error" ? ["#ccc", "#bbb"] : [C.primary, C.accent]}
+                    colors={
+                      phoneSt === "error"
+                        ? ["#ccc", "#bbb"]
+                        : [C.primary, C.accent]
+                    }
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
                     style={s.ctaGrad}
@@ -892,7 +1067,9 @@ export default function RegisterScreen() {
                       </>
                     ) : (
                       <>
-                        <Text style={s.ctaText}>{otpSending ? "Sending OTP…" : "Continue"}</Text>
+                        <Text style={s.ctaText}>
+                          {otpSending ? "Sending OTP…" : "Continue"}
+                        </Text>
                         <Ionicons name="arrow-forward" size={20} color="#fff" />
                       </>
                     )}
@@ -912,7 +1089,11 @@ export default function RegisterScreen() {
 
                 <Pressable style={s.otpCard} onPress={focusOtpInput}>
                   <View style={s.otpBadge}>
-                    <Ionicons name="keypad-outline" size={14} color={C.primary} />
+                    <Ionicons
+                      name="keypad-outline"
+                      size={14}
+                      color={C.primary}
+                    />
                     <Text style={s.otpBadgeText}>SMS Verification</Text>
                   </View>
 
@@ -981,7 +1162,11 @@ export default function RegisterScreen() {
                   disabled={otp.length !== 6 || otpVerifying}
                 >
                   <LinearGradient
-                    colors={otp.length === 6 ? [C.primary, C.accent] : ["#ccc", "#bbb"]}
+                    colors={
+                      otp.length === 6
+                        ? [C.primary, C.accent]
+                        : ["#ccc", "#bbb"]
+                    }
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
                     style={s.ctaGrad}
@@ -994,7 +1179,11 @@ export default function RegisterScreen() {
                     ) : (
                       <>
                         <Text style={s.ctaText}>Verify OTP</Text>
-                        <Ionicons name="shield-checkmark" size={20} color="#fff" />
+                        <Ionicons
+                          name="shield-checkmark"
+                          size={20}
+                          color="#fff"
+                        />
                       </>
                     )}
                   </LinearGradient>
@@ -1007,7 +1196,9 @@ export default function RegisterScreen() {
               <View>
                 <Text style={s.stepTitle}>Almost there!</Text>
                 <Text style={s.stepSub}>
-                  {otpVerified ? "Phone verified. Now complete your details." : "Enter Credentials"}
+                  {otpVerified
+                    ? "Phone verified. Now complete your details."
+                    : "Enter Credentials"}
                 </Text>
 
                 <Text style={s.sectionLabel}></Text>
@@ -1022,7 +1213,11 @@ export default function RegisterScreen() {
                         activeOpacity={0.8}
                       >
                         <Text style={s.roleEmoji}>{r.emoji}</Text>
-                        <Text style={[s.roleLabel, active && { color: C.primary }]}>{r.label}</Text>
+                        <Text
+                          style={[s.roleLabel, active && { color: C.primary }]}
+                        >
+                          {r.label}
+                        </Text>
                         <Text style={s.roleDesc}>{r.desc}</Text>
                         {active && (
                           <View style={s.roleCheck}>
@@ -1038,13 +1233,23 @@ export default function RegisterScreen() {
                   {/* ── Referral Code Field ── */}
                   {role === "customer" && (
                     <View style={s.referralField}>
-                      <View style={[
-                        s.referralInputRow,
-                        referralStatus === "valid" && { borderColor: C.success },
-                        referralStatus === "invalid" && { borderColor: C.error },
-                      ]}>
+                      <View
+                        style={[
+                          s.referralInputRow,
+                          referralStatus === "valid" && {
+                            borderColor: C.success,
+                          },
+                          referralStatus === "invalid" && {
+                            borderColor: C.error,
+                          },
+                        ]}
+                      >
                         <View style={s.referralIconBox}>
-                          <Ionicons name="qr-code-outline" size={16} color={C.primary} />
+                          <Ionicons
+                            name="qr-code-outline"
+                            size={16}
+                            color={C.primary}
+                          />
                         </View>
                         <TextInput
                           style={s.referralInput}
@@ -1055,32 +1260,61 @@ export default function RegisterScreen() {
                           autoCapitalize="characters"
                           maxLength={6}
                         />
-                        {referralStatus === "checking" && <ActivityIndicator size="small" color={C.primary} />}
-                        {referralStatus === "valid" && <Ionicons name="checkmark-circle" size={20} color={C.success} />}
-                        {referralStatus === "invalid" && <Ionicons name="close-circle" size={20} color={C.error} />}
-
-                      
+                        {referralStatus === "checking" && (
+                          <ActivityIndicator size="small" color={C.primary} />
+                        )}
+                        {referralStatus === "valid" && (
+                          <Ionicons
+                            name="checkmark-circle"
+                            size={20}
+                            color={C.success}
+                          />
+                        )}
+                        {referralStatus === "invalid" && (
+                          <Ionicons
+                            name="close-circle"
+                            size={20}
+                            color={C.error}
+                          />
+                        )}
                       </View>
 
                       {referralStatus === "valid" && referralAdminName ? (
                         <View style={s.referralBanner}>
-                          <Ionicons name="shield-checkmark" size={14} color="#16a34a" />
+                          <Ionicons
+                            name="shield-checkmark"
+                            size={14}
+                            color="#16a34a"
+                          />
                           <Text style={s.referralBannerText}>
                             ✓ Linked to{" "}
-                            <Text style={{ fontWeight: "800" }}>{referralAdminName}</Text>
+                            <Text style={{ fontWeight: "800" }}>
+                              {referralAdminName}
+                            </Text>
                             {"'s Gaushala"}
                           </Text>
                         </View>
                       ) : referralStatus === "invalid" ? (
                         <View style={s.referralBannerErr}>
-                          <Ionicons name="alert-circle" size={14} color={C.error} />
-                          <Text style={s.referralBannerErrText}>Invalid referral code</Text>
+                          <Ionicons
+                            name="alert-circle"
+                            size={14}
+                            color={C.error}
+                          />
+                          <Text style={s.referralBannerErrText}>
+                            Invalid referral code
+                          </Text>
                         </View>
                       ) : null}
                     </View>
                   )}
 
-                  <FloatInput label="Full Name" value={name} onChangeText={handleNameChange} error={nameErr} />
+                  <FloatInput
+                    label="Business Name"
+                    value={name}
+                    onChangeText={handleNameChange}
+                    error={nameErr}
+                  />
 
                   <FloatInput
                     label="Email Address"
@@ -1092,9 +1326,29 @@ export default function RegisterScreen() {
                     status={emailSt}
                   />
                   {emailSt === "ok" && !emailErr && (
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: -10, marginBottom: 10 }}>
-                      <Ionicons name="shield-checkmark" size={13} color={C.success} />
-                      <Text style={{ fontSize: 12, color: C.success, fontWeight: "600" }}>Email available</Text>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 4,
+                        marginTop: -10,
+                        marginBottom: 10,
+                      }}
+                    >
+                      <Ionicons
+                        name="shield-checkmark"
+                        size={13}
+                        color={C.success}
+                      />
+                      <Text
+                        style={{
+                          fontSize: 12,
+                          color: C.success,
+                          fontWeight: "600",
+                        }}
+                      >
+                        Email available
+                      </Text>
                     </View>
                   )}
 
@@ -1106,7 +1360,11 @@ export default function RegisterScreen() {
                     error={passErr}
                     rightIcon={
                       <TouchableOpacity onPress={() => setShowPass(!showPass)}>
-                        <Ionicons name={showPass ? "eye-off-outline" : "eye-outline"} size={20} color={C.textLight} />
+                        <Ionicons
+                          name={showPass ? "eye-off-outline" : "eye-outline"}
+                          size={20}
+                          color={C.textLight}
+                        />
                       </TouchableOpacity>
                     }
                   />
@@ -1119,15 +1377,34 @@ export default function RegisterScreen() {
                           style={[
                             s.strengthBar,
                             password.length >= n * 2 && {
-                              backgroundColor: password.length >= 8 ? C.success : password.length >= 5 ? C.warn : C.error,
+                              backgroundColor:
+                                password.length >= 8
+                                  ? C.success
+                                  : password.length >= 5
+                                    ? C.warn
+                                    : C.error,
                             },
                           ]}
                         />
                       ))}
-                      <Text style={[s.strengthLabel, {
-                        color: password.length >= 8 ? C.success : password.length >= 5 ? C.warn : C.error,
-                      }]}>
-                        {password.length < 5 ? "Weak" : password.length < 8 ? "Fair" : "Strong"}
+                      <Text
+                        style={[
+                          s.strengthLabel,
+                          {
+                            color:
+                              password.length >= 8
+                                ? C.success
+                                : password.length >= 5
+                                  ? C.warn
+                                  : C.error,
+                          },
+                        ]}
+                      >
+                        {password.length < 5
+                          ? "Weak"
+                          : password.length < 8
+                            ? "Fair"
+                            : "Strong"}
                       </Text>
                     </View>
                   )}
@@ -1138,7 +1415,13 @@ export default function RegisterScreen() {
                     onChangeText={handleConfirmChange}
                     secureTextEntry={!showPass}
                     error={confErr}
-                    status={confirmPassword && !confErr && confirmPassword === password ? "ok" : undefined}
+                    status={
+                      confirmPassword &&
+                      !confErr &&
+                      confirmPassword === password
+                        ? "ok"
+                        : undefined
+                    }
                   />
                 </View>
 
@@ -1162,7 +1445,11 @@ export default function RegisterScreen() {
                     ) : (
                       <>
                         <Text style={s.ctaText}>Create Account</Text>
-                        <Ionicons name="rocket-outline" size={20} color="#fff" />
+                        <Ionicons
+                          name="rocket-outline"
+                          size={20}
+                          color="#fff"
+                        />
                       </>
                     )}
                   </LinearGradient>
@@ -1194,13 +1481,22 @@ const s = StyleSheet.create({
     borderBottomRightRadius: 28,
   },
   backBtn: {
-    width: 36, height: 36, borderRadius: 10,
+    width: 36,
+    height: 36,
+    borderRadius: 10,
     backgroundColor: "rgba(255,255,255,0.2)",
-    justifyContent: "center", alignItems: "center", marginBottom: 12,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 12,
   },
   logoArea: { alignItems: "center", marginBottom: 20 },
   logoEmoji: { fontSize: 38, marginBottom: 4 },
-  logoText: { fontSize: 26, fontWeight: "800", color: "#fff", letterSpacing: -0.5 },
+  logoText: {
+    fontSize: 26,
+    fontWeight: "800",
+    color: "#fff",
+    letterSpacing: -0.5,
+  },
   logoSub: { fontSize: 13, color: "rgba(255,255,255,0.8)", marginTop: 2 },
 
   pills: {
@@ -1217,9 +1513,12 @@ const s = StyleSheet.create({
     minWidth: 0,
   },
   pill: {
-    width: 24, height: 24, borderRadius: 12,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     backgroundColor: "rgba(255,255,255,0.3)",
-    justifyContent: "center", alignItems: "center",
+    justifyContent: "center",
+    alignItems: "center",
   },
   pillActive: { backgroundColor: "#fff" },
   pillDone: { backgroundColor: C.green },
@@ -1238,30 +1537,71 @@ const s = StyleSheet.create({
   },
   pillLineDone: { backgroundColor: "#fff" },
   body: { padding: 20, paddingTop: 24 },
-  stepTitle: { fontSize: 24, fontWeight: "800", color: C.text, marginBottom: 4, letterSpacing: -0.3 },
+  stepTitle: {
+    fontSize: 24,
+    fontWeight: "800",
+    color: C.text,
+    marginBottom: 4,
+    letterSpacing: -0.3,
+  },
   stepSub: { fontSize: 14, color: C.textSub, marginBottom: 24 },
   phoneCard: {
-    backgroundColor: "#fff", borderRadius: 20, padding: 18,
-    borderWidth: 1.5, borderColor: C.border,
-    shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 20,
-    elevation: 6, marginBottom: 16,
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    padding: 18,
+    borderWidth: 1.5,
+    borderColor: C.border,
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 20,
+    elevation: 6,
+    marginBottom: 16,
   },
-  phoneCardErr: { borderColor: C.error, shadowColor: C.error, shadowOpacity: 0.12 },
-  phoneCardOk: { borderColor: C.success, shadowColor: C.success, shadowOpacity: 0.12 },
+  phoneCardErr: {
+    borderColor: C.error,
+    shadowColor: C.error,
+    shadowOpacity: 0.12,
+  },
+  phoneCardOk: {
+    borderColor: C.success,
+    shadowColor: C.success,
+    shadowOpacity: 0.12,
+  },
   phoneRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   countryChip: {
-    flexDirection: "row", alignItems: "center", gap: 4,
-    backgroundColor: C.bg, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: C.bg,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 10,
   },
   countryCode: { fontSize: 14, fontWeight: "700", color: C.text },
-  phoneInput: { flex: 1, fontSize: 22, fontWeight: "700", color: C.text, letterSpacing: 1 },
-  dotsRow: { flexDirection: "row", gap: 4, marginTop: 14, justifyContent: "center" },
+  phoneInput: {
+    flex: 1,
+    fontSize: 22,
+    fontWeight: "700",
+    color: C.text,
+    letterSpacing: 1,
+  },
+  dotsRow: {
+    flexDirection: "row",
+    gap: 4,
+    marginTop: 14,
+    justifyContent: "center",
+  },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: C.border },
   dotFilled: { backgroundColor: C.primary, transform: [{ scale: 1.2 }] },
   dotErr: { backgroundColor: C.error, transform: [{ scale: 1.2 }] },
   phoneBanner: {
-    flexDirection: "row", alignItems: "center", gap: 8,
-    marginTop: 14, backgroundColor: C.errorBg, borderRadius: 10, padding: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 14,
+    backgroundColor: C.errorBg,
+    borderRadius: 10,
+    padding: 10,
   },
   phoneBannerText: { fontSize: 12.5, fontWeight: "600", flex: 1 },
   otpPhoneText: { fontWeight: "800", color: C.primary },
@@ -1359,70 +1699,170 @@ const s = StyleSheet.create({
   },
   referralField: { marginBottom: 14 },
   referralInputRow: {
-    flexDirection: "row", alignItems: "center",
-    backgroundColor: "#fff", borderRadius: 14,
-    borderWidth: 1.5, borderColor: C.border,
-    paddingHorizontal: 14, paddingVertical: 12, gap: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: C.border,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 10,
   },
   referralIconBox: {
-    width: 32, height: 32, borderRadius: 9,
+    width: 32,
+    height: 32,
+    borderRadius: 9,
     backgroundColor: C.primary + "15",
-    justifyContent: "center", alignItems: "center",
+    justifyContent: "center",
+    alignItems: "center",
   },
   referralInput: {
-    flex: 1, fontSize: 16, fontWeight: "700",
-    color: C.text, letterSpacing: 2,
+    flex: 1,
+    fontSize: 16,
+    fontWeight: "700",
+    color: C.text,
+    letterSpacing: 2,
   },
   referralBanner: {
-    flexDirection: "row", alignItems: "center", gap: 8,
-    backgroundColor: "#f0fdf4", borderRadius: 10, padding: 10,
-    marginTop: 8, borderWidth: 1, borderColor: "#bbf7d0",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#f0fdf4",
+    borderRadius: 10,
+    padding: 10,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: "#bbf7d0",
   },
-  referralBannerText: { fontSize: 13, fontWeight: "600", color: "#16a34a", flex: 1 },
+  referralBannerText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#16a34a",
+    flex: 1,
+  },
   referralBannerErr: {
-    flexDirection: "row", alignItems: "center", gap: 8,
-    backgroundColor: "#fef2f2", borderRadius: 10, padding: 10,
-    marginTop: 8, borderWidth: 1, borderColor: "#fecaca",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#fef2f2",
+    borderRadius: 10,
+    padding: 10,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: "#fecaca",
   },
-  referralBannerErrText: { fontSize: 13, fontWeight: "600", color: C.error, flex: 1 },
-  hint: { fontSize: 12, color: C.textLight, textAlign: "center", lineHeight: 18, marginBottom: 20 },
+  referralBannerErrText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: C.error,
+    flex: 1,
+  },
+  hint: {
+    fontSize: 12,
+    color: C.textLight,
+    textAlign: "center",
+    lineHeight: 18,
+    marginBottom: 20,
+  },
   cta: {
-    borderRadius: 16, overflow: "hidden", marginBottom: 8,
-    shadowColor: C.primary, shadowOpacity: 0.35, shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 }, elevation: 8,
+    borderRadius: 16,
+    overflow: "hidden",
+    marginBottom: 8,
+    shadowColor: C.primary,
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
   },
   ctaDim: { shadowOpacity: 0.05, elevation: 2 },
   ctaGrad: {
-    flexDirection: "row", justifyContent: "center", alignItems: "center",
-    gap: 8, paddingVertical: 16, paddingHorizontal: 24,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
   },
-  ctaText: { fontSize: 17, fontWeight: "800", color: "#fff", letterSpacing: 0.2 },
-  sectionLabel: { fontSize: 13, fontWeight: "700", color: C.textSub, marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.8 },
+  ctaText: {
+    fontSize: 17,
+    fontWeight: "800",
+    color: "#fff",
+    letterSpacing: 0.2,
+  },
+  sectionLabel: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: C.textSub,
+    marginBottom: 12,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+  },
   roleRow: { flexDirection: "row", gap: 10, marginBottom: 24 },
   roleCard: {
-    flex: 1, backgroundColor: "#fff", borderRadius: 16, padding: 12,
-    alignItems: "center", borderWidth: 1.5, borderColor: C.border, position: "relative",
+    flex: 1,
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 12,
+    alignItems: "center",
+    borderWidth: 1.5,
+    borderColor: C.border,
+    position: "relative",
   },
   roleCardActive: {
-    borderColor: C.primary, backgroundColor: "#FFF3EE",
-    shadowColor: C.primary, shadowOpacity: 0.15, shadowRadius: 10, elevation: 5,
+    borderColor: C.primary,
+    backgroundColor: "#FFF3EE",
+    shadowColor: C.primary,
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 5,
   },
   roleEmoji: { fontSize: 24, marginBottom: 4 },
-  roleLabel: { fontSize: 11, fontWeight: "700", color: C.textSub, marginBottom: 2 },
+  roleLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: C.textSub,
+    marginBottom: 2,
+  },
   roleDesc: { fontSize: 9, color: C.textLight, textAlign: "center" },
   roleCheck: {
-    position: "absolute", top: 6, right: 6,
-    width: 16, height: 16, borderRadius: 8,
-    backgroundColor: C.primary, justifyContent: "center", alignItems: "center",
+    position: "absolute",
+    top: 6,
+    right: 6,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: C.primary,
+    justifyContent: "center",
+    alignItems: "center",
   },
   form: { marginBottom: 20 },
-  strengthRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: -8, marginBottom: 12 },
-  strengthBar: { flex: 1, height: 3, borderRadius: 2, backgroundColor: C.border },
+  strengthRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: -8,
+    marginBottom: 12,
+  },
+  strengthBar: {
+    flex: 1,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: C.border,
+  },
   strengthLabel: { fontSize: 11, width: 40, fontWeight: "700" },
-  footer: { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 6, paddingVertical: 24 },
+  footer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 24,
+  },
   footerText: { fontSize: 14, color: C.textSub },
   footerLink: {
-    fontSize: 14, fontWeight: "800", color: C.primary
+    fontSize: 14,
+    fontWeight: "800",
+    color: C.primary,
   },
   scanBtn: {
     width: 34,
@@ -1470,10 +1910,34 @@ const s = StyleSheet.create({
     borderColor: "#fff",
     borderWidth: 3,
   },
-  cornerTL: { top: 0, left: 0, borderBottomWidth: 0, borderRightWidth: 0, borderTopLeftRadius: 6 },
-  cornerTR: { top: 0, right: 0, borderBottomWidth: 0, borderLeftWidth: 0, borderTopRightRadius: 6 },
-  cornerBL: { bottom: 0, left: 0, borderTopWidth: 0, borderRightWidth: 0, borderBottomLeftRadius: 6 },
-  cornerBR: { bottom: 0, right: 0, borderTopWidth: 0, borderLeftWidth: 0, borderBottomRightRadius: 6 },
+  cornerTL: {
+    top: 0,
+    left: 0,
+    borderBottomWidth: 0,
+    borderRightWidth: 0,
+    borderTopLeftRadius: 6,
+  },
+  cornerTR: {
+    top: 0,
+    right: 0,
+    borderBottomWidth: 0,
+    borderLeftWidth: 0,
+    borderTopRightRadius: 6,
+  },
+  cornerBL: {
+    bottom: 0,
+    left: 0,
+    borderTopWidth: 0,
+    borderRightWidth: 0,
+    borderBottomLeftRadius: 6,
+  },
+  cornerBR: {
+    bottom: 0,
+    right: 0,
+    borderTopWidth: 0,
+    borderLeftWidth: 0,
+    borderBottomRightRadius: 6,
+  },
   scannerHint: {
     fontSize: 13,
     color: "rgba(255,255,255,0.8)",

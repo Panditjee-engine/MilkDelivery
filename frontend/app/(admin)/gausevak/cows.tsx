@@ -3,6 +3,7 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import { CameraView, useCameraPermissions } from "expo-camera";
+import type { BusinessLocation } from "../../../src/services/api";
 import {
   View,
   Text,
@@ -77,6 +78,10 @@ interface Cow {
   qrLinkedData?: string;
   isBarcodeLinked?: boolean;
   gender?: Gender;
+  farmLocationId?: string;
+  farmLocationLabel?: string;
+  transferLocationId?: string;
+  transferLocationLabel?: string;
 }
 
 interface Insurance {
@@ -127,6 +132,10 @@ interface CowForm {
   scannedQrData: string;
   isBarcodeLinked: boolean;
   gender: Gender | "";
+  farmLocationId: string;
+  farmLocationLabel: string;
+  transferLocationId: string;
+  transferLocationLabel: string;
 }
 
 // ── Assets
@@ -176,6 +185,10 @@ const EMPTY_FORM: CowForm = {
   scannedQrData: "",
   isBarcodeLinked: false,
   gender: "",
+  farmLocationId: "",
+  farmLocationLabel: "",
+  transferLocationId: "",
+  transferLocationLabel: "",
 };
 
 const STATUS = {
@@ -1227,13 +1240,188 @@ function GenderSelector({
   );
 }
 
+function LocationPicker({
+  locations,
+  selectedId,
+  onSelect,
+  onAddNew,
+}: {
+  locations: BusinessLocation[];
+  selectedId: string;
+  onSelect: (loc: BusinessLocation) => void;
+  onAddNew: () => void;
+}) {
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={{ marginTop: 4 }}
+    >
+      {locations.map((loc) => (
+        <TouchableOpacity
+          key={loc.id}
+          onPress={() => onSelect(loc)}
+          style={[f.motherChip, selectedId === loc.id && f.motherChipActive]}
+        >
+          <Ionicons
+            name="business-outline"
+            size={13}
+            color={selectedId === loc.id ? "#16a34a" : "#8B6854"}
+          />
+          <Text
+            style={[
+              f.motherChipText,
+              selectedId === loc.id && { color: "#16a34a" },
+            ]}
+          >
+            {loc.label}
+          </Text>
+        </TouchableOpacity>
+      ))}
+      <TouchableOpacity
+        onPress={onAddNew}
+        style={[
+          f.motherChip,
+          { borderColor: "#8B6854", borderStyle: "dashed" },
+        ]}
+      >
+        <Ionicons name="add" size={13} color="#8B6854" />
+        <Text style={f.motherChipText}>Add New</Text>
+      </TouchableOpacity>
+    </ScrollView>
+  );
+}
+
+function QuickAddLocationModal({
+  visible,
+  onClose,
+  onCreated,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  onCreated: (l: BusinessLocation) => void;
+}) {
+  const [label, setLabel] = useState("");
+  const [address, setAddress] = useState("");
+  const [city, setCity] = useState("");
+  const [state, setState] = useState("");
+  const [pincode, setPincode] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const reset = () => {
+    setLabel("");
+    setAddress("");
+    setCity("");
+    setState("");
+    setPincode("");
+  };
+
+  const submit = async () => {
+    if (!label.trim() || !address.trim() || !city.trim()) return;
+    setSaving(true);
+    try {
+      const loc = await api.createBusinessLocation({
+        label,
+        address_line: address,
+        city,
+        state,
+        pincode,
+        is_primary: false,
+      });
+      onCreated(loc);
+      reset();
+      onClose();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <View style={m.overlay}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={{ width: "100%" }}
+        >
+          <View style={m.sheet}>
+            <View style={m.handle} />
+            <View style={m.header}>
+              <Text style={m.title}>Add Farm / Address</Text>
+              <TouchableOpacity onPress={onClose} style={m.closeBtn}>
+                <Ionicons name="close" size={18} color="#8B6854" />
+              </TouchableOpacity>
+            </View>
+            <Field
+              label="Label"
+              value={label}
+              onChange={setLabel}
+              placeholder="e.g. Main Farm"
+              icon="business-outline"
+            />
+            <Field
+              label="Address"
+              value={address}
+              onChange={setAddress}
+              placeholder="Street / area"
+              icon="location-outline"
+            />
+            <Field
+              label="City"
+              value={city}
+              onChange={setCity}
+              icon="location-outline"
+            />
+            <Field
+              label="State"
+              value={state}
+              onChange={setState}
+              icon="location-outline"
+            />
+            <Field
+              label="Pincode"
+              value={pincode}
+              onChange={setPincode}
+              icon="location-outline"
+              keyboardType="numeric"
+            />
+            <TouchableOpacity
+              onPress={submit}
+              style={[m.submitBtn, saving && { opacity: 0.7 }]}
+              disabled={saving}
+            >
+              {saving ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={m.submitText}>Save Address</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </View>
+    </Modal>
+  );
+}
+
 function TransferSection({
   form,
   setF,
+  locations,
+  onAddLocation,
 }: {
   form: CowForm;
   setF: (k: keyof CowForm) => (v: any) => void;
+  locations: BusinessLocation[];
+  onAddLocation: () => void;
 }) {
+  const [mode, setMode] = useState<"saved" | "other">(
+    form.transferLocationId ? "saved" : "other",
+  );
+
   return (
     <View style={tr.wrap}>
       <View style={tr.toggleRow}>
@@ -1265,6 +1453,8 @@ function TransferSection({
               setF("transferGaushalaName")("");
               setF("transferAddress")("");
               setF("transferDate")("");
+              setF("transferLocationId")("");
+              setF("transferLocationLabel")("");
             }
           }}
           trackColor={{ false: "#F5EDE5", true: "#7c3aed44" }}
@@ -1274,20 +1464,98 @@ function TransferSection({
       {form.isTransferred && (
         <View style={tr.fields}>
           <View style={tr.divider} />
-          <Field
-            label="Gaushala Name"
-            value={form.transferGaushalaName}
-            onChange={setF("transferGaushalaName")}
-            placeholder="e.g. Shri Radha Gaushala"
-            icon="home-outline"
-          />
-          <Field
-            label="Address"
-            value={form.transferAddress}
-            onChange={setF("transferAddress")}
-            placeholder="City, State"
-            icon="location-outline"
-          />
+
+          <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
+            <TouchableOpacity
+              onPress={() => setMode("saved")}
+              style={[
+                f.purposeChip,
+                mode === "saved" && {
+                  backgroundColor: "#7c3aed18",
+                  borderColor: "#7c3aed",
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  f.purposeText,
+                  mode === "saved" && { color: "#7c3aed" },
+                ]}
+              >
+                Saved Address
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setMode("other")}
+              style={[
+                f.purposeChip,
+                mode === "other" && {
+                  backgroundColor: "#7c3aed18",
+                  borderColor: "#7c3aed",
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  f.purposeText,
+                  mode === "other" && { color: "#7c3aed" },
+                ]}
+              >
+                Other Location
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {mode === "saved" ? (
+            locations.length > 0 ? (
+              <LocationPicker
+                locations={locations}
+                selectedId={form.transferLocationId}
+                onSelect={(loc) => {
+                  setF("transferLocationId")(loc.id);
+                  setF("transferLocationLabel")(loc.label);
+                  setF("transferGaushalaName")(loc.label);
+                  setF("transferAddress")(
+                    `${loc.address_line}, ${loc.city}, ${loc.state} - ${loc.pincode}`,
+                  );
+                }}
+                onAddNew={onAddLocation}
+              />
+            ) : (
+              <TouchableOpacity
+                onPress={onAddLocation}
+                style={[
+                  f.purposeChip,
+                  { alignSelf: "flex-start", paddingHorizontal: 14 },
+                ]}
+              >
+                <Ionicons name="add" size={13} color="#8B6854" />
+                <Text style={f.purposeText}>Add your first saved address</Text>
+              </TouchableOpacity>
+            )
+          ) : (
+            <>
+              <Field
+                label="Gaushala Name"
+                value={form.transferGaushalaName}
+                onChange={(v: string) => {
+                  setF("transferGaushalaName")(v);
+                  setF("transferLocationId")("");
+                  setF("transferLocationLabel")("");
+                }}
+                placeholder="e.g. Shri Radha Gaushala"
+                icon="home-outline"
+              />
+              <Field
+                label="Address"
+                value={form.transferAddress}
+                onChange={setF("transferAddress")}
+                placeholder="City, State"
+                icon="location-outline"
+              />
+            </>
+          )}
+
           <DateField
             label="Transfer Date"
             value={form.transferDate}
@@ -1452,12 +1720,16 @@ function CowFormFields({
   showTagField,
   cows,
   tagLocked,
+  locations,
+  onAddLocation,
 }: {
   form: CowForm;
   setF: (k: keyof CowForm) => (v: any) => void;
   showTagField?: boolean;
   cows?: Cow[];
   tagLocked?: boolean;
+  locations: BusinessLocation[];
+  onAddLocation: () => void;
 }) {
   const isBull = form.type === "bull";
   const motherOptions =
@@ -1531,6 +1803,31 @@ function CowFormFields({
         icon="text-outline"
       />
       <BreedSelector value={form.breed} onChange={setF("breed")} />
+      <View style={f.wrap}>
+        <Text style={f.label}>Farm Location</Text>
+        {locations.length > 0 ? (
+          <LocationPicker
+            locations={locations}
+            selectedId={form.farmLocationId}
+            onSelect={(loc) => {
+              setF("farmLocationId")(loc.id);
+              setF("farmLocationLabel")(loc.label);
+            }}
+            onAddNew={onAddLocation}
+          />
+        ) : (
+          <TouchableOpacity
+            onPress={onAddLocation}
+            style={[
+              f.purposeChip,
+              { alignSelf: "flex-start", paddingHorizontal: 14 },
+            ]}
+          >
+            <Ionicons name="add" size={13} color="#8B6854" />
+            <Text style={f.purposeText}>Add your first farm address</Text>
+          </TouchableOpacity>
+        )}
+      </View>
       {isBull ? (
         <>
           <PurposeSelector value={form.purpose} onChange={setF("purpose")} />
@@ -1707,7 +2004,12 @@ function CowFormFields({
           </View>
         </>
       )}
-      <TransferSection form={form} setF={setF} />
+      <TransferSection
+        form={form}
+        setF={setF}
+        locations={locations}
+        onAddLocation={onAddLocation}
+      />
       <SoldSection form={form} setF={setF} />
       <ExpirySection form={form} setF={setF} />
       <View style={{ height: 12 }} />
@@ -1724,6 +2026,8 @@ function AddCowModal({
   prefillQrData,
   prefillIsBarcode,
   showAlert,
+  locations,
+  onLocationCreated,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -1732,10 +2036,13 @@ function AddCowModal({
   prefillQrData?: string;
   prefillIsBarcode?: boolean;
   showAlert: (c: AlertConfig) => void;
+  locations: BusinessLocation[];
+  onLocationCreated: (l: BusinessLocation) => void;
 }) {
   const [step, setStep] = useState<"pick" | "form">("pick");
   const [form, setForm] = useState<CowForm>(EMPTY_FORM);
   const [submitting, setSub] = useState(false);
+  const [quickAddVisible, setQuickAddVisible] = useState(false);
   const fade = useRef(new Animated.Value(0)).current;
   const setF = (k: keyof CowForm) => (v: any) =>
     setForm((p) => ({ ...p, [k]: v }));
@@ -1824,6 +2131,16 @@ function AddCowModal({
           form.isSold && form.soldReason ? form.soldReason : undefined,
         scannedQrData: form.scannedQrData || undefined,
         isBarcodeLinked: form.isBarcodeLinked,
+        farmLocationId: form.farmLocationId || undefined,
+        farmLocationLabel: form.farmLocationLabel || undefined,
+        transferLocationId:
+          form.isTransferred && form.transferLocationId
+            ? form.transferLocationId
+            : undefined,
+        transferLocationLabel:
+          form.isTransferred && form.transferLocationLabel
+            ? form.transferLocationLabel
+            : undefined,
         ...(isBull && {
           semenAvailable: form.semenAvailable,
           totalDoses: form.totalDoses ? parseInt(form.totalDoses) : undefined,
@@ -1884,205 +2201,225 @@ function AddCowModal({
   const tagLocked = !!form.scannedQrData;
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={reset}
-    >
-      <View style={m.overlay}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          style={{ width: "100%" }}
-        >
-          <View style={m.sheet}>
-            <View style={m.handle} />
-            {step === "pick" && (
-              <View>
-                <View style={m.header}>
-                  <Text style={m.title}>Add Animal</Text>
-                  <TouchableOpacity onPress={reset} style={m.closeBtn}>
-                    <Ionicons name="close" size={18} color="#8B6854" />
-                  </TouchableOpacity>
-                </View>
-                {tagLocked && (
-                  <View style={m.qrLinkedBanner}>
-                    <Ionicons
-                      name={
-                        form.isBarcodeLinked
-                          ? "barcode-outline"
-                          : "qr-code-outline"
-                      }
-                      size={15}
-                      color="#16a34a"
-                    />
-                    <Text style={m.qrLinkedText}>
-                      {form.isBarcodeLinked ? "Barcode" : "QR"} scanned · Tag:{" "}
-                      {form.tag}
-                    </Text>
+    <>
+      <Modal
+        visible={visible}
+        transparent
+        animationType="slide"
+        onRequestClose={reset}
+      >
+        <View style={m.overlay}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            style={{ width: "100%" }}
+          >
+            <View style={m.sheet}>
+              <View style={m.handle} />
+              {step === "pick" && (
+                <View>
+                  <View style={m.header}>
+                    <Text style={m.title}>Add Animal</Text>
+                    <TouchableOpacity onPress={reset} style={m.closeBtn}>
+                      <Ionicons name="close" size={18} color="#8B6854" />
+                    </TouchableOpacity>
                   </View>
-                )}
-                <Text style={m.sub}>Select the type to register</Text>
-                <View style={m.typeRow}>
-                  {TYPE_OPTIONS.map((opt) => (
-                    <TouchableOpacity
-                      key={opt.key}
-                      onPress={() => pickType(opt.key)}
-                      style={m.typeCard}
-                    >
-                      <View
-                        style={[
-                          m.typeInner,
-                          { backgroundColor: opt.bg, borderColor: opt.border },
-                        ]}
+                  {tagLocked && (
+                    <View style={m.qrLinkedBanner}>
+                      <Ionicons
+                        name={
+                          form.isBarcodeLinked
+                            ? "barcode-outline"
+                            : "qr-code-outline"
+                        }
+                        size={15}
+                        color="#16a34a"
+                      />
+                      <Text style={m.qrLinkedText}>
+                        {form.isBarcodeLinked ? "Barcode" : "QR"} scanned · Tag:{" "}
+                        {form.tag}
+                      </Text>
+                    </View>
+                  )}
+                  <Text style={m.sub}>Select the type to register</Text>
+                  <View style={m.typeRow}>
+                    {TYPE_OPTIONS.map((opt) => (
+                      <TouchableOpacity
+                        key={opt.key}
+                        onPress={() => pickType(opt.key)}
+                        style={m.typeCard}
                       >
-                        <Image
-                          source={opt.image}
-                          style={{
-                            width: 50,
-                            height: 50,
-                            resizeMode: "contain",
-                          }}
-                        />
-                        <Text style={[m.typeTitle, { color: opt.titleColor }]}>
-                          {opt.title}
-                        </Text>
-                        <Text style={m.typeSub}>{opt.sub}</Text>
                         <View
                           style={[
-                            m.typePill,
-                            { backgroundColor: opt.pillColor },
+                            m.typeInner,
+                            {
+                              backgroundColor: opt.bg,
+                              borderColor: opt.border,
+                            },
                           ]}
                         >
-                          <Text style={m.typePillText}>SELECT</Text>
-                          <Ionicons
-                            name="arrow-forward"
-                            size={10}
-                            color="#fff"
+                          <Image
+                            source={opt.image}
+                            style={{
+                              width: 50,
+                              height: 50,
+                              resizeMode: "contain",
+                            }}
                           />
+                          <Text
+                            style={[m.typeTitle, { color: opt.titleColor }]}
+                          >
+                            {opt.title}
+                          </Text>
+                          <Text style={m.typeSub}>{opt.sub}</Text>
+                          <View
+                            style={[
+                              m.typePill,
+                              { backgroundColor: opt.pillColor },
+                            ]}
+                          >
+                            <Text style={m.typePillText}>SELECT</Text>
+                            <Ionicons
+                              name="arrow-forward"
+                              size={10}
+                              color="#fff"
+                            />
+                          </View>
                         </View>
-                      </View>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-                <TouchableOpacity
-                  onPress={() => pickType("bull")}
-                  style={m.bullCard}
-                >
-                  <View style={m.bullInner}>
-                    <Image
-                      source={bullImg}
-                      style={{ width: 45, height: 45, resizeMode: "contain" }}
-                    />
-                    <View style={{ flex: 1, marginLeft: 14 }}>
-                      <Text style={m.bullTitle}>Bull</Text>
-                      <Text style={m.bullSub}>
-                        Register a stud / breeding bull with semen details
-                      </Text>
-                    </View>
-                    <View style={[m.typePill, { backgroundColor: "#8B6854" }]}>
-                      <Text style={m.typePillText}>SELECT</Text>
-                      <Ionicons name="arrow-forward" size={10} color="#fff" />
-                    </View>
+                      </TouchableOpacity>
+                    ))}
                   </View>
-                </TouchableOpacity>
-              </View>
-            )}
-            {step === "form" && (
-              <Animated.View style={{ opacity: fade }}>
-                <View style={m.header}>
                   <TouchableOpacity
-                    onPress={() => {
-                      setStep("pick");
-                      fade.setValue(0);
-                    }}
-                    style={m.backBtn}
+                    onPress={() => pickType("bull")}
+                    style={m.bullCard}
                   >
-                    <Ionicons name="arrow-back" size={16} color="#8B6854" />
-                  </TouchableOpacity>
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      flex: 1,
-                      marginLeft: 10,
-                    }}
-                  >
-                    <Image
-                      source={
-                        form.type === "bull"
-                          ? bullImg
-                          : form.type === "newborn"
-                            ? calfImg
-                            : cowImg
-                      }
-                      style={{
-                        width: 50,
-                        height: 50,
-                        resizeMode: "contain",
-                        marginRight: 6,
-                      }}
-                    />
-                    <Text style={m.title}>
-                      {form.type === "mature"
-                        ? "Mature Cow"
-                        : form.type === "newborn"
-                          ? "New Born Calf"
-                          : "Bull"}
-                    </Text>
-                  </View>
-                  <TouchableOpacity onPress={reset} style={m.closeBtn}>
-                    <Ionicons name="close" size={18} color="#8B6854" />
+                    <View style={m.bullInner}>
+                      <Image
+                        source={bullImg}
+                        style={{ width: 45, height: 45, resizeMode: "contain" }}
+                      />
+                      <View style={{ flex: 1, marginLeft: 14 }}>
+                        <Text style={m.bullTitle}>Bull</Text>
+                        <Text style={m.bullSub}>
+                          Register a stud / breeding bull with semen details
+                        </Text>
+                      </View>
+                      <View
+                        style={[m.typePill, { backgroundColor: "#8B6854" }]}
+                      >
+                        <Text style={m.typePillText}>SELECT</Text>
+                        <Ionicons name="arrow-forward" size={10} color="#fff" />
+                      </View>
+                    </View>
                   </TouchableOpacity>
                 </View>
-                <Text style={m.sub}>Fill in the details below</Text>
-                <ScrollView
-                  showsVerticalScrollIndicator={false}
-                  style={{ maxHeight: 400 }}
-                >
-                  <CowFormFields
-                    form={form}
-                    setF={setF}
-                    showTagField
-                    cows={cows}
-                    tagLocked={tagLocked}
-                  />
-                </ScrollView>
-                <TouchableOpacity
-                  onPress={submit}
-                  style={[
-                    m.submitBtn,
-                    form.type === "bull" && { backgroundColor: "#f3dbbc" },
-                    form.type === "newborn" && { backgroundColor: "#f3dbbc" },
-                    submitting && { opacity: 0.7 },
-                  ]}
-                  disabled={submitting}
-                >
-                  {submitting ? (
-                    <ActivityIndicator color="#baf1b2" size="small" />
-                  ) : (
-                    <>
-                      <Ionicons
-                        name="checkmark-circle-outline"
-                        size={18}
-                        color="#f59696"
+              )}
+              {step === "form" && (
+                <Animated.View style={{ opacity: fade }}>
+                  <View style={m.header}>
+                    <TouchableOpacity
+                      onPress={() => {
+                        setStep("pick");
+                        fade.setValue(0);
+                      }}
+                      style={m.backBtn}
+                    >
+                      <Ionicons name="arrow-back" size={16} color="#8B6854" />
+                    </TouchableOpacity>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        flex: 1,
+                        marginLeft: 10,
+                      }}
+                    >
+                      <Image
+                        source={
+                          form.type === "bull"
+                            ? bullImg
+                            : form.type === "newborn"
+                              ? calfImg
+                              : cowImg
+                        }
+                        style={{
+                          width: 50,
+                          height: 50,
+                          resizeMode: "contain",
+                          marginRight: 6,
+                        }}
                       />
-                      <Text style={m.submitText}>
-                        {form.type === "bull"
-                          ? "Register Bull"
+                      <Text style={m.title}>
+                        {form.type === "mature"
+                          ? "Mature Cow"
                           : form.type === "newborn"
-                            ? "Register Calf"
-                            : "Register Cow"}
+                            ? "New Born Calf"
+                            : "Bull"}
                       </Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              </Animated.View>
-            )}
-          </View>
-        </KeyboardAvoidingView>
-      </View>
-    </Modal>
+                    </View>
+                    <TouchableOpacity onPress={reset} style={m.closeBtn}>
+                      <Ionicons name="close" size={18} color="#8B6854" />
+                    </TouchableOpacity>
+                  </View>
+                  <Text style={m.sub}>Fill in the details below</Text>
+                  <ScrollView
+                    showsVerticalScrollIndicator={false}
+                    style={{ maxHeight: 400 }}
+                  >
+                    <CowFormFields
+                      form={form}
+                      setF={setF}
+                      showTagField
+                      cows={cows}
+                      tagLocked={tagLocked}
+                      locations={locations}
+                      onAddLocation={() => setQuickAddVisible(true)}
+                    />
+                  </ScrollView>
+                  <TouchableOpacity
+                    onPress={submit}
+                    style={[
+                      m.submitBtn,
+                      form.type === "bull" && { backgroundColor: "#f3dbbc" },
+                      form.type === "newborn" && { backgroundColor: "#f3dbbc" },
+                      submitting && { opacity: 0.7 },
+                    ]}
+                    disabled={submitting}
+                  >
+                    {submitting ? (
+                      <ActivityIndicator color="#baf1b2" size="small" />
+                    ) : (
+                      <>
+                        <Ionicons
+                          name="checkmark-circle-outline"
+                          size={18}
+                          color="#f59696"
+                        />
+                        <Text style={m.submitText}>
+                          {form.type === "bull"
+                            ? "Register Bull"
+                            : form.type === "newborn"
+                              ? "Register Calf"
+                              : "Register Cow"}
+                        </Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </Animated.View>
+              )}
+            </View>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
+      <QuickAddLocationModal
+        visible={quickAddVisible}
+        onClose={() => setQuickAddVisible(false)}
+        onCreated={(loc) => {
+          onLocationCreated(loc);
+          setF("farmLocationId")(loc.id);
+          setF("farmLocationLabel")(loc.label);
+        }}
+      />
+    </>
   );
 }
 
@@ -2094,6 +2431,8 @@ function EditCowModal({
   onSaved,
   cows,
   showAlert,
+  locations,
+  onLocationCreated,
 }: {
   cow: Cow | null;
   visible: boolean;
@@ -2101,9 +2440,12 @@ function EditCowModal({
   onSaved: (u: Cow) => void;
   cows: Cow[];
   showAlert: (c: AlertConfig) => void;
+  locations: BusinessLocation[];
+  onLocationCreated: (l: BusinessLocation) => void;
 }) {
   const [form, setForm] = useState<CowForm>(EMPTY_FORM);
   const [submitting, setSub] = useState(false);
+  const [quickAddVisible, setQuickAddVisible] = useState(false);
   const originalIsActive = useRef<boolean>(false);
   const originalActiveSince = useRef<string | undefined>(undefined);
 
@@ -2146,6 +2488,10 @@ function EditCowModal({
         soldReason: cow.soldReason ?? "",
         scannedQrData: cow.qrLinkedData ?? "",
         isBarcodeLinked: cow.isBarcodeLinked ?? false,
+        farmLocationId: cow.farmLocationId ?? "",
+        farmLocationLabel: cow.farmLocationLabel ?? "",
+        transferLocationId: cow.transferLocationId ?? "",
+        transferLocationLabel: cow.transferLocationLabel ?? "",
       });
     }
   }, [cow]);
@@ -2213,6 +2559,16 @@ function EditCowModal({
         soldPrice: form.isSold && form.soldPrice ? form.soldPrice : undefined,
         soldReason:
           form.isSold && form.soldReason ? form.soldReason : undefined,
+        farmLocationId: form.farmLocationId || undefined,
+        farmLocationLabel: form.farmLocationLabel || undefined,
+        transferLocationId:
+          form.isTransferred && form.transferLocationId
+            ? form.transferLocationId
+            : undefined,
+        transferLocationLabel:
+          form.isTransferred && form.transferLocationLabel
+            ? form.transferLocationLabel
+            : undefined,
         ...(isBull && {
           semenAvailable: form.semenAvailable,
           totalDoses: form.totalDoses ? parseInt(form.totalDoses) : undefined,
@@ -2248,75 +2604,89 @@ function EditCowModal({
   };
 
   const isBull = cow?.type === "bull";
+  const tagLocked = !!cow?.qrLinkedData;
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-    >
-      <View style={m.overlay}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          style={{ width: "100%" }}
-        >
-          <View style={m.sheet}>
-            <View style={m.handle} />
-            <View style={m.header}>
-              <View
-                style={[
-                  m.editIconWrap,
-                  isBull && { backgroundColor: "#f5f3ff" },
-                ]}
-              >
-                <Ionicons
-                  name="create-outline"
-                  size={16}
-                  color={isBull ? "#FFBF55" : "#BB6B3F"}
-                />
+    <>
+      <Modal
+        visible={visible}
+        transparent
+        animationType="slide"
+        onRequestClose={onClose}
+      >
+        <View style={m.overlay}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            style={{ width: "100%" }}
+          >
+            <View style={m.sheet}>
+              <View style={m.handle} />
+              <View style={m.header}>
+                <View
+                  style={[
+                    m.editIconWrap,
+                    isBull && { backgroundColor: "#f5f3ff" },
+                  ]}
+                >
+                  <Ionicons
+                    name="create-outline"
+                    size={16}
+                    color={isBull ? "#FFBF55" : "#BB6B3F"}
+                  />
+                </View>
+                <Text style={[m.title, { marginLeft: 10, flex: 1 }]}>
+                  Edit {isBull ? "Bull" : "Cow"}
+                </Text>
+                <TouchableOpacity onPress={onClose} style={m.closeBtn}>
+                  <Ionicons name="close" size={18} color="#8B6854" />
+                </TouchableOpacity>
               </View>
-              <Text style={[m.title, { marginLeft: 10, flex: 1 }]}>
-                Edit {isBull ? "Bull" : "Cow"}
-              </Text>
-              <TouchableOpacity onPress={onClose} style={m.closeBtn}>
-                <Ionicons name="close" size={18} color="#8B6854" />
+              <Text style={m.sub}>Update the details below</Text>
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                style={{ maxHeight: 420 }}
+              >
+                <CowFormFields
+                  form={form}
+                  setF={setF}
+                  showTagField
+                  cows={cows}
+                  tagLocked={tagLocked}
+                  locations={locations}
+                  onAddLocation={() => setQuickAddVisible(true)}
+                />
+              </ScrollView>
+              <TouchableOpacity
+                onPress={submit}
+                style={[
+                  m.submitBtn,
+                  isBull ? { backgroundColor: "#8B6854" } : m.submitBtnTerra,
+                  submitting && { opacity: 0.7 },
+                ]}
+                disabled={submitting}
+              >
+                {submitting ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <>
+                    <Ionicons name="save-outline" size={18} color="#fff" />
+                    <Text style={m.submitText}>Save Changes</Text>
+                  </>
+                )}
               </TouchableOpacity>
             </View>
-            <Text style={m.sub}>Update the details below</Text>
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              style={{ maxHeight: 420 }}
-            >
-              <CowFormFields
-                form={form}
-                setF={setF}
-                showTagField
-                cows={cows}
-                tagLocked={!!cow?.qrLinkedData}
-              />
-            </ScrollView>
-            <TouchableOpacity
-              onPress={submit}
-              style={[
-                m.submitBtn,
-                isBull ? { backgroundColor: "#8B6854" } : m.submitBtnTerra,
-                submitting && { opacity: 0.7 },
-              ]}
-              disabled={submitting}
-            >
-              {submitting ? (
-                <ActivityIndicator color="#fff" size="small" />
-              ) : (
-                <>
-                  <Ionicons name="save-outline" size={18} color="#fff" />
-                  <Text style={m.submitText}>Save Changes</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          </View>
-        </KeyboardAvoidingView>
-      </View>
-    </Modal>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
+      <QuickAddLocationModal
+        visible={quickAddVisible}
+        onClose={() => setQuickAddVisible(false)}
+        onCreated={(loc) => {
+          onLocationCreated(loc);
+          setF("farmLocationId")(loc.id);
+          setF("farmLocationLabel")(loc.label);
+        }}
+      />
+    </>
   );
 }
 
@@ -2703,8 +3073,8 @@ function CowCard({
     showAlert({
       title: willBecomeBull ? "Promote to Bull" : "Promote to Mature Cow",
       message: willBecomeBull
-        ? `Mark ${item.name} as fully grown? This updates its image to a bull and moves it into the Bulls list.`
-        : `Mark ${item.name} as fully grown? This updates its image to a mature cow, enables milk recording, and moves it into the Cows list.`,
+        ? `Mark ${item.name} as fully grown Bull? .`
+        : `Mark ${item.name} as fully grown Mature Cow? `,
       type: "confirm",
       confirmText: "Promote",
       cancelText: "Not Yet",
@@ -2981,6 +3351,12 @@ function CowCard({
                   <Text style={cv.miniDaysText}>{activeDays}d active</Text>
                 </View>
               )}
+              {item.farmLocationLabel && (
+                <View style={cv.miniDaysBadge}>
+                  <Ionicons name="business-outline" size={9} color="#BB6B3F" />
+                  <Text style={cv.miniDaysText}>{item.farmLocationLabel}</Text>
+                </View>
+              )}
             </View>
           </View>
           <Ionicons
@@ -3193,6 +3569,13 @@ function CowCard({
                 label={item.type === "newborn" ? "Born" : "Bought"}
                 value={item.bornDate || item.boughtDate || "—"}
               />
+              {item.farmLocationLabel && (
+                <DetailItem
+                  icon="business-outline"
+                  label="Farm"
+                  value={item.farmLocationLabel}
+                />
+              )}
             </View>
           )}
           {item.isExpired && (
@@ -3447,6 +3830,9 @@ function ListHeader({
   sortVisible,
   setSortVisible,
   filteredCount,
+  locations,          // NEW
+  locationFilter,     // NEW
+  setLocationFilter,  // NEW
 }: {
   cows: Cow[];
   search: string;
@@ -3460,6 +3846,9 @@ function ListHeader({
   sortVisible: boolean;
   setSortVisible: (v: boolean) => void;
   filteredCount: number;
+  locations: BusinessLocation[];               // NEW
+  locationFilter: string;                      // NEW
+  setLocationFilter: (v: string) => void;       // NEW
 }) {
   const stats = {
     total: cows.length,
@@ -3547,92 +3936,58 @@ function ListHeader({
         animationType="fade"
         onRequestClose={() => setSortVisible(false)}
       >
-        <TouchableOpacity
+       <TouchableOpacity
           activeOpacity={1}
           style={lh.sortOverlay}
           onPress={() => setSortVisible(false)}
         >
-          <View style={lh.sortSheet}>
+          <TouchableOpacity activeOpacity={1} style={lh.sortSheet}>
             <View style={lh.sortSheetHeader}>
               <Text style={lh.sortSheetTitle}>Sort Cattle</Text>
               <Text style={lh.sortSheetSub}>
                 Choose data ordering and range
               </Text>
             </View>
-            <Text style={lh.sortSectionTitle}>Date Filter</Text>
-            {(
-              ["all_time", "last_week", "last_month", "last_year"] as const
-            ).map((option) => (
-              <TouchableOpacity
-                key={option}
-                activeOpacity={0.85}
-                onPress={() => setDateRange(option)}
-                style={[
-                  lh.sortOption,
-                  dateRange === option && lh.sortOptionActive,
-                ]}
-              >
-                <View
-                  style={[
-                    lh.sortOptionIcon,
-                    dateRange === option && lh.sortOptionIconActive,
-                  ]}
-                >
-                  <Ionicons
-                    name={dateRangeMeta[option].icon}
-                    size={16}
-                    color={dateRange === option ? "#fff" : "#8B6854"}
-                  />
-                </View>
-                <Text
-                  style={[
-                    lh.sortOptionText,
-                    dateRange === option && lh.sortOptionTextActive,
-                  ]}
-                >
-                  {dateRangeMeta[option].label}
-                </Text>
-                {dateRange === option && (
-                  <Ionicons name="checkmark-circle" size={18} color="#8B6854" />
-                )}
-              </TouchableOpacity>
-            ))}
-            <Text style={lh.sortSectionTitle}>Order By</Text>
-            {(["newest", "oldest", "name_asc", "name_desc"] as const).map(
-              (option) => (
+
+            <ScrollView
+              style={{ maxHeight: 380 }}
+              showsVerticalScrollIndicator={false}
+              nestedScrollEnabled
+            >
+              <Text style={lh.sortSectionTitle}>Date Filter</Text>
+              {(
+                ["all_time", "last_week", "last_month", "last_year"] as const
+              ).map((option) => (
                 <TouchableOpacity
                   key={option}
                   activeOpacity={0.85}
-                  onPress={() => {
-                    setSortBy(option);
-                    setSortVisible(false);
-                  }}
+                  onPress={() => setDateRange(option)}
                   style={[
                     lh.sortOption,
-                    sortBy === option && lh.sortOptionActive,
+                    dateRange === option && lh.sortOptionActive,
                   ]}
                 >
                   <View
                     style={[
                       lh.sortOptionIcon,
-                      sortBy === option && lh.sortOptionIconActive,
+                      dateRange === option && lh.sortOptionIconActive,
                     ]}
                   >
                     <Ionicons
-                      name={sortMeta[option].icon}
+                      name={dateRangeMeta[option].icon}
                       size={16}
-                      color={sortBy === option ? "#fff" : "#8B6854"}
+                      color={dateRange === option ? "#fff" : "#8B6854"}
                     />
                   </View>
                   <Text
                     style={[
                       lh.sortOptionText,
-                      sortBy === option && lh.sortOptionTextActive,
+                      dateRange === option && lh.sortOptionTextActive,
                     ]}
                   >
-                    {sortMeta[option].label}
+                    {dateRangeMeta[option].label}
                   </Text>
-                  {sortBy === option && (
+                  {dateRange === option && (
                     <Ionicons
                       name="checkmark-circle"
                       size={18}
@@ -3640,9 +3995,146 @@ function ListHeader({
                     />
                   )}
                 </TouchableOpacity>
-              ),
-            )}
-          </View>
+              ))}
+
+              <Text style={lh.sortSectionTitle}>Farm Location</Text>
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={() => setLocationFilter("all")}
+                style={[
+                  lh.sortOption,
+                  locationFilter === "all" && lh.sortOptionActive,
+                ]}
+              >
+                <View
+                  style={[
+                    lh.sortOptionIcon,
+                    locationFilter === "all" && lh.sortOptionIconActive,
+                  ]}
+                >
+                  <Ionicons
+                    name="globe-outline"
+                    size={16}
+                    color={locationFilter === "all" ? "#fff" : "#8B6854"}
+                  />
+                </View>
+                <Text
+                  style={[
+                    lh.sortOptionText,
+                    locationFilter === "all" && lh.sortOptionTextActive,
+                  ]}
+                >
+                  All Locations
+                </Text>
+                {locationFilter === "all" && (
+                  <Ionicons
+                    name="checkmark-circle"
+                    size={18}
+                    color="#8B6854"
+                  />
+                )}
+              </TouchableOpacity>
+              {locations.length === 0 ? (
+                <Text
+                  style={{
+                    fontSize: 11,
+                    color: "#C4A882",
+                    paddingHorizontal: 10,
+                    paddingVertical: 6,
+                  }}
+                >
+                  No saved farm locations yet
+                </Text>
+              ) : (
+                locations.map((loc) => (
+                  <TouchableOpacity
+                    key={loc.id}
+                    activeOpacity={0.85}
+                    onPress={() => setLocationFilter(loc.id)}
+                    style={[
+                      lh.sortOption,
+                      locationFilter === loc.id && lh.sortOptionActive,
+                    ]}
+                  >
+                    <View
+                      style={[
+                        lh.sortOptionIcon,
+                        locationFilter === loc.id && lh.sortOptionIconActive,
+                      ]}
+                    >
+                      <Ionicons
+                        name="business-outline"
+                        size={16}
+                        color={locationFilter === loc.id ? "#fff" : "#8B6854"}
+                      />
+                    </View>
+                    <Text
+                      style={[
+                        lh.sortOptionText,
+                        locationFilter === loc.id && lh.sortOptionTextActive,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {loc.label}
+                    </Text>
+                    {locationFilter === loc.id && (
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={18}
+                        color="#8B6854"
+                      />
+                    )}
+                  </TouchableOpacity>
+                ))
+              )}
+
+              <Text style={lh.sortSectionTitle}>Order By</Text>
+              {(["newest", "oldest", "name_asc", "name_desc"] as const).map(
+                (option) => (
+                  <TouchableOpacity
+                    key={option}
+                    activeOpacity={0.85}
+                    onPress={() => {
+                      setSortBy(option);
+                      setSortVisible(false);
+                    }}
+                    style={[
+                      lh.sortOption,
+                      sortBy === option && lh.sortOptionActive,
+                    ]}
+                  >
+                    <View
+                      style={[
+                        lh.sortOptionIcon,
+                        sortBy === option && lh.sortOptionIconActive,
+                      ]}
+                    >
+                      <Ionicons
+                        name={sortMeta[option].icon}
+                        size={16}
+                        color={sortBy === option ? "#fff" : "#8B6854"}
+                      />
+                    </View>
+                    <Text
+                      style={[
+                        lh.sortOptionText,
+                        sortBy === option && lh.sortOptionTextActive,
+                      ]}
+                    >
+                      {sortMeta[option].label}
+                    </Text>
+                    {sortBy === option && (
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={18}
+                        color="#8B6854"
+                      />
+                    )}
+                  </TouchableOpacity>
+                ),
+              )}
+            </ScrollView>
+          </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
 
@@ -3701,6 +4193,15 @@ export default function CowsScreen() {
   const [error, setError] = useState<string | null>(null);
   const [promoting, setPromoting] = useState(false);
 
+  //Location Sttate
+  const [locations, setLocations] = useState<BusinessLocation[]>([]);
+  useEffect(() => {
+    api
+      .getBusinessLocations()
+      .then(setLocations)
+      .catch(() => {});
+  }, []);
+
   // Scanner state
   const [scannerVisible, setScannerVisible] = useState(false);
   const [qrActionVisible, setQrActionVisible] = useState(false);
@@ -3717,6 +4218,7 @@ export default function CowsScreen() {
   const [sortBy, setSortBy] = useState<SortOption>("newest");
   const [dateRange, setDateRange] = useState<DateRangeOption>("all_time");
   const [sortVisible, setSortVisible] = useState(false);
+  const [locationFilter, setLocationFilter] = useState<string>("all");
 
   const { alertConfig, showAlert, dismissAlert } = useModernAlert();
 
@@ -3821,6 +4323,9 @@ export default function CowsScreen() {
     .filter((c) => filterType === "all" || c.type === filterType)
     .filter((c) => isWithinRange(c.created_at, dateRange))
     .filter(
+      (c) => locationFilter === "all" || c.farmLocationId === locationFilter, // NEW
+    )
+    .filter(
       (c) =>
         c.name.toLowerCase().includes(search.toLowerCase()) ||
         c.tag.toLowerCase().includes(search.toLowerCase()) ||
@@ -3919,6 +4424,9 @@ export default function CowsScreen() {
               sortVisible={sortVisible}
               setSortVisible={setSortVisible}
               filteredCount={filteredCows.length}
+              locations={locations}                 
+              locationFilter={locationFilter}        
+              setLocationFilter={setLocationFilter}  // NEW
             />
           }
           renderItem={({ item, index }) => (
@@ -4012,6 +4520,8 @@ export default function CowsScreen() {
         prefillQrData={addWithScan ? scannedData : undefined}
         prefillIsBarcode={addWithScan ? addIsBarcode : undefined}
         showAlert={showAlert}
+        locations={locations}
+        onLocationCreated={(loc) => setLocations((prev) => [...prev, loc])}
       />
       <EditCowModal
         cow={editCow}
@@ -4024,6 +4534,8 @@ export default function CowsScreen() {
         }
         cows={cows}
         showAlert={showAlert}
+        locations={locations}
+        onLocationCreated={(loc) => setLocations((prev) => [...prev, loc])}
       />
       <ModernAlert config={alertConfig} onDismiss={dismissAlert} />
     </View>

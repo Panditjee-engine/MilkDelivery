@@ -24,19 +24,19 @@ import { api } from "../../../src/services/api";
 // ── Palette ───────────────────────────────────────────────────────────────────
 
 const C = {
-  primary:   "#FF9675",
+  primary: "#FF9675",
   secondary: "#FF9675",
-  accent:    "#8B6854",
-  light:     "#8B6854",
-  dark:      "#BB6B3F",
-  deep:      "#8B6854",
-  bg:        "#FFF8EF",
-  card:      "#FFE8D6",
-  text:      "#3D1F0A",
+  accent: "#8B6854",
+  light: "#8B6854",
+  dark: "#BB6B3F",
+  deep: "#8B6854",
+  bg: "#FFF8EF",
+  card: "#FFE8D6",
+  text: "#3D1F0A",
   textMuted: "#A07850",
   textLight: "#C9A882",
-  danger:    "#E05A3A",
-  dangerBg:  "#FFF0EE",
+  danger: "#E05A3A",
+  dangerBg: "#FFF0EE",
 };
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -52,6 +52,18 @@ interface Veterinary {
   is_active: boolean;
   is_verified: boolean;
   admin_id?: string;
+  farm_location_ids?: string[];
+  farm_location_labels?: string[];
+}
+
+interface BusinessLocation {
+  id: string;
+  label: string;
+  address_line: string;
+  city: string;
+  state: string;
+  pincode: string;
+  is_primary?: boolean;
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -73,7 +85,7 @@ const AVATAR_GRADIENTS: [string, string][] = [
   ["#FF8C61", "#A0522D"],
 ];
 
-// ── Toast ─────────────────────────────────────────────────────────────────────
+// ── Toast (centered) ─────────────────────────────────────────────────────────
 
 type ToastVariant = "success" | "error" | "info" | "warning";
 
@@ -88,63 +100,133 @@ function Toast({
   visible: boolean;
   onHide: () => void;
 }) {
-  const slide = useRef(new Animated.Value(-80)).current;
+  const scale = useRef(new Animated.Value(0.85)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (!visible) return;
-    Animated.spring(slide, { toValue: 0, useNativeDriver: true, tension: 80, friction: 9 }).start();
+    Animated.parallel([
+      Animated.spring(scale, {
+        toValue: 1,
+        useNativeDriver: true,
+        tension: 90,
+        friction: 10,
+      }),
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
     const t = setTimeout(() => {
-      Animated.timing(slide, { toValue: -80, duration: 250, useNativeDriver: true }).start(onHide);
-    }, 3200);
+      Animated.parallel([
+        Animated.timing(scale, {
+          toValue: 0.9,
+          duration: 220,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacity, {
+          toValue: 0,
+          duration: 220,
+          useNativeDriver: true,
+        }),
+      ]).start(onHide);
+    }, 2800);
     return () => clearTimeout(t);
   }, [visible]);
 
   if (!visible) return null;
 
-  const colors: Record<ToastVariant, { bg: string; icon: keyof typeof Ionicons.glyphMap; border: string; iconColor: string }> = {
-    success: { bg: "#FFF3ED", border: "#FF9675", icon: "checkmark-circle",  iconColor: "#BB6B3F" },
-    error:   { bg: "#FFF0EE", border: "#E05A3A", icon: "close-circle",      iconColor: "#E05A3A" },
-    info:    { bg: "#FFF8EF", border: "#A07850", icon: "information-circle", iconColor: "#A07850" },
-    warning: { bg: "#FFFBF0", border: "#F59E0B", icon: "warning",           iconColor: "#B45309" },
+  const colors: Record<
+    ToastVariant,
+    {
+      bg: string;
+      icon: keyof typeof Ionicons.glyphMap;
+      border: string;
+      iconColor: string;
+    }
+  > = {
+    success: {
+      bg: "#FFF3ED",
+      border: "#FF9675",
+      icon: "checkmark-circle",
+      iconColor: "#BB6B3F",
+    },
+    error: {
+      bg: "#FFF0EE",
+      border: "#E05A3A",
+      icon: "close-circle",
+      iconColor: "#E05A3A",
+    },
+    info: {
+      bg: "#FFF8EF",
+      border: "#A07850",
+      icon: "information-circle",
+      iconColor: "#A07850",
+    },
+    warning: {
+      bg: "#FFFBF0",
+      border: "#F59E0B",
+      icon: "warning",
+      iconColor: "#B45309",
+    },
   };
   const c = colors[variant];
 
   return (
-    <Animated.View
-      style={[
-        toastS.wrap,
-        { transform: [{ translateY: slide }], borderLeftColor: c.border, backgroundColor: c.bg },
-      ]}
-    >
-      <Ionicons name={c.icon} size={20} color={c.iconColor} />
-      <Text style={[toastS.msg, { color: c.iconColor }]}>{msg}</Text>
-      <TouchableOpacity onPress={onHide} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-        <Ionicons name="close" size={15} color={c.iconColor} />
-      </TouchableOpacity>
-    </Animated.View>
+    <View style={toastS.overlay} pointerEvents="box-none">
+      <Animated.View
+        style={[
+          toastS.wrap,
+          {
+            opacity,
+            transform: [{ scale }],
+            backgroundColor: c.bg,
+            borderColor: c.border,
+          },
+        ]}
+      >
+        <Ionicons name={c.icon} size={22} color={c.iconColor} />
+        <Text style={[toastS.msg, { color: c.iconColor }]}>{msg}</Text>
+        <TouchableOpacity
+          onPress={onHide}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Ionicons name="close" size={16} color={c.iconColor} />
+        </TouchableOpacity>
+      </Animated.View>
+    </View>
   );
 }
 
 const toastS = StyleSheet.create({
-  wrap: {
+  overlay: {
     position: "absolute",
-    top: 16,
-    left: 16,
-    right: 16,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     zIndex: 9999,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+  },
+  wrap: {
+    width: "100%",
+    maxWidth: 360,
     borderRadius: 16,
-    padding: 14,
+    padding: 16,
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    borderLeftWidth: 4,
-    shadowColor: "#BB6B3F",
-    shadowOpacity: 0.18,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 12,
+    borderWidth: 1.5,
+    shadowColor: C.deep,
+    shadowOpacity: 0.22,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 16,
   },
-  msg: { flex: 1, fontSize: 13.5, fontWeight: "600", lineHeight: 18 },
+  msg: { flex: 1, fontSize: 14, fontWeight: "600", lineHeight: 19 },
 });
 
 // ── Confirm Dialog ────────────────────────────────────────────────────────────
@@ -170,7 +252,7 @@ function ConfirmDialog({
   onCancel: () => void;
   loading?: boolean;
 }) {
-  const scale   = useRef(new Animated.Value(0.88)).current;
+  const scale = useRef(new Animated.Value(0.88)).current;
   const opacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -178,8 +260,17 @@ function ConfirmDialog({
       scale.setValue(0.88);
       opacity.setValue(0);
       Animated.parallel([
-        Animated.spring(scale,   { toValue: 1, useNativeDriver: true, damping: 14, stiffness: 220 }),
-        Animated.timing(opacity, { toValue: 1, duration: 180, useNativeDriver: true }),
+        Animated.spring(scale, {
+          toValue: 1,
+          useNativeDriver: true,
+          damping: 14,
+          stiffness: 220,
+        }),
+        Animated.timing(opacity, {
+          toValue: 1,
+          duration: 180,
+          useNativeDriver: true,
+        }),
       ]).start();
     }
   }, [visible]);
@@ -188,13 +279,19 @@ function ConfirmDialog({
     <Modal visible={visible} transparent animationType="none">
       <Animated.View style={[cd.overlay, { opacity }]}>
         <Animated.View style={[cd.box, { transform: [{ scale }] }]}>
-          <View style={[cd.iconCircle, { backgroundColor: confirmColor + "18" }]}>
+          <View
+            style={[cd.iconCircle, { backgroundColor: confirmColor + "18" }]}
+          >
             <Ionicons name={icon} size={28} color={confirmColor} />
           </View>
           <Text style={cd.title}>{title}</Text>
           <Text style={cd.message}>{message}</Text>
           <View style={cd.actions}>
-            <TouchableOpacity style={cd.cancelBtn} onPress={onCancel} disabled={loading}>
+            <TouchableOpacity
+              style={cd.cancelBtn}
+              onPress={onCancel}
+              disabled={loading}
+            >
               <Text style={cd.cancelText}>Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -243,9 +340,21 @@ const cd = StyleSheet.create({
     justifyContent: "center",
     marginBottom: 16,
   },
-  title:       { fontSize: 18, fontWeight: "800", color: C.text, marginBottom: 8, textAlign: "center" },
-  message:     { fontSize: 14, color: C.textMuted, textAlign: "center", lineHeight: 21, marginBottom: 24 },
-  actions:     { flexDirection: "row", gap: 10, width: "100%" },
+  title: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: C.text,
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  message: {
+    fontSize: 14,
+    color: C.textMuted,
+    textAlign: "center",
+    lineHeight: 21,
+    marginBottom: 24,
+  },
+  actions: { flexDirection: "row", gap: 10, width: "100%" },
   cancelBtn: {
     flex: 1,
     borderWidth: 1.5,
@@ -254,8 +363,13 @@ const cd = StyleSheet.create({
     paddingVertical: 14,
     alignItems: "center",
   },
-  cancelText:  { fontSize: 15, fontWeight: "600", color: C.textMuted },
-  confirmBtn:  { flex: 1, borderRadius: 14, paddingVertical: 14, alignItems: "center" },
+  cancelText: { fontSize: 15, fontWeight: "600", color: C.textMuted },
+  confirmBtn: {
+    flex: 1,
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
   confirmText: { fontSize: 15, fontWeight: "700", color: "#fff" },
 });
 
@@ -272,22 +386,36 @@ function PasswordResetModal({
   onClose: () => void;
   onSuccess: () => void;
 }) {
-  const [newPass, setNewPass]     = useState("");
+  const [newPass, setNewPass] = useState("");
   const [confirmPass, setConfirm] = useState("");
-  const [showNew, setShowNew]     = useState(false);
-  const [showConf, setShowConf]   = useState(false);
-  const [saving, setSaving]       = useState(false);
-  const [error, setError]         = useState("");
+  const [showNew, setShowNew] = useState(false);
+  const [showConf, setShowConf] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
   const slideAnim = useRef(new Animated.Value(60)).current;
-  const opacAnim  = useRef(new Animated.Value(0)).current;
+  const opacAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (visible) {
-      setNewPass(""); setConfirm(""); setError(""); setShowNew(false); setShowConf(false);
-      slideAnim.setValue(60); opacAnim.setValue(0);
+      setNewPass("");
+      setConfirm("");
+      setError("");
+      setShowNew(false);
+      setShowConf(false);
+      slideAnim.setValue(60);
+      opacAnim.setValue(0);
       Animated.parallel([
-        Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true, damping: 15, stiffness: 200 }),
-        Animated.timing(opacAnim,  { toValue: 1, duration: 200, useNativeDriver: true }),
+        Animated.spring(slideAnim, {
+          toValue: 0,
+          useNativeDriver: true,
+          damping: 15,
+          stiffness: 200,
+        }),
+        Animated.timing(opacAnim, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }),
       ]).start();
     }
   }, [visible]);
@@ -296,8 +424,14 @@ function PasswordResetModal({
 
   const handleSave = async () => {
     setError("");
-    if (newPass.length < 6)     { setError("Password must be at least 6 characters"); return; }
-    if (newPass !== confirmPass) { setError("Passwords do not match"); return; }
+    if (newPass.length < 6) {
+      setError("Password must be at least 6 characters");
+      return;
+    }
+    if (newPass !== confirmPass) {
+      setError("Passwords do not match");
+      return;
+    }
     setSaving(true);
     try {
       await api.resetVeterinarianPassword(vet.id, newPass);
@@ -315,11 +449,24 @@ function PasswordResetModal({
 
   return (
     <Modal visible={visible} transparent animationType="fade">
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
         <View style={pr.overlay}>
-          <Animated.View style={[pr.box, { opacity: opacAnim, transform: [{ translateY: slideAnim }] }]}>
+          <Animated.View
+            style={[
+              pr.box,
+              { opacity: opacAnim, transform: [{ translateY: slideAnim }] },
+            ]}
+          >
             {/* Header */}
-            <LinearGradient colors={gradPair as any} style={pr.header} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+            <LinearGradient
+              colors={gradPair as any}
+              style={pr.header}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
               <TouchableOpacity style={pr.closeBtn} onPress={onClose}>
                 <Ionicons name="close" size={18} color="#fff" />
               </TouchableOpacity>
@@ -331,47 +478,97 @@ function PasswordResetModal({
             </LinearGradient>
 
             <View style={pr.body}>
-              <Text style={pr.hint}>Set a new password for this veterinarian's account.</Text>
+              <Text style={pr.hint}>
+                Set a new password for this veterinarian's account.
+              </Text>
 
               {/* New password */}
               <View style={pr.fieldLabel}>
-                <Ionicons name="lock-closed-outline" size={13} color={C.textLight} />
+                <Ionicons
+                  name="lock-closed-outline"
+                  size={13}
+                  color={C.textLight}
+                />
                 <Text style={pr.fieldLabelText}>NEW PASSWORD</Text>
               </View>
-              <View style={[pr.inputRow, error && newPass.length < 6 && pr.inputError]}>
-                <Ionicons name="key-outline" size={16} color={C.textMuted} style={{ marginRight: 8 }} />
+              <View
+                style={[
+                  pr.inputRow,
+                  error && newPass.length < 6 && pr.inputError,
+                ]}
+              >
+                <Ionicons
+                  name="key-outline"
+                  size={16}
+                  color={C.textMuted}
+                  style={{ marginRight: 8 }}
+                />
                 <TextInput
                   style={pr.input}
                   placeholder="Enter new password"
                   placeholderTextColor={C.textLight}
                   value={newPass}
-                  onChangeText={(v) => { setNewPass(v); setError(""); }}
+                  onChangeText={(v) => {
+                    setNewPass(v);
+                    setError("");
+                  }}
                   secureTextEntry={!showNew}
                   autoCapitalize="none"
                 />
-                <TouchableOpacity onPress={() => setShowNew((p) => !p)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                  <Ionicons name={showNew ? "eye-outline" : "eye-off-outline"} size={19} color={C.textMuted} />
+                <TouchableOpacity
+                  onPress={() => setShowNew((p) => !p)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Ionicons
+                    name={showNew ? "eye-outline" : "eye-off-outline"}
+                    size={19}
+                    color={C.textMuted}
+                  />
                 </TouchableOpacity>
               </View>
 
               {/* Confirm password */}
               <View style={[pr.fieldLabel, { marginTop: 4 }]}>
-                <Ionicons name="checkmark-circle-outline" size={13} color={C.textLight} />
+                <Ionicons
+                  name="checkmark-circle-outline"
+                  size={13}
+                  color={C.textLight}
+                />
                 <Text style={pr.fieldLabelText}>CONFIRM PASSWORD</Text>
               </View>
-              <View style={[pr.inputRow, error && newPass !== confirmPass && pr.inputError]}>
-                <Ionicons name="key-outline" size={16} color={C.textMuted} style={{ marginRight: 8 }} />
+              <View
+                style={[
+                  pr.inputRow,
+                  error && newPass !== confirmPass && pr.inputError,
+                ]}
+              >
+                <Ionicons
+                  name="key-outline"
+                  size={16}
+                  color={C.textMuted}
+                  style={{ marginRight: 8 }}
+                />
                 <TextInput
                   style={pr.input}
                   placeholder="Confirm new password"
                   placeholderTextColor={C.textLight}
                   value={confirmPass}
-                  onChangeText={(v) => { setConfirm(v); setError(""); }}
+                  onChangeText={(v) => {
+                    setConfirm(v);
+                    setError("");
+                  }}
                   secureTextEntry={!showConf}
                   autoCapitalize="none"
                 />
-                <TouchableOpacity onPress={() => setShowConf((p) => !p)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                  <Ionicons name={showConf ? "eye-outline" : "eye-off-outline"} size={19} color={C.textMuted} />
+                <TouchableOpacity
+                  onPress={() => setShowConf((p) => !p)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Ionicons
+                    name={showConf ? "eye-outline" : "eye-off-outline"}
+                    size={19}
+                    color={C.textMuted}
+                  />
                 </TouchableOpacity>
               </View>
 
@@ -386,16 +583,24 @@ function PasswordResetModal({
                         {
                           backgroundColor:
                             newPass.length >= (i + 1) * 3
-                              ? newPass.length >= 10 ? "#22C55E"
-                              : newPass.length >= 7  ? "#F59E0B"
-                              : "#FF9675"
+                              ? newPass.length >= 10
+                                ? "#22C55E"
+                                : newPass.length >= 7
+                                  ? "#F59E0B"
+                                  : "#FF9675"
                               : "#F5D5BC",
                         },
                       ]}
                     />
                   ))}
                   <Text style={pr.strengthText}>
-                    {newPass.length < 6 ? "Too short" : newPass.length < 7 ? "Weak" : newPass.length < 10 ? "Good" : "Strong"}
+                    {newPass.length < 6
+                      ? "Too short"
+                      : newPass.length < 7
+                        ? "Weak"
+                        : newPass.length < 10
+                          ? "Good"
+                          : "Strong"}
                   </Text>
                 </View>
               )}
@@ -403,7 +608,11 @@ function PasswordResetModal({
               {/* Error */}
               {error !== "" && (
                 <View style={pr.errorBox}>
-                  <Ionicons name="alert-circle-outline" size={15} color={C.danger} />
+                  <Ionicons
+                    name="alert-circle-outline"
+                    size={15}
+                    color={C.danger}
+                  />
                   <Text style={pr.errorText}>{error}</Text>
                 </View>
               )}
@@ -414,12 +623,21 @@ function PasswordResetModal({
                 onPress={handleSave}
                 disabled={saving}
               >
-                <LinearGradient colors={gradPair as any} style={pr.saveBtnGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+                <LinearGradient
+                  colors={gradPair as any}
+                  style={pr.saveBtnGrad}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                >
                   {saving ? (
                     <ActivityIndicator color="#fff" size="small" />
                   ) : (
                     <>
-                      <Ionicons name="shield-checkmark-outline" size={18} color="#fff" />
+                      <Ionicons
+                        name="shield-checkmark-outline"
+                        size={18}
+                        color="#fff"
+                      />
                       <Text style={pr.saveBtnText}>Update Password</Text>
                     </>
                   )}
@@ -481,11 +699,26 @@ const pr = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.35)",
   },
   headerTitle: { fontSize: 19, fontWeight: "800", color: "#fff" },
-  headerSub:   { fontSize: 13, color: "rgba(255,255,255,0.75)", marginTop: 3 },
-  body:        { padding: 22 },
-  hint:        { fontSize: 13.5, color: C.textMuted, marginBottom: 20, lineHeight: 20 },
-  fieldLabel:  { flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 7 },
-  fieldLabelText: { fontSize: 11, fontWeight: "700", color: C.textLight, letterSpacing: 1.2 },
+  headerSub: { fontSize: 13, color: "rgba(255,255,255,0.75)", marginTop: 3 },
+  body: { padding: 22 },
+  hint: {
+    fontSize: 13.5,
+    color: C.textMuted,
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  fieldLabel: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginBottom: 7,
+  },
+  fieldLabelText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: C.textLight,
+    letterSpacing: 1.2,
+  },
   inputRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -497,10 +730,21 @@ const pr = StyleSheet.create({
     marginBottom: 14,
   },
   inputError: { borderColor: C.danger },
-  input:      { flex: 1, paddingVertical: 13, fontSize: 15, color: C.text },
-  strengthRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: -6, marginBottom: 14 },
+  input: { flex: 1, paddingVertical: 13, fontSize: 15, color: C.text },
+  strengthRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: -6,
+    marginBottom: 14,
+  },
   strengthBar: { flex: 1, height: 3, borderRadius: 2 },
-  strengthText: { fontSize: 11, fontWeight: "600", color: C.textMuted, marginLeft: 4 },
+  strengthText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: C.textMuted,
+    marginLeft: 4,
+  },
   errorBox: {
     flexDirection: "row",
     alignItems: "center",
@@ -512,8 +756,8 @@ const pr = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#FECACA",
   },
-  errorText:   { fontSize: 13, color: C.danger, fontWeight: "600", flex: 1 },
-  saveBtn:     { borderRadius: 16, overflow: "hidden", marginTop: 4 },
+  errorText: { fontSize: 13, color: C.danger, fontWeight: "600", flex: 1 },
+  saveBtn: { borderRadius: 16, overflow: "hidden", marginTop: 4 },
   saveBtnGrad: {
     flexDirection: "row",
     alignItems: "center",
@@ -526,7 +770,15 @@ const pr = StyleSheet.create({
 
 // ── Field Row ─────────────────────────────────────────────────────────────────
 
-function DetailRow({ icon, label, val }: { icon: keyof typeof Ionicons.glyphMap; label: string; val: string }) {
+function DetailRow({
+  icon,
+  label,
+  val,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  val: string;
+}) {
   return (
     <View style={dm.detailRow}>
       <View style={dm.detailIconBox}>
@@ -545,6 +797,7 @@ function DetailRow({ icon, label, val }: { icon: keyof typeof Ionicons.glyphMap;
 function VetDetailModal({
   vet,
   visible,
+  locations,
   onClose,
   onSave,
   onToggleActive,
@@ -553,35 +806,71 @@ function VetDetailModal({
 }: {
   vet: Veterinary | null;
   visible: boolean;
+  locations: BusinessLocation[];
   onClose: () => void;
   onSave: (id: string, data: Partial<Veterinary>) => Promise<void>;
   onToggleActive: (id: string, active: boolean) => Promise<void>;
   onDeletePress: (vet: Veterinary) => void;
   onPasswordPress: (vet: Veterinary) => void;
 }) {
-  const [editing, setEditing]   = useState(false);
-  const [saving, setSaving]     = useState(false);
-  const [form, setForm]         = useState({ name: "", phone: "", specialization: "", license_number: "" });
-  const scaleAnim   = useRef(new Animated.Value(0.92)).current;
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({
+    name: "",
+    phone: "",
+    specialization: "",
+    license_number: "",
+    farm_location_ids: [] as string[],
+    farm_location_labels: [] as string[],
+  });
+  const scaleAnim = useRef(new Animated.Value(0.92)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim   = useRef(new Animated.Value(40)).current;
+  const slideAnim = useRef(new Animated.Value(40)).current;
 
   useEffect(() => {
     if (visible && vet) {
-      setForm({ name: vet.name, phone: vet.phone || "", specialization: vet.specialization || "", license_number: vet.license_number || "" });
+      setForm({
+        name: vet.name,
+        phone: vet.phone || "",
+        specialization: vet.specialization || "",
+        license_number: vet.license_number || "",
+        farm_location_ids: vet.farm_location_ids || [],
+        farm_location_labels: vet.farm_location_labels || [],
+      });
       setEditing(false);
-      scaleAnim.setValue(0.92); opacityAnim.setValue(0); slideAnim.setValue(40);
+      scaleAnim.setValue(0.92);
+      opacityAnim.setValue(0);
+      slideAnim.setValue(40);
       Animated.parallel([
-        Animated.spring(scaleAnim,   { toValue: 1, useNativeDriver: true, damping: 15, stiffness: 220 }),
-        Animated.timing(opacityAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
-        Animated.spring(slideAnim,   { toValue: 0, useNativeDriver: true, damping: 15, stiffness: 200 }),
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          useNativeDriver: true,
+          damping: 15,
+          stiffness: 220,
+        }),
+        Animated.timing(opacityAnim, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.spring(slideAnim, {
+          toValue: 0,
+          useNativeDriver: true,
+          damping: 15,
+          stiffness: 200,
+        }),
       ]).start();
     }
   }, [visible, vet]);
 
   if (!vet) return null;
 
-  const initials = vet.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
+  const initials = vet.name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
   const colorIdx = vet.name.charCodeAt(0) % AVATAR_GRADIENTS.length;
   const gradPair = AVATAR_GRADIENTS[colorIdx];
 
@@ -589,23 +878,51 @@ function VetDetailModal({
     if (!form.name.trim()) return;
     setSaving(true);
     await onSave(vet.id, {
-      name:           form.name.trim(),
-      phone:          form.phone.trim() || undefined,
+      name: form.name.trim(),
+      phone: form.phone.trim() || undefined,
       specialization: form.specialization.trim() || undefined,
       license_number: form.license_number.trim() || undefined,
+      farm_location_ids: form.farm_location_ids,
+      farm_location_labels: form.farm_location_labels,
     });
     setSaving(false);
     setEditing(false);
+  };
+
+  const toggleLocation = (loc: BusinessLocation) => {
+    setForm((p) => {
+      const exists = p.farm_location_ids.includes(loc.id);
+      return {
+        ...p,
+        farm_location_ids: exists
+          ? p.farm_location_ids.filter((id) => id !== loc.id)
+          : [...p.farm_location_ids, loc.id],
+        farm_location_labels: exists
+          ? p.farm_location_labels.filter((l) => l !== loc.label)
+          : [...p.farm_location_labels, loc.label],
+      };
+    });
   };
 
   return (
     <Modal visible={visible} transparent animationType="fade">
       <View style={dm.overlay}>
         <Animated.View
-          style={[dm.card, { opacity: opacityAnim, transform: [{ scale: scaleAnim }, { translateY: slideAnim }] }]}
+          style={[
+            dm.card,
+            {
+              opacity: opacityAnim,
+              transform: [{ scale: scaleAnim }, { translateY: slideAnim }],
+            },
+          ]}
         >
           {/* Header */}
-          <LinearGradient colors={gradPair as any} style={dm.headerGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+          <LinearGradient
+            colors={gradPair as any}
+            style={dm.headerGrad}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          >
             <View style={dm.headerTop}>
               <TouchableOpacity onPress={onClose} style={dm.circleBtn}>
                 <Ionicons name="arrow-back" size={18} color="#fff" />
@@ -614,8 +931,15 @@ function VetDetailModal({
                 <Ionicons name="medkit-outline" size={11} color="#fff" />
                 <Text style={dm.vetBadgeText}>VETERINARY</Text>
               </View>
-              <TouchableOpacity onPress={() => setEditing(!editing)} style={dm.circleBtn}>
-                <Ionicons name={editing ? "checkmark" : "create-outline"} size={16} color="#fff" />
+              <TouchableOpacity
+                onPress={() => setEditing(!editing)}
+                style={dm.circleBtn}
+              >
+                <Ionicons
+                  name={editing ? "checkmark" : "create-outline"}
+                  size={16}
+                  color="#fff"
+                />
               </TouchableOpacity>
             </View>
             <View style={dm.avatarCircle}>
@@ -623,9 +947,25 @@ function VetDetailModal({
             </View>
             <Text style={dm.modalName}>Dr. {vet.name}</Text>
             <Text style={dm.modalEmail}>{vet.email}</Text>
-            <View style={[dm.statusPill, { backgroundColor: vet.is_active ? "rgba(255,255,255,0.25)" : "rgba(0,0,0,0.18)" }]}>
-              <View style={[dm.dot, { backgroundColor: vet.is_active ? "#fff" : "#fca5a5" }]} />
-              <Text style={dm.statusPillText}>{vet.is_active ? "Active" : "Inactive"}</Text>
+            <View
+              style={[
+                dm.statusPill,
+                {
+                  backgroundColor: vet.is_active
+                    ? "rgba(255,255,255,0.25)"
+                    : "rgba(0,0,0,0.18)",
+                },
+              ]}
+            >
+              <View
+                style={[
+                  dm.dot,
+                  { backgroundColor: vet.is_active ? "#fff" : "#fca5a5" },
+                ]}
+              />
+              <Text style={dm.statusPillText}>
+                {vet.is_active ? "Active" : "Inactive"}
+              </Text>
             </View>
           </LinearGradient>
 
@@ -634,41 +974,153 @@ function VetDetailModal({
               <>
                 <SectionLabel>EDIT DETAILS</SectionLabel>
                 {[
-                  { icon: "person-outline" as keyof typeof Ionicons.glyphMap, key: "name",           label: "Full Name",      kb: "default"   },
-                  { icon: "call-outline"   as keyof typeof Ionicons.glyphMap, key: "phone",          label: "Phone",          kb: "phone-pad"  },
-                  { icon: "ribbon-outline" as keyof typeof Ionicons.glyphMap, key: "license_number", label: "License Number", kb: "default"   },
+                  {
+                    icon: "person-outline" as keyof typeof Ionicons.glyphMap,
+                    key: "name",
+                    label: "Full Name",
+                    kb: "default",
+                  },
+                  {
+                    icon: "call-outline" as keyof typeof Ionicons.glyphMap,
+                    key: "phone",
+                    label: "Phone",
+                    kb: "phone-pad",
+                  },
+                  {
+                    icon: "ribbon-outline" as keyof typeof Ionicons.glyphMap,
+                    key: "license_number",
+                    label: "License Number",
+                    kb: "default",
+                  },
                 ].map((f) => (
                   <View key={f.key} style={dm.inputRow}>
-                    <Ionicons name={f.icon} size={16} color={C.textMuted} style={dm.inputIcon} />
+                    <Ionicons
+                      name={f.icon}
+                      size={16}
+                      color={C.textMuted}
+                      style={dm.inputIcon}
+                    />
                     <TextInput
                       style={dm.input}
                       placeholder={f.label}
                       placeholderTextColor={C.textLight}
                       value={(form as any)[f.key]}
-                      onChangeText={(v) => setForm((p) => ({ ...p, [f.key]: v }))}
+                      onChangeText={(v) =>
+                        setForm((p) => ({ ...p, [f.key]: v }))
+                      }
                       keyboardType={f.kb as any}
                     />
                   </View>
                 ))}
-                <SectionLabel style={{ marginTop: 8 }}>SPECIALIZATION</SectionLabel>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
+
+                <SectionLabel style={{ marginTop: 8 }}>
+                  SPECIALIZATION
+                </SectionLabel>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={{ marginBottom: 16 }}
+                >
                   {SPECIALIZATIONS.map((s) => (
                     <TouchableOpacity
                       key={s}
-                      style={[dm.chip, form.specialization === s && dm.chipActive]}
-                      onPress={() => setForm((p) => ({ ...p, specialization: p.specialization === s ? "" : s }))}
+                      style={[
+                        dm.chip,
+                        form.specialization === s && dm.chipActive,
+                      ]}
+                      onPress={() =>
+                        setForm((p) => ({
+                          ...p,
+                          specialization: p.specialization === s ? "" : s,
+                        }))
+                      }
                     >
-                      <Text style={[dm.chipText, form.specialization === s && dm.chipTextActive]}>{s}</Text>
+                      <Text
+                        style={[
+                          dm.chipText,
+                          form.specialization === s && dm.chipTextActive,
+                        ]}
+                      >
+                        {s}
+                      </Text>
                     </TouchableOpacity>
                   ))}
                 </ScrollView>
-                <TouchableOpacity style={[dm.saveBtn, saving && { opacity: 0.6 }]} onPress={handleSave} disabled={saving}>
-                  <LinearGradient colors={gradPair as any} style={dm.saveBtnGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+
+                <SectionLabel style={{ marginTop: 0 }}>
+                  FARM ADDRESSES{" "}
+                  {form.farm_location_ids.length > 0 &&
+                    `(${form.farm_location_ids.length} selected)`}
+                </SectionLabel>
+                {locations.length === 0 ? (
+                  <View style={dm.noLocationBox}>
+                    <Ionicons
+                      name="location-outline"
+                      size={14}
+                      color={C.textLight}
+                    />
+                    <Text style={dm.noLocationText}>
+                      No farm addresses added yet
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={dm.chipsWrap}>
+                    {locations.map((loc) => {
+                      const active = form.farm_location_ids.includes(loc.id);
+                      return (
+                        <TouchableOpacity
+                          key={loc.id}
+                          style={[dm.chip, active && dm.chipActive]}
+                          onPress={() => toggleLocation(loc)}
+                        >
+                          <Ionicons
+                            name="location-outline"
+                            size={11}
+                            color={active ? C.dark : C.textLight}
+                            style={{ marginRight: 4 }}
+                          />
+                          <Text
+                            style={[
+                              dm.chipText,
+                              active && dm.chipTextActive,
+                            ]}
+                          >
+                            {loc.label}
+                          </Text>
+                          {active && (
+                            <Ionicons
+                              name="checkmark-circle"
+                              size={13}
+                              color={C.dark}
+                              style={{ marginLeft: 4 }}
+                            />
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                )}
+
+                <TouchableOpacity
+                  style={[dm.saveBtn, saving && { opacity: 0.6 }, { marginTop: 16 }]}
+                  onPress={handleSave}
+                  disabled={saving}
+                >
+                  <LinearGradient
+                    colors={gradPair as any}
+                    style={dm.saveBtnGrad}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                  >
                     {saving ? (
                       <ActivityIndicator color="#fff" size="small" />
                     ) : (
                       <>
-                        <Ionicons name="checkmark-circle-outline" size={18} color="#fff" />
+                        <Ionicons
+                          name="checkmark-circle-outline"
+                          size={18}
+                          color="#fff"
+                        />
                         <Text style={dm.saveBtnText}>Save Changes</Text>
                       </>
                     )}
@@ -678,10 +1130,53 @@ function VetDetailModal({
             ) : (
               <>
                 <SectionLabel>DETAILS</SectionLabel>
-                <DetailRow icon="mail-outline"    label="Email"          val={vet.email} />
-                <DetailRow icon="call-outline"    label="Phone"          val={vet.phone || "—"} />
-                <DetailRow icon="medical-outline" label="Specialization" val={vet.specialization || "—"} />
-                <DetailRow icon="ribbon-outline"  label="License No."    val={vet.license_number || "—"} />
+                <DetailRow icon="mail-outline" label="Email" val={vet.email} />
+                <DetailRow
+                  icon="call-outline"
+                  label="Phone"
+                  val={vet.phone || "—"}
+                />
+                <DetailRow
+                  icon="medical-outline"
+                  label="Specialization"
+                  val={vet.specialization || "—"}
+                />
+                <DetailRow
+                  icon="ribbon-outline"
+                  label="License No."
+                  val={vet.license_number || "—"}
+                />
+
+                {/* Farm Addresses (multi) */}
+                <View style={dm.detailRow}>
+                  <View style={dm.detailIconBox}>
+                    <Ionicons
+                      name="location-outline"
+                      size={15}
+                      color={C.accent}
+                    />
+                  </View>
+                  <View style={dm.detailInfo}>
+                    <Text style={dm.detailLabel}>Farm Addresses</Text>
+                    {vet.farm_location_labels &&
+                    vet.farm_location_labels.length > 0 ? (
+                      <View style={dm.locationTagsWrap}>
+                        {vet.farm_location_labels.map((label, i) => (
+                          <View key={i} style={dm.locationTag}>
+                            <Ionicons
+                              name="location"
+                              size={10}
+                              color={C.dark}
+                            />
+                            <Text style={dm.locationTagText}>{label}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    ) : (
+                      <Text style={dm.detailVal}>—</Text>
+                    )}
+                  </View>
+                </View>
 
                 {/* Status toggle */}
                 <View style={dm.toggleRow}>
@@ -690,7 +1185,9 @@ function VetDetailModal({
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={dm.detailLabel}>Account Status</Text>
-                    <Text style={dm.detailVal}>{vet.is_active ? "Active" : "Inactive"}</Text>
+                    <Text style={dm.detailVal}>
+                      {vet.is_active ? "Active" : "Inactive"}
+                    </Text>
                   </View>
                   <Switch
                     value={vet.is_active}
@@ -712,11 +1209,21 @@ function VetDetailModal({
                       colors={["#FFF3E8", "#FFE8D6"]}
                       style={dm.actionBtnInner}
                     >
-                      <View style={[dm.actionIcon, { backgroundColor: C.card }]}>
-                        <Ionicons name="lock-closed-outline" size={18} color={C.dark} />
+                      <View
+                        style={[dm.actionIcon, { backgroundColor: C.card }]}
+                      >
+                        <Ionicons
+                          name="lock-closed-outline"
+                          size={18}
+                          color={C.dark}
+                        />
                       </View>
                       <Text style={dm.actionBtnText}>Reset Password</Text>
-                      <Ionicons name="chevron-forward" size={14} color={C.textLight} />
+                      <Ionicons
+                        name="chevron-forward"
+                        size={14}
+                        color={C.textLight}
+                      />
                     </LinearGradient>
                   </TouchableOpacity>
 
@@ -729,11 +1236,23 @@ function VetDetailModal({
                       colors={["#FFF5F5", "#FEE2E2"]}
                       style={dm.actionBtnInner}
                     >
-                      <View style={[dm.actionIcon, { backgroundColor: "#FECACA" }]}>
-                        <Ionicons name="trash-outline" size={18} color={C.danger} />
+                      <View
+                        style={[dm.actionIcon, { backgroundColor: "#FECACA" }]}
+                      >
+                        <Ionicons
+                          name="trash-outline"
+                          size={18}
+                          color={C.danger}
+                        />
                       </View>
-                      <Text style={[dm.actionBtnText, { color: C.danger }]}>Delete Veterinarian</Text>
-                      <Ionicons name="chevron-forward" size={14} color="#FCA5A5" />
+                      <Text style={[dm.actionBtnText, { color: C.danger }]}>
+                        Delete Veterinarian
+                      </Text>
+                      <Ionicons
+                        name="chevron-forward"
+                        size={14}
+                        color="#FCA5A5"
+                      />
                     </LinearGradient>
                   </TouchableOpacity>
                 </View>
@@ -747,7 +1266,7 @@ function VetDetailModal({
   );
 }
 
-function SectionLabel({ children, style }: { children: string; style?: any }) {
+function SectionLabel({ children, style }: { children: any; style?: any }) {
   return <Text style={[dm.sectionLabel, style]}>{children}</Text>;
 }
 
@@ -801,7 +1320,12 @@ const dm = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
   },
-  vetBadgeText:  { fontSize: 10, fontWeight: "800", color: "#fff", letterSpacing: 1.2 },
+  vetBadgeText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#fff",
+    letterSpacing: 1.2,
+  },
   avatarCircle: {
     width: 68,
     height: 68,
@@ -813,9 +1337,19 @@ const dm = StyleSheet.create({
     borderWidth: 2,
     borderColor: "rgba(255,255,255,0.35)",
   },
-  avatarText:    { fontSize: 24, fontWeight: "800", color: "#fff" },
-  modalName:     { fontSize: 20, fontWeight: "800", color: "#fff", letterSpacing: -0.4 },
-  modalEmail:    { fontSize: 13, color: "rgba(255,255,255,0.78)", marginTop: 3, marginBottom: 14 },
+  avatarText: { fontSize: 24, fontWeight: "800", color: "#fff" },
+  modalName: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#fff",
+    letterSpacing: -0.4,
+  },
+  modalEmail: {
+    fontSize: 13,
+    color: "rgba(255,255,255,0.78)",
+    marginTop: 3,
+    marginBottom: 14,
+  },
   statusPill: {
     flexDirection: "row",
     alignItems: "center",
@@ -824,11 +1358,22 @@ const dm = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 20,
   },
-  dot:           { width: 7, height: 7, borderRadius: 3.5 },
+  dot: { width: 7, height: 7, borderRadius: 3.5 },
   statusPillText: { fontSize: 12, fontWeight: "700", color: "#fff" },
-  body:          { paddingHorizontal: 20, paddingTop: 22 },
-  sectionLabel:  { fontSize: 11, fontWeight: "700", color: C.textLight, letterSpacing: 1.3, marginBottom: 12 },
-  detailRow:     { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 14 },
+  body: { paddingHorizontal: 20, paddingTop: 22 },
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: C.textLight,
+    letterSpacing: 1.3,
+    marginBottom: 12,
+  },
+  detailRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 14,
+  },
   detailIconBox: {
     width: 36,
     height: 36,
@@ -837,10 +1382,32 @@ const dm = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  detailInfo:    { flex: 1 },
-  detailLabel:   { fontSize: 11, color: C.textMuted, fontWeight: "600" },
-  detailVal:     { fontSize: 14, color: C.text, fontWeight: "600", marginTop: 1 },
-  toggleRow:     { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 14, paddingVertical: 4 },
+  detailInfo: { flex: 1 },
+  detailLabel: { fontSize: 11, color: C.textMuted, fontWeight: "600" },
+  detailVal: { fontSize: 14, color: C.text, fontWeight: "600", marginTop: 1 },
+  locationTagsWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: 5,
+  },
+  locationTag: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: C.card,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  locationTagText: { fontSize: 12, fontWeight: "600", color: C.dark },
+  toggleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 14,
+    paddingVertical: 4,
+  },
   inputRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -851,21 +1418,39 @@ const dm = StyleSheet.create({
     marginBottom: 10,
     backgroundColor: "#FFF3E8",
   },
-  inputIcon:      { marginRight: 8 },
-  input:          { flex: 1, paddingVertical: 13, fontSize: 15, color: C.text },
+  inputIcon: { marginRight: 8 },
+  input: { flex: 1, paddingVertical: 13, fontSize: 15, color: C.text },
+  chipsWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 4,
+  },
   chip: {
+    flexDirection: "row",
+    alignItems: "center",
     borderWidth: 1.5,
     borderColor: "#F5D5BC",
     borderRadius: 22,
     paddingHorizontal: 13,
     paddingVertical: 7,
-    marginRight: 8,
     backgroundColor: "#FFF3E8",
   },
-  chipActive:     { borderColor: C.primary, backgroundColor: "#FFE8D6" },
-  chipText:       { fontSize: 12, fontWeight: "600", color: C.textMuted },
+  chipActive: { borderColor: C.primary, backgroundColor: "#FFE8D6" },
+  chipText: { fontSize: 12, fontWeight: "600", color: C.textMuted },
   chipTextActive: { color: C.dark },
-  saveBtn:        { borderRadius: 16, overflow: "hidden", marginTop: 4 },
+  noLocationBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#FFF3E8",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 16,
+  },
+  noLocationText: { fontSize: 12.5, color: C.textLight, fontWeight: "500" },
+  saveBtn: { borderRadius: 16, overflow: "hidden", marginTop: 4 },
   saveBtnGrad: {
     flexDirection: "row",
     alignItems: "center",
@@ -875,8 +1460,8 @@ const dm = StyleSheet.create({
   },
   saveBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
   // action buttons
-  actionRow:    { gap: 10, marginBottom: 4 },
-  actionBtn:    { borderRadius: 16, overflow: "hidden" },
+  actionRow: { gap: 10, marginBottom: 4 },
+  actionBtn: { borderRadius: 16, overflow: "hidden" },
   actionBtnInner: {
     flexDirection: "row",
     alignItems: "center",
@@ -896,30 +1481,75 @@ const dm = StyleSheet.create({
 
 // ── Vet Card ──────────────────────────────────────────────────────────────────
 
-function VetCard({ item, index, onPress }: { item: Veterinary; index: number; onPress: () => void }) {
-  const scale      = useRef(new Animated.Value(1)).current;
-  const opacity    = useRef(new Animated.Value(0)).current;
+function VetCard({
+  item,
+  index,
+  onPress,
+}: {
+  item: Veterinary;
+  index: number;
+  onPress: () => void;
+}) {
+  const scale = useRef(new Animated.Value(1)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(24)).current;
-  const gradPair   = AVATAR_GRADIENTS[index % AVATAR_GRADIENTS.length];
-  const initials   = item.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
+  const gradPair = AVATAR_GRADIENTS[index % AVATAR_GRADIENTS.length];
+  const initials = item.name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
 
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(opacity,    { toValue: 1, duration: 350, delay: index * 60, useNativeDriver: true }),
-      Animated.spring(translateY, { toValue: 0, delay: index * 60, tension: 70, friction: 11, useNativeDriver: true }),
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: 350,
+        delay: index * 60,
+        useNativeDriver: true,
+      }),
+      Animated.spring(translateY, {
+        toValue: 0,
+        delay: index * 60,
+        tension: 70,
+        friction: 11,
+        useNativeDriver: true,
+      }),
     ]).start();
   }, []);
+
+  const locationLabels = item.farm_location_labels || [];
 
   return (
     <Animated.View style={{ opacity, transform: [{ translateY }, { scale }] }}>
       <TouchableOpacity
         activeOpacity={1}
         onPress={onPress}
-        onPressIn={() => Animated.spring(scale, { toValue: 0.97, useNativeDriver: true, speed: 50, bounciness: 2 }).start()}
-        onPressOut={() => Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 30, bounciness: 4 }).start()}
+        onPressIn={() =>
+          Animated.spring(scale, {
+            toValue: 0.97,
+            useNativeDriver: true,
+            speed: 50,
+            bounciness: 2,
+          }).start()
+        }
+        onPressOut={() =>
+          Animated.spring(scale, {
+            toValue: 1,
+            useNativeDriver: true,
+            speed: 30,
+            bounciness: 4,
+          }).start()
+        }
       >
         <View style={styles.card}>
-          <LinearGradient colors={gradPair as any} style={styles.avatar} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+          <LinearGradient
+            colors={gradPair as any}
+            style={styles.avatar}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          >
             <Text style={styles.avatarText}>{initials}</Text>
           </LinearGradient>
           <View style={styles.cardInfo}>
@@ -932,7 +1562,9 @@ function VetCard({ item, index, onPress }: { item: Veterinary; index: number; on
             </View>
             <View style={styles.emailRow}>
               <Ionicons name="mail-outline" size={11} color={C.textMuted} />
-              <Text style={styles.workerEmail} numberOfLines={1}>{item.email}</Text>
+              <Text style={styles.workerEmail} numberOfLines={1}>
+                {item.email}
+              </Text>
             </View>
             <View style={styles.cardTags}>
               {item.specialization ? (
@@ -944,15 +1576,42 @@ function VetCard({ item, index, onPress }: { item: Veterinary; index: number; on
               {item.license_number ? (
                 <View style={[styles.tag, styles.tagLicense]}>
                   <Ionicons name="ribbon-outline" size={10} color={C.accent} />
-                  <Text style={[styles.tagText, { color: C.accent }]}>{item.license_number}</Text>
+                  <Text style={[styles.tagText, { color: C.accent }]}>
+                    {item.license_number}
+                  </Text>
+                </View>
+              ) : null}
+              {locationLabels.length > 0 ? (
+                <View style={[styles.tag, styles.tagLocation]}>
+                  <Ionicons name="location-outline" size={10} color={C.dark} />
+                  <Text style={styles.tagText} numberOfLines={1}>
+                    {locationLabels.length === 1
+                      ? locationLabels[0]
+                      : `${locationLabels[0]} +${locationLabels.length - 1}`}
+                  </Text>
                 </View>
               ) : null}
             </View>
           </View>
           <View style={styles.cardRight}>
-            <View style={[styles.statusPill, { backgroundColor: item.is_active ? "#FFE8D6" : "#FEE2E2" }]}>
-              <View style={[styles.statusDot, { backgroundColor: item.is_active ? C.primary : "#EF4444" }]} />
-              <Text style={[styles.statusText, { color: item.is_active ? C.dark : "#EF4444" }]}>
+            <View
+              style={[
+                styles.statusPill,
+                { backgroundColor: item.is_active ? "#FFE8D6" : "#FEE2E2" },
+              ]}
+            >
+              <View
+                style={[
+                  styles.statusDot,
+                  { backgroundColor: item.is_active ? C.primary : "#EF4444" },
+                ]}
+              />
+              <Text
+                style={[
+                  styles.statusText,
+                  { color: item.is_active ? C.dark : "#EF4444" },
+                ]}
+              >
                 {item.is_active ? "Active" : "Inactive"}
               </Text>
             </View>
@@ -971,23 +1630,37 @@ function VetCard({ item, index, onPress }: { item: Veterinary; index: number; on
 
 export default function VeterinaryScreen() {
   const router = useRouter();
-  const [vets, setVets]                   = useState<Veterinary[]>([]);
-  const [loading, setLoading]             = useState(true);
-  const [modalVisible, setModalVisible]   = useState(false);
-  const [creating, setCreating]           = useState(false);
-  const [selectedVet, setSelectedVet]     = useState<Veterinary | null>(null);
+  const [vets, setVets] = useState<Veterinary[]>([]);
+  const [locations, setLocations] = useState<BusinessLocation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [selectedVet, setSelectedVet] = useState<Veterinary | null>(null);
   const [detailVisible, setDetailVisible] = useState(false);
-  const [toast, setToast]                 = useState({ visible: false, msg: "", variant: "success" as ToastVariant });
-  const [form, setForm]                   = useState({ name: "", email: "", phone: "", password: "", specialization: "", license_number: "" });
-  const [showPassword, setShowPassword]   = useState(false);
+  const [toast, setToast] = useState({
+    visible: false,
+    msg: "",
+    variant: "success" as ToastVariant,
+  });
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    password: "",
+    specialization: "",
+    license_number: "",
+    farm_location_ids: [] as string[],
+    farm_location_labels: [] as string[],
+  });
+  const [showPassword, setShowPassword] = useState(false);
 
   // Delete confirm state
-  const [deleteTarget, setDeleteTarget]   = useState<Veterinary | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Veterinary | null>(null);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
-  const [deleting, setDeleting]           = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // Password reset state
-  const [pwTarget, setPwTarget]           = useState<Veterinary | null>(null);
+  const [pwTarget, setPwTarget] = useState<Veterinary | null>(null);
   const [pwModalVisible, setPwModalVisible] = useState(false);
 
   const showToast = (msg: string, variant: ToastVariant = "success") =>
@@ -1006,7 +1679,31 @@ export default function VeterinaryScreen() {
     }
   };
 
-  useEffect(() => { fetchVets(); }, []);
+  const fetchLocations = async () => {
+    try {
+      const data = await api.getBusinessLocations();
+      setLocations(data);
+    } catch {
+      // non-blocking — location picker will just show empty state
+    }
+  };
+
+  useEffect(() => {
+    fetchVets();
+    fetchLocations();
+  }, []);
+
+  const resetCreateForm = () =>
+    setForm({
+      name: "",
+      email: "",
+      phone: "",
+      password: "",
+      specialization: "",
+      license_number: "",
+      farm_location_ids: [],
+      farm_location_labels: [],
+    });
 
   const handleCreate = async () => {
     if (!form.name.trim() || !form.email.trim() || !form.password.trim()) {
@@ -1016,16 +1713,22 @@ export default function VeterinaryScreen() {
     try {
       setCreating(true);
       await api.createVeterinarian({
-        name:           form.name.trim(),
-        email:          form.email.trim(),
-        password:       form.password,
-        phone:          form.phone.trim() || undefined,
+        name: form.name.trim(),
+        email: form.email.trim(),
+        password: form.password,
+        phone: form.phone.trim() || undefined,
         specialization: form.specialization.trim() || undefined,
         license_number: form.license_number.trim() || undefined,
+        farm_location_ids: form.farm_location_ids.length
+          ? form.farm_location_ids
+          : undefined,
+        farm_location_labels: form.farm_location_labels.length
+          ? form.farm_location_labels
+          : undefined,
       });
       setModalVisible(false);
       setShowPassword(false);
-      setForm({ name: "", email: "", phone: "", password: "", specialization: "", license_number: "" });
+      resetCreateForm();
       fetchVets();
       showToast("Veterinarian created successfully!", "success");
     } catch (e: any) {
@@ -1037,9 +1740,30 @@ export default function VeterinaryScreen() {
 
   const handleUpdateVet = async (id: string, data: Partial<Veterinary>) => {
     try {
-      await api.updateVeterinarian(id, data);
-      setVets((vs) => vs.map((v) => (v.id === id ? { ...v, ...data } : v)));
-      if (selectedVet?.id === id) setSelectedVet((v) => (v ? { ...v, ...data } : v));
+      const updated = await api.updateVeterinarian(id, data as any);
+      setVets((vs) =>
+        vs.map((v) =>
+          v.id === id
+            ? {
+                ...v,
+                ...data,
+                farm_location_labels:
+                  updated?.farm_location_labels ?? v.farm_location_labels,
+              }
+            : v,
+        ),
+      );
+      if (selectedVet?.id === id)
+        setSelectedVet((v) =>
+          v
+            ? {
+                ...v,
+                ...data,
+                farm_location_labels:
+                  updated?.farm_location_labels ?? v.farm_location_labels,
+              }
+            : v,
+        );
       showToast("Veterinarian updated!", "success");
     } catch (e: any) {
       showToast(e?.message || "Update failed", "error");
@@ -1049,9 +1773,15 @@ export default function VeterinaryScreen() {
   const handleToggleActive = async (id: string, active: boolean) => {
     try {
       await api.updateVeterinarian(id, { is_active: active });
-      setVets((vs) => vs.map((v) => (v.id === id ? { ...v, is_active: active } : v)));
-      if (selectedVet?.id === id) setSelectedVet((v) => (v ? { ...v, is_active: active } : v));
-      showToast(`Veterinarian ${active ? "activated" : "deactivated"}`, active ? "success" : "info");
+      setVets((vs) =>
+        vs.map((v) => (v.id === id ? { ...v, is_active: active } : v)),
+      );
+      if (selectedVet?.id === id)
+        setSelectedVet((v) => (v ? { ...v, is_active: active } : v));
+      showToast(
+        `Veterinarian ${active ? "activated" : "deactivated"}`,
+        active ? "success" : "info",
+      );
     } catch (e: any) {
       showToast(e?.message || "Failed to update status", "error");
     }
@@ -1088,12 +1818,34 @@ export default function VeterinaryScreen() {
     setPwModalVisible(true);
   };
 
+  // ── Location picker (create modal) ──
+
+  const toggleCreateLocation = (loc: BusinessLocation) => {
+    setForm((f) => {
+      const exists = f.farm_location_ids.includes(loc.id);
+      return {
+        ...f,
+        farm_location_ids: exists
+          ? f.farm_location_ids.filter((id) => id !== loc.id)
+          : [...f.farm_location_ids, loc.id],
+        farm_location_labels: exists
+          ? f.farm_location_labels.filter((l) => l !== loc.label)
+          : [...f.farm_location_labels, loc.label],
+      };
+    });
+  };
+
   const totalActive = vets.filter((v) => v.is_active).length;
 
   return (
     <View style={styles.screen}>
       <StatusBar barStyle="light-content" />
-      <Toast msg={toast.msg} variant={toast.variant} visible={toast.visible} onHide={hideToast} />
+      <Toast
+        msg={toast.msg}
+        variant={toast.variant}
+        visible={toast.visible}
+        onHide={hideToast}
+      />
 
       {/* ── Header ── */}
       <LinearGradient
@@ -1110,13 +1862,21 @@ export default function VeterinaryScreen() {
             <Ionicons name="medkit-outline" size={16} color={C.primary} />
             <Text style={styles.headerTitle}>Veterinary Staff</Text>
           </View>
-          <Text style={styles.headerSub}>{vets.length} total · {totalActive} active</Text>
+          <Text style={styles.headerSub}>
+            {vets.length} total · {totalActive} active
+          </Text>
         </View>
         <TouchableOpacity
           style={styles.addBtn}
-          onPress={() => { setShowPassword(false); setModalVisible(true); }}
+          onPress={() => {
+            setShowPassword(false);
+            setModalVisible(true);
+          }}
         >
-          <LinearGradient colors={[C.primary, C.dark]} style={styles.addBtnGrad}>
+          <LinearGradient
+            colors={[C.primary, C.dark]}
+            style={styles.addBtnGrad}
+          >
             <Ionicons name="add" size={22} color="#fff" />
           </LinearGradient>
         </TouchableOpacity>
@@ -1130,12 +1890,20 @@ export default function VeterinaryScreen() {
             <Text style={styles.statChipText}>{vets.length} Vets</Text>
           </View>
           <View style={[styles.statChip, { backgroundColor: "#FFE8D6" }]}>
-            <Ionicons name="checkmark-circle-outline" size={13} color={C.dark} />
-            <Text style={[styles.statChipText, { color: C.dark }]}>{totalActive} Active</Text>
+            <Ionicons
+              name="checkmark-circle-outline"
+              size={13}
+              color={C.dark}
+            />
+            <Text style={[styles.statChipText, { color: C.dark }]}>
+              {totalActive} Active
+            </Text>
           </View>
           <View style={[styles.statChip, { backgroundColor: "#FEE2E2" }]}>
             <Ionicons name="close-circle-outline" size={13} color="#DC2626" />
-            <Text style={[styles.statChipText, { color: "#DC2626" }]}>{vets.length - totalActive} Inactive</Text>
+            <Text style={[styles.statChipText, { color: "#DC2626" }]}>
+              {vets.length - totalActive} Inactive
+            </Text>
           </View>
         </View>
       )}
@@ -1152,10 +1920,15 @@ export default function VeterinaryScreen() {
             <Ionicons name="medkit-outline" size={36} color="#fff" />
           </LinearGradient>
           <Text style={styles.emptyTitle}>No Veterinarians Yet</Text>
-          <Text style={styles.emptySubtitle}>Add your first vet to get started</Text>
+          <Text style={styles.emptySubtitle}>
+            Add your first vet to get started
+          </Text>
           <TouchableOpacity
             style={styles.emptyBtn}
-            onPress={() => { setShowPassword(false); setModalVisible(true); }}
+            onPress={() => {
+              setShowPassword(false);
+              setModalVisible(true);
+            }}
           >
             <Ionicons name="add-circle-outline" size={18} color="#fff" />
             <Text style={styles.emptyBtnText}>Add Veterinarian</Text>
@@ -1171,7 +1944,10 @@ export default function VeterinaryScreen() {
             <VetCard
               item={item}
               index={index}
-              onPress={() => { setSelectedVet(item); setDetailVisible(true); }}
+              onPress={() => {
+                setSelectedVet(item);
+                setDetailVisible(true);
+              }}
             />
           )}
           ListFooterComponent={<View style={{ height: 100 }} />}
@@ -1182,6 +1958,7 @@ export default function VeterinaryScreen() {
       <VetDetailModal
         vet={selectedVet}
         visible={detailVisible}
+        locations={locations}
         onClose={() => setDetailVisible(false)}
         onSave={handleUpdateVet}
         onToggleActive={handleToggleActive}
@@ -1205,20 +1982,29 @@ export default function VeterinaryScreen() {
         icon="trash-outline"
         loading={deleting}
         onConfirm={handleDeleteConfirm}
-        onCancel={() => { setDeleteConfirmVisible(false); setDeleteTarget(null); }}
+        onCancel={() => {
+          setDeleteConfirmVisible(false);
+          setDeleteTarget(null);
+        }}
       />
 
       {/* ── Password Reset Modal ── */}
       <PasswordResetModal
         vet={pwTarget}
         visible={pwModalVisible}
-        onClose={() => { setPwModalVisible(false); setPwTarget(null); }}
+        onClose={() => {
+          setPwModalVisible(false);
+          setPwTarget(null);
+        }}
         onSuccess={() => showToast("Password updated successfully!", "success")}
       />
 
       {/* ── Create Vet Modal ── */}
       <Modal visible={modalVisible} animationType="slide" transparent>
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
           <View style={styles.modalOverlay}>
             <View style={styles.modalBox}>
               <View style={styles.modalHandle} />
@@ -1235,7 +2021,10 @@ export default function VeterinaryScreen() {
                 </View>
                 <TouchableOpacity
                   style={styles.closeBtn}
-                  onPress={() => { setShowPassword(false); setModalVisible(false); }}
+                  onPress={() => {
+                    setShowPassword(false);
+                    setModalVisible(false);
+                  }}
                 >
                   <Ionicons name="close" size={19} color={C.textMuted} />
                 </TouchableOpacity>
@@ -1244,30 +2033,54 @@ export default function VeterinaryScreen() {
               <ScrollView showsVerticalScrollIndicator={false}>
                 <Text style={styles.sectionLabel}>REQUIRED</Text>
                 {[
-                  { icon: "person-outline" as keyof typeof Ionicons.glyphMap, key: "name",  label: "Full Name", kb: "default" },
-                  { icon: "mail-outline"   as keyof typeof Ionicons.glyphMap, key: "email", label: "Email",     kb: "email-address" },
+                  {
+                    icon: "person-outline" as keyof typeof Ionicons.glyphMap,
+                    key: "name",
+                    label: "Full Name",
+                    kb: "default",
+                  },
+                  {
+                    icon: "mail-outline" as keyof typeof Ionicons.glyphMap,
+                    key: "email",
+                    label: "Email",
+                    kb: "email-address",
+                  },
                 ].map((f) => (
                   <View key={f.key} style={styles.inputWrapper}>
-                    <Ionicons name={f.icon} size={16} color={C.textMuted} style={styles.inputIcon} />
+                    <Ionicons
+                      name={f.icon}
+                      size={16}
+                      color={C.textMuted}
+                      style={styles.inputIcon}
+                    />
                     <TextInput
                       style={styles.input}
                       placeholder={f.label}
                       placeholderTextColor={C.textLight}
                       value={(form as any)[f.key]}
-                      onChangeText={(v) => setForm((p) => ({ ...p, [f.key]: v }))}
+                      onChangeText={(v) =>
+                        setForm((p) => ({ ...p, [f.key]: v }))
+                      }
                       autoCapitalize="none"
                       keyboardType={f.kb as any}
                     />
                   </View>
                 ))}
                 <View style={styles.inputWrapper}>
-                  <Ionicons name="lock-closed-outline" size={16} color={C.textMuted} style={styles.inputIcon} />
+                  <Ionicons
+                    name="lock-closed-outline"
+                    size={16}
+                    color={C.textMuted}
+                    style={styles.inputIcon}
+                  />
                   <TextInput
                     style={styles.input}
                     placeholder="Password"
                     placeholderTextColor={C.textLight}
                     value={form.password}
-                    onChangeText={(v) => setForm((p) => ({ ...p, password: v }))}
+                    onChangeText={(v) =>
+                      setForm((p) => ({ ...p, password: v }))
+                    }
                     autoCapitalize="none"
                     secureTextEntry={!showPassword}
                   />
@@ -1284,46 +2097,142 @@ export default function VeterinaryScreen() {
                   </TouchableOpacity>
                 </View>
 
-                <Text style={[styles.sectionLabel, { marginTop: 16 }]}>OPTIONAL</Text>
+                <Text style={[styles.sectionLabel, { marginTop: 16 }]}>
+                  OPTIONAL
+                </Text>
                 {[
-                  { icon: "call-outline"   as keyof typeof Ionicons.glyphMap, key: "phone",          label: "Phone Number",   kb: "phone-pad" },
-                  { icon: "ribbon-outline" as keyof typeof Ionicons.glyphMap, key: "license_number",  label: "License Number", kb: "default"   },
+                  {
+                    icon: "call-outline" as keyof typeof Ionicons.glyphMap,
+                    key: "phone",
+                    label: "Phone Number",
+                    kb: "phone-pad",
+                  },
+                  {
+                    icon: "ribbon-outline" as keyof typeof Ionicons.glyphMap,
+                    key: "license_number",
+                    label: "License Number",
+                    kb: "default",
+                  },
                 ].map((f) => (
                   <View key={f.key} style={styles.inputWrapper}>
-                    <Ionicons name={f.icon} size={16} color={C.textMuted} style={styles.inputIcon} />
+                    <Ionicons
+                      name={f.icon}
+                      size={16}
+                      color={C.textMuted}
+                      style={styles.inputIcon}
+                    />
                     <TextInput
                       style={styles.input}
                       placeholder={f.label}
                       placeholderTextColor={C.textLight}
                       value={(form as any)[f.key]}
-                      onChangeText={(v) => setForm((p) => ({ ...p, [f.key]: v }))}
+                      onChangeText={(v) =>
+                        setForm((p) => ({ ...p, [f.key]: v }))
+                      }
                       keyboardType={f.kb as any}
                     />
                   </View>
                 ))}
 
-                <Text style={[styles.sectionLabel, { marginTop: 4 }]}>SPECIALIZATION</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20 }}>
+                <Text style={[styles.sectionLabel, { marginTop: 4 }]}>
+                  SPECIALIZATION
+                </Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={{ marginBottom: 20 }}
+                >
                   {SPECIALIZATIONS.map((s) => (
                     <TouchableOpacity
                       key={s}
-                      style={[styles.designationChip, form.specialization === s && styles.designationChipActive]}
-                      onPress={() => setForm((f) => ({ ...f, specialization: f.specialization === s ? "" : s }))}
+                      style={[
+                        styles.designationChip,
+                        form.specialization === s &&
+                          styles.designationChipActive,
+                      ]}
+                      onPress={() =>
+                        setForm((f) => ({
+                          ...f,
+                          specialization: f.specialization === s ? "" : s,
+                        }))
+                      }
                     >
                       <Ionicons
                         name="medical-outline"
                         size={11}
                         color={form.specialization === s ? C.dark : C.textLight}
                       />
-                      <Text style={[styles.designationChipText, form.specialization === s && styles.designationChipTextActive]}>
+                      <Text
+                        style={[
+                          styles.designationChipText,
+                          form.specialization === s &&
+                            styles.designationChipTextActive,
+                        ]}
+                      >
                         {s}
                       </Text>
                     </TouchableOpacity>
                   ))}
                 </ScrollView>
 
+                <Text style={[styles.sectionLabel, { marginTop: 4 }]}>
+                  FARM ADDRESSES{" "}
+                  {form.farm_location_ids.length > 0 &&
+                    `(${form.farm_location_ids.length} selected)`}
+                </Text>
+                {locations.length === 0 ? (
+                  <View style={styles.noLocationBox}>
+                    <Ionicons
+                      name="location-outline"
+                      size={14}
+                      color={C.textLight}
+                    />
+                    <Text style={styles.noLocationText}>
+                      No farm addresses yet — add one from Business Locations
+                      first.
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={styles.chipsWrap}>
+                    {locations.map((loc) => {
+                      const active = form.farm_location_ids.includes(loc.id);
+                      return (
+                        <TouchableOpacity
+                          key={loc.id}
+                          style={[
+                            styles.designationChip,
+                            active && styles.designationChipActive,
+                          ]}
+                          onPress={() => toggleCreateLocation(loc)}
+                        >
+                          <Ionicons
+                            name="location-outline"
+                            size={11}
+                            color={active ? C.dark : C.textLight}
+                          />
+                          <Text
+                            style={[
+                              styles.designationChipText,
+                              active && styles.designationChipTextActive,
+                            ]}
+                          >
+                            {loc.label}
+                          </Text>
+                          {active && (
+                            <Ionicons
+                              name="checkmark-circle"
+                              size={13}
+                              color={C.dark}
+                            />
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                )}
+
                 <TouchableOpacity
-                  style={[styles.createBtn, creating && { opacity: 0.65 }]}
+                  style={[styles.createBtn, creating && { opacity: 0.65 }, { marginTop: 20 }]}
                   onPress={handleCreate}
                   disabled={creating}
                 >
@@ -1337,8 +2246,14 @@ export default function VeterinaryScreen() {
                       <ActivityIndicator color="#fff" />
                     ) : (
                       <>
-                        <Ionicons name="person-add-outline" size={18} color="#fff" />
-                        <Text style={styles.createBtnText}>Create Veterinarian</Text>
+                        <Ionicons
+                          name="person-add-outline"
+                          size={18}
+                          color="#fff"
+                        />
+                        <Text style={styles.createBtnText}>
+                          Create Veterinarian
+                        </Text>
                       </>
                     )}
                   </LinearGradient>
@@ -1378,12 +2293,28 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  headerCenter:   { flex: 1 },
+  headerCenter: { flex: 1 },
   headerTitleRow: { flexDirection: "row", alignItems: "center", gap: 7 },
-  headerTitle:    { fontSize: 20, fontWeight: "800", color: "#FFF8EF", letterSpacing: -0.3 },
-  headerSub:      { fontSize: 12, color: C.textLight, marginTop: 2, fontWeight: "500" },
-  addBtn:         { borderRadius: 15, overflow: "hidden" },
-  addBtnGrad:     { width: 44, height: 44, alignItems: "center", justifyContent: "center", borderRadius: 15 },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#FFF8EF",
+    letterSpacing: -0.3,
+  },
+  headerSub: {
+    fontSize: 12,
+    color: C.textLight,
+    marginTop: 2,
+    fontWeight: "500",
+  },
+  addBtn: { borderRadius: 15, overflow: "hidden" },
+  addBtnGrad: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 15,
+  },
   statsBar: {
     flexDirection: "row",
     gap: 8,
@@ -1403,7 +2334,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   statChipText: { fontSize: 12, fontWeight: "600", color: C.dark },
-  list:         { padding: 16, gap: 10 },
+  list: { padding: 16, gap: 10 },
   card: {
     flexDirection: "row",
     alignItems: "center",
@@ -1420,9 +2351,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#F5E6D8",
   },
-  avatar:       { width: 52, height: 52, borderRadius: 17, alignItems: "center", justifyContent: "center" },
-  avatarText:   { fontSize: 17, fontWeight: "800", color: "#fff", letterSpacing: -0.3 },
-  nameRow:      { flexDirection: "row", alignItems: "center", gap: 6 },
+  avatar: {
+    width: 52,
+    height: 52,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarText: {
+    fontSize: 17,
+    fontWeight: "800",
+    color: "#fff",
+    letterSpacing: -0.3,
+  },
+  nameRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   vetTag: {
     flexDirection: "row",
     alignItems: "center",
@@ -1432,12 +2374,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
   },
-  vetTagText:   { fontSize: 9, fontWeight: "800", color: C.dark, letterSpacing: 0.5 },
-  cardInfo:     { flex: 1, gap: 3 },
-  workerName:   { fontSize: 15, fontWeight: "700", color: C.text, letterSpacing: -0.2 },
-  emailRow:     { flexDirection: "row", alignItems: "center", gap: 4 },
-  workerEmail:  { fontSize: 12, color: C.textMuted, fontWeight: "500" },
-  cardTags:     { flexDirection: "row", flexWrap: "wrap", gap: 5, marginTop: 4 },
+  vetTagText: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: C.dark,
+    letterSpacing: 0.5,
+  },
+  cardInfo: { flex: 1, gap: 3 },
+  workerName: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: C.text,
+    letterSpacing: -0.2,
+  },
+  emailRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+  workerEmail: { fontSize: 12, color: C.textMuted, fontWeight: "500" },
+  cardTags: { flexDirection: "row", flexWrap: "wrap", gap: 5, marginTop: 4 },
   tag: {
     flexDirection: "row",
     alignItems: "center",
@@ -1446,10 +2398,12 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 8,
     paddingVertical: 3,
+    maxWidth: 160,
   },
-  tagLicense:   { backgroundColor: "#FFF0E8" },
-  tagText:      { fontSize: 11, color: C.dark, fontWeight: "600" },
-  cardRight:    { alignItems: "flex-end", gap: 6 },
+  tagLicense: { backgroundColor: "#FFF0E8" },
+  tagLocation: { backgroundColor: "#FFEFE3" },
+  tagText: { fontSize: 11, color: C.dark, fontWeight: "600" },
+  cardRight: { alignItems: "flex-end", gap: 6 },
   statusPill: {
     flexDirection: "row",
     alignItems: "center",
@@ -1458,12 +2412,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 9,
     paddingVertical: 5,
   },
-  statusDot:    { width: 6, height: 6, borderRadius: 3 },
-  statusText:   { fontSize: 11, fontWeight: "700" },
-  editHint:     { flexDirection: "row", alignItems: "center", gap: 3 },
+  statusDot: { width: 6, height: 6, borderRadius: 3 },
+  statusText: { fontSize: 11, fontWeight: "700" },
+  editHint: { flexDirection: "row", alignItems: "center", gap: 3 },
   editHintText: { fontSize: 10, color: C.textLight, fontWeight: "500" },
-  centered:     { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, paddingHorizontal: 40 },
-  loadingText:  { fontSize: 14, color: C.textMuted, marginTop: 8 },
+  centered: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+    paddingHorizontal: 40,
+  },
+  loadingText: { fontSize: 14, color: C.textMuted, marginTop: 8 },
   emptyIcon: {
     width: 74,
     height: 74,
@@ -1472,8 +2432,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: 4,
   },
-  emptyTitle:    { fontSize: 20, fontWeight: "800", color: C.text },
-  emptySubtitle: { fontSize: 14, color: C.textMuted, textAlign: "center", lineHeight: 20 },
+  emptyTitle: { fontSize: 20, fontWeight: "800", color: C.text },
+  emptySubtitle: {
+    fontSize: 14,
+    color: C.textMuted,
+    textAlign: "center",
+    lineHeight: 20,
+  },
   emptyBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -1484,8 +2449,12 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     marginTop: 8,
   },
-  emptyBtnText:  { color: "#fff", fontWeight: "700", fontSize: 15 },
-  modalOverlay:  { flex: 1, backgroundColor: "rgba(61,31,10,0.55)", justifyContent: "flex-end" },
+  emptyBtnText: { color: "#fff", fontWeight: "700", fontSize: 15 },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(61,31,10,0.55)",
+    justifyContent: "flex-end",
+  },
   modalBox: {
     backgroundColor: C.bg,
     borderTopLeftRadius: 28,
@@ -1517,8 +2486,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  modalTitle:   { fontSize: 20, fontWeight: "800", color: C.text },
-  modalSub:     { fontSize: 13, color: C.textMuted, marginTop: 2 },
+  modalTitle: { fontSize: 20, fontWeight: "800", color: C.text },
+  modalSub: { fontSize: 13, color: C.textMuted, marginTop: 2 },
   closeBtn: {
     width: 34,
     height: 34,
@@ -1544,8 +2513,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     marginBottom: 10,
   },
-  inputIcon:      { marginRight: 8 },
-  input:          { flex: 1, paddingVertical: 13, fontSize: 15, color: C.text },
+  inputIcon: { marginRight: 8 },
+  input: { flex: 1, paddingVertical: 13, fontSize: 15, color: C.text },
   passwordEyeBtn: {
     width: 36,
     height: 36,
@@ -1554,6 +2523,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: "#FFF3ED",
     marginLeft: 8,
+  },
+  chipsWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 4,
   },
   designationChip: {
     flexDirection: "row",
@@ -1564,13 +2539,29 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     paddingHorizontal: 12,
     paddingVertical: 7,
-    marginRight: 8,
     backgroundColor: "#fff",
   },
-  designationChipActive:     { borderColor: C.primary, backgroundColor: C.card },
-  designationChipText:       { fontSize: 12, fontWeight: "600", color: C.textMuted },
+  designationChipActive: { borderColor: C.primary, backgroundColor: C.card },
+  designationChipText: { fontSize: 12, fontWeight: "600", color: C.textMuted },
   designationChipTextActive: { color: C.dark },
-  createBtn:         { borderRadius: 16, overflow: "hidden", marginTop: 8 },
+  noLocationBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#FFF3E8",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    marginBottom: 20,
+  },
+  noLocationText: {
+    flex: 1,
+    fontSize: 12.5,
+    color: C.textLight,
+    fontWeight: "500",
+    lineHeight: 17,
+  },
+  createBtn: { borderRadius: 16, overflow: "hidden" },
   createBtnGradient: {
     flexDirection: "row",
     alignItems: "center",

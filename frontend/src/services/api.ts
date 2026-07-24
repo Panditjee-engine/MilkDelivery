@@ -363,6 +363,24 @@ export interface FarmSale {
   created_at: string;
 }
 
+//farm multiple adress
+export interface BusinessLocationCreate {
+  label: string;
+  address_line: string;
+  city: string;
+  state: string;
+  pincode: string;
+  is_primary?: boolean;
+}
+
+export interface BusinessLocation extends BusinessLocationCreate {
+  id: string;
+  admin_id: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+
 class ApiService {
   private token: string | null = null;
 
@@ -1044,6 +1062,10 @@ class ApiService {
       milkActive: boolean; // ← ADD THIS
       qrLinkedData: string;
       isBarcodeLinked: boolean;
+      farmLocationId: string;
+      farmLocationLabel: string;
+      transferLocationId: string;
+      transferLocationLabel: string;
     }>,
   ) {
     return this.request<any>(`/gausevak/cows/${id}`, {
@@ -1315,19 +1337,20 @@ class ApiService {
     return this.request<any[]>("/admin/workers");
   }
 
-  async createWorker(data: {
-    name: string;
-    email: string;
-    password: string;
-    phone?: string;
-    designation?: string;
-    farm_name?: string;
-  }) {
-    return this.request<any>("/admin/workers", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
-  }
+async createWorker(data: {
+  name: string;
+  email: string;
+  password: string;
+  phone?: string;
+  designation?: string;
+  farm_name?: string;
+  farm_location_id?: string;
+}) {
+  return this.request<any>("/admin/workers", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
 
   async getAdminCustomers(params?: {
     zone?: string;
@@ -2000,22 +2023,23 @@ class ApiService {
     });
   }
 
-  async updateWorker(
-    id: string,
-    data: Partial<{
-      name: string;
-      phone: string;
-      designation: string;
-      farm_name: string;
-      is_active: boolean;
-      password: string;
-    }>,
-  ) {
-    return this.request<any>(`/admin/workers/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(data),
-    });
-  }
+async updateWorker(
+  id: string,
+  data: Partial<{
+    name: string;
+    phone: string;
+    designation: string;
+    farm_name: string;
+    farm_location_id: string;
+    is_active: boolean;
+    password: string;
+  }>,
+) {
+  return this.request<any>(`/admin/workers/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
 
   //worker id delete by anurag
   async deleteWorker(id: string) {
@@ -2324,35 +2348,39 @@ async resetVeterinarianPassword(id: string, new_password: string) {
     return this.request<any[]>("/admin/veterinarians");
   }
 
-  async createVeterinarian(data: {
-    name: string;
-    email: string;
-    password: string;
-    phone?: string;
-    specialization?: string;
-    license_number?: string;
-  }) {
-    return this.request<any>("/admin/veterinarians", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
-  }
+async createVeterinarian(data: {
+  name: string;
+  email: string;
+  password: string;
+  phone?: string;
+  specialization?: string;
+  license_number?: string;
+  farm_location_ids?: string[];        // ← was farm_location_id: string
+  farm_location_labels?: string[];     // ← was farm_location_label: string
+}) {
+  return this.request<any>("/admin/veterinarians", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
 
   async updateVeterinarian(
-    id: string,
-    data: Partial<{
-      name: string;
-      phone: string;
-      specialization: string;
-      license_number: string;
-      is_active: boolean;
-    }>,
-  ) {
-    return this.request<any>(`/admin/veterinarians/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(data),
-    });
-  }
+  id: string,
+  data: Partial<{
+    name: string;
+    phone: string;
+    specialization: string;
+    license_number: string;
+    is_active: boolean;
+    farm_location_ids: string[];       // ← was farm_location_id: string
+    farm_location_labels: string[];    // ← was farm_location_label: string
+  }>,
+) {
+  return this.request<any>(`/admin/veterinarians/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
 
   async vetLogin(email: string, password: string) {
     const response = await fetch(`${API_BASE}/api/vet/auth/login`, {
@@ -3087,6 +3115,28 @@ async workerGetFarmSales(params?: {
     });
   }
   
+//Farm/business multiple Adresses
+async getBusinessLocations(): Promise<BusinessLocation[]> {
+  return this.request<BusinessLocation[]>("/admin/locations");
+}
+
+async createBusinessLocation(data: BusinessLocationCreate): Promise<BusinessLocation> {
+  return this.request<BusinessLocation>("/admin/locations", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+async updateBusinessLocation(id: string, data: BusinessLocationCreate): Promise<BusinessLocation> {
+  return this.request<BusinessLocation>(`/admin/locations/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+async deleteBusinessLocation(id: string): Promise<{ success: boolean; id: string }> {
+  return this.request(`/admin/locations/${id}`, { method: "DELETE" });
+}
 
   // Logout
   logout = async () => {

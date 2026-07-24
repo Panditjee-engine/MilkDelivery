@@ -15,7 +15,7 @@ import {
   ActivityIndicator,
   Image,
 } from "react-native";
-import { api } from "../../src/services/api";
+import { api, BusinessLocation, BusinessLocationCreate } from "../../src/services/api";
 import QRCode from "react-native-qrcode-svg";
 import * as Sharing from "expo-sharing";
 import * as ImagePicker from "expo-image-picker";
@@ -52,6 +52,7 @@ type ModalType =
   | "profile"
   | "password"
   | "share"
+  | "locations"
   | null;
 
 // password change has 3 steps:
@@ -715,6 +716,22 @@ export default function AdminSettingsScreen() {
     is_active: boolean;
   }>({ id: null, title: "", description: "", images: [], is_active: true });
 
+  // ── Business Locations state (multiple branches for the same business)
+  const [locations, setLocations] = useState<BusinessLocation[]>([]);
+  const [locationsLoading, setLocationsLoading] = useState(false);
+  const [locationSaving, setLocationSaving] = useState(false);
+  const [editingLocationId, setEditingLocationId] = useState<string | null>(
+    null,
+  );
+  const [locationDraft, setLocationDraft] = useState<BusinessLocationCreate>({
+    label: "",
+    address_line: "",
+    city: "",
+    state: "",
+    pincode: "",
+    is_primary: false,
+  });
+
   // ── Load non-profile settings (cutoff/delivery/grace) from AsyncStorage.
   //    businessName / supportContact are deliberately excluded here — they
   //    are always derived live from `user`, never from the cache, so a
@@ -733,6 +750,7 @@ export default function AdminSettingsScreen() {
       useNativeDriver: true,
     }).start();
     loadContent();
+    loadLocations();
   }, []);
 
   // ── Business Name & Support Contact always mirror the admin's real profile.
@@ -769,6 +787,10 @@ export default function AdminSettingsScreen() {
       setPwDraft({ newPw: "", confirm: "" });
       setShowPw({ newPw: false, confirm: false });
       setPwLoading(false);
+    }
+    if (type === "locations") {
+      resetLocationDraft();
+      loadLocations();
     }
     setActiveModal(type);
   };
@@ -970,6 +992,154 @@ export default function AdminSettingsScreen() {
               showAlert(
                 "Delete Failed",
                 error?.message || "Could not delete content.",
+              );
+            }
+          },
+        },
+      ],
+      "trash-outline",
+      "#FEE2E2",
+      "#dc2626",
+    );
+  };
+
+  // ─────────────────────────────────────────────
+  // Business Locations — CRUD against /admin/locations
+  // ─────────────────────────────────────────────
+  const resetLocationDraft = () => {
+    setEditingLocationId(null);
+    setLocationDraft({
+      label: "",
+      address_line: "",
+      city: "",
+      state: "",
+      pincode: "",
+      is_primary: false,
+    });
+  };
+
+  const loadLocations = async () => {
+    setLocationsLoading(true);
+    try {
+      const data = await api.getBusinessLocations();
+      setLocations(Array.isArray(data) ? data : []);
+    } catch (error: any) {
+      showAlert(
+        "Load Failed",
+        error?.message || "Could not load locations.",
+        undefined,
+        "alert-circle-outline",
+        C.deepPeach,
+        C.amber,
+      );
+    } finally {
+      setLocationsLoading(false);
+    }
+  };
+
+  const editLocation = (loc: BusinessLocation) => {
+    setEditingLocationId(loc.id);
+    setLocationDraft({
+      label: loc.label,
+      address_line: loc.address_line,
+      city: loc.city,
+      state: loc.state,
+      pincode: loc.pincode,
+      is_primary: loc.is_primary,
+    });
+  };
+
+  const saveLocation = async () => {
+    const { label, address_line, city, state, pincode } = locationDraft;
+    if (
+      !label.trim() ||
+      !address_line.trim() ||
+      !city.trim() ||
+      !state.trim() ||
+      !pincode.trim()
+    ) {
+      showAlert(
+        "Missing Details",
+        "Please fill in all fields.",
+        undefined,
+        "alert-circle-outline",
+        C.deepPeach,
+        C.amber,
+      );
+      return;
+    }
+    if (pincode.trim().length !== 6) {
+      showAlert(
+        "Invalid Pincode",
+        "Pincode must be 6 digits.",
+        undefined,
+        "alert-circle-outline",
+        C.deepPeach,
+        C.amber,
+      );
+      return;
+    }
+    setLocationSaving(true);
+    try {
+      const payload: BusinessLocationCreate = {
+        label: label.trim(),
+        address_line: address_line.trim(),
+        city: city.trim(),
+        state: state.trim(),
+        pincode: pincode.trim(),
+        is_primary: !!locationDraft.is_primary,
+      };
+      if (editingLocationId) {
+        await api.updateBusinessLocation(editingLocationId, payload);
+      } else {
+        await api.createBusinessLocation(payload);
+      }
+      resetLocationDraft();
+      await loadLocations();
+      showAlert(
+        "Saved",
+        editingLocationId ? "Location updated." : "Location added.",
+        undefined,
+        "checkmark-circle",
+        "#E8F5E9",
+        "#388E3C",
+      );
+    } catch (error: any) {
+      showAlert(
+        "Save Failed",
+        error?.message || "Could not save location.",
+        undefined,
+        "alert-circle-outline",
+        C.deepPeach,
+        C.amber,
+      );
+    } finally {
+      setLocationSaving(false);
+    }
+  };
+
+  const deleteLocation = (loc: BusinessLocation) => {
+    showAlert(
+      "Delete Location?",
+      `Remove "${loc.label}"? This cannot be undone.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await api.deleteBusinessLocation(loc.id);
+              if (editingLocationId === loc.id) resetLocationDraft();
+              await loadLocations();
+            } catch (error: any) {
+              showAlert(
+                "Delete Failed",
+                error?.message || "Could not delete location.",
+                undefined,
+                "alert-circle-outline",
+                "#FEF2F2",
+                "#dc2626",
               );
             }
           },
@@ -1384,6 +1554,9 @@ export default function AdminSettingsScreen() {
   // Display strings
   const cutoffDisplay = `${settings.cutoffHour}:${settings.cutoffMin} ${settings.cutoffAmPm}`;
   const deliveryDisplay = `${settings.deliveryStartHour}:${settings.deliveryStartMin} ${settings.deliveryStartAmPm} – ${settings.deliveryEndHour}:${settings.deliveryEndMin} ${settings.deliveryEndAmPm}`;
+  const locationsDisplay = locations.length
+    ? `${locations.length} location${locations.length !== 1 ? "s" : ""} added`
+    : "No locations added";
 
   const pwStepTitle =
     otpStep === "request"
@@ -1644,6 +1817,15 @@ export default function AdminSettingsScreen() {
               label="Support Contact"
               value={settings.supportContact}
               onPress={() => openModal("contact")}
+            />
+            <View style={s.divider} />
+            <SettingRow
+              icon="location-outline"
+              iconBg="#F5EDE8"
+              iconColor={C.dark}
+              label="Business Locations"
+              value={locationsDisplay}
+              onPress={() => openModal("locations")}
             />
           </View>
         </View>
@@ -1952,6 +2134,174 @@ export default function AdminSettingsScreen() {
         </TouchableOpacity>
       </SettingModal>
 
+      {/* ── Modal: Business Locations (multiple branches, own collection) ── */}
+      <SettingModal
+        visible={activeModal === "locations"}
+        title="Business Locations"
+        icon="location-outline"
+        onClose={closeModal}
+        onSave={() => {}}
+      >
+        {locationsLoading ? (
+          <ActivityIndicator
+            color={C.primary}
+            style={{ marginVertical: 24 }}
+          />
+        ) : locations.length === 0 ? (
+          <View style={loc.emptyBox}>
+            <Ionicons name="location-outline" size={26} color={C.light} />
+            <Text style={loc.emptyText}>
+              No locations added yet. Add your branches below.
+            </Text>
+          </View>
+        ) : (
+          locations.map((item) => (
+            <View key={item.id} style={loc.card}>
+              <View style={loc.cardTop}>
+                <View style={loc.cardTitleRow}>
+                  <Text style={loc.cardLabel} numberOfLines={1}>
+                    {item.label}
+                  </Text>
+                  {item.is_primary ? (
+                    <View style={loc.primaryPill}>
+                      <Ionicons name="star" size={10} color="#fff" />
+                      <Text style={loc.primaryPillTxt}>Primary</Text>
+                    </View>
+                  ) : null}
+                </View>
+                <View style={loc.cardActions}>
+                  <TouchableOpacity
+                    style={loc.cardActionBtn}
+                    onPress={() => editLocation(item)}
+                  >
+                    <Ionicons name="pencil-outline" size={15} color={C.dark} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[loc.cardActionBtn, { backgroundColor: "#FEE2E2" }]}
+                    onPress={() => deleteLocation(item)}
+                  >
+                    <Ionicons name="trash-outline" size={15} color="#dc2626" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+              <Text style={loc.cardAddress}>
+                {item.address_line}, {item.city}, {item.state} -{" "}
+                {item.pincode}
+              </Text>
+            </View>
+          ))
+        )}
+
+        <View style={mS.separator} />
+
+        <Text style={mS.subHeading}>
+          {editingLocationId ? "Edit Location" : "Add a New Location"}
+        </Text>
+
+        <Text style={mS.fieldLabel}>Label</Text>
+        <TextInput
+          style={mS.input}
+          value={locationDraft.label}
+          onChangeText={(v) =>
+            setLocationDraft((d) => ({ ...d, label: v }))
+          }
+          placeholder="e.g. Main Farm, Sector 12 Branch"
+          placeholderTextColor={C.light}
+        />
+
+        <Text style={mS.fieldLabel}>Address Line</Text>
+        <TextInput
+          style={mS.input}
+          value={locationDraft.address_line}
+          onChangeText={(v) =>
+            setLocationDraft((d) => ({ ...d, address_line: v }))
+          }
+          placeholder="House no, street, area"
+          placeholderTextColor={C.light}
+        />
+
+        <Text style={mS.fieldLabel}>City</Text>
+        <TextInput
+          style={mS.input}
+          value={locationDraft.city}
+          onChangeText={(v) => setLocationDraft((d) => ({ ...d, city: v }))}
+          placeholder="City"
+          placeholderTextColor={C.light}
+        />
+
+        <Text style={mS.fieldLabel}>State</Text>
+        <TextInput
+          style={mS.input}
+          value={locationDraft.state}
+          onChangeText={(v) => setLocationDraft((d) => ({ ...d, state: v }))}
+          placeholder="State"
+          placeholderTextColor={C.light}
+        />
+
+        <Text style={mS.fieldLabel}>Pincode</Text>
+        <TextInput
+          style={mS.input}
+          value={locationDraft.pincode}
+          onChangeText={(v) =>
+            setLocationDraft((d) => ({
+              ...d,
+              pincode: v.replace(/\D/g, "").slice(0, 6),
+            }))
+          }
+          placeholder="6-digit pincode"
+          placeholderTextColor={C.light}
+          keyboardType="number-pad"
+          maxLength={6}
+        />
+
+        <TouchableOpacity
+          style={loc.primaryToggle}
+          activeOpacity={0.8}
+          onPress={() =>
+            setLocationDraft((d) => ({ ...d, is_primary: !d.is_primary }))
+          }
+        >
+          <Ionicons
+            name={locationDraft.is_primary ? "checkbox" : "square-outline"}
+            size={20}
+            color={C.primary}
+          />
+          <Text style={loc.primaryToggleTxt}>Set as primary location</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[mS.saveBtn, locationSaving && mS.saveBtnDisabled]}
+          onPress={saveLocation}
+          activeOpacity={0.8}
+          disabled={locationSaving}
+        >
+          {locationSaving ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <>
+              <Ionicons
+                name={editingLocationId ? "checkmark-circle" : "add-circle"}
+                size={18}
+                color="#fff"
+              />
+              <Text style={mS.saveTxt}>
+                {editingLocationId ? "Update Location" : "Add Location"}
+              </Text>
+            </>
+          )}
+        </TouchableOpacity>
+
+        {editingLocationId ? (
+          <TouchableOpacity
+            style={mS.backBtn}
+            onPress={resetLocationDraft}
+          >
+            <Ionicons name="close-outline" size={14} color={C.muted} />
+            <Text style={mS.backTxt}>Cancel edit</Text>
+          </TouchableOpacity>
+        ) : null}
+      </SettingModal>
+
       {/* ── Modal: Edit Profile */}
       <SettingModal
         visible={activeModal === "profile"}
@@ -1975,16 +2325,16 @@ export default function AdminSettingsScreen() {
         </View>
         {[
           {
-            label: "Full Name",
+            label: "Business name",
             key: "name",
-            placeholder: "Your name",
+            placeholder: "Enter Business Name",
             keyboard: "default",
             icon: "person-outline",
           },
           {
             label: "Email Address",
             key: "email",
-            placeholder: "your@email.com",
+            placeholder: "Business@email.com",
             keyboard: "email-address",
             icon: "mail-outline",
           },
@@ -2654,6 +3004,87 @@ const pw = StyleSheet.create({
     color: C.muted,
     fontWeight: "600",
   },
+});
+
+// Business Locations modal styles
+const loc = StyleSheet.create({
+  emptyBox: {
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFF0E4",
+    borderRadius: 16,
+    paddingVertical: 28,
+    paddingHorizontal: 20,
+    gap: 8,
+    marginBottom: 4,
+  },
+  emptyText: {
+    fontSize: 13,
+    color: C.muted,
+    textAlign: "center",
+    fontWeight: "500",
+    lineHeight: 18,
+  },
+  card: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: "#FFE8C8",
+    padding: 14,
+    marginBottom: 10,
+  },
+  cardTop: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  cardTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flex: 1,
+  },
+  cardLabel: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#3D1F0A",
+    flexShrink: 1,
+  },
+  primaryPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: C.primary,
+    borderRadius: 10,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  primaryPillTxt: { fontSize: 9, fontWeight: "800", color: "#fff" },
+  cardActions: { flexDirection: "row", gap: 8 },
+  cardActionBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 9,
+    backgroundColor: "#FFE8D6",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  cardAddress: {
+    fontSize: 12.5,
+    color: "#A07850",
+    marginTop: 8,
+    lineHeight: 18,
+    fontWeight: "500",
+  },
+  primaryToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 2,
+    marginBottom: 6,
+  },
+  primaryToggleTxt: { fontSize: 13, color: "#3D1F0A", fontWeight: "600" },
 });
 
 const s = StyleSheet.create({

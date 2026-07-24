@@ -20,6 +20,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { useLang } from "../../src/contexts/LanguageContext";
 import { api } from "../../src/services/api";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // Types
 
@@ -30,6 +31,7 @@ interface Cow {
   tag?: string;
   isActive?: boolean;
   isSold?: boolean;
+  farmLocationId?: string;
 }
 
 interface FeedItem {
@@ -346,15 +348,33 @@ export default function FeedScreen({
   };
 
   // ── Fetch cows + feed status ──
+  // Reads the worker's own farm location fresh from AsyncStorage on every
+  // call (not stored in state), so there's no race between "location loaded"
+  // and "cows loaded" — the filter is always applied using the value that
+  // was current at the moment of this fetch.
   const fetchAll = useCallback(async () => {
     try {
+      let myLocationId: string | null = null;
+      try {
+        const raw = await AsyncStorage.getItem("worker_data");
+        if (raw) {
+          const w = JSON.parse(raw);
+          myLocationId = w.farm_location_id ?? null;
+        }
+      } catch {
+        // ignore — falls back to showing all cows
+      }
+
       const [cowsData, statusData] = await Promise.all([
         api.workerGetCows(),
         api.workerGetFeedStatus(todayStr(), shift),
       ]);
 
       const activeCows: Cow[] = cowsData.filter(
-        (c: Cow) => c.isActive !== false && !c.isSold,
+        (c: Cow) =>
+          c.isActive !== false &&
+          !c.isSold &&
+          (!myLocationId || c.farmLocationId === myLocationId),
       );
       setCows(activeCows);
 

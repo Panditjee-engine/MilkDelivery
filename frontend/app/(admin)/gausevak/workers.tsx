@@ -21,6 +21,11 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { api } from "../../../src/services/api";
 
+interface FarmLocationOption {
+  id: string;
+  label: string;
+}
+
 interface Worker {
   id: string;
   name: string;
@@ -28,6 +33,8 @@ interface Worker {
   phone?: string;
   designation?: string;
   farm_name?: string;
+  farm_location_id?: string;
+  farm_location_label?: string;
   is_active: boolean;
   is_verified: boolean;
   admin_id?: string;
@@ -65,7 +72,7 @@ const AVATAR_COLORS = [
   ["#1b4332", "#40916c"],
 ];
 
-// ── Toast Component
+// ── Toast Component (now centered on screen)
 type ToastVariant = "success" | "error" | "info";
 function Toast({
   msg,
@@ -78,25 +85,43 @@ function Toast({
   visible: boolean;
   onHide: () => void;
 }) {
-  const slide = useRef(new Animated.Value(-80)).current;
+  const scale = useRef(new Animated.Value(0.85)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+
   useEffect(() => {
     if (!visible) return;
-    Animated.spring(slide, {
-      toValue: 0,
-      useNativeDriver: true,
-      tension: 80,
-      friction: 9,
-    }).start();
-    const t = setTimeout(() => {
-      Animated.timing(slide, {
-        toValue: -80,
-        duration: 250,
+    Animated.parallel([
+      Animated.spring(scale, {
+        toValue: 1,
         useNativeDriver: true,
-      }).start(onHide);
-    }, 3000);
+        tension: 90,
+        friction: 10,
+      }),
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
+    const t = setTimeout(() => {
+      Animated.parallel([
+        Animated.timing(scale, {
+          toValue: 0.9,
+          duration: 220,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacity, {
+          toValue: 0,
+          duration: 220,
+          useNativeDriver: true,
+        }),
+      ]).start(onHide);
+    }, 2600);
     return () => clearTimeout(t);
   }, [visible]);
+
   if (!visible) return null;
+
   const colors: Record<
     ToastVariant,
     { bg: string; icon: string; border: string }
@@ -106,48 +131,60 @@ function Toast({
     info: { bg: "#eff6ff", border: "#2563eb", icon: "information-circle" },
   };
   const c = colors[variant];
+
   return (
-    <Animated.View
-      style={[
-        toastS.wrap,
-        {
-          transform: [{ translateY: slide }],
-          borderLeftColor: c.border,
-          backgroundColor: c.bg,
-        },
-      ]}
-    >
-      <Ionicons name={c.icon as any} size={20} color={c.border} />
-      <Text style={[toastS.msg, { color: c.border }]}>{msg}</Text>
-      <TouchableOpacity
-        onPress={onHide}
-        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+    <View style={toastS.overlay} pointerEvents="box-none">
+      <Animated.View
+        style={[
+          toastS.wrap,
+          {
+            opacity,
+            transform: [{ scale }],
+            backgroundColor: c.bg,
+            borderColor: c.border,
+          },
+        ]}
       >
-        <Ionicons name="close" size={15} color={c.border} />
-      </TouchableOpacity>
-    </Animated.View>
+        <Ionicons name={c.icon as any} size={22} color={c.border} />
+        <Text style={[toastS.msg, { color: c.border }]}>{msg}</Text>
+        <TouchableOpacity
+          onPress={onHide}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Ionicons name="close" size={16} color={c.border} />
+        </TouchableOpacity>
+      </Animated.View>
+    </View>
   );
 }
 const toastS = StyleSheet.create({
-  wrap: {
+  overlay: {
     position: "absolute",
-    top: 16,
-    left: 16,
-    right: 16,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     zIndex: 9999,
-    borderRadius: 14,
-    padding: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+  },
+  wrap: {
+    width: "100%",
+    maxWidth: 360,
+    borderRadius: 16,
+    padding: 16,
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    borderLeftWidth: 4,
+    borderWidth: 1.5,
     shadowColor: "#000",
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 12,
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 16,
   },
-  msg: { flex: 1, fontSize: 13.5, fontWeight: "600", lineHeight: 18 },
+  msg: { flex: 1, fontSize: 14, fontWeight: "600", lineHeight: 19 },
 });
 
 // ── Extra Task Item
@@ -258,6 +295,7 @@ function WorkerDetailModal({
   onSave,
   onToggleActive,
   onDelete,
+  locations,
 }: {
   worker: Worker | null;
   visible: boolean;
@@ -268,6 +306,7 @@ function WorkerDetailModal({
   ) => Promise<void>;
   onToggleActive: (id: string, active: boolean) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
+  locations: FarmLocationOption[];
 }) {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -281,6 +320,7 @@ function WorkerDetailModal({
     phone: "",
     designation: "",
     farm_name: "",
+    farm_location_id: "",
   });
 
   // Password change state
@@ -289,6 +329,11 @@ function WorkerDetailModal({
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showNewPwd, setShowNewPwd] = useState(false);
   const [showConfirmPwd, setShowConfirmPwd] = useState(false);
+
+  // Transfer (location) state
+  const [transferVisible, setTransferVisible] = useState(false);
+  const [transferring, setTransferring] = useState(false);
+  const [selectedLocationId, setSelectedLocationId] = useState("");
 
   const scaleAnim = useRef(new Animated.Value(0.92)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
@@ -302,6 +347,7 @@ function WorkerDetailModal({
         phone: worker.phone || "",
         designation: worker.designation || "",
         farm_name: worker.farm_name || "",
+        farm_location_id: worker.farm_location_id || "",
       });
       setEditing(false);
       setExtraTasks([]);
@@ -310,6 +356,8 @@ function WorkerDetailModal({
       setConfirmPassword("");
       setShowNewPwd(false);
       setShowConfirmPwd(false);
+      setTransferVisible(false);
+      setSelectedLocationId(worker.farm_location_id || "");
 
       scaleAnim.setValue(0.92);
       opacityAnim.setValue(0);
@@ -393,6 +441,7 @@ function WorkerDetailModal({
       phone: form.phone.trim() || undefined,
       designation: form.designation.trim() || undefined,
       farm_name: form.farm_name.trim() || undefined,
+      farm_location_id: form.farm_location_id || undefined,
     };
 
     if (showPasswordSection && newPassword.trim()) {
@@ -424,6 +473,24 @@ function WorkerDetailModal({
         },
       ],
     );
+  };
+
+  // ── Transfer handlers
+  const openTransfer = () => {
+    setSelectedLocationId(worker.farm_location_id || "");
+    setTransferVisible(true);
+  };
+
+  const handleTransfer = async () => {
+    if (!selectedLocationId) return;
+    if (selectedLocationId === worker.farm_location_id) {
+      setTransferVisible(false);
+      return;
+    }
+    setTransferring(true);
+    await onSave(worker.id, { farm_location_id: selectedLocationId });
+    setTransferring(false);
+    setTransferVisible(false);
   };
 
   return (
@@ -567,6 +634,57 @@ function WorkerDetailModal({
                     </TouchableOpacity>
                   ))}
                 </ScrollView>
+
+                {/* ── Farm Location Chips ── */}
+                {locations.length > 0 && (
+                  <>
+                    <Text style={[dm.sectionLabel, { marginTop: 4 }]}>
+                      FARM LOCATION
+                    </Text>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      style={{ marginBottom: 16 }}
+                    >
+                      {locations.map((loc) => (
+                        <TouchableOpacity
+                          key={loc.id}
+                          style={[
+                            dm.chip,
+                            form.farm_location_id === loc.id && dm.chipActive,
+                          ]}
+                          onPress={() =>
+                            setForm((p) => ({
+                              ...p,
+                              farm_location_id:
+                                p.farm_location_id === loc.id ? "" : loc.id,
+                            }))
+                          }
+                        >
+                          <Ionicons
+                            name="location-outline"
+                            size={12}
+                            color={
+                              form.farm_location_id === loc.id
+                                ? "#2d6a4f"
+                                : "#888"
+                            }
+                            style={{ marginRight: 4 }}
+                          />
+                          <Text
+                            style={[
+                              dm.chipText,
+                              form.farm_location_id === loc.id &&
+                                dm.chipTextActive,
+                            ]}
+                          >
+                            {loc.label}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </>
+                )}
 
                 {/* ── Change Password Section ── */}
                 <TouchableOpacity
@@ -781,6 +899,11 @@ function WorkerDetailModal({
                     label: "Farm",
                     val: worker.farm_name || "—",
                   },
+                  {
+                    icon: "location-outline",
+                    label: "Farm Location",
+                    val: worker.farm_location_label || "—",
+                  },
                 ].map((row) => (
                   <View key={row.label} style={dm.detailRow}>
                     <View style={dm.detailIconBox}>
@@ -792,6 +915,33 @@ function WorkerDetailModal({
                     </View>
                   </View>
                 ))}
+
+                {/* ── Transfer Button ── */}
+                {locations.length > 0 && (
+                  <TouchableOpacity
+                    style={dm.transferBtn}
+                    onPress={openTransfer}
+                    activeOpacity={0.7}
+                  >
+                    <View style={dm.transferBtnLeft}>
+                      <View style={dm.transferIconBox}>
+                        <Ionicons
+                          name="swap-horizontal-outline"
+                          size={15}
+                          color="#b45309"
+                        />
+                      </View>
+                      <Text style={dm.transferBtnText}>
+                        Transfer to Another Location
+                      </Text>
+                    </View>
+                    <Ionicons
+                      name="chevron-forward"
+                      size={16}
+                      color="#b45309"
+                    />
+                  </TouchableOpacity>
+                )}
 
                 {/* Active toggle */}
                 <View style={dm.toggleRow}>
@@ -859,6 +1009,103 @@ function WorkerDetailModal({
           </ScrollView>
         </Animated.View>
       </View>
+
+      {/* ── Transfer Location Modal ── */}
+      <Modal
+        visible={transferVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setTransferVisible(false)}
+      >
+        <View style={dm.overlay}>
+          <View style={trS.card}>
+            <View style={trS.iconWrap}>
+              <Ionicons name="swap-horizontal" size={22} color="#b45309" />
+            </View>
+            <Text style={trS.title}>Transfer Worker</Text>
+            <Text style={trS.sub}>
+              Select a new farm location for {worker.name}
+            </Text>
+
+            <ScrollView style={trS.list} showsVerticalScrollIndicator={false}>
+              {locations.map((loc) => {
+                const active = selectedLocationId === loc.id;
+                const isCurrent = worker.farm_location_id === loc.id;
+                return (
+                  <TouchableOpacity
+                    key={loc.id}
+                    style={[trS.locRow, active && trS.locRowActive]}
+                    onPress={() => setSelectedLocationId(loc.id)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons
+                      name="location-outline"
+                      size={17}
+                      color={active ? "#2d6a4f" : "#888"}
+                    />
+                    <View style={{ flex: 1 }}>
+                      <Text
+                        style={[trS.locText, active && trS.locTextActive]}
+                      >
+                        {loc.label}
+                      </Text>
+                      {isCurrent && (
+                        <Text style={trS.currentTag}>Current location</Text>
+                      )}
+                    </View>
+                    {active && (
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={19}
+                        color="#2d6a4f"
+                      />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            <View style={trS.btnRow}>
+              <TouchableOpacity
+                style={trS.cancelBtn}
+                onPress={() => setTransferVisible(false)}
+                disabled={transferring}
+              >
+                <Text style={trS.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  trS.confirmBtn,
+                  (transferring ||
+                    !selectedLocationId ||
+                    selectedLocationId === worker.farm_location_id) && {
+                    opacity: 0.5,
+                  },
+                ]}
+                onPress={handleTransfer}
+                disabled={
+                  transferring ||
+                  !selectedLocationId ||
+                  selectedLocationId === worker.farm_location_id
+                }
+              >
+                {transferring ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <>
+                    <Ionicons
+                      name="checkmark-circle-outline"
+                      size={16}
+                      color="#fff"
+                    />
+                    <Text style={trS.confirmBtnText}>Confirm Transfer</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </Modal>
   );
 }
@@ -978,6 +1225,28 @@ const dm = StyleSheet.create({
     fontWeight: "600",
     marginTop: 1,
   },
+  // ── Transfer button (view mode)
+  transferBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#fffbeb",
+    borderWidth: 1.5,
+    borderColor: "#fde68a",
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 16,
+  },
+  transferBtnLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
+  transferIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: "#fef3c7",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  transferBtnText: { fontSize: 13, fontWeight: "700", color: "#92400e" },
   toggleRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -1005,6 +1274,8 @@ const dm = StyleSheet.create({
     borderRadius: 16,
   },
   chip: {
+    flexDirection: "row",
+    alignItems: "center",
     borderWidth: 1.5,
     borderColor: "#e0e0e0",
     borderRadius: 20,
@@ -1140,6 +1411,71 @@ const dm = StyleSheet.create({
   noTasksText: { fontSize: 13, color: "#bbb", fontWeight: "500" },
 });
 
+// ── Transfer modal styles
+const trS = StyleSheet.create({
+  card: {
+    backgroundColor: "#fff",
+    borderRadius: 24,
+    width: "100%",
+    maxWidth: 380,
+    padding: 22,
+    maxHeight: "72%",
+    shadowColor: "#000",
+    shadowOpacity: 0.2,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 16,
+  },
+  iconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: "#fef3c7",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
+  },
+  title: { fontSize: 18, fontWeight: "800", color: "#1a1a1a" },
+  sub: { fontSize: 12.5, color: "#999", marginTop: 3, marginBottom: 16 },
+  list: { maxHeight: 260 },
+  locRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderWidth: 1.5,
+    borderColor: "#eee",
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 8,
+    backgroundColor: "#fafafa",
+  },
+  locRowActive: { borderColor: "#2d6a4f", backgroundColor: "#f0fdf4" },
+  locText: { fontSize: 13.5, fontWeight: "700", color: "#444" },
+  locTextActive: { color: "#2d6a4f" },
+  currentTag: { fontSize: 10.5, color: "#b45309", fontWeight: "600", marginTop: 2 },
+  btnRow: { flexDirection: "row", gap: 10, marginTop: 16 },
+  cancelBtn: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 13,
+    borderRadius: 14,
+    backgroundColor: "#f5f5f5",
+  },
+  cancelBtnText: { fontWeight: "700", color: "#666", fontSize: 13.5 },
+  confirmBtn: {
+    flex: 1.5,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 13,
+    borderRadius: 14,
+    backgroundColor: "#2d6a4f",
+  },
+  confirmBtnText: { fontWeight: "700", color: "#fff", fontSize: 13.5 },
+});
+
 // ── Worker Card
 function WorkerCard({
   item,
@@ -1221,6 +1557,14 @@ function WorkerCard({
                   <Text style={styles.tagText}>{item.designation}</Text>
                 </View>
               ) : null}
+              {item.farm_location_label ? (
+                <View style={[styles.tag, styles.tagLocation]}>
+                  <Ionicons name="location-outline" size={10} color="#b45309" />
+                  <Text style={[styles.tagText, { color: "#b45309" }]}>
+                    {item.farm_location_label}
+                  </Text>
+                </View>
+              ) : null}
               {item.phone ? (
                 <View style={[styles.tag, styles.tagPhone]}>
                   <Ionicons name="call-outline" size={10} color="#5b8db8" />
@@ -1268,6 +1612,7 @@ function WorkerCard({
 export default function WorkersScreen() {
   const router = useRouter();
   const [workers, setWorkers] = useState<Worker[]>([]);
+  const [locations, setLocations] = useState<FarmLocationOption[]>([]);
   const [sortBy, setSortBy] = useState<SortOption>("name_asc");
   const [sortVisible, setSortVisible] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -1288,6 +1633,7 @@ export default function WorkersScreen() {
     password: "",
     designation: "",
     farm_name: "",
+    farm_location_id: "",
   });
 
   const showToast = (msg: string, variant: ToastVariant = "success") =>
@@ -1306,8 +1652,22 @@ export default function WorkersScreen() {
     }
   };
 
+  const fetchLocations = async () => {
+    try {
+      const data = await api.getBusinessLocations();
+      setLocations(
+        Array.isArray(data)
+          ? data.map((l: any) => ({ id: l.id, label: l.label }))
+          : [],
+      );
+    } catch {
+      setLocations([]);
+    }
+  };
+
   useEffect(() => {
     fetchWorkers();
+    fetchLocations();
   }, []);
 
   const handleCreate = async () => {
@@ -1324,6 +1684,7 @@ export default function WorkersScreen() {
         phone: form.phone.trim() || undefined,
         designation: form.designation.trim() || undefined,
         farm_name: form.farm_name.trim() || undefined,
+        farm_location_id: form.farm_location_id || undefined,
       });
       setModalVisible(false);
       setShowPassword(false);
@@ -1334,6 +1695,7 @@ export default function WorkersScreen() {
         password: "",
         designation: "",
         farm_name: "",
+        farm_location_id: "",
       });
       fetchWorkers();
       showToast("Worker created successfully!", "success");
@@ -1344,21 +1706,48 @@ export default function WorkersScreen() {
     }
   };
 
-  // ── Update worker (including optional password)
+  // ── Update worker (including optional password / location transfer)
   const handleUpdateWorker = async (
     id: string,
     data: Partial<Worker> & { password?: string },
   ) => {
     try {
-      await api.updateWorker(id, data);
+      const updated = await api.updateWorker(id, data);
       // Don't persist password in local state
       const { password: _pw, ...safeData } = data;
       setWorkers((ws) =>
-        ws.map((w) => (w.id === id ? { ...w, ...safeData } : w)),
+        ws.map((w) =>
+          w.id === id
+            ? {
+                ...w,
+                ...safeData,
+                farm_location_label:
+                  updated?.farm_location_label ?? w.farm_location_label,
+              }
+            : w,
+        ),
       );
       if (selectedWorker?.id === id)
-        setSelectedWorker((w) => (w ? { ...w, ...safeData } : w));
-      showToast("Worker updated!", "success");
+        setSelectedWorker((w) =>
+          w
+            ? {
+                ...w,
+                ...safeData,
+                farm_location_label:
+                  updated?.farm_location_label ?? w.farm_location_label,
+              }
+            : w,
+        );
+
+      // Contextual message: transfer vs generic update
+      if (
+        Object.keys(safeData).length === 1 &&
+        "farm_location_id" in safeData
+      ) {
+        showToast("Worker transferred successfully!", "success");
+      } else {
+        showToast("Worker updated!", "success");
+      }
     } catch (e: any) {
       showToast(e?.message || "Update failed", "error");
     }
@@ -1438,7 +1827,7 @@ export default function WorkersScreen() {
     <View style={styles.screen}>
       <StatusBar barStyle="light-content" />
 
-      {/* Toast */}
+      {/* Toast (centered) */}
       <Toast
         msg={toast.msg}
         variant={toast.variant}
@@ -1608,7 +1997,7 @@ export default function WorkersScreen() {
         />
       )}
 
-      {/* Worker Detail / Edit / Delete Modal */}
+      {/* Worker Detail / Edit / Delete / Transfer Modal */}
       <WorkerDetailModal
         worker={selectedWorker}
         visible={detailVisible}
@@ -1616,6 +2005,7 @@ export default function WorkersScreen() {
         onSave={handleUpdateWorker}
         onToggleActive={handleToggleActive}
         onDelete={handleDeleteWorker}
+        locations={locations}
       />
 
       {/* Create Worker Modal */}
@@ -1772,6 +2162,59 @@ export default function WorkersScreen() {
                     </TouchableOpacity>
                   ))}
                 </ScrollView>
+
+                {/* ── Farm Location Chips ── */}
+                {locations.length > 0 && (
+                  <>
+                    <Text style={[styles.sectionLabel, { marginTop: 4 }]}>
+                      FARM LOCATION
+                    </Text>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      style={{ marginBottom: 16 }}
+                    >
+                      {locations.map((loc) => (
+                        <TouchableOpacity
+                          key={loc.id}
+                          style={[
+                            styles.designationChip,
+                            form.farm_location_id === loc.id &&
+                              styles.designationChipActive,
+                          ]}
+                          onPress={() =>
+                            setForm((f) => ({
+                              ...f,
+                              farm_location_id:
+                                f.farm_location_id === loc.id ? "" : loc.id,
+                            }))
+                          }
+                        >
+                          <Ionicons
+                            name="location-outline"
+                            size={12}
+                            color={
+                              form.farm_location_id === loc.id
+                                ? "#2d6a4f"
+                                : "#888"
+                            }
+                            style={{ marginRight: 4 }}
+                          />
+                          <Text
+                            style={[
+                              styles.designationChipText,
+                              form.farm_location_id === loc.id &&
+                                styles.designationChipTextActive,
+                            ]}
+                          >
+                            {loc.label}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </>
+                )}
+
                 <TouchableOpacity
                   style={[styles.createBtn, creating && { opacity: 0.65 }]}
                   onPress={handleCreate}
@@ -1961,6 +2404,12 @@ const styles = StyleSheet.create({
     gap: 4,
     alignItems: "center",
   },
+  tagLocation: {
+    backgroundColor: "#fffbeb",
+    flexDirection: "row",
+    gap: 4,
+    alignItems: "center",
+  },
   tagText: { fontSize: 11, color: "#2d6a4f", fontWeight: "600" },
   cardRight: { alignItems: "flex-end", gap: 6 },
   statusPill: {
@@ -2072,6 +2521,8 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   designationChip: {
+    flexDirection: "row",
+    alignItems: "center",
     borderWidth: 1.5,
     borderColor: "#e0e0e0",
     borderRadius: 20,

@@ -16,8 +16,9 @@ import { useAuth } from "../../src/contexts/AuthContext";
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useLang } from "../../src/contexts/LanguageContext";
 import { api } from "../../src/services/api";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Helpers
 
 function todayStr() {
   return new Date().toISOString().split("T")[0];
@@ -27,7 +28,7 @@ function getCurrentShift(): "morning" | "evening" {
   return new Date().getHours() < 12 ? "morning" : "evening";
 }
 
-// ─── Types ───────────────────────────────────────────────────────────────────
+// ─── Types
 
 interface Cow {
   id: string;
@@ -37,6 +38,7 @@ interface Cow {
   isActive?: boolean;
   isSold?: boolean;
   milkActive?: boolean;
+  farmLocationId?: string;
 }
 
 interface ShiftStatus {
@@ -58,7 +60,7 @@ interface MilkEntry {
   worker_name: string;
 }
 
-// ─── Modern Alert ─────────────────────────────────────────────────────────────
+// ─── Modern Alert
 
 interface AlertConfig {
   visible: boolean;
@@ -203,7 +205,7 @@ const al = StyleSheet.create({
   btnText: { fontSize: 15, fontWeight: "800", color: "#fff" },
 });
 
-// ─── Undo Confirm Modal ───────────────────────────────────────────────────────
+// ─── Undo Confirm Modal
 
 interface UndoConfirmProps {
   visible: boolean;
@@ -418,7 +420,7 @@ const uc = StyleSheet.create({
   confirmTxt: { fontSize: 14, fontWeight: "800", color: "#fff" },
 });
 
-// ─── Qty Input ────────────────────────────────────────────────────────────────
+// ─── Qty Input
 
 function QtyInput({
   qty,
@@ -469,8 +471,7 @@ function QtyInput({
   );
 }
 
-// ─── Search Bar ───────────────────────────────────────────────────────────────
-
+// ─── Search Bar
 function CowSearchBar({
   value,
   onChange,
@@ -633,7 +634,7 @@ const sb = StyleSheet.create({
   noResultText: { fontSize: 12, fontWeight: "600", color: "#ef4444" },
 });
 
-// ─── Main Screen ──────────────────────────────────────────────────────────────
+// ─── Main Screen
 
 function MilkScreenInner({
   onTotalChange,
@@ -679,8 +680,22 @@ function MilkScreenInner({
   const patch = (id: string, p: Partial<ReturnType<typeof get>>) =>
     setCowData((prev) => ({ ...prev, [id]: { ...get(id), ...p } }));
 
+  // Fetches everything needed for this screen, including the worker's OWN
+  // farm location (read fresh from AsyncStorage every call — no separate
+  // state, so there's no race between "location loaded" and "cows loaded").
   const fetchAll = useCallback(async () => {
     try {
+      let myLocationId: string | null = null;
+      try {
+        const raw = await AsyncStorage.getItem("worker_data");
+        if (raw) {
+          const w = JSON.parse(raw);
+          myLocationId = w.farm_location_id ?? null;
+        }
+      } catch {
+        // ignore — falls back to showing all cows
+      }
+
       const [cowsData, status, entries] = await Promise.all([
         api.workerGetCows(),
         api.workerGetShiftStatus(),
@@ -688,7 +703,11 @@ function MilkScreenInner({
       ]);
 
       const activeCows = cowsData.filter(
-        (c: Cow) => c.isActive !== false && !c.isSold && c.milkActive === true,
+        (c: Cow) =>
+          c.isActive !== false &&
+          !c.isSold &&
+          c.milkActive === true &&
+          (!myLocationId || c.farmLocationId === myLocationId),
       );
 
       setCows(activeCows);
