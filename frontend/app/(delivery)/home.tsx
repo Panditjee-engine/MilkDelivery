@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View, Text, StyleSheet, ScrollView,
   RefreshControl, Alert, TouchableOpacity, Switch,
@@ -19,18 +19,22 @@ export default function DeliveryHome() {
   const [checkinStatus, setCheckinStatus] = useState<any>(null);
   const [myOrders, setMyOrders] = useState<any[]>([]);
   const [actionLoading, setActionLoading] = useState(false);
+  const fetchingRef = useRef(false);
 
   const fetchData = async () => {
+    if (fetchingRef.current) return;
+    fetchingRef.current = true;
     try {
-      const [status, ordersData] = await Promise.all([
+      const [status, ordersData] = await Promise.allSettled([
         api.getCheckinStatus(),
         api.getMyOrders(),
       ]);
-      setCheckinStatus(status);
-      setMyOrders(ordersData || []);
+      if (status.status === "fulfilled") setCheckinStatus(status.value);
+      if (ordersData.status === "fulfilled") setMyOrders(ordersData.value || []);
     } catch (error) {
       console.error("Error fetching data:", error);
     } finally {
+      fetchingRef.current = false;
       setLoading(false);
       setRefreshing(false);
     }

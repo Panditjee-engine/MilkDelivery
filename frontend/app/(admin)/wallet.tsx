@@ -156,6 +156,26 @@ type BankAccount = {
   upiId?: string;
 };
 
+type AdminOrder = {
+  id?: string;
+  customer_name?: string;
+  customer_phone?: string;
+  total_amount?: number;
+  status?: string;
+  payment_method?: string;
+  payment_status?: string;
+  delivery_date?: string;
+  delivered_at?: string;
+  created_at?: string;
+  items?: Array<{
+    name?: string;
+    product_name?: string;
+    product_id?: string;
+    quantity?: number;
+    amount?: number;
+  }>;
+};
+
 function BankModal({
   visible,
   existing,
@@ -470,6 +490,7 @@ export default function AdminWalletScreen() {
   const [balance, setBalance] = useState(0);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [withdrawals, setWithdrawals] = useState<any[]>([]);
+  const [orders, setOrders] = useState<AdminOrder[]>([]);
   const [filter, setFilter] = useState<"ALL" | "credit" | "debit">("ALL");
   const [bankAccount, setBankAccount] = useState<BankAccount | null>(null);
   const [showBank, setShowBank] = useState(false);
@@ -479,15 +500,17 @@ export default function AdminWalletScreen() {
 
   const fetchData = async () => {
     try {
-      const [walletData, txData, bankData, withdrawalData] = await Promise.all([
+      const [walletData, txData, bankData, withdrawalData, ordersData] = await Promise.all([
         api.getWallet(),
         api.getWalletTransactions(),
         api.getBankAccount().catch(() => null),
         api.getWithdrawalHistory().catch(() => []),
+        api.getAllOrders().catch(() => []),
       ]);
       setBalance(walletData.balance ?? 0);
       setTransactions(txData ?? []);
       setWithdrawals(withdrawalData ?? []);
+      setOrders(Array.isArray(ordersData) ? ordersData : []);
       if (bankData) setBankAccount(bankData);
     } catch (e) {
       console.error("Error fetching wallet:", e);
@@ -513,6 +536,23 @@ export default function AdminWalletScreen() {
       hour: "2-digit",
       minute: "2-digit",
     });
+
+  const money = (amount: number) =>
+    `₹${Number(amount || 0).toLocaleString("en-IN", {
+      maximumFractionDigits: 0,
+    })}`;
+
+  const isDelivered = (order: AdminOrder) =>
+    String(order.status || "").toLowerCase() === "delivered";
+
+  const isPaidOrder = (order: AdminOrder) => {
+    const status = String(order.payment_status || "").toLowerCase();
+    const method = String(order.payment_method || "").toLowerCase();
+    if (["paid", "success", "successful", "completed", "captured", "approved"].includes(status)) {
+      return true;
+    }
+    return ["wallet", "online", "razorpay"].includes(method) && !["pending", "failed", "rejected", "unpaid"].includes(status);
+  };
 
   const statusMeta = (status: string) => {
     switch (status?.toLowerCase()) {
@@ -620,12 +660,41 @@ export default function AdminWalletScreen() {
 
   const credits = transactions.filter((t) => t.type === "credit");
   const debits = transactions.filter((t) => t.type === "debit");
-  const totalEarned = credits.reduce((s, t) => s + t.amount, 0);
+  const inactiveStatuses = ["delivered", "cancelled", "skipped", "rejected"];
+  const activeOrders = orders.filter(
+    (order) =>
+      !inactiveStatuses.includes(String(order.status || "").toLowerCase()),
+  );
+  const deliveredOrders = orders.filter(isDelivered);
+  const paidOrders = deliveredOrders.filter(isPaidOrder);
+  const totalOrderValue = orders.reduce(
+    (sum, order) => sum + Number(order.total_amount || 0),
+    0,
+  );
+  const activeOrderValue = activeOrders.reduce(
+    (sum, order) => sum + Number(order.total_amount || 0),
+    0,
+  );
+  const deliveredBalance = deliveredOrders.reduce(
+    (sum, order) => sum + Number(order.total_amount || 0),
+    0,
+  );
+  const paidAmount = paidOrders.reduce(
+    (sum, order) => sum + Number(order.total_amount || 0),
+    0,
+  );
+  const walletCreditTotal = credits.reduce((s, t) => s + Number(t.amount || 0), 0);
+  const totalEarned = deliveredBalance || walletCreditTotal;
   const totalRefunded = debits.reduce((s, t) => s + t.amount, 0);
   const todayStr = new Date().toDateString();
-  const todayEarnings = credits
-    .filter((t) => new Date(t.created_at).toDateString() === todayStr)
-    .reduce((s, t) => s + t.amount, 0);
+  const todayEarnings = deliveredOrders
+    .filter((order) => {
+      const date = order.delivered_at || order.delivery_date || order.created_at;
+      if (!date) return false;
+      const parsed = String(date).includes("T") ? new Date(date) : new Date(`${date}T00:00:00`);
+      return parsed.toDateString() === todayStr;
+    })
+    .reduce((s, order) => s + Number(order.total_amount || 0), 0);
 
   const filteredTx =
     filter === "ALL"
@@ -642,6 +711,7 @@ export default function AdminWalletScreen() {
   const totalWithdrawn = withdrawals
     .filter((w) => ["completed", "approved"].includes(w.status?.toLowerCase()))
     .reduce((s, w) => s + w.amount, 0);
+  const availableForSettlement = Math.max(paidAmount - totalRefunded - totalWithdrawn, 0);
 
   return (
     <SafeAreaView style={s.container} edges={["top"]}>
@@ -684,17 +754,19 @@ export default function AdminWalletScreen() {
             </View>
           </View>
 
-          <Text style={s.heroAmount}>₹{balance.toFixed(2)}</Text>
+          <Text style={s.heroAmount}>{money(deliveredBalance)}</Text>
+          <Text style={s.heroHint}>
+            Delivered value · Total order value {money(totalOrderValue)} · Available settlement {money(availableForSettlement)}
+          </Text>
 
-          {/* Action buttons Withdraw and edit bank modal Enable for admin now commented */}
-          {/* <View style={s.actionRow}>
+          <View style={s.actionRow}>
             <TouchableOpacity
               style={s.actionBtn}
               onPress={handleWithdrawClick}
               activeOpacity={0.8}
             >
-              <Ionicons name="arrow-up-circle" size={16} color={C.dark} />
-              <Text style={s.actionBtnTxt}>Withdraw</Text>
+              <Ionicons name="business-outline" size={16} color={C.dark} />
+              <Text style={s.actionBtnTxt}>Settlement</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[
@@ -711,7 +783,7 @@ export default function AdminWalletScreen() {
                 {bankAccount ? "Edit Bank" : "Add Bank"}
               </Text>
             </TouchableOpacity>
-          </View> */}
+          </View>
 
           <View style={s.heroStatsRow}>
             <View style={s.heroStat}>
@@ -720,7 +792,7 @@ export default function AdminWalletScreen() {
               </View>
               <View>
                 <Text style={s.heroStatLabel}>Total Earned</Text>
-                <Text style={s.heroStatVal}>₹{totalEarned.toFixed(0)}</Text>
+                <Text style={s.heroStatVal}>{money(totalEarned)}</Text>
               </View>
             </View>
             <View style={s.heroStatDivider} />
@@ -735,7 +807,7 @@ export default function AdminWalletScreen() {
               </View>
               <View>
                 <Text style={s.heroStatLabel}>Today</Text>
-                <Text style={s.heroStatVal}>₹{todayEarnings.toFixed(0)}</Text>
+                <Text style={s.heroStatVal}>{money(todayEarnings)}</Text>
               </View>
             </View>
           </View>
@@ -765,54 +837,6 @@ export default function AdminWalletScreen() {
             <Text style={s.bankEditTxt}>{bankAccount ? "Edit" : "Add"}</Text>
           </TouchableOpacity>
         </View> */}
-
-        {/* ── Quick Stats ── */}
-        <View style={s.quickStats}>
-          {[
-            {
-              bg: "#FFF3E8",
-              iconBg: "#FF967520",
-              icon: "checkmark-circle-outline",
-              color: C.primary,
-              val: String(credits.length),
-              label: "Orders Paid",
-            },
-            {
-              bg: "#FFF8E8",
-              iconBg: "#FFBF5520",
-              icon: "calendar-outline",
-              color: C.amber,
-              val: String(
-                credits.filter(
-                  (t) => new Date(t.created_at).toDateString() === todayStr,
-                ).length,
-              ),
-              label: "Today's",
-            },
-            {
-              bg: "#F5EDE8",
-              iconBg: "#BB6B3F20",
-              icon: "arrow-undo-outline",
-              color: C.dark,
-              val: `₹${totalRefunded.toFixed(0)}`,
-              label: "Refunded",
-            },
-          ].map((stat, i) => (
-            <View key={i} style={[s.quickStat, { backgroundColor: stat.bg }]}>
-              <View style={[s.quickStatIcon, { backgroundColor: stat.iconBg }]}>
-                <Ionicons
-                  name={stat.icon as any}
-                  size={18}
-                  color={stat.color}
-                />
-              </View>
-              <Text style={[s.quickStatVal, { color: stat.color }]}>
-                {stat.val}
-              </Text>
-              <Text style={s.quickStatLabel}>{stat.label}</Text>
-            </View>
-          ))}
-        </View>
 
         {/* ── Withdrawal Requests Section ── */}
         {withdrawals.length > 0 && (
@@ -922,6 +946,36 @@ export default function AdminWalletScreen() {
             })}
           </View>
         )}
+
+        {/* ── Wallet Insights ── */}
+        <View style={s.insightSection}>
+          <Text style={s.txTitle}>Wallet Insights</Text>
+          <Text style={s.txSub}>
+            Finance summary based on order status, payments, refunds and settlements.
+          </Text>
+          <View style={s.insightGrid}>
+            <View style={s.insightCard}>
+              <Ionicons name="receipt-outline" size={18} color={C.primary} />
+              <Text style={s.insightValue}>{money(totalOrderValue)}</Text>
+              <Text style={s.insightLabel}>All Orders Value</Text>
+            </View>
+            <View style={s.insightCard}>
+              <Ionicons name="time-outline" size={18} color={C.amber} />
+              <Text style={s.insightValue}>{money(activeOrderValue)}</Text>
+              <Text style={s.insightLabel}>Pending Pipeline</Text>
+            </View>
+            <View style={s.insightCard}>
+              <Ionicons name="checkmark-circle-outline" size={18} color="#22A06B" />
+              <Text style={s.insightValue}>{money(deliveredBalance)}</Text>
+              <Text style={s.insightLabel}>Delivered Revenue</Text>
+            </View>
+            <View style={s.insightCard}>
+              <Ionicons name="business-outline" size={18} color={C.dark} />
+              <Text style={s.insightValue}>{money(availableForSettlement)}</Text>
+              <Text style={s.insightLabel}>Settlement Ready</Text>
+            </View>
+          </View>
+        </View>
 
         {/* ── Transactions ── */}
         <View style={s.txHeader}>
@@ -1096,6 +1150,13 @@ const bS = StyleSheet.create({
     marginBottom: 20,
   },
   title: { fontSize: 20, fontWeight: "800", color: "#3D1F0A" },
+  note: {
+    fontSize: 13,
+    color: "#8B6854",
+    lineHeight: 19,
+    marginBottom: 14,
+    fontWeight: "500",
+  },
   closeBtn: {
     width: 32,
     height: 32,
@@ -1301,7 +1362,14 @@ const s = StyleSheet.create({
     fontWeight: "800",
     color: "#fff",
     letterSpacing: -1,
+    marginBottom: 6,
+  },
+  heroHint: {
+    color: "rgba(255,255,255,0.76)",
+    fontSize: 12,
+    fontWeight: "600",
     marginBottom: 16,
+    lineHeight: 17,
   },
 
   actionRow: { flexDirection: "row", gap: 10, marginBottom: 16 },
@@ -1384,32 +1452,34 @@ const s = StyleSheet.create({
   },
   bankEditTxt: { fontSize: 13, fontWeight: "700", color: C.dark },
 
-  quickStats: {
-    flexDirection: "row",
-    paddingHorizontal: 20,
-    gap: 10,
+  insightSection: {
+    marginHorizontal: 20,
     marginBottom: 20,
   },
-  quickStat: {
-    flex: 1,
+  insightGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginTop: 12,
+  },
+  insightCard: {
+    width: "48%",
+    backgroundColor: C.card,
     borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#FFE8C8",
     padding: 14,
-    alignItems: "center",
-    gap: 6,
+    gap: 7,
   },
-  quickStatIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    justifyContent: "center",
-    alignItems: "center",
+  insightValue: {
+    fontSize: 18,
+    fontWeight: "900",
+    color: C.text,
   },
-  quickStatVal: { fontSize: 18, fontWeight: "800" },
-  quickStatLabel: {
+  insightLabel: {
     fontSize: 10,
     color: C.accent,
-    fontWeight: "600",
-    textAlign: "center",
+    fontWeight: "700",
   },
 
   // ── Withdrawal Section ──

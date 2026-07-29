@@ -141,7 +141,7 @@ export default function SubscriptionsScreen() {
   const fetchData = async () => {
     setError(null);
     try {
-      const [subs, status] = await Promise.all([
+      const [subs, status]: [any, any] = await Promise.all([
         api.getAssignedSubscriptions(),
         api.getCheckinStatus().catch(() => null),
       ]);

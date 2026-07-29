@@ -8,6 +8,7 @@ import {
   Text,
   TouchableOpacity,
   View,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -15,6 +16,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { api } from "../../src/services/api";
 import { Colors } from "../../src/constants/colors";
+import { hasCompleteDeliveryAddress } from "../../src/utils/address";
 
 const CATEGORY_THEMES: Record<string, { bg: string; accent: string; icon: string }> = {
   milk: { bg: "#EAF4FF", accent: "#3B82F6", icon: "water" },
@@ -47,8 +49,6 @@ const subscriptionPatterns = [
 
 const isDairyProduct = (product: any) =>
   DAIRY_CATEGORIES.includes(product?.category?.toLowerCase?.());
-const hasCompleteDeliveryAddress = (address?: any) =>
-  Boolean(address?.tower?.trim?.() && address?.flat?.trim?.());
 
 function formatUnit(unit?: string) {
   if (!unit) return "";
@@ -133,8 +133,29 @@ export default function ProductDetailsScreen() {
   const ensureAddress = async () => {
     const latestUser = await api.getMe();
     if (hasCompleteDeliveryAddress(latestUser?.address)) return true;
-    setFeedback("Please add delivery address from Profile before ordering.");
+    setFeedback("Please add your complete delivery address before payment.");
     setFeedbackType("address");
+    Alert.alert(
+      "Delivery address required",
+      "Please add your complete delivery address before choosing payment.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Add Address",
+          onPress: () => {
+            setBuySheetVisible(false);
+            router.push({
+              pathname: "/(customer)/profile",
+              params: {
+                openAddress: "1",
+                addressRequired: "1",
+                returnTo: "catalog",
+              },
+            } as any);
+          },
+        },
+      ],
+    );
     return false;
   };
 
@@ -383,11 +404,18 @@ export default function ProductDetailsScreen() {
                     style={s.feedbackArrow}
                     onPress={() => {
                       setBuySheetVisible(false);
-                      router.push(
-                        (feedbackType === "address"
-                          ? "/(customer)/profile"
-                          : "/(customer)/wallet") as any
-                      );
+                      if (feedbackType === "address") {
+                        router.push({
+                          pathname: "/(customer)/profile",
+                          params: {
+                            openAddress: "1",
+                            addressRequired: "1",
+                            returnTo: "catalog",
+                          },
+                        } as any);
+                      } else {
+                        router.push("/(customer)/wallet" as any);
+                      }
                     }}
                     activeOpacity={0.8}
                   >

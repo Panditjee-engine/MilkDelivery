@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -15,6 +15,16 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import Svg, {
+  Circle,
+  G,
+  Line,
+  Path,
+  Polygon,
+  Polyline,
+  Rect,
+  Text as SvgText,
+} from "react-native-svg";
 import { useRouter } from "expo-router";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { api } from "../../src/services/api";
@@ -42,6 +52,348 @@ const getLocalDateKey = (date = new Date()) => {
   const d = `${date.getDate()}`.padStart(2, "0");
   return `${y}-${m}-${d}`;
 };
+
+const PAID_STATUSES = [
+  "paid",
+  "success",
+  "successful",
+  "completed",
+  "captured",
+  "approved",
+];
+
+const isPaidOrder = (order: any) => {
+  const status = String(order.payment_status || "").toLowerCase();
+  const method = String(order.payment_method || "").toLowerCase();
+  if (PAID_STATUSES.includes(status)) return true;
+  return (
+    ["wallet", "online", "razorpay"].includes(method) &&
+    !["pending", "failed", "rejected", "unpaid", "refunded"].includes(status)
+  );
+};
+
+const orderDateKey = (order: any) => {
+  const raw = order.delivered_at || order.delivery_date || order.created_at;
+  if (!raw) return "";
+  if (typeof raw === "string" && /^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return getLocalDateKey(parsed);
+};
+
+const money = (amount: number) =>
+  `₹${Number(amount || 0).toLocaleString("en-IN", {
+    maximumFractionDigits: 0,
+  })}`;
+
+const pct = (value: number, total: number) =>
+  total > 0 ? Math.round((value / total) * 100) : 0;
+
+const chartPoint = (
+  index: number,
+  value: number,
+  max: number,
+  count: number,
+  width: number,
+  height: number,
+) => {
+  const x = count <= 1 ? width / 2 : (index / (count - 1)) * width;
+  const y = height - (max > 0 ? (value / max) * height : 0);
+  return `${x},${y}`;
+};
+
+function SectionTitle({ title, subtitle }: { title: string; subtitle?: string }) {
+  return (
+    <View style={styles.sectionHeader}>
+      <View>
+        <Text style={styles.sectionTitle}>{title}</Text>
+        {subtitle ? <Text style={styles.sectionSub}>{subtitle}</Text> : null}
+      </View>
+    </View>
+  );
+}
+
+function KpiCard({
+  label,
+  value,
+  icon,
+  color,
+  sub,
+}: {
+  label: string;
+  value: string | number;
+  icon: string;
+  color: string;
+  sub?: string;
+}) {
+  return (
+    <View style={styles.kpiCard}>
+      <View style={[styles.kpiIcon, { backgroundColor: color + "22" }]}>
+        <Ionicons name={icon as any} size={17} color={color} />
+      </View>
+      <Text style={styles.kpiValue}>{value}</Text>
+      <Text style={styles.kpiLabel}>{label}</Text>
+      {sub ? <Text style={styles.kpiSub}>{sub}</Text> : null}
+    </View>
+  );
+}
+
+function StackedBar({
+  segments,
+}: {
+  segments: Array<{ label: string; value: number; color: string }>;
+}) {
+  const total = segments.reduce((s, item) => s + item.value, 0);
+  return (
+    <View>
+      <View style={styles.stackTrack}>
+        {segments.map((item) => (
+          <View
+            key={item.label}
+            style={[
+              styles.stackSegment,
+              {
+                width: `${Math.max(pct(item.value, total), item.value ? 7 : 0)}%`,
+                backgroundColor: item.color,
+              },
+            ]}
+          />
+        ))}
+      </View>
+      <View style={styles.legendRow}>
+        {segments.map((item) => (
+          <View key={item.label} style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: item.color }]} />
+            <Text style={styles.legendText}>
+              {item.label} {item.value}
+            </Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function ComboChart({
+  data,
+}: {
+  data: Array<{ label: string; orders: number; revenue: number }>;
+}) {
+  const width = 300;
+  const height = 98;
+  const maxOrders = Math.max(...data.map((d) => d.orders), 1);
+  const maxRevenue = Math.max(...data.map((d) => d.revenue), 1);
+  const barW = 20;
+  const gap = width / Math.max(data.length, 1);
+  const linePoints = data
+    .map((d, i) => chartPoint(i, d.revenue, maxRevenue, data.length, width, height - 16))
+    .join(" ");
+  return (
+    <Svg width="100%" height={120} viewBox={`0 0 ${width} 120`}>
+      {data.map((d, i) => {
+        const x = i * gap + gap / 2 - barW / 2;
+        const h = (d.orders / maxOrders) * 58;
+        return (
+          <G key={d.label}>
+            <Rect x={x} y={86 - h} width={barW} height={h} rx={6} fill="#FFD9B8" />
+            <SvgText x={i * gap + gap / 2} y={112} fontSize="9" fill={C.textMuted} textAnchor="middle">
+              {d.label}
+            </SvgText>
+          </G>
+        );
+      })}
+      <Polyline points={linePoints} fill="none" stroke={C.dark} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+      {data.map((d, i) => {
+        const [x, y] = chartPoint(i, d.revenue, maxRevenue, data.length, width, height - 16).split(",").map(Number);
+        return <Circle key={`${d.label}-dot`} cx={x} cy={y} r={4} fill={C.primary} stroke="#fff" strokeWidth={2} />;
+      })}
+    </Svg>
+  );
+}
+
+function LineTrend({ data }: { data: Array<{ label: string; value: number }> }) {
+  const width = 300;
+  const height = 72;
+  const max = Math.max(...data.map((d) => d.value), 1);
+  const points = data
+    .map((d, i) => chartPoint(i, d.value, max, data.length, width, height))
+    .join(" ");
+  return (
+    <Svg width="100%" height={96} viewBox={`0 0 ${width} 96`}>
+      {[0, 1, 2].map((i) => (
+        <Line key={i} x1="0" x2={width} y1={14 + i * 26} y2={14 + i * 26} stroke="#FFE8D6" strokeWidth="1" />
+      ))}
+      <Polyline points={points} fill="none" stroke={C.primary} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+      {data.map((d, i) => {
+        const [x, y] = chartPoint(i, d.value, max, data.length, width, height).split(",").map(Number);
+        return (
+          <G key={d.label}>
+            <Circle cx={x} cy={y} r={4} fill={C.dark} />
+            <SvgText x={x} y={91} fontSize="9" fill={C.textMuted} textAnchor="middle">
+              {d.label}
+            </SvgText>
+          </G>
+        );
+      })}
+    </Svg>
+  );
+}
+
+function DonutChart({
+  delivered,
+  pending,
+}: {
+  delivered: number;
+  pending: number;
+}) {
+  const total = Math.max(delivered + pending, 1);
+  const radius = 31;
+  const circumference = 2 * Math.PI * radius;
+  const deliveredDash = (delivered / total) * circumference;
+  return (
+    <View style={styles.donutWrap}>
+      <Svg width={88} height={88} viewBox="0 0 88 88">
+        <Circle cx="44" cy="44" r={radius} stroke="#FFE8D6" strokeWidth="13" fill="none" />
+        <Circle
+          cx="44"
+          cy="44"
+          r={radius}
+          stroke={C.dark}
+          strokeWidth="13"
+          fill="none"
+          strokeDasharray={`${deliveredDash} ${circumference - deliveredDash}`}
+          strokeLinecap="round"
+          rotation="-90"
+          origin="44,44"
+        />
+      </Svg>
+      <View style={styles.donutCenter}>
+        <Text style={styles.donutValue}>{pct(delivered, total)}%</Text>
+        <Text style={styles.donutLabel}>Done</Text>
+      </View>
+    </View>
+  );
+}
+
+function FunnelChart({ values }: { values: Array<{ label: string; value: number }> }) {
+  const max = Math.max(...values.map((v) => v.value), 1);
+  return (
+    <View style={styles.funnelWrap}>
+      {values.map((item, index) => (
+        <View key={item.label} style={styles.funnelRow}>
+          <View
+            style={[
+              styles.funnelBar,
+              {
+                width: `${Math.max(28, (item.value / max) * 100)}%`,
+                backgroundColor: [C.primary, C.dark, C.accent, C.light][index % 4],
+              },
+            ]}
+          >
+            <Text style={styles.funnelText}>{item.label}</Text>
+          </View>
+          <Text style={styles.funnelValue}>{item.value}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function RadarChart({ metrics }: { metrics: Array<{ label: string; value: number }> }) {
+  const size = 128;
+  const center = size / 2;
+  const radius = 46;
+  const pointFor = (value: number, index: number) => {
+    const angle = (Math.PI * 2 * index) / metrics.length - Math.PI / 2;
+    const r = radius * Math.min(value, 100) / 100;
+    return `${center + Math.cos(angle) * r},${center + Math.sin(angle) * r}`;
+  };
+  const fullPointFor = (index: number) => {
+    const angle = (Math.PI * 2 * index) / metrics.length - Math.PI / 2;
+    return `${center + Math.cos(angle) * radius},${center + Math.sin(angle) * radius}`;
+  };
+  return (
+    <Svg width="100%" height={134} viewBox={`0 0 ${size} ${size}`}>
+      <Polygon points={metrics.map((_, i) => fullPointFor(i)).join(" ")} fill="#FFF8EF" stroke="#FFE8D6" strokeWidth="1" />
+      {metrics.map((_, i) => {
+        const [x, y] = fullPointFor(i).split(",").map(Number);
+        return <Line key={i} x1={center} y1={center} x2={x} y2={y} stroke="#FFE8D6" strokeWidth="1" />;
+      })}
+      <Polygon points={metrics.map((m, i) => pointFor(m.value, i)).join(" ")} fill={C.primary + "55"} stroke={C.dark} strokeWidth="2" />
+      {metrics.map((m, i) => {
+        const [x, y] = fullPointFor(i).split(",").map(Number);
+        return (
+          <SvgText key={m.label} x={x} y={y + 4} fontSize="7" fill={C.textMuted} textAnchor="middle">
+            {m.label}
+          </SvgText>
+        );
+      })}
+    </Svg>
+  );
+}
+
+function TreemapChart({ data }: { data: Array<{ label: string; value: number }> }) {
+  const total = data.reduce((s, item) => s + item.value, 0) || 1;
+  return (
+    <View style={styles.treemapWrap}>
+      {data.slice(0, 5).map((item, index) => (
+        <View
+          key={item.label}
+          style={[
+            styles.treemapTile,
+            {
+              width: index < 2 ? "48%" : "31%",
+              backgroundColor: ["#FFF3DC", "#FFE8D6", "#FFD9B8", "#FFEEDD", "#FFF8EF"][index],
+            },
+          ]}
+        >
+          <Text style={styles.treemapLabel} numberOfLines={1}>{item.label}</Text>
+          <Text style={styles.treemapValue}>{money(item.value)}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function ScatterChart({ data }: { data: Array<{ x: number; y: number; label: string }> }) {
+  const width = 300;
+  const height = 110;
+  const maxX = Math.max(...data.map((d) => d.x), 1);
+  const maxY = Math.max(...data.map((d) => d.y), 1);
+  return (
+    <Svg width="100%" height={104} viewBox={`0 0 ${width} 104`}>
+      <Line x1="0" x2={width} y1={height} y2={height} stroke="#FFE8D6" />
+      <Line x1="0" x2="0" y1="0" y2={height} stroke="#FFE8D6" />
+      {data.map((d, i) => (
+        <Circle
+          key={`${d.label}-${i}`}
+          cx={(d.x / maxX) * (width - 18) + 8}
+          cy={height - (d.y / maxY) * (height - 18)}
+          r={4 + Math.min(d.y / maxY, 1) * 5}
+          fill={i % 2 ? C.dark : C.primary}
+          opacity={0.78}
+        />
+      ))}
+    </Svg>
+  );
+}
+
+function Heatmap({ data }: { data: Array<{ label: string; value: number }> }) {
+  const max = Math.max(...data.map((d) => d.value), 1);
+  return (
+    <View style={styles.heatmapGrid}>
+      {data.map((item) => {
+        const alpha = 0.18 + (item.value / max) * 0.72;
+        return (
+          <View key={item.label} style={styles.heatCellWrap}>
+            <View style={[styles.heatCell, { backgroundColor: `rgba(187,107,63,${alpha})` }]} />
+            <Text style={styles.heatLabel}>{item.label}</Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
 
 // ── Modal Types
 type ModalType =
@@ -298,8 +650,11 @@ export default function AdminDashboard() {
   );
   const [modalType, setModalType] = useState<ModalType>(null);
   const isFocused = useIsFocused();
+  const fetchingRef = useRef(false);
 
   const fetchData = async () => {
+    if (fetchingRef.current) return;
+    fetchingRef.current = true;
     try {
       const [
         dashboardData,
@@ -308,23 +663,33 @@ export default function AdminDashboard() {
         ordersData,
         rechargeRequestsData,
       ] =
-        await Promise.all([
+        await Promise.allSettled([
           api.getAdminDashboard(),
           api.getProducts(),
           api.getAllUsers("customer"),
           api.getAllOrders(),
           api.getAdminRechargeRequests("pending").catch(() => []),
         ]);
-      setStats(dashboardData);
-      setProducts(productsData);
-      setCustomers(usersData);
-      setOrders(ordersData);
-      setPendingRechargeRequests(
-        Array.isArray(rechargeRequestsData) ? rechargeRequestsData : [],
-      );
+      if (dashboardData.status === "fulfilled") setStats(dashboardData.value);
+      if (productsData.status === "fulfilled" && Array.isArray(productsData.value)) {
+        setProducts(productsData.value);
+      }
+      if (usersData.status === "fulfilled" && Array.isArray(usersData.value)) {
+        setCustomers(usersData.value);
+      }
+      if (ordersData.status === "fulfilled" && Array.isArray(ordersData.value)) {
+        setOrders(ordersData.value);
+      }
+      if (
+        rechargeRequestsData.status === "fulfilled" &&
+        Array.isArray(rechargeRequestsData.value)
+      ) {
+        setPendingRechargeRequests(rechargeRequestsData.value);
+      }
     } catch (error) {
       console.error("Error fetching dashboard:", error);
     } finally {
+      fetchingRef.current = false;
       setLoading(false);
       setRefreshing(false);
     }
@@ -336,7 +701,7 @@ export default function AdminDashboard() {
     fetchData();
     const interval = setInterval(() => {
       fetchData();
-    }, 2000);
+    }, 30_000);
 
     return () => clearInterval(interval);
   }, [isFocused]);
@@ -363,10 +728,110 @@ export default function AdminDashboard() {
     (sum: number, order: any) => sum + Number(order.total_amount || order.total || 0),
     0,
   );
-
+  const todayKey = getLocalDateKey();
+  const todayPaidRevenue = orders
+    .filter(
+      (order: any) =>
+        String(order.status || "").toLowerCase() === "delivered" &&
+        isPaidOrder(order) &&
+        orderDateKey(order) === todayKey,
+    )
+    .reduce(
+      (sum: number, order: any) =>
+        sum + Number(order.total_amount || order.total || 0),
+      0,
+    );
   const deliveryRate = totalOrdersToday
     ? Math.round((deliveredToday / totalOrdersToday) * 100)
     : 0;
+  const deliveredOrders = orders.filter(
+    (order: any) => String(order.status || "").toLowerCase() === "delivered",
+  );
+  const paidOrders = deliveredOrders.filter(isPaidOrder);
+  const paidRevenue = paidOrders.reduce(
+    (sum: number, order: any) => sum + Number(order.total_amount || order.total || 0),
+    0,
+  );
+  const paidPendingOrders = orders.filter(
+    (order: any) =>
+      String(order.status || "").toLowerCase() !== "delivered" &&
+      isPaidOrder(order),
+  );
+  const avgOrderValue = paidOrders.length ? Math.round(paidRevenue / paidOrders.length) : 0;
+  const activeProducts = products.filter((p: any) => p.is_available !== false).length;
+  const inactiveProducts = Math.max(products.length - activeProducts, 0);
+  const cashOrders = orders.filter((order: any) =>
+    ["cash_on_delivery", "cod", "cash"].includes(String(order.payment_method || "").toLowerCase()),
+  ).length;
+  const onlineOrders = orders.filter((order: any) =>
+    ["online", "razorpay"].includes(String(order.payment_method || "").toLowerCase()),
+  ).length;
+  const walletOrders = orders.filter(
+    (order: any) => String(order.payment_method || "").toLowerCase() === "wallet",
+  ).length;
+
+  const last7 = Array.from({ length: 7 }).map((_, index) => {
+    const date = new Date();
+    date.setDate(date.getDate() - (6 - index));
+    const key = getLocalDateKey(date);
+    const dayOrders = orders.filter((order: any) => orderDateKey(order) === key);
+    const dayPaid = dayOrders
+      .filter((order: any) => String(order.status || "").toLowerCase() === "delivered" && isPaidOrder(order))
+      .reduce((sum: number, order: any) => sum + Number(order.total_amount || order.total || 0), 0);
+    return {
+      key,
+      label: date.toLocaleDateString("en-IN", { weekday: "short" }).slice(0, 3),
+      orders: dayOrders.length,
+      revenue: dayPaid,
+    };
+  });
+
+  const productRevenueMap = new Map<string, number>();
+  paidOrders.forEach((order: any) => {
+    (order.items || []).forEach((item: any) => {
+      const label =
+        item.product_name ||
+        item.name ||
+        products.find((p: any) => p.id === item.product_id)?.name ||
+        "Product";
+      const value = Number(item.amount || 0) || Number(item.price || 0) * Number(item.quantity || 1);
+      productRevenueMap.set(label, (productRevenueMap.get(label) || 0) + value);
+    });
+  });
+  const productRevenue = Array.from(productRevenueMap.entries())
+    .map(([label, value]) => ({ label, value }))
+    .sort((a, b) => b.value - a.value);
+
+  const moduleHealth = [
+    { label: "Products", value: activeProducts, color: C.dark },
+    { label: "Inactive", value: inactiveProducts, color: C.textLight },
+    { label: "Pending", value: pending, color: C.secondary },
+    { label: "Paid", value: paidOrders.length, color: C.primary },
+  ];
+  const funnelData = [
+    { label: "Orders", value: totalOrdersToday },
+    { label: "Paid", value: paidOrders.length },
+    { label: "Delivered", value: deliveredToday },
+    { label: "Pending", value: pending },
+  ];
+  const radarMetrics = [
+    { label: "Delivery", value: deliveryRate },
+    { label: "Payment", value: pct(paidOrders.length, totalOrdersToday) },
+    { label: "Catalog", value: pct(activeProducts, products.length) },
+    { label: "Customers", value: Math.min(customers.length * 8, 100) },
+    { label: "Wallet", value: pendingRechargeRequests.length ? 65 : 95 },
+  ];
+  const scatterData = orders.slice(0, 24).map((order: any, index: number) => ({
+    x: index + 1,
+    y: Number(order.total_amount || order.total || 0),
+    label: order.id || String(index),
+  }));
+  const heatmapData = last7.flatMap((day) => [
+    { label: `${day.label} O`, value: day.orders },
+    { label: `${day.label} ₹`, value: Math.round(day.revenue / 100) },
+  ]);
+  const last7Revenue = last7.reduce((sum, day) => sum + day.revenue, 0);
+  const paymentMixLabel = `Wallet ${walletOrders} · Online ${onlineOrders} · COD ${cashOrders}`;
 
   return (
     <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
@@ -399,15 +864,19 @@ export default function AdminDashboard() {
           <View style={styles.revenueLeft}>
             <Text style={styles.revenueLabel}>{`Today's Revenue`}</Text>
             <Text style={styles.revenueAmount}>
-              ₹{stats?.today_revenue || 0}
+              ₹{todayPaidRevenue.toLocaleString("en-IN", {
+                maximumFractionDigits: 0,
+              })}
             </Text>
             <View style={styles.revenueBadge}>
-              <Ionicons name="trending-up" size={12} color={C.deep} />
-              <Text style={styles.revenueBadgeText}>Live</Text>
+              <Ionicons name="checkmark-circle-outline" size={11} color={C.deep} />
+              <Text style={styles.revenueBadgeText}>
+                {paidOrders.length} paid
+              </Text>
             </View>
           </View>
           <View style={styles.revenueIcon}>
-            <Ionicons name="cash" size={42} color={C.deep} />
+            <Ionicons name="cash" size={30} color={C.deep} />
           </View>
         </View>
 
@@ -423,13 +892,13 @@ export default function AdminDashboard() {
             <View style={{ flex: 1 }}>
               <Text style={styles.todayOrderTitle}>{`Today's Order Summary`}</Text>
               <Text style={styles.todayOrderSub}>
-                Product, customer, address and date wise details
+                {deliveredToday} delivered · {pending} pending · {deliveryRate}% done
               </Text>
             </View>
           </View>
           <View style={styles.todayOrderRight}>
             <Text style={styles.todayOrderCount}>{totalOrdersToday}</Text>
-            <Text style={styles.todayOrderMeta}>₹{todayTotalAmount}</Text>
+            <Text style={styles.todayOrderMeta}>{money(todayTotalAmount)}</Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color={C.dark} />
         </TouchableOpacity>
@@ -472,7 +941,7 @@ export default function AdminDashboard() {
             <View
               style={[styles.statIcon, { backgroundColor: C.primary + "30" }]}
             >
-              <Ionicons name="people" size={20} color={C.dark} />
+              <Ionicons name="people" size={16} color={C.dark} />
             </View>
             <Text style={[styles.statValue, { color: C.dark }]}>
               {customers.length || stats?.total_customers || 0}
@@ -491,7 +960,7 @@ export default function AdminDashboard() {
             <View
               style={[styles.statIcon, { backgroundColor: C.accent + "30" }]}
             >
-              <Ionicons name="cube" size={20} color={C.dark} />
+              <Ionicons name="cube" size={16} color={C.dark} />
             </View>
             <Text style={[styles.statValue, { color: C.dark }]}>
               {products.length}
@@ -511,7 +980,7 @@ export default function AdminDashboard() {
             <View
               style={[styles.statIcon, { backgroundColor: C.secondary + "30" }]}
             >
-              <Ionicons name="receipt" size={20} color={C.dark} />
+              <Ionicons name="receipt" size={16} color={C.dark} />
             </View>
             <Text style={[styles.statValue, { color: C.dark }]}>
               {totalOrdersToday}
@@ -528,7 +997,7 @@ export default function AdminDashboard() {
             activeOpacity={0.75}
           >
             <View style={[styles.statIcon, { backgroundColor: C.dark + "20" }]}>
-              <Ionicons name="checkmark-circle" size={20} color={C.deep} />
+              <Ionicons name="checkmark-circle" size={16} color={C.deep} />
             </View>
             <Text style={[styles.statValue, { color: C.deep }]}>
               {deliveredToday}
@@ -538,6 +1007,110 @@ export default function AdminDashboard() {
               <Ionicons name="chevron-forward" size={11} color={C.textLight} />
             </View>
           </TouchableOpacity>
+        </View>
+
+        <View style={styles.kpiTitleWrap}>
+          <SectionTitle
+            title="KPI Performance"
+            subtitle={`${totalOrdersToday} orders today · ${paymentMixLabel}`}
+          />
+        </View>
+        <View style={styles.kpiGrid}>
+          <KpiCard
+            label="Paid Revenue"
+            value={money(paidRevenue)}
+            icon="cash-outline"
+            color={C.dark}
+            sub={`${paidOrders.length} paid orders`}
+          />
+          <KpiCard
+            label="Avg Order"
+            value={money(avgOrderValue)}
+            icon="analytics-outline"
+            color={C.primary}
+            sub="Delivered paid AOV"
+          />
+          <KpiCard
+            label="Payment Rate"
+            value={`${pct(paidOrders.length, totalOrdersToday)}%`}
+            icon="card-outline"
+            color={C.accent}
+            sub={`${paidPendingOrders.length} paid pending`}
+          />
+          <KpiCard
+            label="Catalog Health"
+            value={`${pct(activeProducts, products.length)}%`}
+            icon="pulse-outline"
+            color={C.deep}
+            sub={`${activeProducts}/${products.length || 0} active`}
+          />
+        </View>
+
+        <View style={styles.chartCard}>
+          <SectionTitle
+            title="Module Health"
+            subtitle={`${activeProducts} active products · ${pending} pending orders`}
+          />
+          <StackedBar segments={moduleHealth} />
+        </View>
+
+        <View style={styles.chartCard}>
+          <SectionTitle
+            title="Orders vs Revenue"
+            subtitle={`Last 7 days · ${money(last7Revenue)} paid revenue`}
+          />
+          <ComboChart data={last7} />
+        </View>
+
+        <View style={styles.chartGrid}>
+          <View style={styles.chartHalf}>
+            <SectionTitle
+              title="Line Trend"
+              subtitle={`Today ${money(todayPaidRevenue)}`}
+            />
+            <LineTrend data={last7.map((d) => ({ label: d.label, value: d.revenue }))} />
+          </View>
+          <View style={styles.chartHalf}>
+            <SectionTitle
+              title="Donut"
+              subtitle={`${deliveredToday}/${totalOrdersToday} delivered`}
+            />
+            <DonutChart delivered={deliveredToday} pending={pending} />
+          </View>
+        </View>
+
+        <View style={styles.chartGrid}>
+          <View style={styles.chartHalf}>
+            <SectionTitle title="Funnel" subtitle={`${paidOrders.length} paid orders`} />
+            <FunnelChart values={funnelData} />
+          </View>
+          <View style={styles.chartHalf}>
+            <SectionTitle title="Radar" subtitle={`${deliveryRate}% delivery score`} />
+            <RadarChart metrics={radarMetrics} />
+          </View>
+        </View>
+
+        <View style={styles.chartCard}>
+          <SectionTitle
+            title="Treemap"
+            subtitle={`${productRevenue.length} revenue products`}
+          />
+          {productRevenue.length ? (
+            <TreemapChart data={productRevenue} />
+          ) : (
+            <Text style={styles.emptyText}>No paid product revenue yet</Text>
+          )}
+        </View>
+
+        <View style={styles.chartGrid}>
+          <View style={styles.chartHalf}>
+            <SectionTitle title="Scatter" subtitle={`AOV ${money(avgOrderValue)}`} />
+            <ScatterChart data={scatterData} />
+          </View>
+          <View style={styles.chartHalf}>
+            <SectionTitle title="Activity Heatmap" subtitle="7-day activity" />
+            <Heatmap data={heatmapData} />
+          </View>
         </View>
 
         <TouchableOpacity
@@ -855,21 +1428,21 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "flex-start",
     paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 16,
+    paddingTop: 10,
+    paddingBottom: 10,
   },
-  greeting: { fontSize: 12, color: C.textLight, fontWeight: "500" },
+  greeting: { fontSize: 11, color: C.textLight, fontWeight: "600" },
   userName: {
-    fontSize: 22,
+    fontSize: 19,
     fontWeight: "800",
     color: C.text,
     letterSpacing: -0.3,
   },
-  date: { fontSize: 12, color: C.textLight, marginTop: 3 },
+  date: { fontSize: 11, color: C.textLight, marginTop: 2 },
   adminBadge: {
-    width: 46,
-    height: 46,
-    borderRadius: 14,
+    width: 38,
+    height: 38,
+    borderRadius: 12,
     backgroundColor: C.light,
     justifyContent: "center",
     alignItems: "center",
@@ -881,24 +1454,25 @@ const styles = StyleSheet.create({
 
   revenueCard: {
     marginHorizontal: 20,
-    marginBottom: 16,
+    marginBottom: 10,
     backgroundColor: C.primary,
-    borderRadius: 20,
-    padding: 22,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     shadowColor: C.dark,
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 6,
+    shadowOpacity: 0.16,
+    shadowRadius: 9,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
   },
-  revenueLeft: { gap: 4 },
-  revenueLabel: { fontSize: 13, color: C.deep, fontWeight: "600" },
+  revenueLeft: { gap: 2 },
+  revenueLabel: { fontSize: 12, color: C.deep, fontWeight: "700" },
   revenueAmount: {
-    fontSize: 38,
-    fontWeight: "800",
+    fontSize: 29,
+    fontWeight: "900",
     color: C.text,
     letterSpacing: -1,
   },
@@ -907,20 +1481,20 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 4,
     backgroundColor: C.light,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
     borderRadius: 20,
     alignSelf: "flex-start",
   },
-  revenueBadgeText: { fontSize: 11, color: C.deep, fontWeight: "700" },
-  revenueIcon: { opacity: 0.5 },
+  revenueBadgeText: { fontSize: 10, color: C.deep, fontWeight: "800" },
+  revenueIcon: { opacity: 0.45 },
 
   todayOrderCard: {
     marginHorizontal: 20,
-    marginBottom: 16,
+    marginBottom: 10,
     backgroundColor: "#fff",
-    borderRadius: 18,
-    padding: 16,
+    borderRadius: 15,
+    padding: 11,
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
@@ -939,31 +1513,31 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   todayOrderIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 14,
+    width: 36,
+    height: 36,
+    borderRadius: 11,
     backgroundColor: "#FFF3DC",
     alignItems: "center",
     justifyContent: "center",
   },
-  todayOrderTitle: { fontSize: 15, fontWeight: "800", color: C.text },
+  todayOrderTitle: { fontSize: 13, fontWeight: "900", color: C.text },
   todayOrderSub: {
-    fontSize: 12,
+    fontSize: 10.5,
     color: C.textMuted,
     fontWeight: "600",
     marginTop: 2,
-    lineHeight: 16,
+    lineHeight: 14,
   },
   todayOrderRight: { alignItems: "flex-end" },
-  todayOrderCount: { fontSize: 24, fontWeight: "900", color: C.dark },
-  todayOrderMeta: { fontSize: 12, fontWeight: "800", color: C.textMuted },
+  todayOrderCount: { fontSize: 20, fontWeight: "900", color: C.dark },
+  todayOrderMeta: { fontSize: 10.5, fontWeight: "800", color: C.textMuted },
 
   rechargeRequestCard: {
     marginHorizontal: 20,
-    marginBottom: 16,
+    marginBottom: 10,
     backgroundColor: "#FFF3DC",
-    borderRadius: 18,
-    padding: 14,
+    borderRadius: 15,
+    padding: 11,
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
@@ -977,32 +1551,32 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   rechargeRequestIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
+    width: 36,
+    height: 36,
+    borderRadius: 11,
     backgroundColor: C.primary + "30",
     alignItems: "center",
     justifyContent: "center",
   },
-  rechargeRequestTitle: { fontSize: 14, fontWeight: "900", color: C.text },
+  rechargeRequestTitle: { fontSize: 12.5, fontWeight: "900", color: C.text },
   rechargeRequestSub: {
-    fontSize: 11,
+    fontSize: 10,
     color: C.textMuted,
     fontWeight: "600",
     marginTop: 2,
     lineHeight: 15,
   },
   rechargeRequestCount: {
-    minWidth: 32,
-    height: 32,
-    borderRadius: 11,
+    minWidth: 28,
+    height: 28,
+    borderRadius: 10,
     backgroundColor: C.primary,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 8,
   },
   rechargeRequestCountText: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: "900",
     color: "#fff",
   },
@@ -1011,27 +1585,29 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     paddingHorizontal: 16,
-    gap: 10,
-    marginBottom: 16,
+    gap: 8,
+    marginBottom: 10,
   },
   statCard: {
     width: "47.5%",
-    borderRadius: 16,
-    padding: 16,
-    gap: 6,
+    minHeight: 82,
+    borderRadius: 13,
+    paddingHorizontal: 11,
+    paddingVertical: 9,
+    gap: 2,
     position: "relative",
   },
   statIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+    width: 24,
+    height: 24,
+    borderRadius: 8,
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 4,
+    marginBottom: 1,
   },
-  statValue: { fontSize: 28, fontWeight: "800", letterSpacing: -0.5 },
-  statLabel: { fontSize: 12, color: C.textMuted, fontWeight: "600" },
-  tapHint: { position: "absolute", bottom: 10, right: 10 },
+  statValue: { fontSize: 18, fontWeight: "900", letterSpacing: -0.35 },
+  statLabel: { fontSize: 9.5, color: C.textMuted, fontWeight: "800" },
+  tapHint: { position: "absolute", bottom: 8, right: 8 },
   customerManagerCard: {
     marginHorizontal: 16,
     marginBottom: 14,
@@ -1154,4 +1730,151 @@ const styles = StyleSheet.create({
   },
   moreText: { fontSize: 12, color: C.accent, fontWeight: "700" },
   emptyText: { fontSize: 13, color: C.textLight, fontStyle: "italic" },
+  sectionHeader: {
+    marginBottom: 9,
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: "900",
+    color: C.text,
+  },
+  sectionSub: {
+    fontSize: 11,
+    color: C.textMuted,
+    fontWeight: "600",
+    marginTop: 2,
+  },
+  kpiTitleWrap: {
+    paddingHorizontal: 16,
+    marginBottom: 2,
+  },
+  kpiGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    paddingHorizontal: 16,
+    marginBottom: 10,
+  },
+  kpiCard: {
+    width: "47.5%",
+    backgroundColor: "#fff",
+    borderRadius: 14,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: "#FFE8D6",
+    shadowColor: C.dark,
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
+  },
+  kpiIcon: {
+    width: 26,
+    height: 26,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 5,
+  },
+  kpiValue: {
+    fontSize: 18,
+    fontWeight: "900",
+    color: C.text,
+    letterSpacing: -0.4,
+  },
+  kpiLabel: { fontSize: 10, color: C.textMuted, fontWeight: "800", marginTop: 1 },
+  kpiSub: { fontSize: 9, color: C.textLight, fontWeight: "700", marginTop: 3 },
+  chartCard: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    marginHorizontal: 16,
+    marginBottom: 10,
+    padding: 12,
+    borderWidth: 1,
+    borderLeftWidth: 4,
+    borderColor: "#FFE8D6",
+    borderLeftColor: C.primary,
+    shadowColor: C.dark,
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  chartGrid: {
+    flexDirection: "row",
+    gap: 8,
+    paddingHorizontal: 16,
+    marginBottom: 10,
+  },
+  chartHalf: {
+    flex: 1,
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 10,
+    borderWidth: 1,
+    borderLeftWidth: 4,
+    borderColor: "#FFE8D6",
+    borderLeftColor: C.primary,
+    minHeight: 150,
+    shadowColor: C.dark,
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
+  },
+  stackTrack: {
+    height: 14,
+    borderRadius: 999,
+    overflow: "hidden",
+    backgroundColor: "#FFF3DC",
+    flexDirection: "row",
+  },
+  stackSegment: { height: "100%" },
+  legendRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 7,
+    marginTop: 8,
+  },
+  legendItem: { flexDirection: "row", alignItems: "center", gap: 5 },
+  legendDot: { width: 8, height: 8, borderRadius: 4 },
+  legendText: { fontSize: 9.5, color: C.textMuted, fontWeight: "700" },
+  donutWrap: { alignSelf: "center", alignItems: "center", justifyContent: "center" },
+  donutCenter: { position: "absolute", alignItems: "center" },
+  donutValue: { fontSize: 16, fontWeight: "900", color: C.text },
+  donutLabel: { fontSize: 9, color: C.textMuted, fontWeight: "800" },
+  funnelWrap: { gap: 6 },
+  funnelRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  funnelBar: {
+    minHeight: 21,
+    borderRadius: 8,
+    justifyContent: "center",
+    paddingHorizontal: 8,
+  },
+  funnelText: { color: C.text, fontSize: 9.5, fontWeight: "900" },
+  funnelValue: { width: 20, fontSize: 10, fontWeight: "900", color: C.textMuted },
+  treemapWrap: {
+    minHeight: 94,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  treemapTile: {
+    minWidth: "30%",
+    minHeight: 44,
+    borderRadius: 12,
+    padding: 8,
+    justifyContent: "space-between",
+  },
+  treemapLabel: { fontSize: 9.5, fontWeight: "900", color: C.text },
+  treemapValue: { fontSize: 11, fontWeight: "900", color: C.dark },
+  heatmapGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 5,
+    paddingTop: 4,
+  },
+  heatCellWrap: { width: 27, alignItems: "center", gap: 2 },
+  heatCell: { width: 21, height: 21, borderRadius: 7 },
+  heatLabel: { fontSize: 7, color: C.textMuted, fontWeight: "800" },
 });

@@ -57,9 +57,15 @@ interface Order {
   created_at?: string;
   updated_at?: string;
   assigned_at?: string;
+  delivery_partner_id?: string;
+  delivery_partner_name?: string;
+  delivery_partner_phone?: string;
   product?: { id: string; name: string; price: number; unit: string };
   quantity?: number;
   product_name?: string;
+  payment_method?: string;
+  payment_status?: string;
+  razorpay_payment_id?: string;
 }
 
 interface ProductMap {
@@ -132,6 +138,20 @@ function getTotalQty(order: Order): number {
   if (order.items?.length > 0)
     return order.items.reduce((s, i) => s + i.quantity, 0);
   return order.quantity ?? 1;
+}
+
+function getPaymentLabel(method?: string): string {
+  switch ((method || "wallet").toLowerCase()) {
+    case "online":
+      return "Online";
+    case "cash_on_delivery":
+    case "cod":
+      return "Cash on Delivery";
+    case "wallet":
+      return "Wallet";
+    default:
+      return "Payment";
+  }
 }
 
 // ─── Delivery badge ───────────────────────────────────────────────────────────
@@ -763,6 +783,10 @@ function OrderCard({
             />
             {pattern !== "" && <DetailCell label="Type" value={pattern} />}
             <DetailCell
+              label="Payment"
+              value={`${getPaymentLabel(order.payment_method)} · ${order.payment_status || "pending"}`}
+            />
+            <DetailCell
               label="Order #"
               value={`#${order.id.slice(-8).toUpperCase()}`}
               mono
@@ -811,6 +835,24 @@ function OrderCard({
                   </Text>
                 </View>
               )}
+            </View>
+          )}
+
+          {order.delivery_partner_name && (
+            <View style={cd.riderRow}>
+              <View style={cd.riderIcon}>
+                <Ionicons name="bicycle-outline" size={16} color="#2563EB" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={cd.riderLabel}>Delivery partner</Text>
+                <Text style={cd.riderName}>{order.delivery_partner_name}</Text>
+                {order.delivery_partner_phone && (
+                  <Text style={cd.riderPhone}>{order.delivery_partner_phone}</Text>
+                )}
+              </View>
+              <View style={cd.riderBadge}>
+                <Text style={cd.riderBadgeText}>Assigned</Text>
+              </View>
             </View>
           )}
 
@@ -969,6 +1011,41 @@ const cd = StyleSheet.create({
     color: "#6B7280",
     marginTop: 1,
   },
+  riderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "#EFF6FF",
+    borderRadius: 12,
+    padding: 10,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+  },
+  riderIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: "#DBEAFE",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  riderLabel: {
+    fontSize: 9,
+    color: "#2563EB",
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
+  riderName: { fontSize: 14, fontWeight: "800", color: "#111827", marginTop: 1 },
+  riderPhone: { fontSize: 11, fontWeight: "700", color: "#4B5563", marginTop: 1 },
+  riderBadge: {
+    backgroundColor: "#DBEAFE",
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  riderBadgeText: { fontSize: 10, fontWeight: "800", color: "#2563EB" },
   cancelBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -1162,6 +1239,7 @@ export default function OrdersScreen() {
   const [cancelOrder, setCancelOrder] = useState<Order | null>(null);
   const [cancelModal, setCancelModal] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const fetchingOrdersRef = useRef(false);
 
   const headerY = useRef(new Animated.Value(-20)).current;
   const headerOp = useRef(new Animated.Value(0)).current;
@@ -1195,6 +1273,8 @@ export default function OrdersScreen() {
   }, []);
 
   const fetchData = useCallback(async () => {
+    if (fetchingOrdersRef.current) return;
+    fetchingOrdersRef.current = true;
     try {
       const data = await api.getOrders();
       const sorted = [...data].sort((a: Order, b: Order) => {
@@ -1204,8 +1284,9 @@ export default function OrdersScreen() {
       });
       setOrders(sorted);
     } catch (err) {
-      console.error("Failed to fetch orders:", err);
+      console.warn("Failed to fetch orders:", (err as any)?.message || err);
     } finally {
+      fetchingOrdersRef.current = false;
       setLoading(false);
       setRefreshing(false);
     }
@@ -1215,7 +1296,7 @@ export default function OrdersScreen() {
     if (!isFocused) return;
     loadProductMap();
     fetchData();
-    const iv = setInterval(fetchData, 5000);
+    const iv = setInterval(fetchData, 60_000);
     return () => clearInterval(iv);
   }, [isFocused, fetchData, loadProductMap]);
 

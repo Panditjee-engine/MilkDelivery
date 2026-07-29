@@ -2,6 +2,11 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const API_BASE = process.env.EXPO_PUBLIC_BACKEND_URL || "";
 
+type ApiRequestOptions = RequestInit & {
+  silentErrorLog?: boolean;
+  timeoutMs?: number;
+};
+
 export interface FeedItem {
   feed_type: string;
   quantity_kg: number;
@@ -355,9 +360,12 @@ class ApiService {
 
   private async request<T>(
     endpoint: string,
-    options: RequestInit = {},
+    options: ApiRequestOptions = {},
   ): Promise<T> {
     const url = `${API_BASE}/api${endpoint}`;
+    const controller = new AbortController();
+    const { silentErrorLog, timeoutMs, ...fetchOptions } = options;
+    const timeout = setTimeout(() => controller.abort(), timeoutMs ?? 45_000);
 
     const storedToken =
       this.token || (await AsyncStorage.getItem("access_token"));
@@ -371,27 +379,58 @@ class ApiService {
       headers["Authorization"] = `Bearer ${storedToken}`;
     }
 
-    const response = await fetch(url, {
-      ...options,
-      headers,
-    });
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        ...fetchOptions,
+        headers,
+        signal: fetchOptions.signal || controller.signal,
+      });
+    } catch (error: any) {
+      if (error?.name === "AbortError") {
+        throw new Error("Request timed out. Please check your connection and try again.");
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
 
     if (!response.ok) {
       const text = await response.text();
 
-      console.log("API ERROR URL:", url);
-      console.log("STATUS:", response.status);
-      console.log("BODY:", text);
-
-      if (response.status === 401) {
-        throw new Error("UNAUTHORIZED");
+      if (!silentErrorLog) {
+        console.log("API ERROR URL:", url);
+        console.log("STATUS:", response.status);
+        console.log("BODY:", text);
       }
+
+      let message = text || "Request failed";
       try {
         const errJson = JSON.parse(text);
-        throw new Error(errJson.detail || text || "Request failed");
+        message = errJson.detail || errJson.message || text || "Request failed";
       } catch {
-        throw new Error(text || "Request failed");
+        // Keep the raw text when the backend does not return JSON.
       }
+      const lowerMessage = String(message).toLowerCase();
+      const isAuthError =
+        response.status === 401 ||
+        (response.status === 403 &&
+          (lowerMessage.includes("not authenticated") ||
+            lowerMessage.includes("invalid token") ||
+            lowerMessage.includes("not authorized")));
+      if (isAuthError) {
+        this.setToken(null);
+        await AsyncStorage.multiRemove([
+          "access_token",
+          "worker_token",
+          "worker_data",
+        ]);
+        throw new Error("UNAUTHORIZED");
+      }
+      const error = new Error(message);
+      (error as Error & { status?: number; url?: string }).status = response.status;
+      (error as Error & { status?: number; url?: string }).url = url;
+      throw error;
     }
     return response.json();
   }
@@ -440,13 +479,30 @@ class ApiService {
 
     const text = await response.text();
     if (!response.ok) {
-      if (response.status === 401) throw new Error("UNAUTHORIZED");
+      let message = text || "Request failed";
       try {
         const errJson = JSON.parse(text);
-        throw new Error(errJson.message || errJson.detail || "Request failed");
+        message = errJson.message || errJson.detail || "Request failed";
       } catch {
-        throw new Error(text || "Request failed");
+        // Keep raw backend text when it is not JSON.
       }
+      const lowerMessage = String(message).toLowerCase();
+      const isAuthError =
+        response.status === 401 ||
+        (response.status === 403 &&
+          (lowerMessage.includes("not authenticated") ||
+            lowerMessage.includes("invalid token") ||
+            lowerMessage.includes("not authorized")));
+      if (isAuthError) {
+        this.setToken(null);
+        await AsyncStorage.multiRemove([
+          "access_token",
+          "worker_token",
+          "worker_data",
+        ]);
+        throw new Error("UNAUTHORIZED");
+      }
+      throw new Error(message);
     }
     if (!text) return {} as T;
     return JSON.parse(text);
@@ -641,6 +697,11 @@ class ApiService {
     start_date: string;
     end_date?: string | null;
     delivery_slot: string;
+    payment_method?: "wallet" | "cash_on_delivery" | "online";
+    payment_status?: string | null;
+    payment_intent_id?: string | null;
+    razorpay_order_id?: string | null;
+    razorpay_payment_id?: string | null;
   }) {
     const payload = {
       ...data,
@@ -649,6 +710,32 @@ class ApiService {
     return this.request<any>("/subscriptions", {
       method: "POST",
       body: JSON.stringify(payload),
+    });
+  }
+
+  async createSubscriptionRazorpayOrder(data: Parameters<ApiService["createSubscription"]>[0]) {
+    return this.request<{
+      key_id: string;
+      order_id: string;
+      amount: number;
+      currency: string;
+      receipt: string;
+      name: string;
+      description: string;
+    }>("/subscriptions/razorpay/order", {
+      method: "POST",
+      body: JSON.stringify({ ...data, payment_method: "online" }),
+    });
+  }
+
+  async verifySubscriptionRazorpayPayment(data: {
+    razorpay_order_id: string;
+    razorpay_payment_id: string;
+    razorpay_signature: string;
+  }) {
+    return this.request<any>("/subscriptions/razorpay/verify", {
+      method: "POST",
+      body: JSON.stringify(data),
     });
   }
 
@@ -765,6 +852,54 @@ class ApiService {
     });
   }
 
+  async createRazorpayWalletRechargeOrder(amount: number) {
+    return this.request<{
+      key_id: string;
+      order_id: string;
+      amount: number;
+      currency: string;
+      receipt: string;
+      name: string;
+      description: string;
+    }>("/wallet/razorpay/recharge-order", {
+      method: "POST",
+      body: JSON.stringify({ amount }),
+    });
+  }
+
+  async verifyRazorpayWalletRecharge(data: {
+    razorpay_order_id: string;
+    razorpay_payment_id: string;
+    razorpay_signature: string;
+  }) {
+    return this.request<{ message: string; new_balance: number; status: string }>(
+      "/wallet/razorpay/verify-recharge",
+      {
+        method: "POST",
+        body: JSON.stringify(data),
+      },
+    );
+  }
+
+  async getRazorpayLinkedAccount() {
+    return this.request<{
+      configured: boolean;
+      linked_account_id: string | null;
+      label: string | null;
+      updated_at?: string;
+    }>("/wallet/razorpay/account");
+  }
+
+  async saveRazorpayLinkedAccount(data: {
+    linked_account_id: string;
+    label?: string;
+  }) {
+    return this.request<any>("/wallet/razorpay/account", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
+
   async createRechargeRequest(data: { amount: number; reference: string }) {
     return this.request<any>("/wallet/recharge-request", {
       method: "POST",
@@ -773,11 +908,11 @@ class ApiService {
   }
 
   async getRechargeRequests() {
-    return this.request<any[]>("/wallet/recharge-request");
+    return this.request<any[]>("/wallet/recharge-requests");
   }
 
   async getOrders() {
-    return this.request<any[]>("/orders");
+    return this.request<any[]>("/orders", { timeoutMs: 60_000 });
   }
 
   async getOrder(id: string) {
@@ -886,6 +1021,48 @@ class ApiService {
     return this.request<any[]>(`/admin/users${params}`);
   }
 
+  async getAdminDeliveryPartners() {
+    return this.request<any[]>("/admin/delivery-partners");
+  }
+
+  async createDeliveryPartner(data: {
+    name: string;
+    email: string;
+    password: string;
+    phone?: string;
+    zone?: string;
+  }) {
+    return this.request<any>("/admin/delivery-partners", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateDeliveryPartner(
+    id: string,
+    data: Partial<{
+      name: string;
+      email: string;
+      password: string;
+      phone: string;
+      zone: string;
+      is_active: boolean;
+      is_verified: boolean;
+    }>,
+  ) {
+    return this.request<any>(`/admin/delivery-partners/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteDeliveryPartner(id: string) {
+    return this.request<{ success: boolean; id: string }>(
+      `/admin/delivery-partners/${id}`,
+      { method: "DELETE" },
+    );
+  }
+
   async assignZone(userId: string, zone: string) {
     return this.request<any>(`/admin/users/${userId}/zone`, {
       method: "PUT",
@@ -905,7 +1082,7 @@ class ApiService {
     if (status) params.append("status", status);
     if (date) params.append("date", date);
     const query = params.toString() ? `?${params.toString()}` : "";
-    return this.request<any[]>(`/admin/orders${query}`);
+    return this.request<any[]>(`/admin/orders${query}`, { timeoutMs: 60_000 });
   }
 
   async adminCancelOrder(orderId: string) {
@@ -2021,7 +2198,7 @@ async resetVeterinarianPassword(id: string, new_password: string) {
       ifscCode: string;
       bankName: string;
       upiId?: string;
-    }>("/wallet/bank-account");
+    }>("/wallet/bank-account", { silentErrorLog: true });
   }
 
   async saveBankAccount(data: {

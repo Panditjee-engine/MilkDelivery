@@ -370,7 +370,9 @@ const handleVerifyOtp = async () => {
               {otp.map((digit, index) => (
                 <TextInput
                   key={index}
-                  ref={(ref) => (otpInputRefs.current[index] = ref)}
+                  ref={(ref) => {
+                    otpInputRefs.current[index] = ref;
+                  }}
                   style={[styles.otpInput, otpError ? styles.otpInputError : null]}
                   value={digit}
                   onChangeText={(value) => handleOtpChange(value, index)}

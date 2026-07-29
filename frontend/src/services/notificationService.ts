@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const API_BASE = process.env.EXPO_PUBLIC_BACKEND_URL || "";
-const POLL_INTERVAL_MS = 30_000;
+const POLL_INTERVAL_MS = 60_000;
 
 export interface CowTaskStatus {
   cow_id: string;
@@ -45,6 +45,7 @@ class NotificationService {
   private listeners: Set<NotifListener> = new Set();
   private lastData: NotificationSummary | null = null;
   private isPolling = false;
+  private inFlight = false;
 
   subscribe(listener: NotifListener): () => void {
     this.listeners.add(listener);
@@ -82,6 +83,9 @@ class NotificationService {
   }
 
   private async fetchSummary() {
+    if (this.inFlight) return;
+    this.inFlight = true;
+    let timeout: ReturnType<typeof setTimeout> | null = null;
     try {
       // API_BASE check
       if (!API_BASE) {
@@ -102,10 +106,9 @@ class NotificationService {
       }
 
       const url = `${API_BASE}/api/admin/notifications/summary`;
-      console.log("[Notif] Fetching:", url);
 
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 10000);
+      timeout = setTimeout(() => controller.abort(), 15000);
 
       const response = await fetch(url, {
         signal: controller.signal,
@@ -115,8 +118,8 @@ class NotificationService {
         },
       });
 
-      clearTimeout(timeout);
-      console.log("[Notif] Response status:", response.status);
+      if (timeout) clearTimeout(timeout);
+      timeout = null;
 
       if (!response.ok) {
         if (response.status === 401 || response.status === 403) {
@@ -128,7 +131,6 @@ class NotificationService {
       }
 
       const data: NotificationSummary = await response.json();
-      console.log("[Notif] Data received — total_pending:", data.total_pending);
       this.lastData = data;
       this.emit(data);
     } catch (error: any) {
@@ -138,6 +140,9 @@ class NotificationService {
         console.warn("[Notif] Fetch error:", error?.message);
       }
       this.emit(null, error?.message || "Network error");
+    } finally {
+      if (timeout) clearTimeout(timeout);
+      this.inFlight = false;
     }
   }
 

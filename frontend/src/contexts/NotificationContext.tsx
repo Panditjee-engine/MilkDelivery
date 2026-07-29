@@ -10,6 +10,7 @@ import {
   notificationService,
   NotificationSummary,
 } from "../services/notificationService";
+import { useAuth } from "./AuthContext";
 
 interface NotificationContextType {
   summary: NotificationSummary | null;
@@ -28,10 +29,18 @@ const NotificationContext = createContext<NotificationContextType>({
 });
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
   const [summary, setSummary] = useState<NotificationSummary | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (user?.role !== "admin") {
+      notificationService.stopPolling();
+      setLoading(false);
+      setSummary(null);
+      return;
+    }
+
     const unsubscribe = notificationService.subscribe((data) => {
       setLoading(false);
       if (data) setSummary(data);
@@ -42,7 +51,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     return () => {
       unsubscribe();
     };
-  }, []);
+  }, [user?.role]);
 
   const refresh = useCallback(async () => {
     setLoading(true);

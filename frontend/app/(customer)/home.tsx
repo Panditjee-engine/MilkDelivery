@@ -997,7 +997,7 @@ export default function CustomerHome() {
   const fetchData = async (isInitial = false) => {
     try {
       const [walletData, ordersData, productsData, adminsData, contentData] =
-        await Promise.all([
+        await Promise.allSettled([
           api.getWallet(),
           api.getOrders(),
           api.getCatalogProducts(
@@ -1008,11 +1008,13 @@ export default function CustomerHome() {
           api.getCatalogContent().catch(() => null),
         ]);
 
-      setAdminsList(adminsData.map((a: any) => ({ ...a, id: a.id || a._id })));
-      setWalletBalance(walletData.balance);
-      setRecentOrder(ordersData?.[0] || null);
-      setFeaturedProducts((productsData || []).slice(0, 3));
-      setContentSlides(mapContentToSlides(contentData?.data || []));
+      if (adminsData.status === "fulfilled") {
+        setAdminsList(adminsData.value.map((a: any) => ({ ...a, id: a.id || a._id })));
+      }
+      if (walletData.status === "fulfilled") setWalletBalance(walletData.value.balance);
+      if (ordersData.status === "fulfilled") setRecentOrder(ordersData.value?.[0] || null);
+      if (productsData.status === "fulfilled") setFeaturedProducts((productsData.value || []).slice(0, 3));
+      if (contentData.status === "fulfilled") setContentSlides(mapContentToSlides(contentData.value?.data || []));
 
       if (isInitial) {
         Animated.parallel([
