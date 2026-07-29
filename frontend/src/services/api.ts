@@ -2,6 +2,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const API_BASE = process.env.EXPO_PUBLIC_BACKEND_URL || "";
 
+export type PaymentMethod = "cash" | "upi";
+
 export interface FeedItem {
   feed_type: string;
   quantity_kg: number;
@@ -345,6 +347,9 @@ export interface FarmSaleCreate {
   price_per_unit: number;
   date: string; // YYYY-MM-DD
   notes?: string;
+  payment_method?: PaymentMethod;
+  payment_confirmed?: boolean;
+  receipt_image?: string;
 }
 
 export interface FarmSale {
@@ -361,6 +366,9 @@ export interface FarmSale {
   date: string;
   notes?: string;
   created_at: string;
+  payment_method?: PaymentMethod;
+  payment_confirmed?: boolean;
+  receipt_image?: string;
 }
 
 //farm multiple adress
@@ -3094,6 +3102,9 @@ async workerGetFarmSales(params?: {
       unit: string;
       price_per_unit: number;
       notes: string;
+      payment_method: PaymentMethod;
+      payment_confirmed: boolean;
+      receipt_image: string;
     }>,
   ): Promise<FarmSale> {
     return this.request<FarmSale>(`/admin/farm-sales/${saleId}`, {
@@ -3137,6 +3148,48 @@ async updateBusinessLocation(id: string, data: BusinessLocationCreate): Promise<
 async deleteBusinessLocation(id: string): Promise<{ success: boolean; id: string }> {
   return this.request(`/admin/locations/${id}`, { method: "DELETE" });
 }
+
+  async workerGetAdminPaymentQr(): Promise<{
+    admin_id: string;
+    qr_image_base64: string;
+    file_type: string;
+    label: string;
+  }> {
+    const token = await AsyncStorage.getItem("worker_token");
+    const response = await fetch(`${API_BASE}/api/worker/payment-qr`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await response.json();
+    if (!response.ok)
+      throw new Error(data.detail || "Failed to fetch payment QR");
+    return data;
+  }
+
+  async workerUpdateFarmSale(
+  saleId: string,
+  data: Partial<FarmSaleCreate>,
+): Promise<FarmSale> {
+  const token = await AsyncStorage.getItem("worker_token");
+  const response = await fetch(`${API_BASE}/api/worker/farm-sale/${saleId}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+  const result = await response.json();
+  if (!response.ok)
+    throw new Error(result.detail || "Failed to update farm sale entry");
+  return result;
+}
+
+async getFarmSales(search?: string) {
+    const params = new URLSearchParams();
+    if (search) params.append("search", search);
+    const query = params.toString() ? `?${params.toString()}` : "";
+    return this.request<FarmSale[]>(`/farm-sales${query}`);
+  }
 
   // Logout
   logout = async () => {

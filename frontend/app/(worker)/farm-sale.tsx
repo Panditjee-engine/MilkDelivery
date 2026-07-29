@@ -12,14 +12,15 @@ import {
   KeyboardAvoidingView,
   Platform,
   StatusBar,
+  Image,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
-import DateTimePicker from "@react-native-community/datetimepicker";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import * as ImagePicker from "expo-image-picker";
 import { useAuth } from "../../src/contexts/AuthContext";
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { api, FarmSale } from "../../src/services/api";
+import { api, FarmSale, PaymentMethod } from "../../src/services/api";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -27,27 +28,18 @@ function todayStr() {
   return new Date().toISOString().split("T")[0];
 }
 
-function parseUTCDate(dateString: string): Date {
-  const hasTimezone = /Z$|[+-]\d{2}:?\d{2}$/.test(dateString);
-  return new Date(hasTimezone ? dateString : dateString + "Z");
+function fmtShortDate(dateStr: string): string {
+  const d = new Date(dateStr + "T00:00:00");
+  return d.toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
 }
 
-function fmtDate(d: Date): string {
-  return d.toISOString().split("T")[0];
-}
+const UNIT_OPTIONS = ["kg", "L", "pcs"] as const;
 
-const PRODUCT_OPTIONS = [
-  { key: "Milk", icon: "cup-water", labelHi: "दूध" },
-  { key: "Ghee", icon: "food-variant", labelHi: "घी" },
-  { key: "Curd", icon: "bowl-mix", labelHi: "दही" },
-  { key: "Paneer", icon: "cheese", labelHi: "पनीर" },
-  { key: "Cow Dung", icon: "compost", labelHi: "गोबर" },
-  { key: "Other", icon: "dots-horizontal", labelHi: "अन्य" },
-] as const;
-
-const UNIT_OPTIONS = ["L", "kg", "piece"] as const;
-
-// ─── Modern Alert ─────────────────────────────────────────────────────────────
+// ─── Modern Alert (unchanged logic) ──────────────────────────────────────────
 
 interface AlertConfig {
   visible: boolean;
@@ -100,10 +92,7 @@ function ModernAlert({
           ]}
         >
           <View
-            style={[
-              al.iconWrap,
-              { backgroundColor: config.iconBg ?? "#fee2e2" },
-            ]}
+            style={[al.iconWrap, { backgroundColor: config.iconBg ?? "#fee2e2" }]}
           >
             <Ionicons
               name={(config.icon ?? "alert-circle-outline") as any}
@@ -113,11 +102,7 @@ function ModernAlert({
           </View>
           <Text style={al.title}>{config.title}</Text>
           <Text style={al.message}>{config.message}</Text>
-          <TouchableOpacity
-            style={al.btn}
-            onPress={onClose}
-            activeOpacity={0.85}
-          >
+          <TouchableOpacity style={al.btn} onPress={onClose} activeOpacity={0.85}>
             <Text style={al.btnText}>OK</Text>
           </TouchableOpacity>
         </Animated.View>
@@ -198,7 +183,7 @@ const al = StyleSheet.create({
   btnText: { fontSize: 15, fontWeight: "800", color: "#fff" },
 });
 
-// ─── Undo Confirm Modal ───────────────────────────────────────────────────────
+// ─── Undo/Delete Confirm Modal (unchanged logic) ─────────────────────────────
 
 function UndoConfirmModal({
   visible,
@@ -206,14 +191,12 @@ function UndoConfirmModal({
   onConfirm,
   onCancel,
   loading,
-  isHindi,
 }: {
   visible: boolean;
   sale: FarmSale | null;
   onConfirm: () => void;
   onCancel: () => void;
   loading: boolean;
-  isHindi: boolean;
 }) {
   const scaleAnim = useRef(new Animated.Value(0.88)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
@@ -244,25 +227,16 @@ function UndoConfirmModal({
     <Modal visible={visible} transparent animationType="none">
       <View style={uc.overlay}>
         <Animated.View
-          style={[
-            uc.card,
-            { opacity: opacityAnim, transform: [{ scale: scaleAnim }] },
-          ]}
+          style={[uc.card, { opacity: opacityAnim, transform: [{ scale: scaleAnim }] }]}
         >
           <View style={uc.iconRing}>
             <View style={uc.iconInner}>
-              <Ionicons name="arrow-undo" size={26} color="#ef4444" />
+              <Ionicons name="trash" size={24} color="#ef4444" />
             </View>
           </View>
 
-          <Text style={uc.title}>
-            {isHindi ? "बिक्री हटाएं?" : "Undo Sale Entry?"}
-          </Text>
-          <Text style={uc.subtitle}>
-            {isHindi
-              ? "इसे हमेशा के लिए हटा देगा"
-              : "This will permanently remove the sale for"}
-          </Text>
+          <Text style={uc.title}>Delete Sale Entry?</Text>
+          <Text style={uc.subtitle}>This will permanently remove the sale for</Text>
 
           <View style={uc.chip}>
             <Ionicons name="person" size={14} color="#374151" />
@@ -274,9 +248,7 @@ function UndoConfirmModal({
           </View>
 
           <Text style={uc.warn}>
-            {isHindi
-              ? "यह बिक्री आज के कुल से हट जाएगी, आप इसे फिर से जोड़ सकते हैं।"
-              : "This sale will be removed from today's total and you can re-enter it."}
+            This sale will be removed from the total and cannot be recovered.
           </Text>
 
           <View style={uc.btnRow}>
@@ -286,9 +258,7 @@ function UndoConfirmModal({
               activeOpacity={0.75}
               disabled={loading}
             >
-              <Text style={uc.cancelTxt}>
-                {isHindi ? "रहने दें" : "Keep it"}
-              </Text>
+              <Text style={uc.cancelTxt}>Keep it</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -301,10 +271,8 @@ function UndoConfirmModal({
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
                 <>
-                  <Ionicons name="arrow-undo" size={15} color="#fff" />
-                  <Text style={uc.confirmTxt}>
-                    {isHindi ? "हां, हटाएं" : "Yes, Undo"}
-                  </Text>
+                  <Ionicons name="trash" size={15} color="#fff" />
+                  <Text style={uc.confirmTxt}>Yes, Delete</Text>
                 </>
               )}
             </TouchableOpacity>
@@ -356,12 +324,7 @@ const uc = StyleSheet.create({
     justifyContent: "center",
   },
   title: { fontSize: 20, fontWeight: "900", color: "#111827", marginBottom: 6 },
-  subtitle: {
-    fontSize: 13,
-    color: "#6b7280",
-    fontWeight: "500",
-    marginBottom: 14,
-  },
+  subtitle: { fontSize: 13, color: "#6b7280", fontWeight: "500", marginBottom: 14 },
   chip: {
     flexDirection: "row",
     alignItems: "center",
@@ -376,7 +339,7 @@ const uc = StyleSheet.create({
   },
   chipName: { fontSize: 14, fontWeight: "800", color: "#111827" },
   chipTag: { fontSize: 12, fontWeight: "700", color: "#6b7280" },
-  chipQty: { fontSize: 13, fontWeight: "800", color: "#16a34a" },
+  chipQty: { fontSize: 13, fontWeight: "800", color: "#4f46e5" },
   chipDivider: { width: 1, height: 14, backgroundColor: "#e5e7eb" },
   warn: {
     fontSize: 12,
@@ -410,337 +373,432 @@ const uc = StyleSheet.create({
   confirmTxt: { fontSize: 14, fontWeight: "800", color: "#fff" },
 });
 
-// ─── Date Filter Modal ────────────────────────────────────────────────────────
+// ─── Number Stepper (unchanged logic) ────────────────────────────────────────
 
-function DateFilterModal({
-  visible,
-  onClose,
-  onSelect,
-  currentDate,
-  isHindi,
+function NumberStepper({
+  value,
+  onChange,
+  step = 1,
+  placeholder = "0",
 }: {
-  visible: boolean;
-  onClose: () => void;
-  onSelect: (date: string | null) => void;
-  currentDate: string | null;
-  isHindi: boolean;
+  value: string;
+  onChange: (v: string) => void;
+  step?: number;
+  placeholder?: string;
 }) {
-  const [showPicker, setShowPicker] = useState(false);
-  const [pickedDate, setPickedDate] = useState(new Date());
-
-  const scaleAnim = useRef(new Animated.Value(0.9)).current;
-  const opacityAnim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    if (visible) {
-      setShowPicker(false);
-      scaleAnim.setValue(0.9);
-      opacityAnim.setValue(0);
-      Animated.parallel([
-        Animated.spring(scaleAnim, {
-          toValue: 1,
-          useNativeDriver: true,
-          damping: 15,
-          stiffness: 200,
-        }),
-        Animated.timing(opacityAnim, {
-          toValue: 1,
-          duration: 160,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    }
-  }, [visible]);
+  const bump = (dir: 1 | -1) => {
+    const cur = parseFloat(value) || 0;
+    const next = Math.max(0, Math.round((cur + dir * step) * 100) / 100);
+    onChange(String(next));
+  };
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="none"
-      onRequestClose={onClose}
-    >
-      <TouchableOpacity style={fm.overlay} activeOpacity={1} onPress={onClose}>
-        <Animated.View
-          style={[
-            fm.card,
-            { opacity: opacityAnim, transform: [{ scale: scaleAnim }] },
-          ]}
-          onStartShouldSetResponder={() => true}
-        >
-          <View style={fm.header}>
-            <View style={fm.headerIconWrap}>
-              <Ionicons name="filter" size={16} color="#16a34a" />
-            </View>
-            <Text style={fm.title}>
-              {isHindi ? "बिक्री फ़िल्टर करें" : "Filter Sales"}
-            </Text>
-          </View>
+    <View style={ns.wrap}>
+      <TextInput
+        style={ns.input}
+        value={value}
+        onChangeText={onChange}
+        placeholder={placeholder}
+        placeholderTextColor="#9ca3af"
+        keyboardType="decimal-pad"
+      />
+      <View style={ns.stepperCol}>
+        <TouchableOpacity style={ns.stepperBtn} onPress={() => bump(1)}>
+          <Ionicons name="chevron-up" size={14} color="#6b7280" />
+        </TouchableOpacity>
+        <View style={ns.stepperDivider} />
+        <TouchableOpacity style={ns.stepperBtn} onPress={() => bump(-1)}>
+          <Ionicons name="chevron-down" size={14} color="#6b7280" />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
 
-          <TouchableOpacity
-            style={[fm.option, !currentDate && fm.optionActive]}
-            onPress={() => onSelect(null)}
-            activeOpacity={0.8}
-          >
-            <Ionicons
-              name="infinite-outline"
-              size={17}
-              color={!currentDate ? "#16a34a" : "#6b7280"}
-            />
-            <Text style={[fm.optionText, !currentDate && fm.optionTextActive]}>
-              {isHindi ? "सभी समय" : "All Time"}
-            </Text>
-            {!currentDate && (
-              <Ionicons name="checkmark-circle" size={17} color="#16a34a" />
+const ns = StyleSheet.create({
+  wrap: {
+    flexDirection: "row",
+    alignItems: "stretch",
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    borderRadius: 8,
+    backgroundColor: "#fff",
+    height: 44,
+  },
+  input: { flex: 1, paddingHorizontal: 12, fontSize: 14, color: "#111827" },
+  stepperCol: { borderLeftWidth: 1, borderLeftColor: "#e5e7eb", width: 32 },
+  stepperBtn: { flex: 1, alignItems: "center", justifyContent: "center" },
+  stepperDivider: { height: 1, backgroundColor: "#e5e7eb" },
+});
+
+// ─── Receipt Viewer Modal (unchanged logic) ──────────────────────────────────
+
+function ReceiptViewerModal({
+  visible,
+  imageUri,
+  onClose,
+}: {
+  visible: boolean;
+  imageUri: string | null;
+  onClose: () => void;
+}) {
+  const [busy, setBusy] = useState<"share" | "download" | null>(null);
+  const { config: alertConfig, show: showAlert, hide: hideAlert } = useModernAlert();
+
+  const writeToTempFile = async (uri: string) => {
+    const FileSystem = require("expo-file-system");
+    const base64Data = uri.includes(",") ? uri.split(",")[1] : uri;
+    const fileUri = `${FileSystem.cacheDirectory}receipt_${Date.now()}.jpg`;
+    await FileSystem.writeAsStringAsync(fileUri, base64Data, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+    return fileUri;
+  };
+
+  const handleShare = async () => {
+    if (!imageUri) return;
+    setBusy("share");
+    try {
+      const Sharing = require("expo-sharing");
+      const fileUri = await writeToTempFile(imageUri);
+      const available = await Sharing.isAvailableAsync();
+      if (!available) {
+        showAlert("Something Went Wrong", "Could not share the receipt.", "share-outline", "#ef4444", "#fee2e2");
+        return;
+      }
+      await Sharing.shareAsync(fileUri, { mimeType: "image/jpeg" });
+    } catch (err) {
+      showAlert("Something Went Wrong", "Could not share the receipt.", "share-outline", "#ef4444", "#fee2e2");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleDownload = async () => {
+    if (!imageUri) return;
+    setBusy("download");
+    try {
+      const MediaLibrary = require("expo-media-library");
+      const perm = await MediaLibrary.requestPermissionsAsync();
+      if (!perm.granted) {
+        showAlert("Permission Needed", "Allow gallery access to save the receipt.", "images-outline", "#6b7280", "#f3f4f6");
+        return;
+      }
+      const fileUri = await writeToTempFile(imageUri);
+      const asset = await MediaLibrary.createAssetAsync(fileUri);
+      await MediaLibrary.createAlbumAsync("Farm Sale Receipts", asset, false);
+      showAlert("Saved", "Receipt has been saved to your gallery.", "checkmark-circle-outline", "#16a34a", "#dcfce7");
+    } catch (err) {
+      showAlert("Something Went Wrong", "Could not save the receipt.", "download-outline", "#ef4444", "#fee2e2");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  if (!imageUri) return null;
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <ModernAlert config={alertConfig} onClose={hideAlert} />
+      <View style={rv.overlay}>
+        <View style={rv.header}>
+          <Text style={rv.headerTitle}>Receipt</Text>
+          <TouchableOpacity onPress={onClose} hitSlop={10}>
+            <Ionicons name="close" size={24} color="#fff" />
+          </TouchableOpacity>
+        </View>
+        <View style={rv.imageWrap}>
+          <Image source={{ uri: imageUri }} style={rv.image} resizeMode="contain" />
+        </View>
+        <View style={rv.actionRow}>
+          <TouchableOpacity style={rv.actionBtn} onPress={handleShare} disabled={busy !== null}>
+            {busy === "share" ? (
+              <ActivityIndicator size="small" color="#111827" />
+            ) : (
+              <>
+                <Ionicons name="share-outline" size={18} color="#111827" />
+                <Text style={rv.actionBtnText}>Share</Text>
+              </>
             )}
           </TouchableOpacity>
-
           <TouchableOpacity
-            style={[fm.option, currentDate === todayStr() && fm.optionActive]}
-            onPress={() => onSelect(todayStr())}
-            activeOpacity={0.8}
+            style={[rv.actionBtn, rv.actionBtnPrimary]}
+            onPress={handleDownload}
+            disabled={busy !== null}
           >
-            <Ionicons
-              name="today-outline"
-              size={17}
-              color={currentDate === todayStr() ? "#16a34a" : "#6b7280"}
-            />
-            <Text
-              style={[
-                fm.optionText,
-                currentDate === todayStr() && fm.optionTextActive,
-              ]}
-            >
-              {isHindi ? "आज" : "Today"}
-            </Text>
-            {currentDate === todayStr() && (
-              <Ionicons name="checkmark-circle" size={17} color="#16a34a" />
+            {busy === "download" ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <>
+                <Ionicons name="download-outline" size={18} color="#fff" />
+                <Text style={[rv.actionBtnText, { color: "#fff" }]}>Download</Text>
+              </>
             )}
           </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              fm.option,
-              currentDate && currentDate !== todayStr() && fm.optionActive,
-            ]}
-            onPress={() => {
-              setPickedDate(
-                currentDate && currentDate !== todayStr()
-                  ? new Date(currentDate)
-                  : new Date(),
-              );
-              setShowPicker(true);
-            }}
-            activeOpacity={0.8}
-          >
-            <Ionicons
-              name="calendar-outline"
-              size={17}
-              color={
-                currentDate && currentDate !== todayStr()
-                  ? "#16a34a"
-                  : "#6b7280"
-              }
-            />
-            <Text
-              style={[
-                fm.optionText,
-                currentDate &&
-                  currentDate !== todayStr() &&
-                  fm.optionTextActive,
-              ]}
-            >
-              {currentDate && currentDate !== todayStr()
-                ? currentDate
-                : isHindi
-                  ? "विशिष्ट तिथि चुनें"
-                  : "Pick a specific date"}
-            </Text>
-            <Ionicons name="chevron-forward" size={15} color="#d1d5db" />
-          </TouchableOpacity>
-
-          {showPicker && (
-            <View style={fm.pickerWrap}>
-              <DateTimePicker
-                value={pickedDate}
-                mode="date"
-                display={Platform.OS === "ios" ? "spinner" : "default"}
-                maximumDate={new Date()}
-                onChange={(_e, selected) => {
-                  if (Platform.OS === "android") {
-                    setShowPicker(false);
-                    if (selected) onSelect(fmtDate(selected));
-                    return;
-                  }
-                  if (selected) setPickedDate(selected);
-                }}
-              />
-              {Platform.OS === "ios" && (
-                <TouchableOpacity
-                  style={fm.confirmBtn}
-                  onPress={() => onSelect(fmtDate(pickedDate))}
-                  activeOpacity={0.85}
-                >
-                  <Text style={fm.confirmBtnText}>
-                    {isHindi ? "लागू करें" : "Apply"}
-                  </Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          )}
-        </Animated.View>
-      </TouchableOpacity>
+        </View>
+      </View>
     </Modal>
   );
 }
 
-const fm = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.45)",
-    justifyContent: "center",
-    padding: 28,
-  },
-  card: {
-    backgroundColor: "#fff",
-    borderRadius: 22,
-    padding: 16,
-    shadowColor: "#000",
-    shadowOpacity: 0.18,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 16,
-  },
+const rv = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.92)" },
   header: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    marginBottom: 14,
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingTop: 56,
     paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f3f4f6",
   },
-  headerIconWrap: {
-    width: 30,
-    height: 30,
-    borderRadius: 10,
-    backgroundColor: "#f0fdf4",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  title: { fontSize: 15, fontWeight: "900", color: "#111827" },
-  option: {
+  headerTitle: { fontSize: 16, fontWeight: "800", color: "#fff" },
+  imageWrap: { flex: 1, alignItems: "center", justifyContent: "center" },
+  image: { width: "100%", height: "100%" },
+  actionRow: { flexDirection: "row", gap: 10, paddingHorizontal: 20, paddingTop: 14, paddingBottom: 36 },
+  actionBtn: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    paddingVertical: 13,
-    paddingHorizontal: 12,
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "#fff",
     borderRadius: 14,
-    marginBottom: 4,
+    paddingVertical: 14,
   },
-  optionActive: { backgroundColor: "#f0fdf4" },
-  optionText: { flex: 1, fontSize: 13, fontWeight: "700", color: "#374151" },
-  optionTextActive: { color: "#16a34a" },
-  pickerWrap: { marginTop: 4 },
-  confirmBtn: {
-    backgroundColor: "#16a34a",
-    borderRadius: 12,
-    paddingVertical: 13,
-    alignItems: "center",
-    marginTop: 8,
-  },
-  confirmBtnText: { color: "#fff", fontWeight: "800", fontSize: 14 },
+  actionBtnPrimary: { backgroundColor: "#4f46e5" },
+  actionBtnText: { fontSize: 14, fontWeight: "800", color: "#111827" },
 });
 
-// ─── Add Sale Modal ────────────────────────────────────────────────────────────
+// ─── Main Screen ──────────────────────────────────────────────────────────────
 
-function AddSaleModal({
-  visible,
-  onClose,
-  onSaved,
-  isHindi,
-}: {
-  visible: boolean;
-  onClose: () => void;
-  onSaved: (entry: FarmSale) => void;
-  isHindi: boolean;
-}) {
-  const [customerName, setCustomerName] = useState("");
-  const [product, setProduct] = useState<string>("Milk");
-  const [customProduct, setCustomProduct] = useState("");
-  const [quantity, setQuantity] = useState("");
-  const [unit, setUnit] = useState<string>("L");
-  const [pricePerUnit, setPricePerUnit] = useState("");
+function FarmSaleScreenInner() {
+  const { workerToken } = useAuth();
+  const insets = useSafeAreaInsets();
+  const scrollRef = useRef<ScrollView>(null);
+  const formLayoutY = useRef(0);
+
+  const [allSales, setAllSales] = useState<FarmSale[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeFilter, setActiveFilter] = useState("Today");
+
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const {
-    config: alertConfig,
-    show: showAlert,
-    hide: hideAlert,
-  } = useModernAlert();
+  const [myWorkerId, setMyWorkerId] = useState<string | null>(null);
+  const [farmName, setFarmName] = useState<string>("GreenField Co-op");
 
-  const labels = {
-    title: isHindi ? "नई बिक्री दर्ज करें" : "Record a New Sale",
-    customer: isHindi ? "ग्राहक का नाम" : "Customer Name",
-    customerPh: isHindi ? "जैसे: रमेश कुमार" : "e.g. Ramesh Kumar",
-    product: isHindi ? "उत्पाद" : "Product",
-    productPh: isHindi ? "उत्पाद का नाम लिखें" : "Enter product name",
-    quantity: isHindi ? "मात्रा" : "Quantity",
-    unit: isHindi ? "यूनिट" : "Unit",
-    price: isHindi ? "प्रति" : "Price per",
-    total: isHindi ? "कुल राशि" : "Total Amount",
-    save: isHindi ? "बिक्री सहेजें" : "Save Sale",
-    errorTitle: isHindi ? "सहेजा नहीं जा सका" : "Could Not Save",
-    errorMsg: isHindi
-      ? "बिक्री सहेजते समय कुछ गलत हो गया।"
-      : "Something went wrong while saving the sale entry.",
+  const [deleteTarget, setDeleteTarget] = useState<FarmSale | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const [viewerUri, setViewerUri] = useState<string | null>(null);
+  const [viewerVisible, setViewerVisible] = useState(false);
+
+  const { config: alertConfig, show: showAlert, hide: hideAlert } = useModernAlert();
+
+  // Form state
+  const [customerName, setCustomerName] = useState("");
+  const [productName, setProductName] = useState("");
+  const [quantity, setQuantity] = useState("");
+  const [unit, setUnit] = useState<string>("kg");
+  const [pricePerUnit, setPricePerUnit] = useState("");
+  const [receiptImage, setReceiptImage] = useState<string | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
+  const [paymentConfirmed, setPaymentConfirmed] = useState(false);
+
+  const [qrLoading, setQrLoading] = useState(false);
+  const [qrImage, setQrImage] = useState<string | null>(null);
+  const [qrError, setQrError] = useState<string | null>(null);
+
+  // ── Data loading (same API calls as before) ──
+
+  const fetchAll = useCallback(async () => {
+    try {
+      const data = await api.workerGetFarmSales({ all_time: true });
+      setAllSales(data);
+    } catch (e) {
+      console.log("all sales fetch error:", e);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [workerToken]);
+
+  useEffect(() => {
+    fetchAll();
+  }, []);
+
+  useEffect(() => {
+    AsyncStorage.getItem("worker_data").then((raw) => {
+      if (raw) {
+        try {
+          const w = JSON.parse(raw);
+          setMyWorkerId(w.id ?? null);
+          if (w.farm_name) setFarmName(w.farm_name);
+        } catch {}
+      }
+    });
+  }, []);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchAll();
   };
 
-  const qtyNum = parseFloat(quantity) || 0;
-  const priceNum = parseFloat(pricePerUnit) || 0;
-  const computedTotal = Math.round(qtyNum * priceNum * 100) / 100;
-  const resolvedProductName =
-    product === "Other" ? customProduct.trim() : product;
+  // ── Filter chips + search (client-side only, UI only) ──
+
+  const displayedSales = React.useMemo(() => {
+    let list = allSales;
+    const now = new Date();
+    if (activeFilter === "Today") {
+      list = list.filter((s) => s.date === todayStr());
+    } else if (activeFilter === "Last 7 days") {
+      list = list.filter((s) => {
+        const d = new Date(s.date);
+        const diff = (now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24);
+        return diff >= 0 && diff < 7;
+      });
+    } else if (activeFilter === "This month") {
+      list = list.filter((s) => {
+        const d = new Date(s.date);
+        return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+      });
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      list = list.filter(
+        (s) =>
+          s.customer_name.toLowerCase().includes(q) ||
+          s.product_name.toLowerCase().includes(q),
+      );
+    }
+    return list;
+  }, [allSales, activeFilter, searchQuery]);
+
+  // ── Form handlers (same logic as your existing AddSaleModal) ──
+
+  const resetForm = () => {
+    setEditingId(null);
+    setCustomerName("");
+    setProductName("");
+    setQuantity("");
+    setUnit("kg");
+    setPricePerUnit("");
+    setPaymentMethod("cash");
+    setPaymentConfirmed(false);
+    setReceiptImage(null);
+    setQrImage(null);
+    setQrError(null);
+  };
+
+  const openNewSale = () => {
+    resetForm();
+    setIsFormOpen(true);
+    setTimeout(() => {
+      scrollRef.current?.scrollTo({ y: formLayoutY.current, animated: true });
+    }, 150);
+  };
+
+  const openEditSale = (sale: FarmSale) => {
+    setEditingId(sale.id);
+    setCustomerName(sale.customer_name);
+    setProductName(sale.product_name);
+    setQuantity(String(sale.quantity));
+    setUnit(sale.unit);
+    setPricePerUnit(String(sale.price_per_unit));
+    setPaymentMethod((sale.payment_method as PaymentMethod) ?? "cash");
+    setPaymentConfirmed(!!sale.payment_confirmed);
+    setReceiptImage(sale.receipt_image ?? null);
+    setIsFormOpen(true);
+    setTimeout(() => {
+      scrollRef.current?.scrollTo({ y: formLayoutY.current, animated: true });
+    }, 150);
+  };
+
+  const closeForm = () => {
+    setIsFormOpen(false);
+    resetForm();
+  };
+
+  // Fetch admin's payment QR the moment UPI is selected (same as your existing flow)
+  useEffect(() => {
+    if (paymentMethod !== "upi" || qrImage || qrLoading) return;
+    let cancelled = false;
+    setQrLoading(true);
+    setQrError(null);
+    api
+      .workerGetAdminPaymentQr()
+      .then((res) => {
+        if (!cancelled) setQrImage(res.qr_image_base64);
+      })
+      .catch((err) => {
+        if (!cancelled) setQrError(err?.message ?? "Admin's payment QR isn't available right now.");
+      })
+      .finally(() => {
+        if (!cancelled) setQrLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [paymentMethod]);
+
+  const pickReceipt = async () => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      showAlert("Permission Needed", "Allow gallery access to attach a photo.", "images-outline", "#6b7280", "#f3f4f6");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.5,
+      base64: true,
+    });
+    if (!result.canceled && result.assets?.[0]?.base64) {
+      const asset = result.assets[0];
+      const mime = asset.mimeType || "image/jpeg";
+      setReceiptImage(`data:${mime};base64,${asset.base64}`);
+    }
+  };
 
   const canSave =
     customerName.trim().length > 0 &&
-    resolvedProductName.length > 0 &&
-    qtyNum > 0 &&
-    priceNum > 0 &&
+    productName.trim().length > 0 &&
+    (parseFloat(quantity) || 0) > 0 &&
+    (parseFloat(pricePerUnit) || 0) > 0 &&
+    (paymentMethod === "cash" || paymentConfirmed) &&
     !saving;
-
-  const resetForm = () => {
-    setCustomerName("");
-    setProduct("Milk");
-    setCustomProduct("");
-    setQuantity("");
-    setUnit("L");
-    setPricePerUnit("");
-  };
-
-  const handleClose = () => {
-    resetForm();
-    onClose();
-  };
 
   const handleSave = async () => {
     if (!canSave) return;
     setSaving(true);
     try {
-      const entry = await api.workerCreateFarmSale({
+      const paymentConfirmedFinal = paymentMethod === "cash" ? true : paymentConfirmed;
+      const payload = {
         customer_name: customerName.trim(),
-        product_name: resolvedProductName,
-        quantity: qtyNum,
+        product_name: productName.trim(),
+        quantity: parseFloat(quantity),
         unit,
-        price_per_unit: priceNum,
-        date: todayStr(),
-      });
-      onSaved(entry);
-      resetForm();
-      onClose();
+        price_per_unit: parseFloat(pricePerUnit),
+        payment_method: paymentMethod,
+        payment_confirmed: paymentConfirmedFinal,
+        receipt_image: receiptImage ?? undefined,
+      };
+
+      if (editingId) {
+        await api.workerUpdateFarmSale(editingId, payload);
+      } else {
+        await api.workerCreateFarmSale({ ...payload, date: todayStr() });
+      }
+
+      closeForm();
+      await fetchAll();
     } catch (err: any) {
       showAlert(
-        labels.errorTitle,
-        err?.message ?? labels.errorMsg,
+        editingId ? "Could Not Update" : "Could Not Save",
+        err?.message ?? "Something went wrong while saving the sale entry.",
         "cart-outline",
         "#ef4444",
         "#fee2e2",
@@ -750,106 +808,180 @@ function AddSaleModal({
     }
   };
 
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await api.workerDeleteFarmSale(deleteTarget.id);
+      setAllSales((prev) => prev.filter((s) => s.id !== deleteTarget.id));
+      setDeleteTarget(null);
+    } catch (err: any) {
+      setDeleteTarget(null);
+      showAlert(
+        "Delete Failed",
+        err?.message ?? "Could not remove the entry. You can only delete today's entries.",
+        "trash-outline",
+        "#ef4444",
+        "#fee2e2",
+      );
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const openReceiptViewer = (uri: string) => {
+    setViewerUri(uri);
+    setViewerVisible(true);
+  };
+
+  const total = (parseFloat(quantity) || 0) * (parseFloat(pricePerUnit) || 0);
+
+  if (loading) {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color="#4f46e5" />
+      </View>
+    );
+  }
+
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={handleClose}>
-      <View style={am.container}>
-        <StatusBar barStyle="light-content" />
-        <ModernAlert config={alertConfig} onClose={hideAlert} />
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+      <ModernAlert config={alertConfig} onClose={hideAlert} />
+      <UndoConfirmModal
+        visible={!!deleteTarget}
+        sale={deleteTarget}
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => setDeleteTarget(null)}
+        loading={deleting}
+      />
+      <ReceiptViewerModal
+        visible={viewerVisible}
+        imageUri={viewerUri}
+        onClose={() => setViewerVisible(false)}
+      />
 
-        {/* Header */}
-        <LinearGradient colors={["#16a34a", "#15803d"]} style={am.header}>
-          <TouchableOpacity style={am.backBtn} onPress={handleClose}>
-            <Ionicons name="arrow-back" size={22} color="#fff" />
-          </TouchableOpacity>
-          <View style={{ flex: 1 }}>
-            <Text style={am.headerTitle}>{labels.title}</Text>
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
+          <View style={styles.logoCircle}>
+            <MaterialCommunityIcons name="sprout" size={20} color="#fff" />
           </View>
-        </LinearGradient>
+          <View>
+            <Text style={styles.headerTitle}>{farmName}</Text>
+            <Text style={styles.headerSubtitle}>Sales management</Text>
+          </View>
+        </View>
+        <TouchableOpacity style={styles.addBtnTop} onPress={openNewSale}>
+          <Ionicons name="add" size={18} color="#000" />
+          <Text style={styles.addBtnTopText}>Add</Text>
+        </TouchableOpacity>
+      </View>
 
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          keyboardVerticalOffset={80}
+      {/* Search & Filter Bar */}
+      <View style={styles.searchRow}>
+        <View style={styles.searchBox}>
+          <TextInput
+            placeholder="Search customer or product"
+            placeholderTextColor="#9ca3af"
+            style={styles.searchInput}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+        </View>
+        <TouchableOpacity style={styles.filterIconBtn}>
+          <Ionicons name="funnel-outline" size={20} color="#374151" />
+        </TouchableOpacity>
+      </View>
+
+      {/* Filter Chips */}
+      <View style={styles.chipsRow}>
+        {["Today", "Last 7 days", "This month"].map((chip) => {
+          const isActive = activeFilter === chip;
+          return (
+            <TouchableOpacity
+              key={chip}
+              style={[styles.chip, isActive && styles.chipActive]}
+              onPress={() => setActiveFilter(chip)}
+            >
+              <Text style={[styles.chipText, isActive && styles.chipTextActive]}>
+                {chip}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <ScrollView
+          ref={scrollRef}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         >
-          <ScrollView
-            style={{ flex: 1 }}
-            contentContainerStyle={am.scrollContent}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-          >
-            <Text style={am.label}>{labels.customer}</Text>
-            <TextInput
-              style={am.input}
-              value={customerName}
-              onChangeText={setCustomerName}
-              placeholder={labels.customerPh}
-              placeholderTextColor="#9ca3af"
-            />
-
-            <Text style={am.label}>{labels.product}</Text>
-            <View style={am.chipRow}>
-              {PRODUCT_OPTIONS.map((p) => {
-                const active = product === p.key;
-                return (
-                  <TouchableOpacity
-                    key={p.key}
-                    style={[am.productChip, active && am.productChipActive]}
-                    onPress={() => setProduct(p.key)}
-                    activeOpacity={0.8}
-                  >
-                    <MaterialCommunityIcons
-                      name={p.icon as any}
-                      size={14}
-                      color={active ? "#fff" : "#374151"}
-                    />
-                    <Text
-                      style={[am.productChipText, active && { color: "#fff" }]}
-                    >
-                      {isHindi ? p.labelHi : p.key}
-                    </Text>
+          {/* Inline Form */}
+          {isFormOpen && (
+            <View
+              style={styles.formCard}
+              onLayout={(e) => {
+                formLayoutY.current = e.nativeEvent.layout.y;
+              }}
+            >
+              <View style={styles.formHeaderRow}>
+                <View>
+                  <Text style={styles.formTitle}>{editingId ? "Edit Sale" : "New Sale"}</Text>
+                  <Text style={styles.formSubtitle}>Quickly add a sale record</Text>
+                </View>
+                <View style={styles.formActions}>
+                  <TouchableOpacity style={styles.cancelBtn} onPress={closeForm}>
+                    <Text style={styles.cancelBtnText}>Cancel</Text>
                   </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            {product === "Other" && (
-              <TextInput
-                style={[am.input, { marginTop: 10 }]}
-                value={customProduct}
-                onChangeText={setCustomProduct}
-                placeholder={labels.productPh}
-                placeholderTextColor="#9ca3af"
-              />
-            )}
-
-            <View style={am.row2}>
-              <View style={{ flex: 1 }}>
-                <Text style={am.label}>{labels.quantity}</Text>
-                <TextInput
-                  style={am.input}
-                  value={quantity}
-                  onChangeText={setQuantity}
-                  placeholder="0"
-                  placeholderTextColor="#9ca3af"
-                  keyboardType="decimal-pad"
-                />
+                  <TouchableOpacity
+                    style={[styles.saveBtn, (!canSave || saving) && { opacity: 0.6 }]}
+                    onPress={handleSave}
+                    disabled={!canSave || saving}
+                  >
+                    {saving ? (
+                      <ActivityIndicator size="small" color="#000" />
+                    ) : (
+                      <Text style={styles.saveBtnText}>Save</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
               </View>
-              <View style={{ width: 12 }} />
-              <View style={{ flex: 1 }}>
-                <Text style={am.label}>{labels.unit}</Text>
-                <View style={am.unitRow}>
+
+              <TextInput
+                style={styles.inputField}
+                placeholder="Customer name (e.g., Aarav Patel)"
+                placeholderTextColor="#9ca3af"
+                value={customerName}
+                onChangeText={setCustomerName}
+              />
+              <TextInput
+                style={styles.inputField}
+                placeholder="Product name (e.g., Organic Tomatoes)"
+                placeholderTextColor="#9ca3af"
+                value={productName}
+                onChangeText={setProductName}
+              />
+
+              <View style={styles.row}>
+                <View style={{ flex: 1 }}>
+                  <NumberStepper value={quantity} onChange={setQuantity} />
+                </View>
+                <View style={styles.unitSelector}>
                   {UNIT_OPTIONS.map((u) => {
                     const active = unit === u;
                     return (
                       <TouchableOpacity
                         key={u}
-                        style={[am.unitChip, active && am.unitChipActive]}
                         onPress={() => setUnit(u)}
-                        activeOpacity={0.8}
+                        style={[styles.unitChip, active && styles.unitChipActive]}
                       >
-                        <Text
-                          style={[am.unitChipText, active && { color: "#fff" }]}
-                        >
+                        <Text style={[styles.unitChipText, active && styles.unitChipTextActive]}>
                           {u}
                         </Text>
                       </TouchableOpacity>
@@ -857,557 +989,194 @@ function AddSaleModal({
                   })}
                 </View>
               </View>
-            </View>
 
-            <Text style={am.label}>
-              {labels.price} {unit}
-            </Text>
-            <View style={am.priceInputWrap}>
-              <Text style={am.rupee}>₹</Text>
-              <TextInput
-                style={am.priceInput}
+              <NumberStepper
                 value={pricePerUnit}
-                onChangeText={setPricePerUnit}
-                placeholder="0"
-                placeholderTextColor="#9ca3af"
-                keyboardType="decimal-pad"
+                onChange={setPricePerUnit}
+                placeholder="Price per unit"
               />
-            </View>
 
-            <View style={am.totalPreview}>
-              <Text style={am.totalPreviewLabel}>{labels.total}</Text>
-              <Text style={am.totalPreviewValue}>
-                ₹{computedTotal.toFixed(2)}
-              </Text>
-            </View>
-
-            <TouchableOpacity
-              style={[am.saveBtn, !canSave && am.saveBtnDisabled]}
-              onPress={handleSave}
-              disabled={!canSave}
-              activeOpacity={0.85}
-            >
-              {saving ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <>
-                  <Ionicons
-                    name="checkmark-circle-outline"
-                    size={18}
-                    color="#fff"
-                  />
-                  <Text style={am.saveBtnText}>{labels.save}</Text>
-                </>
+              {total > 0 && (
+                <View style={styles.totalPreview}>
+                  <Text style={styles.totalPreviewLabel}>Total</Text>
+                  <Text style={styles.totalPreviewValue}>₹{total.toFixed(2)}</Text>
+                </View>
               )}
-            </TouchableOpacity>
 
-            <View style={{ height: 40 }} />
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </View>
-    </Modal>
-  );
-}
-
-const am = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff" },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    paddingTop: 56,
-    paddingBottom: 18,
-    paddingHorizontal: 16,
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 13,
-    backgroundColor: "rgba(255,255,255,0.2)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerTitle: { fontSize: 18, fontWeight: "900", color: "#fff" },
-  scrollContent: { padding: 16 },
-  label: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#6b7280",
-    marginBottom: 6,
-    marginTop: 14,
-  },
-  input: {
-    borderWidth: 1.5,
-    borderColor: "#e5e7eb",
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#111827",
-    backgroundColor: "#f9fafb",
-  },
-  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  productChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    borderWidth: 1.5,
-    borderColor: "#e5e7eb",
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: "#f9fafb",
-  },
-  productChipActive: { backgroundColor: "#16a34a", borderColor: "#16a34a" },
-  productChipText: { fontSize: 12, fontWeight: "700", color: "#374151" },
-  row2: { flexDirection: "row" },
-  unitRow: { flexDirection: "row", gap: 6 },
-  unitChip: {
-    flex: 1,
-    alignItems: "center",
-    borderWidth: 1.5,
-    borderColor: "#e5e7eb",
-    borderRadius: 10,
-    paddingVertical: 12,
-    backgroundColor: "#f9fafb",
-  },
-  unitChipActive: { backgroundColor: "#16a34a", borderColor: "#16a34a" },
-  unitChipText: { fontSize: 13, fontWeight: "800", color: "#374151" },
-  priceInputWrap: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1.5,
-    borderColor: "#e5e7eb",
-    borderRadius: 12,
-    backgroundColor: "#f9fafb",
-    paddingHorizontal: 14,
-  },
-  rupee: { fontSize: 15, fontWeight: "800", color: "#6b7280", marginRight: 4 },
-  priceInput: {
-    flex: 1,
-    paddingVertical: 12,
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#111827",
-  },
-  totalPreview: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    backgroundColor: "#f0fdf4",
-    borderWidth: 1,
-    borderColor: "#16a34a30",
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginTop: 20,
-  },
-  totalPreviewLabel: { fontSize: 13, fontWeight: "700", color: "#16a34a" },
-  totalPreviewValue: { fontSize: 18, fontWeight: "900", color: "#16a34a" },
-  saveBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    backgroundColor: "#16a34a",
-    borderRadius: 14,
-    paddingVertical: 14,
-    marginTop: 20,
-  },
-  saveBtnDisabled: { backgroundColor: "#d1d5db" },
-  saveBtnText: { fontSize: 15, fontWeight: "800", color: "#fff" },
-});
-
-// ─── Sale Card (shared) ────────────────────────────────────────────────────────
-
-function SaleCard({
-  sale,
-  myWorkerId,
-  onUndo,
-  undoLabel,
-  showDate = false,
-}: {
-  sale: FarmSale;
-  myWorkerId: string | null;
-  onUndo: () => void;
-  undoLabel: string;
-  showDate?: boolean;
-}) {
-  return (
-    <View style={s.saleCard}>
-      <View style={s.saleTop}>
-        <View style={s.saleAvatar}>
-          <Ionicons name="person" size={18} color="#16a34a" />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={s.saleCustomer}>{sale.customer_name}</Text>
-          <Text style={s.saleMeta}>
-            {sale.product_name} · {sale.quantity} {sale.unit} × ₹
-            {sale.price_per_unit}
-          </Text>
-        </View>
-        <Text style={s.saleAmount}>₹{sale.total_amount.toFixed(0)}</Text>
-      </View>
-
-      <View style={s.saleFooter}>
-        <Text style={s.saleTime}>
-          {showDate ? `${sale.date} · ` : ""}
-          {parseUTCDate(sale.created_at).toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          })}
-        </Text>
-        {sale.worker_id === myWorkerId ? (
-          <TouchableOpacity
-            style={s.undoBtn}
-            onPress={onUndo}
-            activeOpacity={0.75}
-          >
-            <Ionicons name="arrow-undo" size={13} color="#ef4444" />
-            <Text style={s.undoBtnText}>{undoLabel}</Text>
-          </TouchableOpacity>
-        ) : (
-          <View style={s.addedByBadge}>
-            <Text style={s.addedByText}>{sale.worker_name}</Text>
-          </View>
-        )}
-      </View>
-    </View>
-  );
-}
-
-// ─── Main Screen ──────────────────────────────────────────────────────────────
-
-function FarmSaleScreenInner() {
-  const { workerToken } = useAuth();
-
-  const [todaySales, setTodaySales] = useState<FarmSale[]>([]);
-  const [allSales, setAllSales] = useState<FarmSale[]>([]);
-
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [allLoading, setAllLoading] = useState(true);
-  const [allRefreshing, setAllRefreshing] = useState(false);
-
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [isHindi, setIsHindi] = useState(false);
-
-  const [filterDate, setFilterDate] = useState<string | null>(null); // null = All Time
-  const [filterVisible, setFilterVisible] = useState(false);
-
-  const [undoTarget, setUndoTarget] = useState<FarmSale | null>(null);
-  const [undoing, setUndoing] = useState(false);
-  const [myWorkerId, setMyWorkerId] = useState<string | null>(null);
-
-  const {
-    config: alertConfig,
-    show: showAlert,
-    hide: hideAlert,
-  } = useModernAlert();
-
-  const labels = {
-    title: isHindi ? "फार्म सेल" : "Farm Sale",
-    revenueLbl: isHindi ? "आज की कमाई" : "Today's Revenue",
-    salesToday: (n: number) =>
-      isHindi ? `आज ${n} बिक्री` : `${n} sale${n !== 1 ? "s" : ""} today`,
-    sectionTitle: isHindi ? "आज की बिक्री" : "Today's Sales",
-    allSalesTitle: isHindi ? "सभी बिक्री" : "All Sales",
-    emptyTitle: isHindi ? "अभी कोई बिक्री नहीं" : "No sales recorded yet",
-    emptySub: isHindi
-      ? "ऊपर + बटन दबाकर नई बिक्री जोड़ें"
-      : "Tap the + button above to add a new sale",
-    emptyAllTitle: isHindi
-      ? "इस अवधि में कोई बिक्री नहीं"
-      : "No sales in this period",
-    undo: isHindi ? "पूर्ववत करें" : "Undo",
-    undoFailTitle: isHindi ? "पूर्ववत नहीं हो सका" : "Undo Failed",
-    undoFailMsg: isHindi
-      ? "प्रविष्टि हटाई नहीं जा सकी। आप केवल आज की प्रविष्टियां हटा सकते हैं।"
-      : "Could not remove the entry. You can only undo today's sales.",
-    loadingText: isHindi
-      ? "बिक्री रिकॉर्ड लोड हो रहे हैं…"
-      : "Loading sale records…",
-    allTime: isHindi ? "सभी समय" : "All Time",
-    today: isHindi ? "आज" : "Today",
-  };
-
-  const fetchToday = useCallback(async () => {
-    try {
-      const data = await api.workerGetFarmSales({ date: todayStr() });
-      setTodaySales(data);
-    } catch (e) {
-      console.log("today sales fetch error:", e);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [workerToken]);
-
-  const fetchAll = useCallback(async (date: string | null) => {
-    setAllLoading(true);
-    try {
-      const data = date
-        ? await api.workerGetFarmSales({ date })
-        : await api.workerGetFarmSales({ all_time: true });
-      setAllSales(data);
-    } catch (e) {
-      console.log("all sales fetch error:", e);
-    } finally {
-      setAllLoading(false);
-      setAllRefreshing(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchToday();
-    fetchAll(null);
-  }, []);
-
-  useEffect(() => {
-    AsyncStorage.getItem("worker_data").then((raw) => {
-      if (raw) {
-        try {
-          const w = JSON.parse(raw);
-          setMyWorkerId(w.id ?? null);
-        } catch {}
-      }
-    });
-  }, []);
-
-  const onRefreshTop = () => {
-    setRefreshing(true);
-    setAllRefreshing(true);
-    fetchToday();
-    fetchAll(filterDate);
-  };
-
-  const totalRevenue = todaySales.reduce((s, e) => s + e.total_amount, 0);
-
-  const handleSaved = (entry: FarmSale) => {
-    setTodaySales((prev) => [entry, ...prev]);
-    if (!filterDate || filterDate === todayStr()) {
-      setAllSales((prev) => [entry, ...prev]);
-    }
-  };
-
-  const handleUndoConfirm = async () => {
-    if (!undoTarget) return;
-    setUndoing(true);
-    try {
-      await api.workerDeleteFarmSale(undoTarget.id);
-      setTodaySales((prev) => prev.filter((s) => s.id !== undoTarget.id));
-      setAllSales((prev) => prev.filter((s) => s.id !== undoTarget.id));
-      setUndoTarget(null);
-    } catch (err: any) {
-      setUndoTarget(null);
-      showAlert(
-        labels.undoFailTitle,
-        err?.message ?? labels.undoFailMsg,
-        "arrow-undo-outline",
-        "#ef4444",
-        "#fee2e2",
-      );
-    } finally {
-      setUndoing(false);
-    }
-  };
-
-  const applyDateFilter = (date: string | null) => {
-    setFilterDate(date);
-    setFilterVisible(false);
-    fetchAll(date);
-  };
-
-  const filterLabel = filterDate
-    ? filterDate === todayStr()
-      ? labels.today
-      : filterDate
-    : labels.allTime;
-
-  if (loading) {
-    return (
-      <View style={s.centered}>
-        <ActivityIndicator size="large" color="#16a34a" />
-        <Text style={s.loadingText}>{labels.loadingText}</Text>
-      </View>
-    );
-  }
-
-  return (
-    <>
-      <ModernAlert config={alertConfig} onClose={hideAlert} />
-      <UndoConfirmModal
-        visible={!!undoTarget}
-        sale={undoTarget}
-        onConfirm={handleUndoConfirm}
-        onCancel={() => setUndoTarget(null)}
-        loading={undoing}
-        isHindi={isHindi}
-      />
-      <AddSaleModal
-        visible={showAddModal}
-        onClose={() => setShowAddModal(false)}
-        onSaved={handleSaved}
-        isHindi={isHindi}
-      />
-      <DateFilterModal
-        visible={filterVisible}
-        onClose={() => setFilterVisible(false)}
-        onSelect={applyDateFilter}
-        currentDate={filterDate}
-        isHindi={isHindi}
-      />
-
-      <View style={s.container}>
-        {/* ── Header ── */}
-        <View style={s.topBar}>
-          <View style={{ flex: 1 }}>
-            <Text style={s.topBarTitle}>{labels.title}</Text>
-            <Text style={s.topBarDate}>{todayStr()}</Text>
-          </View>
-
-          <TouchableOpacity
-            style={s.langBtn}
-            onPress={() => setIsHindi((v) => !v)}
-            activeOpacity={0.8}
-          >
-            <Text style={s.langBtnText}>{isHindi ? "EN" : "हि"}</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={s.addBtn}
-            onPress={() => setShowAddModal(true)}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="add" size={26} color="#fff" />
-          </TouchableOpacity>
-        </View>
-
-        <ScrollView
-          style={{ flex: 1 }}
-          contentContainerStyle={s.content}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing || allRefreshing}
-              onRefresh={onRefreshTop}
-              tintColor="#16a34a"
-            />
-          }
-        >
-          {/* ── Revenue Banner (Today) ── */}
-          <LinearGradient
-            colors={["#f0fdf4", "#dcfce7"]}
-            style={[s.banner, { borderColor: "#16a34a40" }]}
-          >
-            <View style={s.bannerLeft}>
-              <View style={[s.bannerIconBox, { backgroundColor: "#bbf7d0" }]}>
-                <MaterialCommunityIcons
-                  name="cash-register"
-                  size={22}
-                  color="#16a34a"
-                />
+              <View style={styles.paymentRow}>
+                <Text style={styles.paymentLabel}>Payment</Text>
+                <TouchableOpacity
+                  style={styles.radioOption}
+                  onPress={() => setPaymentMethod("upi")}
+                >
+                  <View style={[styles.radioCircle, paymentMethod === "upi" && styles.radioCircleActive]}>
+                    {paymentMethod === "upi" && <View style={styles.radioInner} />}
+                  </View>
+                  <Text style={styles.radioText}>UPI</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.radioOption}
+                  onPress={() => setPaymentMethod("cash")}
+                >
+                  <View style={[styles.radioCircle, paymentMethod === "cash" && styles.radioCircleActive]}>
+                    {paymentMethod === "cash" && <View style={styles.radioInner} />}
+                  </View>
+                  <Text style={styles.radioText}>Cash</Text>
+                </TouchableOpacity>
               </View>
-              <View>
-                <Text style={[s.bannerTitle, { color: "#16a34a" }]}>
-                  {labels.revenueLbl}
-                </Text>
-                <Text style={s.bannerSub}>
-                  {labels.salesToday(todaySales.length)}
-                </Text>
+
+              {/* UPI QR flow — same logic as before, shown inline */}
+              {paymentMethod === "upi" && (
+                <View style={styles.qrCard}>
+                  {qrLoading ? (
+                    <ActivityIndicator color="#4f46e5" />
+                  ) : qrError ? (
+                    <View style={{ alignItems: "center" }}>
+                      <Ionicons name="alert-circle-outline" size={20} color="#ef4444" />
+                      <Text style={styles.qrErrorText}>{qrError}</Text>
+                    </View>
+                  ) : qrImage ? (
+                    <>
+                      <Text style={styles.qrLabel}>Scan to pay</Text>
+                      <Image
+                        source={{ uri: qrImage }}
+                        style={styles.qrImage}
+                        resizeMode="contain"
+                      />
+                      <TouchableOpacity
+                        style={[styles.paymentDoneBtn, paymentConfirmed && styles.paymentDoneBtnActive]}
+                        onPress={() => setPaymentConfirmed((v) => !v)}
+                      >
+                        <Ionicons
+                          name={paymentConfirmed ? "checkmark-circle" : "ellipse-outline"}
+                          size={16}
+                          color={paymentConfirmed ? "#fff" : "#4f46e5"}
+                        />
+                        <Text
+                          style={[
+                            styles.paymentDoneBtnText,
+                            paymentConfirmed && { color: "#fff" },
+                          ]}
+                        >
+                          {paymentConfirmed ? "Payment Done" : "Confirm payment received"}
+                        </Text>
+                      </TouchableOpacity>
+                    </>
+                  ) : null}
+                </View>
+              )}
+
+              <View style={styles.receiptUploadRow}>
+                <TouchableOpacity
+                  style={styles.receiptThumbPlaceholder}
+                  onPress={receiptImage ? () => openReceiptViewer(receiptImage) : undefined}
+                >
+                  {receiptImage ? (
+                    <Image source={{ uri: receiptImage }} style={styles.receiptImage} />
+                  ) : (
+                    <Ionicons name="receipt-outline" size={24} color="#9ca3af" />
+                  )}
+                </TouchableOpacity>
+                <View style={styles.receiptTextCol}>
+                  <Text style={styles.receiptLabel}>Receipt (optional)</Text>
+                  <Text style={styles.receiptSub}>Tap to upload or replace</Text>
+                </View>
+                <TouchableOpacity style={styles.uploadBtn} onPress={pickReceipt}>
+                  <Text style={styles.uploadBtnText}>Upload</Text>
+                </TouchableOpacity>
               </View>
             </View>
-            <Text style={[s.totalNum, { color: "#16a34a" }]}>
-              ₹{totalRevenue.toFixed(0)}
-            </Text>
-          </LinearGradient>
-
-          {/* ── Today's Sales ── */}
-          <Text style={s.sectionTitle}>{labels.sectionTitle}</Text>
-
-          {todaySales.length === 0 ? (
-            <View style={s.emptyWrap}>
-              <MaterialCommunityIcons
-                name="cart-off"
-                size={44}
-                color="#d1d5db"
-              />
-              <Text style={s.emptyTitle}>{labels.emptyTitle}</Text>
-              <Text style={s.emptySub}>{labels.emptySub}</Text>
-              <TouchableOpacity
-                style={s.emptyAddBtn}
-                onPress={() => setShowAddModal(true)}
-                activeOpacity={0.85}
-              >
-                <Ionicons name="add-circle-outline" size={18} color="#fff" />
-                <Text style={s.emptyAddBtnText}>
-                  {isHindi ? "बिक्री जोड़ें" : "Add Sale"}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            todaySales.map((sale) => (
-              <SaleCard
-                key={sale.id}
-                sale={sale}
-                myWorkerId={myWorkerId}
-                onUndo={() => setUndoTarget(sale)}
-                undoLabel={labels.undo}
-              />
-            ))
           )}
 
-          {/* ── Divider ── */}
-          <View style={s.sectionDivider} />
-
-          {/* ── All Sales (with filter) ── */}
-          <View style={s.allHeaderRow}>
-            <Text style={[s.sectionTitle, { marginBottom: 0 }]}>
-              {labels.allSalesTitle}
-            </Text>
-            <TouchableOpacity
-              style={s.filterBtn}
-              onPress={() => setFilterVisible(true)}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="filter" size={13} color="#16a34a" />
-              <Text style={s.filterBtnText}>{filterLabel}</Text>
-              <Ionicons name="chevron-down" size={12} color="#16a34a" />
-            </TouchableOpacity>
-          </View>
-
-          {allLoading ? (
-            <ActivityIndicator
-              color="#16a34a"
-              style={{ marginTop: 24, marginBottom: 24 }}
-            />
-          ) : allSales.length === 0 ? (
-            <View style={s.emptyWrap}>
-              <MaterialCommunityIcons
-                name="cart-off"
-                size={40}
-                color="#d1d5db"
-              />
-              <Text style={s.emptyTitle}>{labels.emptyAllTitle}</Text>
+          {/* Empty state */}
+          {displayedSales.length === 0 && (
+            <View style={styles.emptyState}>
+              <Ionicons name="receipt-outline" size={36} color="#d1d5db" />
+              <Text style={styles.emptyStateText}>No sales in this range</Text>
             </View>
-          ) : (
-            allSales.map((sale) => (
-              <SaleCard
-                key={sale.id}
-                sale={sale}
-                myWorkerId={myWorkerId}
-                onUndo={() => setUndoTarget(sale)}
-                undoLabel={labels.undo}
-                showDate
-              />
-            ))
           )}
 
-          <View style={{ height: 40 }} />
+          {/* List of Sales */}
+          {displayedSales.map((sale) => (
+            <View key={sale.id} style={styles.saleCard}>
+              <View style={styles.saleCardLeft}>
+                <View style={styles.avatar}>
+                  <Ionicons name="person" size={16} color="#4f46e5" />
+                </View>
+                <View style={styles.saleDetails}>
+                  <Text style={styles.saleName}>{sale.customer_name}</Text>
+                  <Text style={styles.saleProduct}>Product: {sale.product_name}</Text>
+                  <Text style={styles.saleQtyPrice}>
+                    {sale.quantity} {sale.unit} x ₹{sale.price_per_unit.toFixed(2)}
+                  </Text>
+                  <Text style={styles.saleTotal}>Total: ₹{sale.total_amount.toFixed(2)}</Text>
+
+                  <View style={styles.badgeRow}>
+                    {sale.payment_method === "upi" ? (
+                      <View style={styles.badgeUpi}>
+                        <Text style={styles.badgeUpiText}>UPI</Text>
+                      </View>
+                    ) : (
+                      <View style={styles.badgeCash}>
+                        <Text style={styles.badgeCashText}>Cash</Text>
+                      </View>
+                    )}
+
+                    {sale.receipt_image ? (
+                      <TouchableOpacity
+                        style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+                        onPress={() => openReceiptViewer(sale.receipt_image!)}
+                      >
+                        <View style={styles.badgeReceipt}>
+                          <Text style={styles.badgeReceiptText}>Receipt</Text>
+                        </View>
+                        <Image
+                          source={{ uri: sale.receipt_image }}
+                          style={styles.receiptMiniThumb}
+                        />
+                      </TouchableOpacity>
+                    ) : (
+                      <View style={styles.badgeReceipt}>
+                        <Text style={styles.badgeReceiptText}>No receipt</Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.saleCardRight}>
+                {sale.worker_id === myWorkerId ? (
+                  <View style={styles.actionBtns}>
+                    <TouchableOpacity style={styles.iconBtn} onPress={() => openEditSale(sale)}>
+                      <MaterialCommunityIcons name="pencil-outline" size={16} color="#000" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.iconBtn}
+                      onPress={() => setDeleteTarget(sale)}
+                    >
+                      <Ionicons name="trash" size={16} color="#000" />
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <Text style={styles.addedByText}>{sale.worker_name}</Text>
+                )}
+                <Text style={styles.saleDate}>{fmtShortDate(sale.date)}</Text>
+              </View>
+            </View>
+          ))}
         </ScrollView>
-      </View>
-    </>
+      </KeyboardAvoidingView>
+
+      {/* Bottom Sticky Add Button */}
+      {!isFormOpen && (
+        <View style={styles.bottomBar}>
+          <TouchableOpacity style={styles.bottomAddBtn} onPress={openNewSale}>
+            <Ionicons name="add" size={20} color="#fff" />
+            <Text style={styles.bottomAddBtnText}>Add New Sale</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
   );
 }
 
@@ -1415,177 +1184,293 @@ export default function FarmSaleScreen() {
   return <FarmSaleScreenInner />;
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
+// ─── Styles (matches the screenshot exactly) ─────────────────────────────────
 
-const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#ffffff" },
-  content: { padding: 16 },
-  centered: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 12,
-  },
-  loadingText: { color: "#6b7280", fontSize: 14 },
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: "#fefefe" },
+  centered: { flex: 1, alignItems: "center", justifyContent: "center" },
 
-  topBar: {
+  header: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    justifyContent: "space-between",
     paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f3f4f6",
+    paddingVertical: 12,
   },
-  topBarTitle: { fontSize: 20, fontWeight: "900", color: "#111827" },
-  topBarDate: { fontSize: 12, color: "#9ca3af", marginTop: 2 },
-  langBtn: {
+  headerLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
+  logoCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#4f46e5",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerTitle: { fontSize: 16, fontWeight: "bold", color: "#111827" },
+  headerSubtitle: { fontSize: 11, color: "#6b7280" },
+  addBtnTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f97316",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    gap: 4,
+  },
+  addBtnTopText: { fontSize: 13, fontWeight: "bold", color: "#000" },
+
+  searchRow: { flexDirection: "row", paddingHorizontal: 16, gap: 10, marginBottom: 12 },
+  searchBox: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    height: 40,
+    justifyContent: "center",
+  },
+  searchInput: { fontSize: 13, color: "#111827" },
+  filterIconBtn: {
     width: 40,
     height: 40,
-    borderRadius: 12,
-    backgroundColor: "#f0fdf4",
     borderWidth: 1,
-    borderColor: "#bbf7d0",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  langBtnText: { fontSize: 13, fontWeight: "900", color: "#16a34a" },
-  addBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: "#16a34a",
+    borderColor: "#e5e7eb",
+    borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
   },
 
-  banner: {
+  chipsRow: { flexDirection: "row", paddingHorizontal: 16, gap: 8, marginBottom: 16 },
+  chip: {
+    flex: 1,
+    height: 36,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  chipActive: { borderColor: "#3b82f6", backgroundColor: "#eff6ff" },
+  chipText: { fontSize: 12, fontWeight: "600", color: "#4b5563" },
+  chipTextActive: { color: "#3b82f6" },
+
+  scrollContent: { paddingHorizontal: 16, paddingBottom: 100 },
+
+  formCard: {
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    backgroundColor: "#fff",
+  },
+  formHeaderRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
-    borderRadius: 18,
-    borderWidth: 1,
-    padding: 18,
-    marginBottom: 20,
-    marginTop: 4,
+    alignItems: "flex-start",
+    marginBottom: 16,
   },
-  bannerLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
-  bannerIconBox: {
-    width: 46,
-    height: 46,
-    borderRadius: 14,
+  formTitle: { fontSize: 16, fontWeight: "bold", color: "#111827" },
+  formSubtitle: { fontSize: 11, color: "#6b7280", marginTop: 2 },
+  formActions: { flexDirection: "row", gap: 8 },
+  cancelBtn: {
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    justifyContent: "center",
+  },
+  cancelBtnText: { fontSize: 12, fontWeight: "bold", color: "#111827" },
+  saveBtn: {
+    backgroundColor: "#4ade80",
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    justifyContent: "center",
+    minWidth: 56,
+    alignItems: "center",
+  },
+  saveBtnText: { fontSize: 12, fontWeight: "bold", color: "#000" },
+
+  inputField: {
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    height: 44,
+    fontSize: 13,
+    marginBottom: 10,
+    color: "#111827",
+  },
+  row: { flexDirection: "row", gap: 10, marginBottom: 10 },
+  unitSelector: { flexDirection: "row", gap: 6 },
+  unitChip: {
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    height: 44,
     alignItems: "center",
     justifyContent: "center",
   },
-  bannerTitle: { fontSize: 14, fontWeight: "800" },
-  bannerSub: { fontSize: 12, color: "#6b7280", marginTop: 2 },
-  totalNum: { fontSize: 24, fontWeight: "900" },
+  unitChipActive: { borderColor: "#4f46e5", backgroundColor: "#eef2ff" },
+  unitChipText: { fontSize: 12, fontWeight: "600", color: "#6b7280" },
+  unitChipTextActive: { color: "#4f46e5" },
 
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: "#111827",
+  totalPreview: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    backgroundColor: "#f9fafb",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     marginBottom: 10,
   },
+  totalPreviewLabel: { fontSize: 12, color: "#6b7280" },
+  totalPreviewValue: { fontSize: 14, fontWeight: "bold", color: "#111827" },
 
-  sectionDivider: {
-    height: 1,
-    backgroundColor: "#f3f4f6",
-    marginVertical: 22,
-  },
-  allHeaderRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 12,
-  },
-  filterBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    backgroundColor: "#f0fdf4",
-    borderWidth: 1,
-    borderColor: "#bbf7d0",
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-  },
-  filterBtnText: { fontSize: 12, fontWeight: "800", color: "#16a34a" },
-
-  emptyWrap: {
+  paymentRow: { flexDirection: "row", alignItems: "center", marginTop: 4, marginBottom: 10, gap: 16 },
+  paymentLabel: { fontSize: 12, color: "#6b7280" },
+  radioOption: { flexDirection: "row", alignItems: "center", gap: 6 },
+  radioCircle: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: "#d1d5db",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 40,
-    gap: 8,
   },
-  emptyTitle: { fontSize: 15, fontWeight: "700", color: "#6b7280" },
-  emptySub: {
-    fontSize: 12,
-    color: "#9ca3af",
-    textAlign: "center",
-    paddingHorizontal: 32,
+  radioCircleActive: { borderColor: "#4f46e5" },
+  radioInner: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#4f46e5" },
+  radioText: { fontSize: 12, fontWeight: "600", color: "#111827" },
+
+  qrCard: {
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    borderRadius: 10,
+    padding: 14,
+    alignItems: "center",
+    backgroundColor: "#f9fafb",
+    marginBottom: 12,
   },
-  emptyAddBtn: {
+  qrLabel: { fontSize: 12, fontWeight: "700", color: "#6b7280", marginBottom: 8 },
+  qrImage: { width: 150, height: 150, borderRadius: 8, marginBottom: 10, backgroundColor: "#fff" },
+  qrErrorText: { fontSize: 11, color: "#ef4444", textAlign: "center", marginTop: 6 },
+  paymentDoneBtn: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "#16a34a",
-    borderRadius: 12,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    marginTop: 14,
+    borderWidth: 1.5,
+    borderColor: "#4f46e5",
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
   },
-  emptyAddBtnText: { fontSize: 13, fontWeight: "800", color: "#fff" },
+  paymentDoneBtnActive: { backgroundColor: "#4f46e5" },
+  paymentDoneBtnText: { fontSize: 12, fontWeight: "800", color: "#4f46e5" },
+
+  receiptUploadRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderTopWidth: 1,
+    borderTopColor: "#f3f4f6",
+    paddingTop: 16,
+    gap: 12,
+  },
+  receiptThumbPlaceholder: {
+    width: 48,
+    height: 48,
+    backgroundColor: "#f3f4f6",
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  receiptImage: { width: "100%", height: "100%" },
+  receiptTextCol: { flex: 1 },
+  receiptLabel: { fontSize: 12, color: "#374151", fontWeight: "600" },
+  receiptSub: { fontSize: 11, color: "#9ca3af", marginTop: 2 },
+  uploadBtn: {
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  uploadBtnText: { fontSize: 12, fontWeight: "bold", color: "#111827" },
+
+  emptyState: { alignItems: "center", paddingVertical: 50, gap: 8 },
+  emptyStateText: { fontSize: 13, color: "#9ca3af" },
 
   saleCard: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    borderWidth: 1.5,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    borderWidth: 1,
     borderColor: "#f3f4f6",
-    padding: 14,
-    marginBottom: 10,
-  },
-  saleTop: { flexDirection: "row", alignItems: "center", gap: 10 },
-  saleAvatar: {
-    width: 38,
-    height: 38,
     borderRadius: 12,
-    backgroundColor: "#dcfce7",
+    padding: 16,
+    marginBottom: 12,
+    backgroundColor: "#fff",
+  },
+  saleCardLeft: { flexDirection: "row", flex: 1, gap: 12 },
+  avatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#eef2ff",
     alignItems: "center",
     justifyContent: "center",
   },
-  saleCustomer: { fontSize: 14, fontWeight: "800", color: "#111827" },
-  saleMeta: { fontSize: 12, color: "#9ca3af", marginTop: 2 },
-  saleAmount: { fontSize: 16, fontWeight: "900", color: "#16a34a" },
-  saleFooter: {
-    flexDirection: "row",
-    justifyContent: "space-between",
+  saleDetails: { flex: 1 },
+  saleName: { fontSize: 14, fontWeight: "bold", color: "#111827", marginBottom: 2 },
+  saleProduct: { fontSize: 11, color: "#4b5563" },
+  saleQtyPrice: { fontSize: 11, color: "#6b7280", marginBottom: 4 },
+  saleTotal: { fontSize: 13, fontWeight: "bold", color: "#111827", marginBottom: 8 },
+
+  badgeRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  badgeUpi: { backgroundColor: "#4f46e5", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12 },
+  badgeUpiText: { color: "#fff", fontSize: 10, fontWeight: "bold" },
+  badgeCash: { borderWidth: 1, borderColor: "#e5e7eb", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12 },
+  badgeCashText: { color: "#111827", fontSize: 10, fontWeight: "bold" },
+  badgeReceipt: { borderWidth: 1, borderColor: "#e5e7eb", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12 },
+  badgeReceiptText: { color: "#4b5563", fontSize: 10 },
+  receiptMiniThumb: { width: 20, height: 24, backgroundColor: "#d1d5db", borderRadius: 4 },
+
+  saleCardRight: { alignItems: "flex-end", justifyContent: "space-between" },
+  actionBtns: { flexDirection: "row", gap: 8 },
+  iconBtn: {
+    width: 28,
+    height: 28,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    borderRadius: 6,
     alignItems: "center",
-    marginTop: 10,
-    paddingTop: 10,
+    justifyContent: "center",
+  },
+  addedByText: { fontSize: 10, fontWeight: "700", color: "#9ca3af", maxWidth: 90, textAlign: "right" },
+  saleDate: { fontSize: 10, color: "#6b7280", marginTop: 8 },
+
+  bottomBar: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 16,
+    paddingBottom: Platform.OS === "ios" ? 32 : 16,
+    backgroundColor: "#fff",
     borderTopWidth: 1,
     borderTopColor: "#f3f4f6",
   },
-  saleTime: { fontSize: 11, color: "#9ca3af", fontWeight: "600" },
-  undoBtn: {
+  bottomAddBtn: {
+    backgroundColor: "#000",
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    backgroundColor: "#fef2f2",
-    borderWidth: 1,
-    borderColor: "#fca5a5",
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    justifyContent: "center",
+    paddingVertical: 14,
+    borderRadius: 12,
+    gap: 8,
   },
-  undoBtnText: { fontSize: 12, fontWeight: "800", color: "#ef4444" },
-
-  addedByBadge: {
-    backgroundColor: "#f3f4f6",
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  addedByText: { fontSize: 11, fontWeight: "700", color: "#6b7280" },
+  bottomAddBtnText: { color: "#fff", fontSize: 14, fontWeight: "bold" },
 });
