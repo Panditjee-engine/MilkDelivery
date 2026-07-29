@@ -16,11 +16,13 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Colors } from "../../src/constants/colors";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { api } from "../../src/services/api";
+import { hasCompleteDeliveryAddress } from "../../src/utils/address";
 
 const RECENT_SEARCH_KEY = "customer_recent_product_searches";
 const SCREEN_WIDTH = Dimensions.get("window").width;
@@ -61,8 +63,6 @@ const getCategoryTheme = (category: string) =>
   CATEGORY_THEMES[category?.toLowerCase()] || CATEGORY_THEMES.other;
 const isDairyProduct = (product: any) =>
   DAIRY_CATEGORIES.includes(product?.category?.toLowerCase());
-const hasCompleteDeliveryAddress = (address?: any) =>
-  Boolean(address?.tower?.trim?.() && address?.flat?.trim?.());
 
 function formatUnit(unit?: string) {
   if (!unit) return "";
@@ -243,7 +243,28 @@ export default function ProductSearchScreen() {
   const ensureAddress = async () => {
     const latestUser = await api.getMe();
     if (hasCompleteDeliveryAddress(latestUser?.address)) return true;
-    setFeedback("Please add delivery address from Profile before ordering.");
+    setFeedback("Please add your complete delivery address before payment.");
+    Alert.alert(
+      "Delivery address required",
+      "Please add your complete delivery address before choosing payment.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Add Address",
+          onPress: () => {
+            setSelectedProduct(null);
+            router.push({
+              pathname: "/(customer)/profile",
+              params: {
+                openAddress: "1",
+                addressRequired: "1",
+                returnTo: "catalog",
+              },
+            } as any);
+          },
+        },
+      ],
+    );
     return false;
   };
   const handleCreateOrder = async () => {
@@ -472,7 +493,29 @@ export default function ProductSearchScreen() {
               <Text style={s.totalLabel}>Total</Text>
               <Text style={s.totalValue}>₹{((selectedProduct?.price ?? 0) * quantity).toFixed(2)}</Text>
             </View>
-            {feedback ? <Text style={s.feedback}>{feedback}</Text> : null}
+            {feedback ? (
+              <View style={s.feedbackBox}>
+                <Text style={s.feedback}>{feedback}</Text>
+                {feedback.includes("address") && (
+                  <TouchableOpacity
+                    style={s.feedbackAction}
+                    onPress={() => {
+                      setSelectedProduct(null);
+                      router.push({
+                        pathname: "/(customer)/profile",
+                        params: {
+                          openAddress: "1",
+                          addressRequired: "1",
+                          returnTo: "catalog",
+                        },
+                      } as any);
+                    }}
+                  >
+                    <Text style={s.feedbackActionText}>Add Address</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            ) : null}
             <TouchableOpacity
               style={[s.primaryBtn, submitting && { opacity: 0.65 }]}
               onPress={handleCreateOrder}
@@ -639,7 +682,26 @@ const s = StyleSheet.create({
   totalRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderTopWidth: 1, borderTopColor: "#F1F5F9", paddingTop: 14, marginTop: 14 },
   totalLabel: { fontSize: 13, fontWeight: "800", color: "#64748B" },
   totalValue: { fontSize: 20, fontWeight: "900", color: Colors.primary },
-  feedback: { marginTop: 12, fontSize: 12, color: "#dc2626", fontWeight: "800", textAlign: "center" },
+  feedbackBox: {
+    marginTop: 12,
+    backgroundColor: "#FEF2F2",
+    borderWidth: 1,
+    borderColor: "#FECACA",
+    borderRadius: 14,
+    padding: 10,
+    alignItems: "center",
+    gap: 8,
+  },
+  feedback: { fontSize: 12, color: "#dc2626", fontWeight: "800", textAlign: "center" },
+  feedbackAction: {
+    backgroundColor: "#fff",
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderWidth: 1,
+    borderColor: "#FECACA",
+  },
+  feedbackActionText: { fontSize: 12, fontWeight: "900", color: "#dc2626" },
   primaryBtn: { marginTop: 14, backgroundColor: Colors.primary, borderRadius: 16, paddingVertical: 15, alignItems: "center" },
   primaryBtnText: { color: "#fff", fontSize: 15, fontWeight: "900" },
 });

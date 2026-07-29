@@ -190,6 +190,111 @@ function FieldError({ msg }: { msg?: string }) {
   );
 }
 
+function RegisterOtpCodeModal({
+  visible,
+  code,
+  phone,
+  onClose,
+}: {
+  visible: boolean;
+  code: string;
+  phone: string;
+  onClose: () => void;
+}) {
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      presentationStyle="overFullScreen"
+      statusBarTranslucent
+    >
+      <View style={codeModal.overlay}>
+        <View style={codeModal.card}>
+          <View style={codeModal.iconCircle}>
+            <Ionicons name="keypad" size={28} color="#fff" />
+          </View>
+          <Text style={codeModal.title}>Your Verification Code</Text>
+          <Text style={codeModal.subtitle}>
+            Sent to <Text style={codeModal.strong}>{phone}</Text>
+          </Text>
+          <View style={codeModal.codeBox}>
+            <Text style={codeModal.codeText}>{code}</Text>
+          </View>
+          <TouchableOpacity style={codeModal.btn} onPress={onClose} activeOpacity={0.85}>
+            <Text style={codeModal.btnText}>Got it</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const codeModal = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.62)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 32,
+  },
+  card: {
+    width: "100%",
+    backgroundColor: "#fff",
+    borderRadius: 28,
+    paddingHorizontal: 26,
+    paddingVertical: 28,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.22,
+    shadowRadius: 36,
+    shadowOffset: { width: 0, height: 16 },
+    elevation: 20,
+  },
+  iconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: C.primary,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 18,
+  },
+  title: { fontSize: 20, fontWeight: "800", color: C.text, marginBottom: 6 },
+  subtitle: {
+    fontSize: 13.5,
+    color: C.textSub,
+    textAlign: "center",
+    marginBottom: 22,
+  },
+  strong: { color: C.text, fontWeight: "700" },
+  codeBox: {
+    width: "100%",
+    backgroundColor: C.primary + "0D",
+    borderWidth: 2,
+    borderColor: C.primary + "40",
+    borderRadius: 20,
+    paddingVertical: 20,
+    paddingHorizontal: 16,
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  codeText: {
+    fontSize: 38,
+    fontWeight: "900",
+    color: C.primary,
+    letterSpacing: 12,
+  },
+  btn: {
+    width: "100%",
+    backgroundColor: C.primary,
+    paddingVertical: 15,
+    borderRadius: 16,
+    alignItems: "center",
+  },
+  btnText: { fontSize: 16, fontWeight: "800", color: "#fff" },
+});
+
 interface FIProps {
   label: string;
   value: string;
@@ -422,6 +527,8 @@ export default function RegisterScreen() {
   const [otpSending, setOtpSending] = useState(false);
   const [otpVerifying, setOtpVerifying] = useState(false);
   const [otpVerified, setOtpVerified] = useState(false);
+  const [otpDevCode, setOtpDevCode] = useState("");
+  const [otpCodeModalVisible, setOtpCodeModalVisible] = useState(false);
   const [resendIn, setResendIn] = useState(0);
 
   // ── Referral state — QR code se initialize
@@ -498,6 +605,8 @@ export default function RegisterScreen() {
     setPhone(cleaned);
     setOtp("");
     setOtpErr("");
+    setOtpDevCode("");
+    setOtpCodeModalVisible(false);
     setOtpVerified(false);
     setPhoneErr("");
     setPhoneSt("idle");
@@ -642,11 +751,14 @@ export default function RegisterScreen() {
     setOtpSending(true);
     setOtpErr("");
     try {
-      await api.requestAuthOtp({
+      const res = await api.requestAuthOtp({
         phone: fullPhone,
       });
+      const devCode = String(res?.dev_code || "").trim();
       setResendIn(30);
       setOtp("");
+      setOtpDevCode(devCode);
+      setOtpCodeModalVisible(!!devCode);
       showToast(
         isResend
           ? "OTP sent again to your phone"
@@ -849,6 +961,12 @@ export default function RegisterScreen() {
         type={toast.type}
         visible={toast.visible}
         onHide={hideToast}
+      />
+      <RegisterOtpCodeModal
+        visible={otpCodeModalVisible}
+        code={otpDevCode}
+        phone={fullPhone}
+        onClose={() => setOtpCodeModalVisible(false)}
       />
 
       <KeyboardAvoidingView
@@ -1096,6 +1214,17 @@ export default function RegisterScreen() {
                     />
                     <Text style={s.otpBadgeText}>SMS Verification</Text>
                   </View>
+
+                  {!!otpDevCode && (
+                    <TouchableOpacity
+                      style={s.viewCodeBtn}
+                      onPress={() => setOtpCodeModalVisible(true)}
+                      activeOpacity={0.85}
+                    >
+                      <Ionicons name="eye-outline" size={15} color={C.primary} />
+                      <Text style={s.viewCodeBtnText}>View my code</Text>
+                    </TouchableOpacity>
+                  )}
 
                   <View style={s.otpBoxesRow}>
                     {Array.from({ length: 6 }).map((_, index) => {
@@ -1631,6 +1760,25 @@ const s = StyleSheet.create({
   },
   otpBadgeText: {
     fontSize: 12,
+    fontWeight: "700",
+    color: C.primary,
+  },
+  viewCodeBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    alignSelf: "flex-start",
+    gap: 6,
+    backgroundColor: C.primary + "10",
+    borderWidth: 1.5,
+    borderColor: C.primary + "30",
+    borderRadius: 12,
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+    marginBottom: 16,
+  },
+  viewCodeBtnText: {
+    fontSize: 13,
     fontWeight: "700",
     color: C.primary,
   },

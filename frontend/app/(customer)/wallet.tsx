@@ -9,24 +9,47 @@ import {
   TextInput,
   Modal,
   Image,
+  Alert,
   Animated,
   Vibration,
   Easing,
   KeyboardAvoidingView,
   Platform,
   Keyboard,
+  NativeModules,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import Constants from "expo-constants";
 import * as Sharing from "expo-sharing";
 import { api } from "../../src/services/api";
 import { Colors } from "../../src/constants/colors";
 import LoadingScreen from "../../src/components/LoadingScreen";
 import Button from "../../src/components/Button";
+import { useAuth } from "../../src/contexts/AuthContext";
 
 const quickAmounts = [100, 200, 500, 1000];
 const MIN_AMOUNT = 100;
 const MAX_AMOUNT = 99999;
+type RechargeMode = "online" | "manual";
+
+function isExpoGo(): boolean {
+  return Constants.appOwnership === "expo";
+}
+
+function canUseRazorpayNativeModule(): boolean {
+  return Boolean(
+    !isExpoGo() &&
+      (NativeModules.RNRazorpayCheckout || NativeModules.RazorpayCheckout),
+  );
+}
+
+function getRazorpayContact(phone?: string): string | undefined {
+  const digits = String(phone || "").replace(/\D/g, "");
+  if (digits.length >= 10) return digits.slice(-10);
+  return digits || undefined;
+}
 
 function getFileCacheDir(): string {
   try {
@@ -494,6 +517,8 @@ const ss = StyleSheet.create({
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function WalletScreen() {
+  const router = useRouter();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [balance, setBalance] = useState(0);
@@ -505,6 +530,7 @@ export default function WalletScreen() {
   const [rechargeModal, setRechargeModal] = useState(false);
   const [rechargeAmount, setRechargeAmount] = useState("");
   const [reference, setReference] = useState("");
+  const [rechargeMode, setRechargeMode] = useState<RechargeMode>("online");
   const [recharging, setRecharging] = useState(false);
   const [toast, setToast] = useState<ToastType>(null);
   const [successVisible, setSuccessVisible] = useState(false);
@@ -643,11 +669,121 @@ export default function WalletScreen() {
     }
   };
 
+  const handleOnlineRecharge = async () => {
+    const amount = parseFloat(rechargeAmount);
+    if (isNaN(amount) || amount < MIN_AMOUNT) {
+      triggerShake();
+      showToast("min");
+      return;
+    }
+    if (amount > MAX_AMOUNT) {
+      triggerShake();
+      showToast("max");
+      return;
+    }
+    if (!canUseRazorpayNativeModule()) {
+      Alert.alert(
+        "Development build needed",
+        "Online Razorpay payments cannot run inside Expo Go because the native Razorpay module is not included there. Please use an Android/iOS development build, or use QR Manual for testing.",
+      );
+      return;
+    }
+
+    setRecharging(true);
+    try {
+      const RazorpayCheckout = require("react-native-razorpay").default;
+      const order = await api.createRazorpayWalletRechargeOrder(amount);
+      const prefill = {
+        name: user?.name || "Gau Satva Customer",
+        email: user?.email || "",
+        contact: getRazorpayContact(user?.phone),
+      };
+      const checkoutResult = await RazorpayCheckout.open({
+        key: order.key_id,
+        amount: order.amount,
+        currency: order.currency || "INR",
+        name: order.name || "Gau Satva",
+        description: order.description || "Wallet recharge",
+        order_id: order.order_id,
+        prefill,
+        readonly: {
+          contact: Boolean(prefill.contact),
+          email: Boolean(prefill.email),
+          name: Boolean(prefill.name),
+        },
+        method: {
+          upi: true,
+          card: true,
+          netbanking: true,
+          wallet: true,
+        },
+        config: {
+          display: {
+            blocks: {
+              upi: {
+                name: "Pay using UPI",
+                instruments: [{ method: "upi" }],
+              },
+            },
+            sequence: ["block.upi"],
+            preferences: {
+              show_default_blocks: true,
+            },
+          },
+        },
+        theme: { color: Colors.primary },
+        retry: { enabled: true, max_count: 1 },
+      });
+      const verified = await api.verifyRazorpayWalletRecharge({
+        razorpay_order_id: checkoutResult.razorpay_order_id,
+        razorpay_payment_id: checkoutResult.razorpay_payment_id,
+        razorpay_signature: checkoutResult.razorpay_signature,
+      });
+      setBalance(Number(verified.new_balance || 0));
+      setRechargeModal(false);
+      setRechargeAmount("");
+      setReference("");
+      setToast(null);
+      await fetchData();
+      Vibration.vibrate([0, 60, 40, 80]);
+      router.push({
+        pathname: "/(customer)/payment-success",
+        params: {
+          amount: amount.toFixed(2),
+          balance: String(Number(verified.new_balance || 0)),
+          paymentId: checkoutResult.razorpay_payment_id || "",
+        },
+      });
+    } catch (error: any) {
+      triggerShake();
+      const message = String(error?.description || error?.message || "");
+      const isRazorpayRouteMissing =
+        error?.status === 404 &&
+        String(error?.url || "").includes("/wallet/razorpay/recharge-order");
+      const reason = isRazorpayRouteMissing
+        ? "Online payment API is not active on the server yet. Please restart/deploy the backend with Razorpay wallet routes."
+        : message.includes("react-native-razorpay")
+        ? "Online payments need a development or production build. Please open the installed app build and try again."
+        : message || "Your wallet was not charged. Please try again.";
+      setRechargeModal(false);
+      router.push({
+        pathname: "/(customer)/payment-failed",
+        params: {
+          amount: amount.toFixed(2),
+          reason,
+        },
+      });
+    } finally {
+      setRecharging(false);
+    }
+  };
+
   const closeModal = () => {
     Keyboard.dismiss();
     setRechargeModal(false);
     setRechargeAmount("");
     setReference("");
+    setRechargeMode("online");
     setToast(null);
     if (toastTimer.current) clearTimeout(toastTimer.current);
   };
@@ -700,12 +836,8 @@ export default function WalletScreen() {
     .reduce((s, t) => s + t.amount, 0);
   const isValidAmount = (() => {
     const n = parseFloat(rechargeAmount);
-    return (
-      !isNaN(n) &&
-      n >= MIN_AMOUNT &&
-      n <= MAX_AMOUNT &&
-      Boolean(reference.trim())
-    );
+    if (isNaN(n) || n < MIN_AMOUNT || n > MAX_AMOUNT) return false;
+    return rechargeMode === "online" || Boolean(reference.trim());
   })();
   const pendingRequests = rechargeRequests.filter(
     (item) => (item.status || "").toLowerCase() === "pending",
@@ -1010,38 +1142,78 @@ export default function WalletScreen() {
                 </View>
               </View>
 
-              <View style={styles.qrBox}>
-                {qrImageUri ? (
-                  <TouchableOpacity
-                    activeOpacity={0.85}
-                    onPress={() => setQrPreviewVisible(true)}
-                  >
-                    <Image
-                      source={{ uri: qrImageUri }}
-                      style={styles.qrImage}
-                      resizeMode="contain"
-                    />
-                    <View style={styles.qrTapHint}>
-                      <Ionicons name="expand-outline" size={11} color="#fff" />
-                    </View>
-                  </TouchableOpacity>
-                ) : (
-                  <View style={styles.qrEmpty}>
-                    <Ionicons name="qr-code-outline" size={28} color="#bbb" />
-                    <Text style={styles.qrEmptyText}>
-                      Payment QR unavailable
+              <View style={styles.modeTabs}>
+                {[
+                  { key: "online" as RechargeMode, label: "Online", icon: "card-outline" },
+                  { key: "manual" as RechargeMode, label: "QR Manual", icon: "qr-code-outline" },
+                ].map((mode) => {
+                  const active = rechargeMode === mode.key;
+                  return (
+                    <TouchableOpacity
+                      key={mode.key}
+                      style={[styles.modeTab, active && styles.modeTabActive]}
+                      onPress={() => setRechargeMode(mode.key)}
+                      activeOpacity={0.85}
+                    >
+                      <Ionicons
+                        name={mode.icon as any}
+                        size={15}
+                        color={active ? "#fff" : Colors.primary}
+                      />
+                      <Text style={[styles.modeTabText, active && styles.modeTabTextActive]}>
+                        {mode.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {rechargeMode === "online" ? (
+                <View style={styles.onlineBox}>
+                  <View style={styles.onlineIcon}>
+                    <Ionicons name="shield-checkmark-outline" size={22} color={Colors.primary} />
+                  </View>
+                  <View style={styles.qrInfo}>
+                    <Text style={styles.qrLabel}>Secure Razorpay Payment</Text>
+                    <Text style={styles.qrNote}>
+                      Wallet balance updates only after successful payment verification.
                     </Text>
                   </View>
-                )}
-                <View style={styles.qrInfo}>
-                  <Text style={styles.qrLabel}>
-                    {paymentQr?.label || "Admin Payment QR"}
-                  </Text>
-                  <Text style={styles.qrNote}>
-                    Pay on this QR, then enter transaction reference below.
-                  </Text>
                 </View>
-              </View>
+              ) : (
+                <View style={styles.qrBox}>
+                  {qrImageUri ? (
+                    <TouchableOpacity
+                      activeOpacity={0.85}
+                      onPress={() => setQrPreviewVisible(true)}
+                    >
+                      <Image
+                        source={{ uri: qrImageUri }}
+                        style={styles.qrImage}
+                        resizeMode="contain"
+                      />
+                      <View style={styles.qrTapHint}>
+                        <Ionicons name="expand-outline" size={11} color="#fff" />
+                      </View>
+                    </TouchableOpacity>
+                  ) : (
+                    <View style={styles.qrEmpty}>
+                      <Ionicons name="qr-code-outline" size={28} color="#bbb" />
+                      <Text style={styles.qrEmptyText}>
+                        Payment QR unavailable
+                      </Text>
+                    </View>
+                  )}
+                  <View style={styles.qrInfo}>
+                    <Text style={styles.qrLabel}>
+                      {paymentQr?.label || "Admin Payment QR"}
+                    </Text>
+                    <Text style={styles.qrNote}>
+                      Pay on this QR, then enter transaction reference below.
+                    </Text>
+                  </View>
+                </View>
+              )}
 
               {/* Amount input */}
               <Text style={styles.quickLabel}>Enter Amount</Text>
@@ -1121,31 +1293,40 @@ export default function WalletScreen() {
                 ))}
               </View>
 
-              {/* Reference input */}
-              <Text style={styles.quickLabel}>Payment Reference</Text>
-              <TextInput
-                style={styles.referenceInput}
-                value={reference}
-                onChangeText={setReference}
-                placeholder="UPI / transaction reference"
-                placeholderTextColor="#bbb"
-                autoCapitalize="characters"
-                returnKeyType="done"
-                onSubmitEditing={Keyboard.dismiss}
-              />
+              {rechargeMode === "manual" && (
+                <>
+                  <Text style={styles.quickLabel}>Payment Reference</Text>
+                  <TextInput
+                    style={styles.referenceInput}
+                    value={reference}
+                    onChangeText={setReference}
+                    placeholder="UPI / transaction reference"
+                    placeholderTextColor="#bbb"
+                    autoCapitalize="characters"
+                    returnKeyType="done"
+                    onSubmitEditing={Keyboard.dismiss}
+                  />
+                </>
+              )}
 
               <Button
                 title={
                   isValidAmount
-                    ? `Submit ₹${rechargeAmount} Request`
-                    : "Enter Amount & Reference"
+                    ? rechargeMode === "online"
+                      ? `Pay ₹${rechargeAmount} Online`
+                      : `Submit ₹${rechargeAmount} Request`
+                    : rechargeMode === "online"
+                      ? "Enter Amount"
+                      : "Enter Amount & Reference"
                 }
-                onPress={handleRecharge}
+                onPress={rechargeMode === "online" ? handleOnlineRecharge : handleRecharge}
                 loading={recharging}
                 disabled={!isValidAmount}
               />
               <Text style={styles.mockNote}>
-                Amount will be usable only after admin approval.
+                {rechargeMode === "online"
+                  ? "Online recharge is credited only after Razorpay signature verification."
+                  : "Amount will be usable only after admin approval."}
               </Text>
 
               {/* Safe bottom padding so content clears the home bar */}
@@ -1495,6 +1676,54 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   limitText: { fontSize: 11, color: "#888", fontWeight: "600" },
+
+  modeTabs: {
+    flexDirection: "row",
+    gap: 8,
+    backgroundColor: "#F5F5F5",
+    borderRadius: 16,
+    padding: 5,
+    marginBottom: 14,
+  },
+  modeTab: {
+    flex: 1,
+    minHeight: 42,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 6,
+  },
+  modeTabActive: {
+    backgroundColor: Colors.primary,
+    shadowColor: Colors.primary,
+    shadowOpacity: 0.22,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
+  modeTabText: { fontSize: 13, fontWeight: "800", color: Colors.primary },
+  modeTabTextActive: { color: "#fff" },
+
+  onlineBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: "#FFF7F2",
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: Colors.primary + "26",
+  },
+  onlineIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+  },
 
   qrBox: {
     flexDirection: "row",

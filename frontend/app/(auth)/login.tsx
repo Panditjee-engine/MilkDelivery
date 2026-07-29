@@ -135,14 +135,12 @@ const ts = StyleSheet.create({
   },
 });
 
-// ── OTP Popup Modal 
-function OTPPopupModal({
-  visible,
+// ── OTP Popup
+function OTPPopupCard({
   code,
   identifier,
   onClose,
 }: {
-  visible: boolean;
   code: string;
   identifier: string;
   onClose: () => void;
@@ -152,110 +150,101 @@ function OTPPopupModal({
   const glowAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    if (visible) {
-      scaleAnim.setValue(0.8);
-      opacityAnim.setValue(0);
-      glowAnim.setValue(0);
-      Animated.parallel([
-        Animated.spring(scaleAnim, {
+    scaleAnim.setValue(0.8);
+    opacityAnim.setValue(0);
+    glowAnim.setValue(0);
+
+    const glowLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(glowAnim, {
           toValue: 1,
-          useNativeDriver: true,
-          damping: 12,
-          stiffness: 220,
-        }),
-        Animated.timing(opacityAnim, {
-          toValue: 1,
-          duration: 200,
+          duration: 1000,
           useNativeDriver: true,
         }),
-      ]).start(() => {
-        Animated.loop(
-          Animated.sequence([
-            Animated.timing(glowAnim, {
-              toValue: 1,
-              duration: 1000,
-              useNativeDriver: true,
-            }),
-            Animated.timing(glowAnim, {
-              toValue: 0,
-              duration: 1000,
-              useNativeDriver: true,
-            }),
-          ]),
-        ).start();
-      });
-    }
-  }, [visible]);
+        Animated.timing(glowAnim, {
+          toValue: 0,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+
+    Animated.parallel([
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        useNativeDriver: true,
+        damping: 12,
+        stiffness: 220,
+      }),
+      Animated.timing(opacityAnim, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start(() => glowLoop.start());
+
+    return () => glowLoop.stop();
+  }, []);
 
   const isPhone = looksLikePhone(identifier);
 
   return (
-    <Modal visible={visible} transparent animationType="fade">
-      <View style={otp.overlay}>
-        <Animated.View
-          style={[
-            otp.card,
-            { opacity: opacityAnim, transform: [{ scale: scaleAnim }] },
-          ]}
-        >
-          <View style={otp.badge}>
-            <Ionicons
-              name={isPhone ? "phone-portrait-outline" : "mail-outline"}
-              size={13}
-              color={Colors.primary}
-            />
-            <Text style={otp.badgeText}>
-              {isPhone ? "SMS Code" : "Email Code"}
-            </Text>
-          </View>
-          <View style={otp.iconRing}>
-            <View style={otp.iconCircle}>
-              <Ionicons name="keypad" size={28} color="#fff" />
-            </View>
-          </View>
-          <Text style={otp.title}>Your Verification Code</Text>
-          <Text style={otp.subtitle}>
-            Sent to{" "}
-            <Text style={otp.identifierText}>
-              {isPhone ? `+91 ${identifier}` : identifier}
-            </Text>
-          </Text>
-          <Animated.View
-            style={[
-              otp.codeBox,
-              {
-                opacity: glowAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0.9, 1],
-                }),
-              },
-            ]}
-          >
-            <Text style={otp.codeText}>{code}</Text>
-          </Animated.View>
-          <Text style={otp.hint}>
-            Enter this code in the verification field below
-          </Text>
-          <TouchableOpacity
-            style={otp.closeBtn}
-            onPress={onClose}
-            activeOpacity={0.85}
-          >
-            <Text style={otp.closeBtnText}>Got it</Text>
-          </TouchableOpacity>
-        </Animated.View>
+    <Animated.View
+      style={[
+        otp.card,
+        { opacity: opacityAnim, transform: [{ scale: scaleAnim }] },
+      ]}
+    >
+      <View style={otp.badge}>
+        <Ionicons
+          name={isPhone ? "phone-portrait-outline" : "mail-outline"}
+          size={13}
+          color={Colors.primary}
+        />
+        <Text style={otp.badgeText}>{isPhone ? "SMS Code" : "Email Code"}</Text>
       </View>
-    </Modal>
+      <View style={otp.iconRing}>
+        <View style={otp.iconCircle}>
+          <Ionicons name="keypad" size={28} color="#fff" />
+        </View>
+      </View>
+      <Text style={otp.title}>Your Verification Code</Text>
+      <Text style={otp.subtitle}>
+        Sent to{" "}
+        <Text style={otp.identifierText}>
+          {isPhone ? `+91 ${identifier}` : identifier}
+        </Text>
+      </Text>
+      <Animated.View
+        style={[
+          otp.codeBox,
+          {
+            opacity: glowAnim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [0.9, 1],
+            }),
+          },
+        ]}
+      >
+        <Text style={otp.codeText}>{code}</Text>
+      </Animated.View>
+      <Text style={otp.hint}>Enter this code in the verification field below</Text>
+      <TouchableOpacity style={otp.closeBtn} onPress={onClose} activeOpacity={0.85}>
+        <Text style={otp.closeBtnText}>Got it</Text>
+      </TouchableOpacity>
+    </Animated.View>
   );
 }
 
 const otp = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.6)",
+  inlineOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.62)",
     justifyContent: "center",
     alignItems: "center",
     padding: 32,
+    zIndex: 50,
+    elevation: 50,
   },
   card: {
     backgroundColor: "#fff",
@@ -778,7 +767,7 @@ function ForgotPasswordModal({
 
   return (
     <>
-      <Modal visible={visible} transparent animationType="fade">
+      <Modal visible={visible} transparent animationType="fade" presentationStyle="overFullScreen" statusBarTranslucent>
         <View style={fm.overlay}>
           <Animated.View
             style={[
@@ -1025,15 +1014,17 @@ function ForgotPasswordModal({
               </TouchableOpacity>
             )}
           </Animated.View>
+          {otpPopupVisible && !!verificationCode && (
+            <View style={otp.inlineOverlay}>
+              <OTPPopupCard
+                code={verificationCode}
+                identifier={fpIdentifier.trim()}
+                onClose={() => setOtpPopupVisible(false)}
+              />
+            </View>
+          )}
         </View>
       </Modal>
-
-      <OTPPopupModal
-        visible={otpPopupVisible}
-        code={verificationCode}
-        identifier={fpIdentifier.trim()}
-        onClose={() => setOtpPopupVisible(false)}
-      />
     </>
   );
 }

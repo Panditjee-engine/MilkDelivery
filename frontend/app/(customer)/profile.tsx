@@ -19,6 +19,10 @@ import { api } from "../../src/services/api";
 import { Colors } from "../../src/constants/colors";
 import Button from "../../src/components/Button";
 import Input from "../../src/components/Input";
+import {
+  formatDeliveryAddress,
+  hasCompleteDeliveryAddress,
+} from "../../src/utils/address";
 
 const { width } = Dimensions.get("window");
 
@@ -37,6 +41,40 @@ type AlertConfig = {
   title: string;
   message: string;
   actions: AlertAction[];
+};
+
+const emptyAddress = () => ({
+  id: `addr_${Date.now()}`,
+  label: "home",
+  is_default: true,
+  tower: "",
+  flat: "",
+  floor: "",
+  area: "",
+  city: "",
+  pincode: "",
+  landmark: "",
+});
+
+const normalizeAddressBook = (user: any) => {
+  const addresses = Array.isArray(user?.addresses) ? user.addresses : [];
+  const withIds = addresses.map((address: any, index: number) => ({
+    id: address.id || `addr_${index}_${Date.now()}`,
+    is_default: false,
+    ...address,
+  }));
+  if (!withIds.length && user?.address) {
+    withIds.push({
+      id: user.address.id || "addr_default",
+      label: user.address.label || "home",
+      is_default: true,
+      ...user.address,
+    });
+  }
+  if (withIds.length && !withIds.some((address: any) => address.is_default)) {
+    withIds[0].is_default = true;
+  }
+  return withIds;
 };
 
 function CustomAlert({
@@ -316,8 +354,12 @@ export default function ProfileScreen() {
   const [selectingStart, setSelectingStart] = useState(true);
   const [editName, setEditName] = useState(user?.name || "");
   const [editPhone, setEditPhone] = useState(user?.phone || "");
-  const [editAddress, setEditAddress] = useState(
-    user?.address || { tower: "", flat: "", floor: "" }
+  const [addressBook, setAddressBook] = useState<any[]>(() =>
+    normalizeAddressBook(user),
+  );
+  const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
+  const [editAddress, setEditAddress] = useState(() =>
+    normalizeAddressBook(user)[0] || emptyAddress(),
   );
   const [saving, setSaving] = useState(false);
   const [deleteModal, setDeleteModal] = useState(false);
@@ -327,9 +369,19 @@ export default function ProfileScreen() {
 
   useEffect(() => {
     if (!isFocused || params.openAddress !== "1") return;
-    setEditAddress(user?.address || { tower: "", flat: "", floor: "" });
+    const next = normalizeAddressBook(user);
+    setAddressBook(next);
+    const selected = next.find((address) => address.is_default) || next[0] || emptyAddress();
+    setEditingAddressId(selected.id);
+    setEditAddress(selected);
     setEditModal(true);
   }, [isFocused, params.openAddress, user?.address]);
+
+  useEffect(() => {
+    if (!isFocused) return;
+    const next = normalizeAddressBook(user);
+    setAddressBook(next);
+  }, [isFocused, user?.address, (user as any)?.addresses]);
 
   const [alertConfig, setAlertConfig] = useState<AlertConfig>({
     visible: false,
@@ -508,29 +560,121 @@ export default function ProfileScreen() {
     });
   };
 
+  const openNewAddress = () => {
+    const next = {
+      ...emptyAddress(),
+      is_default: addressBook.length === 0,
+    };
+    setEditingAddressId(null);
+    setEditAddress(next);
+    setEditModal(true);
+  };
+
+  const openEditAddress = (address: any) => {
+    setEditingAddressId(address.id);
+    setEditAddress(address);
+    setEditModal(true);
+  };
+
+  const handleDeleteAddress = (address: any) => {
+    showAlert({
+      icon: "trash-outline",
+      iconColor: "#EF4444",
+      iconBg: "#FEF2F2",
+      title: "Delete Address",
+      message: "Remove this saved delivery address?",
+      actions: [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            const remaining = addressBook.filter((item) => item.id !== address.id);
+            if (remaining.length && !remaining.some((item) => item.is_default)) {
+              remaining[0].is_default = true;
+            }
+            const defaultAddress = remaining.find((item) => item.is_default) || remaining[0] || null;
+            setSaving(true);
+            try {
+              await api.updateProfile({
+                name: editName,
+                phone: editPhone,
+                address: defaultAddress,
+                addresses: remaining,
+              });
+              setAddressBook(remaining);
+              updateUser({
+                name: editName,
+                phone: editPhone,
+                address: defaultAddress,
+                addresses: remaining,
+              } as any);
+              showToast("Address removed", "success");
+            } catch (error: any) {
+              showToast(error.message || "Could not remove address", "error");
+            } finally {
+              setSaving(false);
+            }
+          },
+        },
+      ],
+    });
+  };
+
   const handleSaveProfile = async () => {
-    if (!editAddress.tower?.trim() || !editAddress.flat?.trim()) {
-      showToast("Tower / building and flat number are required for delivery.", "error");
+    const normalizedAddress = {
+      id: editAddress.id || `addr_${Date.now()}`,
+      label: editAddress.label || "home",
+      is_default: editAddress.is_default ?? true,
+      tower: editAddress.tower?.trim() || "",
+      flat: editAddress.flat?.trim() || "",
+      floor: editAddress.floor?.trim() || "",
+      area: editAddress.area?.trim() || "",
+      city: editAddress.city?.trim() || "",
+      pincode: editAddress.pincode?.trim() || "",
+      landmark: editAddress.landmark?.trim() || "",
+    };
+
+    if (!hasCompleteDeliveryAddress(normalizedAddress)) {
+      showToast("Flat, building/area, city and pincode are required for delivery.", "error");
       return;
     }
 
-    const normalizedAddress = {
-      tower: editAddress.tower.trim(),
-      flat: editAddress.flat.trim(),
-      floor: editAddress.floor?.trim() || "",
-    };
-
     setSaving(true);
     try {
+      const nextBook = editingAddressId
+        ? addressBook.map((address) =>
+            address.id === editingAddressId ? { ...address, ...normalizedAddress } : address,
+          )
+        : [...addressBook, normalizedAddress];
+      const normalizedBook = nextBook.map((address) => ({
+        ...address,
+        is_default: normalizedAddress.is_default ? address.id === normalizedAddress.id : address.is_default,
+      }));
+      if (!normalizedBook.some((address) => address.is_default)) {
+        normalizedBook[normalizedBook.length - 1].is_default = true;
+      }
+      const defaultAddress =
+        normalizedBook.find((address) => address.is_default) ||
+        normalizedBook[normalizedBook.length - 1];
+
       await api.updateProfile({
         name: editName,
         phone: editPhone,
-        address: normalizedAddress,
+        address: defaultAddress,
+        addresses: normalizedBook,
       });
-      setEditAddress(normalizedAddress);
-      updateUser({ name: editName, phone: editPhone, address: normalizedAddress });
+      setAddressBook(normalizedBook);
+      setEditAddress(defaultAddress);
+      setEditingAddressId(defaultAddress.id);
+      updateUser({
+        name: editName,
+        phone: editPhone,
+        address: defaultAddress,
+        addresses: normalizedBook,
+      } as any);
       setEditModal(false);
-      showToast("Profile updated successfully", "success");
+      showToast("Address saved successfully", "success");
       if (params.returnTo === "catalog") {
         router.replace("/(customer)/catalog");
       }
@@ -644,32 +788,55 @@ export default function ProfileScreen() {
               <Ionicons name="location" size={17} color="#4F7EFF" />
             </View>
             <Text style={styles.cardTitle}>Delivery Address</Text>
+            <TouchableOpacity style={styles.addIconBtn} onPress={openNewAddress}>
+              <Ionicons name="add" size={17} color={Colors.primary} />
+            </TouchableOpacity>
           </View>
-          {user?.address?.tower?.trim?.() && user?.address?.flat?.trim?.() ? (
-            <View style={styles.addressGrid}>
-              {user.address.tower && (
-                <View style={styles.addressPill}>
-                  <Text style={styles.addressPillLabel}>Tower</Text>
-                  <Text style={styles.addressPillValue}>{user.address.tower}</Text>
-                </View>
-              )}
-              {user.address.flat && (
-                <View style={styles.addressPill}>
-                  <Text style={styles.addressPillLabel}>Flat</Text>
-                  <Text style={styles.addressPillValue}>{user.address.flat}</Text>
-                </View>
-              )}
-              {user.address.floor && (
-                <View style={styles.addressPill}>
-                  <Text style={styles.addressPillLabel}>Floor</Text>
-                  <Text style={styles.addressPillValue}>{user.address.floor}</Text>
-                </View>
-              )}
+          {addressBook.length > 0 ? (
+            <View style={styles.addressList}>
+              {addressBook.map((address) => (
+                <TouchableOpacity
+                  key={address.id}
+                  style={styles.savedAddressCard}
+                  activeOpacity={0.85}
+                  onPress={() => openEditAddress(address)}
+                >
+                  <View style={styles.addressTopRow}>
+                    <View style={styles.addressTypeBadge}>
+                      <Ionicons
+                        name={address?.label === "work" ? "briefcase-outline" : address?.label === "other" ? "location-outline" : "home-outline"}
+                        size={13}
+                        color={Colors.primary}
+                      />
+                      <Text style={styles.addressTypeText}>
+                        {String(address?.label || "home").toUpperCase()}
+                      </Text>
+                    </View>
+                    <View style={styles.addressActions}>
+                      {address?.is_default && (
+                        <View style={styles.defaultBadge}>
+                          <Text style={styles.defaultBadgeText}>Default</Text>
+                        </View>
+                      )}
+                      <TouchableOpacity
+                        style={styles.addressDeleteBtn}
+                        onPress={() => handleDeleteAddress(address)}
+                      >
+                        <Ionicons name="trash-outline" size={14} color="#dc2626" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                  <Text style={styles.savedAddressText}>
+                    {formatDeliveryAddress(address)}
+                  </Text>
+                  <Text style={styles.savedAddressAction}>Tap to edit address</Text>
+                </TouchableOpacity>
+              ))}
             </View>
           ) : (
             <TouchableOpacity
               style={styles.emptyAddress}
-              onPress={() => setEditModal(true)}
+              onPress={openNewAddress}
             >
               <Ionicons name="add-circle-outline" size={20} color={Colors.primary} />
               <Text style={styles.emptyAddressText}>
@@ -948,7 +1115,9 @@ export default function ProfileScreen() {
           <View style={styles.modalSheet}>
             <View style={styles.dragHandle} />
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Edit Profile</Text>
+              <Text style={styles.modalTitle}>
+                {editingAddressId ? "Edit Address" : "New Address"}
+              </Text>
               <TouchableOpacity
                 style={styles.closeBtn}
                 onPress={() => setEditModal(false)}
@@ -985,7 +1154,47 @@ export default function ProfileScreen() {
                 placeholder="Phone number"
                 keyboardType="phone-pad"
               />
+              <View style={styles.profileDivider} />
               <Text style={styles.addressSectionLabel}>Delivery Address</Text>
+              <View style={styles.addressTypeRow}>
+                {[
+                  { key: "home", label: "Home", icon: "home-outline" },
+                  { key: "work", label: "Work", icon: "briefcase-outline" },
+                  { key: "other", label: "Other", icon: "location-outline" },
+                ].map((item) => {
+                  const active = (editAddress.label || "home") === item.key;
+                  return (
+                    <TouchableOpacity
+                      key={item.key}
+                      style={[
+                        styles.addressTypeChip,
+                        active && styles.addressTypeChipActive,
+                      ]}
+                      onPress={() => setEditAddress({ ...editAddress, label: item.key })}
+                    >
+                      <Ionicons
+                        name={item.icon as any}
+                        size={14}
+                        color={active ? "#fff" : Colors.primary}
+                      />
+                      <Text
+                        style={[
+                          styles.addressTypeChipText,
+                          active && styles.addressTypeChipTextActive,
+                        ]}
+                      >
+                        {item.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <Input
+                label="Flat / House Number"
+                value={editAddress.flat || ""}
+                onChangeText={(t) => setEditAddress({ ...editAddress, flat: t })}
+                placeholder="Flat 204, House 12"
+              />
               <Input
                 label="Tower / Building"
                 value={editAddress.tower || ""}
@@ -993,10 +1202,10 @@ export default function ProfileScreen() {
                 placeholder="Tower name or number"
               />
               <Input
-                label="Flat Number"
-                value={editAddress.flat || ""}
-                onChangeText={(t) => setEditAddress({ ...editAddress, flat: t })}
-                placeholder="Flat / Apartment number"
+                label="Area / Society"
+                value={editAddress.area || ""}
+                onChangeText={(t) => setEditAddress({ ...editAddress, area: t })}
+                placeholder="Society, colony or area"
               />
               <Input
                 label="Floor"
@@ -1004,8 +1213,48 @@ export default function ProfileScreen() {
                 onChangeText={(t) => setEditAddress({ ...editAddress, floor: t })}
                 placeholder="Floor number"
               />
+              <Input
+                label="City"
+                value={editAddress.city || ""}
+                onChangeText={(t) => setEditAddress({ ...editAddress, city: t })}
+                placeholder="City"
+              />
+              <Input
+                label="Pincode"
+                value={editAddress.pincode || ""}
+                onChangeText={(t) => setEditAddress({ ...editAddress, pincode: t.replace(/\D/g, "").slice(0, 6) })}
+                placeholder="6 digit pincode"
+                keyboardType="number-pad"
+              />
+              <Input
+                label="Landmark"
+                value={editAddress.landmark || ""}
+                onChangeText={(t) => setEditAddress({ ...editAddress, landmark: t })}
+                placeholder="Nearby landmark"
+              />
+              <TouchableOpacity
+                style={styles.defaultAddressRow}
+                onPress={() =>
+                  setEditAddress({
+                    ...editAddress,
+                    is_default: true,
+                  })
+                }
+              >
+                <View
+                  style={[
+                    styles.defaultCheck,
+                    editAddress.is_default !== false && styles.defaultCheckActive,
+                  ]}
+                >
+                  {editAddress.is_default !== false && (
+                    <Ionicons name="checkmark" size={13} color="#fff" />
+                  )}
+                </View>
+                <Text style={styles.defaultAddressText}>Use as default delivery address</Text>
+              </TouchableOpacity>
               <Button
-                title="Save Changes"
+                title={editingAddressId ? "Save Address" : "Add Address"}
                 onPress={handleSaveProfile}
                 loading={saving}
                 style={{ marginTop: 8, marginBottom: 20 }}
@@ -1142,6 +1391,66 @@ const styles = StyleSheet.create({
 
   // Address
   addressGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  addressList: { gap: 10 },
+  savedAddressCard: {
+    backgroundColor: "#F8FBF7",
+    borderWidth: 1,
+    borderColor: Colors.primary + "22",
+    borderRadius: 16,
+    padding: 14,
+  },
+  addressTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  addressTypeBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#fff",
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: Colors.primary + "20",
+  },
+  addressTypeText: { fontSize: 10, fontWeight: "900", color: Colors.primary },
+  defaultBadge: {
+    backgroundColor: Colors.primary,
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+  },
+  defaultBadgeText: { fontSize: 10, fontWeight: "900", color: "#fff" },
+  addressActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  addressDeleteBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 10,
+    backgroundColor: "#FEF2F2",
+    borderWidth: 1,
+    borderColor: "#FECACA",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  savedAddressText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#111827",
+    lineHeight: 20,
+  },
+  savedAddressAction: {
+    marginTop: 8,
+    fontSize: 12,
+    fontWeight: "800",
+    color: Colors.primary,
+  },
   addressPill: {
     flex: 1,
     minWidth: 90,
@@ -1165,6 +1474,54 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   emptyAddressText: { fontSize: 14, color: Colors.primary, fontWeight: "600" },
+  addressTypeRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 12,
+  },
+  addressTypeChip: {
+    flex: 1,
+    minHeight: 40,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.primary + "22",
+    backgroundColor: Colors.primary + "08",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  addressTypeChipActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  addressTypeChipText: {
+    fontSize: 12,
+    fontWeight: "900",
+    color: Colors.primary,
+  },
+  addressTypeChipTextActive: { color: "#fff" },
+  defaultAddressRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "#F8F8FA",
+    borderRadius: 14,
+    padding: 12,
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  defaultCheck: {
+    width: 22,
+    height: 22,
+    borderRadius: 7,
+    borderWidth: 1.5,
+    borderColor: Colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  defaultCheckActive: { backgroundColor: Colors.primary },
+  defaultAddressText: { fontSize: 13, fontWeight: "800", color: "#111827" },
 
   // Vacation
   hintText: { fontSize: 12, color: "#bbb", marginBottom: 12, marginTop: -6 },
@@ -1352,6 +1709,12 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     marginTop: 12,
     marginBottom: 8,
+  },
+  profileDivider: {
+    height: 1,
+    backgroundColor: "#F1F5F9",
+    marginTop: 8,
+    marginBottom: 4,
   },
   addressRequiredBanner: {
     flexDirection: "row",

@@ -72,6 +72,10 @@ export default function CustomerLayout() {
       <Tabs.Screen name="order-notifications" options={{ href: null }} />
       <Tabs.Screen name="product-search" options={{ href: null }} />
       <Tabs.Screen name="product-details" options={{ href: null }} />
+      <Tabs.Screen name="payment-success" options={{ href: null }} />
+      <Tabs.Screen name="payment-failed" options={{ href: null }} />
+      <Tabs.Screen name="order-success" options={{ href: null }} />
+      <Tabs.Screen name="order-failed" options={{ href: null }} />
     </Tabs>
   );
 }

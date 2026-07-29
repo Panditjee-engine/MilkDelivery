@@ -18,17 +18,24 @@ import {
   Vibration,
   Image,
   Dimensions,
+  Alert,
+  NativeModules,
 } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import Constants from "expo-constants";
 import { api } from "../../src/services/api";
 import { Colors } from "../../src/constants/colors";
 import Button from "../../src/components/Button";
 import LoadingScreen from "../../src/components/LoadingScreen";
 import { useAuth } from "../../src/contexts/AuthContext";
+import {
+  formatDeliveryAddress,
+  hasCompleteDeliveryAddress,
+} from "../../src/utils/address";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const GRID_PADDING = 20;
@@ -87,6 +94,38 @@ type CatalogSlide = {
   colors: string[];
   image: any;
 };
+
+type PaymentMethod = "wallet" | "cash_on_delivery" | "online";
+
+function canUseRazorpayNativeModule(): boolean {
+  return Boolean(
+    Constants.appOwnership !== "expo" &&
+      (NativeModules.RNRazorpayCheckout || NativeModules.RazorpayCheckout),
+  );
+}
+
+function getRazorpayContact(phone?: string): string | undefined {
+  const digits = String(phone || "").replace(/\D/g, "");
+  if (digits.length >= 10) return digits.slice(-10);
+  return digits || undefined;
+}
+
+function openAddressRequired(router: ReturnType<typeof useRouter>) {
+  router.push({
+    pathname: "/(customer)/profile",
+    params: {
+      openAddress: "1",
+      addressRequired: "1",
+      returnTo: "catalog",
+    },
+  } as any);
+}
+
+function isAddressRequiredError(error: any) {
+  return String(error?.message || error?.detail || "")
+    .toLowerCase()
+    .includes("delivery address");
+}
 
 const SLIDE_GRADIENTS = [
   ["#123524", "#1f6f43"],
@@ -1506,6 +1545,7 @@ function SubscribeModal({
   onToast: (n: string, s: boolean) => void;
 }) {
   const router = useRouter();
+  const { user } = useAuth();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [qty, setQty] = useState(1);
   const [pattern, setPattern] = useState("daily");
@@ -1513,6 +1553,7 @@ function SubscribeModal({
   const [slot, setSlot] = useState("morning");
   const [startDate, setStartDate] = useState<string | null>(null);
   const [endDate, setEndDate] = useState<string | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("wallet");
   const [submitting, setSubmitting] = useState(false);
   const [infoVis, setInfoVis] = useState(false);
 
@@ -1536,6 +1577,7 @@ function SubscribeModal({
       setSlot("morning");
       setStartDate(tomorrow);
       setEndDate(null);
+      setPaymentMethod("wallet");
     }
   }, [visible, tomorrow]);
 
@@ -1561,9 +1603,38 @@ function SubscribeModal({
 
   const confirm = async () => {
     if (!product) return;
+    if (!hasCompleteDeliveryAddress(user?.address)) {
+      Alert.alert(
+        "Delivery address required",
+        "Please add your complete delivery address before choosing payment.",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Add Address",
+            onPress: () => {
+              onClose();
+              openAddressRequired(router);
+            },
+          },
+        ],
+      );
+      return;
+    }
+    if (paymentMethod === "wallet" && !canAfford) {
+      alert("Insufficient wallet balance. Please choose online payment, cash on delivery, or recharge wallet.");
+      return;
+    }
+    if (paymentMethod === "online" && !canUseRazorpayNativeModule()) {
+      Alert.alert(
+        "Development build needed",
+        "Online payments cannot run inside Expo Go. Please use the installed development build, or choose another payment method.",
+      );
+      return;
+    }
     setSubmitting(true);
     try {
-      await api.createSubscription({
+      let paymentId: string | undefined;
+      const payload: Parameters<typeof api.createSubscription>[0] = {
         items: [
           {
             product_id: product.id,
@@ -1577,17 +1648,80 @@ function SubscribeModal({
         start_date: startDate!,
         end_date: endDate ?? null,
         delivery_slot: slot,
-      });
+        payment_method: paymentMethod,
+      };
+      if (paymentMethod === "online") {
+        const RazorpayCheckout = require("react-native-razorpay").default;
+        const order = await api.createSubscriptionRazorpayOrder(payload);
+        const checkoutResult = await RazorpayCheckout.open({
+          key: order.key_id,
+          amount: order.amount,
+          currency: order.currency || "INR",
+          name: order.name || "Gau Satva",
+          description: order.description || "Order payment",
+          order_id: order.order_id,
+          prefill: {
+            name: user?.name || "Gau Satva Customer",
+            email: user?.email || "",
+            contact: getRazorpayContact(user?.phone),
+          },
+          method: { upi: true, card: true, netbanking: true, wallet: true },
+          theme: { color: Colors.primary },
+          retry: { enabled: true, max_count: 1 },
+        });
+        await api.verifySubscriptionRazorpayPayment({
+          razorpay_order_id: checkoutResult.razorpay_order_id,
+          razorpay_payment_id: checkoutResult.razorpay_payment_id,
+          razorpay_signature: checkoutResult.razorpay_signature,
+        });
+        paymentId = checkoutResult.razorpay_payment_id;
+      } else {
+        await api.createSubscription(payload);
+      }
       onClose();
       onToast(product.name, true);
-      onSuccess(() =>
+      await onSuccess(() =>
         api
           .getWallet()
           .then((w) => w.balance ?? 0)
           .catch(() => walletBalance),
       );
+      router.push({
+        pathname: "/(customer)/order-success",
+        params: {
+          amount: String(unitPrice * qty),
+          items: "1",
+          method: paymentMethod,
+          type: "subscription",
+          ...(paymentId ? { paymentId } : {}),
+        },
+      } as any);
     } catch (e: any) {
-      alert(e?.message || "Something went wrong");
+      if (isAddressRequiredError(e)) {
+        Alert.alert(
+          "Delivery address required",
+          "Please add your complete delivery address before choosing payment.",
+          [
+            { text: "Cancel", style: "cancel" },
+            {
+              text: "Add Address",
+              onPress: () => {
+                onClose();
+                openAddressRequired(router);
+              },
+            },
+          ],
+        );
+        return;
+      }
+      router.push({
+        pathname: "/(customer)/order-failed",
+        params: {
+          amount: String(unitPrice * qty),
+          method: paymentMethod,
+          reason: e?.message || "Something went wrong",
+        },
+      } as any);
     } finally {
       setSubmitting(false);
     }
@@ -1971,9 +2105,16 @@ function SubscribeModal({
                     </Text>
                   </View>
                   <Text style={reviewS.note}>
-                    Deducted from wallet each delivery
+                    Select how you want to pay for this order.
                   </Text>
                 </View>
+
+                <PaymentMethodSelector
+                  value={paymentMethod}
+                  onChange={setPaymentMethod}
+                  walletBalance={walletBalance}
+                  total={total}
+                />
 
                 <View
                   style={[
@@ -2030,11 +2171,11 @@ function SubscribeModal({
                   </View>
                 </View>
 
-                {!canAfford && (
+                {paymentMethod === "wallet" && !canAfford && (
                   <View style={reviewS.warn}>
                     <Ionicons name="information-circle-outline" size={13} color={T.orange} />
                     <Text style={reviewS.warnTxt}>
-                      Balance is below order amount. Recharge before confirming.
+                      Balance is below order amount. Choose online/COD or recharge before confirming.
                     </Text>
                     <TouchableOpacity
                       style={reviewS.addMoneyBtn}
@@ -2059,7 +2200,7 @@ function SubscribeModal({
                   }
                   onPress={confirm}
                   loading={submitting}
-                  disabled={!canAfford}
+                  disabled={paymentMethod === "wallet" && !canAfford}
                 />
                 <View style={{ height: 16 }} />
               </ScrollView>
@@ -2422,11 +2563,136 @@ const dotsS = StyleSheet.create({
   line: { width: 20, height: 1.5, backgroundColor: T.border, borderRadius: 1 },
 });
 
+function PaymentMethodSelector({
+  value,
+  onChange,
+  walletBalance,
+  total,
+}: {
+  value: PaymentMethod;
+  onChange: (method: PaymentMethod) => void;
+  walletBalance: number;
+  total: number;
+}) {
+  const options: Array<{
+    key: PaymentMethod;
+    title: string;
+    sub: string;
+    icon: keyof typeof Ionicons.glyphMap;
+  }> = [
+    {
+      key: "wallet",
+      title: "Wallet",
+      sub: `Balance ₹${walletBalance.toFixed(2)}`,
+      icon: "wallet-outline",
+    },
+    {
+      key: "online",
+      title: "Online",
+      sub: "UPI, card, netbanking",
+      icon: "card-outline",
+    },
+    {
+      key: "cash_on_delivery",
+      title: "Cash on Delivery",
+      sub: "Pay at delivery",
+      icon: "cash-outline",
+    },
+  ];
+
+  return (
+    <View style={payS.wrap}>
+      <Text style={payS.label}>Payment Method</Text>
+      <View style={payS.grid}>
+        {options.map((option) => {
+          const active = value === option.key;
+          const disabled = option.key === "wallet" && walletBalance < total;
+          return (
+            <TouchableOpacity
+              key={option.key}
+              style={[
+                payS.option,
+                active && payS.optionActive,
+                disabled && payS.optionDisabled,
+              ]}
+              onPress={() => !disabled && onChange(option.key)}
+              activeOpacity={0.85}
+              disabled={disabled}
+            >
+              <Ionicons
+                name={option.icon}
+                size={18}
+                color={active ? "#fff" : disabled ? T.faint : Colors.primary}
+              />
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={[
+                    payS.title,
+                    active && payS.titleActive,
+                    disabled && payS.disabledText,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {option.title}
+                </Text>
+                <Text
+                  style={[
+                    payS.sub,
+                    active && payS.subActive,
+                    disabled && payS.disabledText,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {disabled ? "Insufficient balance" : option.sub}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+const payS = StyleSheet.create({
+  wrap: { marginTop: 14, gap: 8 },
+  label: { fontSize: 12, fontWeight: "800", color: T.text },
+  grid: { gap: 8 },
+  option: {
+    minHeight: 54,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: T.border,
+    backgroundColor: "#fff",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 12,
+  },
+  optionActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  optionDisabled: {
+    backgroundColor: "#F7F7F7",
+    opacity: 0.75,
+  },
+  title: { fontSize: 13, fontWeight: "900", color: T.text },
+  titleActive: { color: "#fff" },
+  sub: { marginTop: 2, fontSize: 11, fontWeight: "600", color: T.muted },
+  subActive: { color: "rgba(255,255,255,0.78)" },
+  disabledText: { color: T.faint },
+});
+
 // ─── Cart Sheet ─────────────────────────────────────────────────────────────
 function CartSheet({
   visible,
   cart,
   walletBalance,
+  selectedAddress,
+  addresses,
+  onSelectAddress,
+  onAddAddress,
   onClose,
   onRemove,
   onUpdateQty,
@@ -2436,13 +2702,19 @@ function CartSheet({
   visible: boolean;
   cart: CartItem[];
   walletBalance: number;
+  selectedAddress: any;
+  addresses: any[];
+  onSelectAddress: (address: any) => void;
+  onAddAddress: () => void;
   onClose: () => void;
   onRemove: (id: string) => void;
   onUpdateQty: (id: string, q: number) => void;
-  onPlaceOrder: () => void;
+  onPlaceOrder: (paymentMethod: PaymentMethod) => void;
   submitting: boolean;
 }) {
   const router = useRouter();
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("wallet");
+  const [addressPickerVisible, setAddressPickerVisible] = useState(false);
   const slide = useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const overlay = useRef(new Animated.Value(0)).current;
 
@@ -2479,6 +2751,7 @@ function CartSheet({
 
   const cartTotal = cart.reduce((s, i) => s + i.product.price * i.quantity, 0);
   const canAfford = walletBalance >= cartTotal;
+  const canPlace = paymentMethod !== "wallet" || canAfford;
   if (!visible) return null;
 
   return (
@@ -2506,39 +2779,66 @@ function CartSheet({
             )}
           </View>
 
-          <View style={cartS.walletStrip}>
-            <View
-              style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+          <ScrollView
+            style={cartS.contentScroll}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={cartS.contentScrollInner}
+          >
+            <TouchableOpacity
+              style={cartS.addressCard}
+              activeOpacity={0.86}
+              onPress={() => setAddressPickerVisible(true)}
             >
-              <Ionicons
-                name="wallet-outline"
-                size={12}
-                color={canAfford ? T.green : T.orange}
-              />
-              <Text style={cartS.walletLabel}>Wallet</Text>
-            </View>
-            <Text
-              style={[
-                cartS.walletBal,
-                { color: canAfford ? T.green : T.orange },
-              ]}
-            >
-              ₹{walletBalance.toFixed(2)}
-            </Text>
-          </View>
+              <Ionicons name="location-outline" size={14} color={Colors.primary} />
+              {selectedAddress ? (
+                <>
+                  <Text style={cartS.addressTypeText} numberOfLines={1}>
+                    {String(selectedAddress.label || "home").toUpperCase()}
+                  </Text>
+                  <Text style={cartS.addressText} numberOfLines={1}>
+                    {formatDeliveryAddress(selectedAddress)}
+                  </Text>
+                </>
+              ) : (
+                <Text style={cartS.addressMissing} numberOfLines={1}>
+                  Add delivery address
+                </Text>
+              )}
+              <Text style={cartS.changeAddressText}>
+                {selectedAddress ? "Change" : "Add"}
+              </Text>
+            </TouchableOpacity>
 
-          <View style={cartS.divider} />
-
-          {cart.length === 0 ? (
-            <View style={cartS.empty}>
-              <Ionicons name="cart-outline" size={36} color={T.faint} />
-              <Text style={cartS.emptyTxt}>Cart is empty</Text>
+            <View style={cartS.walletStrip}>
+              <View
+                style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+              >
+                <Ionicons
+                  name="wallet-outline"
+                  size={12}
+                  color={canAfford ? T.green : T.orange}
+                />
+                <Text style={cartS.walletLabel}>Wallet</Text>
+              </View>
+              <Text
+                style={[
+                  cartS.walletBal,
+                  { color: canAfford ? T.green : T.orange },
+                ]}
+              >
+                ₹{walletBalance.toFixed(2)}
+              </Text>
             </View>
-          ) : (
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingBottom: 8 }}
-            >
+
+            <View style={cartS.divider} />
+
+            {cart.length === 0 ? (
+              <View style={cartS.empty}>
+                <Ionicons name="cart-outline" size={36} color={T.faint} />
+                <Text style={cartS.emptyTxt}>Cart is empty</Text>
+              </View>
+            ) : (
+              <View>
               {cart.map((item) => {
                 const theme = getCategoryTheme(item.product.category);
                 return (
@@ -2596,8 +2896,9 @@ function CartSheet({
                   </View>
                 );
               })}
-            </ScrollView>
-          )}
+              </View>
+            )}
+          </ScrollView>
 
           {cart.length > 0 && (
             <View style={cartS.footer}>
@@ -2613,7 +2914,13 @@ function CartSheet({
                   ₹{cartTotal.toFixed(2)}
                 </Text>
               </View>
-              {!canAfford && (
+              <PaymentMethodSelector
+                value={paymentMethod}
+                onChange={setPaymentMethod}
+                walletBalance={walletBalance}
+                total={cartTotal}
+              />
+              {paymentMethod === "wallet" && !canAfford && (
                 <View style={cartS.lowBal}>
                   <Ionicons name="warning-outline" size={11} color={T.orange} />
                   <Text style={cartS.lowBalTxt}>
@@ -2638,13 +2945,68 @@ function CartSheet({
                     ? "Placing Order…"
                     : `Place Order · ₹${cartTotal.toFixed(2)}`
                 }
-                onPress={onPlaceOrder}
+                onPress={() => onPlaceOrder(paymentMethod)}
                 loading={submitting}
-                disabled={!canAfford}
+                disabled={!canPlace}
               />
             </View>
           )}
         </Animated.View>
+        {addressPickerVisible && (
+          <View style={cartS.pickerOverlay}>
+            <View style={cartS.pickerSheet}>
+              <View style={cartS.pickerHeader}>
+                <Text style={cartS.pickerTitle}>Choose Delivery Address</Text>
+                <TouchableOpacity
+                  style={cartS.pickerClose}
+                  onPress={() => setAddressPickerVisible(false)}
+                >
+                  <Ionicons name="close" size={16} color={T.muted} />
+                </TouchableOpacity>
+              </View>
+              <ScrollView showsVerticalScrollIndicator={false}>
+                {addresses.map((address) => {
+                  const active = selectedAddress?.id === address.id;
+                  return (
+                    <TouchableOpacity
+                      key={address.id || formatDeliveryAddress(address)}
+                      style={[
+                        cartS.pickerAddress,
+                        active && cartS.pickerAddressActive,
+                      ]}
+                      onPress={() => {
+                        onSelectAddress(address);
+                        setAddressPickerVisible(false);
+                      }}
+                    >
+                      <View style={cartS.pickerAddressTop}>
+                        <Text style={cartS.pickerAddressLabel}>
+                          {String(address.label || "home").toUpperCase()}
+                        </Text>
+                        {active && (
+                          <Ionicons name="checkmark-circle" size={18} color={Colors.primary} />
+                        )}
+                      </View>
+                      <Text style={cartS.pickerAddressText}>
+                        {formatDeliveryAddress(address)}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+                <TouchableOpacity
+                  style={cartS.newAddressBtn}
+                  onPress={() => {
+                    setAddressPickerVisible(false);
+                    onAddAddress();
+                  }}
+                >
+                  <Ionicons name="add-circle-outline" size={18} color="#fff" />
+                  <Text style={cartS.newAddressText}>New Address</Text>
+                </TouchableOpacity>
+              </ScrollView>
+            </View>
+          </View>
+        )}
       </View>
     </Modal>
   );
@@ -2696,6 +3058,26 @@ const cartS = StyleSheet.create({
     paddingHorizontal: 5,
   },
   badgeTxt: { fontSize: 10, fontWeight: "800", color: "#fff" },
+  contentScroll: { flex: 1 },
+  contentScrollInner: { paddingBottom: 6 },
+  addressCard: {
+    minHeight: 38,
+    marginHorizontal: 16,
+    marginBottom: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.primary + "22",
+    backgroundColor: "#F8FBF7",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  changeAddressText: { fontSize: 10.5, fontWeight: "900", color: Colors.primary },
+  addressTypeText: { fontSize: 9.5, fontWeight: "900", color: Colors.primary },
+  addressText: { flex: 1, fontSize: 11.5, fontWeight: "700", color: T.text },
+  addressMissing: { flex: 1, fontSize: 11.5, fontWeight: "800", color: T.red },
   walletStrip: {
     flexDirection: "row",
     alignItems: "center",
@@ -2703,13 +3085,13 @@ const cartS = StyleSheet.create({
     backgroundColor: "#F7F6F4",
     borderRadius: T.radius.md,
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 8,
     marginHorizontal: 16,
-    marginBottom: 6,
+    marginBottom: 4,
   },
   walletLabel: { fontSize: 12, fontWeight: "600", color: T.muted },
   walletBal: { fontSize: 14, fontWeight: "800" },
-  divider: { height: 1, backgroundColor: T.border, marginVertical: 10 },
+  divider: { height: 1, backgroundColor: T.border, marginVertical: 8 },
   item: {
     flexDirection: "row",
     alignItems: "center",
@@ -2782,6 +3164,65 @@ const cartS = StyleSheet.create({
     justifyContent: "center",
   },
   emptyTxt: { fontSize: 14, fontWeight: "600", color: T.faint },
+  pickerOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.28)",
+    justifyContent: "flex-end",
+  },
+  pickerSheet: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    padding: 16,
+    maxHeight: "58%",
+  },
+  pickerHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  pickerTitle: { fontSize: 16, fontWeight: "900", color: T.text },
+  pickerClose: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: "#F5F5F3",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pickerAddress: {
+    borderWidth: 1,
+    borderColor: T.border,
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 9,
+    backgroundColor: "#fff",
+  },
+  pickerAddressActive: {
+    borderColor: Colors.primary,
+    backgroundColor: Colors.primary + "08",
+  },
+  pickerAddressTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 5,
+  },
+  pickerAddressLabel: { fontSize: 11, fontWeight: "900", color: Colors.primary },
+  pickerAddressText: { fontSize: 12, fontWeight: "700", color: T.text, lineHeight: 17 },
+  newAddressBtn: {
+    minHeight: 44,
+    borderRadius: 14,
+    backgroundColor: Colors.primary,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  newAddressText: { fontSize: 13, fontWeight: "900", color: "#fff" },
 });
 
 // ─── Mini Cart Pill ──────────────────────────────────────────────────────────
@@ -2928,7 +3369,7 @@ const pillS = StyleSheet.create({
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 export default function CatalogScreen() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const [linkedAdminId, setLinkedAdminId] = useState<string | null>(null);
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
@@ -2961,6 +3402,7 @@ export default function CatalogScreen() {
   const [toastIsSub, setToastIsSub] = useState(false);
   const [activeNewSlide, setActiveNewSlide] = useState(0);
   const [catalogSlides, setCatalogSlides] = useState<CatalogSlide[]>([]);
+  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isFocused = useIsFocused();
   const { addToCartProduct, addToCartQty } = useLocalSearchParams<{
@@ -2973,6 +3415,57 @@ export default function CatalogScreen() {
     d.setDate(d.getDate() + 1);
     return dateToString(d);
   }, []);
+
+  const addressBook = useMemo(() => {
+    const saved = Array.isArray((user as any)?.addresses)
+      ? [...((user as any).addresses || [])]
+      : [];
+    if (!saved.length && user?.address) {
+      saved.push({
+        id: (user.address as any).id || "addr_default",
+        label: (user.address as any).label || "home",
+        is_default: true,
+        ...(user.address as any),
+      });
+    }
+    return saved.filter((address) => hasCompleteDeliveryAddress(address));
+  }, [user]);
+
+  const selectedAddress = useMemo(() => {
+    if (!addressBook.length) return user?.address || null;
+    return (
+      addressBook.find((address) => address.id === selectedAddressId) ||
+      addressBook.find((address) => address.is_default) ||
+      addressBook[0]
+    );
+  }, [addressBook, selectedAddressId, user?.address]);
+
+  useEffect(() => {
+    if (!selectedAddressId && selectedAddress?.id) {
+      setSelectedAddressId(selectedAddress.id);
+    }
+  }, [selectedAddress?.id, selectedAddressId]);
+
+  const handleSelectDeliveryAddress = async (address: any) => {
+    const nextBook = addressBook.map((item) => ({
+      ...item,
+      is_default: item.id === address.id,
+    }));
+    setSelectedAddressId(address.id);
+    updateUser({
+      address,
+      addresses: nextBook,
+    } as any);
+    try {
+      await api.updateProfile({
+        address: { ...address, is_default: true },
+        addresses: nextBook,
+      });
+    } catch {
+      // The local selection still keeps checkout usable; backend validation
+      // will catch any stale profile update before payment starts.
+    }
+  };
 
   const fetchSubs = useCallback(async () => {
     try {
@@ -3207,16 +3700,43 @@ export default function CatalogScreen() {
   const cartTotal = cart.reduce((s, i) => s + i.product.price * i.quantity, 0);
 
   // ── FIXED: All cart items go as ONE buy_once subscription
-  const handlePlaceOrder = async () => {
-    if (walletBalance < cartTotal) {
+  const handlePlaceOrder = async (paymentMethod: PaymentMethod) => {
+    if (!hasCompleteDeliveryAddress(selectedAddress)) {
+      Alert.alert(
+        "Delivery address required",
+        "Please add your complete delivery address before choosing payment.",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Add Address",
+            onPress: () => {
+              setCartVisible(false);
+              openAddressRequired(router);
+            },
+          },
+        ],
+      );
+      return;
+    }
+    if (selectedAddress?.id && selectedAddress.id !== (user?.address as any)?.id) {
+      await handleSelectDeliveryAddress(selectedAddress);
+    }
+    if (paymentMethod === "wallet" && walletBalance < cartTotal) {
       setWalletErrorVisible(true);
+      return;
+    }
+    if (paymentMethod === "online" && !canUseRazorpayNativeModule()) {
+      Alert.alert(
+        "Development build needed",
+        "Online payments cannot run inside Expo Go. Please use the installed development build, or choose another payment method.",
+      );
       return;
     }
     setSubmitting(true);
     const placedCount = cart.length;
     try {
-      // Single subscription with all cart items bundled together
-      await api.createSubscription({
+      let paymentId: string | undefined;
+      const payload: Parameters<typeof api.createSubscription>[0] = {
         items: cart.map((item) => ({
           product_id: item.product.id,
           quantity: item.quantity,
@@ -3228,20 +3748,84 @@ export default function CatalogScreen() {
         start_date: tomorrow,
         end_date: tomorrow,
         delivery_slot: "morning",
-      });
+        payment_method: paymentMethod,
+      };
+      // Single subscription with all cart items bundled together
+      if (paymentMethod === "online") {
+        const RazorpayCheckout = require("react-native-razorpay").default;
+        const order = await api.createSubscriptionRazorpayOrder(payload);
+        const checkoutResult = await RazorpayCheckout.open({
+          key: order.key_id,
+          amount: order.amount,
+          currency: order.currency || "INR",
+          name: order.name || "Gau Satva",
+          description: order.description || "Order payment",
+          order_id: order.order_id,
+          prefill: {
+            name: user?.name || "Gau Satva Customer",
+            email: user?.email || "",
+            contact: getRazorpayContact(user?.phone),
+          },
+          method: { upi: true, card: true, netbanking: true, wallet: true },
+          theme: { color: Colors.primary },
+          retry: { enabled: true, max_count: 1 },
+        });
+        await api.verifySubscriptionRazorpayPayment({
+          razorpay_order_id: checkoutResult.razorpay_order_id,
+          razorpay_payment_id: checkoutResult.razorpay_payment_id,
+          razorpay_signature: checkoutResult.razorpay_signature,
+        });
+        paymentId = checkoutResult.razorpay_payment_id;
+      } else {
+        await api.createSubscription(payload);
+      }
 
       setSuccessItemCount(placedCount);
       setCart([]);
       setCartVisible(false);
       setSuccessIsSub(false);
-      setSuccessVisible(true);
       api
         .getWallet()
         .then((w) => setWalletBalance(w.balance ?? 0))
         .catch(() => { });
       await fetchData();
+      router.push({
+        pathname: "/(customer)/order-success",
+        params: {
+          amount: String(cartTotal),
+          items: String(placedCount),
+          method: paymentMethod,
+          type: "order",
+          ...(paymentId ? { paymentId } : {}),
+        },
+      } as any);
     } catch (e: any) {
-      alert(e?.message || "Order failed. Please try again.");
+      if (isAddressRequiredError(e)) {
+        Alert.alert(
+          "Delivery address required",
+          "Please add your complete delivery address before choosing payment.",
+          [
+            { text: "Cancel", style: "cancel" },
+            {
+              text: "Add Address",
+              onPress: () => {
+                setCartVisible(false);
+                openAddressRequired(router);
+              },
+            },
+          ],
+        );
+        return;
+      }
+      setCartVisible(false);
+      router.push({
+        pathname: "/(customer)/order-failed",
+        params: {
+          amount: String(cartTotal),
+          method: paymentMethod,
+          reason: e?.message || "Order failed. Please try again.",
+        },
+      } as any);
     } finally {
       setSubmitting(false);
     }
@@ -3476,9 +4060,6 @@ export default function CatalogScreen() {
           await fetchSubs();
           const wallet = await api.getWallet();
           setWalletBalance(wallet.balance ?? 0);
-          setSuccessIsSub(true);
-          setSuccessItemCount(1);
-          setSuccessVisible(true);
         }}
         onToast={showToast}
       />
@@ -3487,6 +4068,13 @@ export default function CatalogScreen() {
         visible={cartVisible}
         cart={cart}
         walletBalance={walletBalance}
+        selectedAddress={selectedAddress}
+        addresses={addressBook}
+        onSelectAddress={handleSelectDeliveryAddress}
+        onAddAddress={() => {
+          setCartVisible(false);
+          openAddressRequired(router);
+        }}
         onClose={() => setCartVisible(false)}
         onRemove={handleRemove}
         onUpdateQty={handleUpdateQty}

@@ -12,6 +12,7 @@ interface User {
   phone?: string;
   role: 'customer' | 'delivery_partner' | 'admin';
   address?: any;
+  addresses?: any[];
   is_active: boolean;
   zone?: string;
   referral_admin_id?: string;
@@ -152,8 +153,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     notificationService.stopPolling(); // ← NEW: logout pe polling band karo
 
-    await api.logout();
+    try {
+      if (typeof (api as any).logout === "function") {
+        await (api as any).logout();
+      }
+    } catch (error) {
+      console.log("Logout API failed, clearing local session:", error);
+    }
     await AsyncStorage.multiRemove(['access_token', 'worker_token', 'worker_data']);
+    api.setToken(null);
 
     setToken(null);
     setUser(null);

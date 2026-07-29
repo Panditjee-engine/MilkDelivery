@@ -40,6 +40,15 @@ const ITEMS = [
     gradient: ["#0f1f3d", "#1a4a8a"] as const,
     accent: "#7ca9d4",
   },
+  {
+    id: "delivery-partners",
+    title: "Delivery Partner",
+    subtitle: "Add riders and assign customer orders",
+    route: "/(admin)/gausevak/delivery-partners",
+    icon: "bicycle",
+    gradient: ["#3a2016", "#8f4f2a"] as const,
+    accent: "#f7b267",
+  },
 ];
 
 export default function UserManagementScreen() {
@@ -55,7 +64,7 @@ export default function UserManagementScreen() {
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>User Management</Text>
-          <Text style={styles.subtitle}>Manage workers and veterinary access in one place</Text>
+          <Text style={styles.subtitle}>Manage workers, veterinary and delivery access in one place</Text>
         </View>
       </View>
 
@@ -95,7 +104,7 @@ export default function UserManagementScreen() {
         <View style={styles.infoCard}>
           <Ionicons name="information-circle-outline" size={18} color={C.textMuted} />
           <Text style={styles.infoText}>
-            Use Workers for staff management and Veterinary for vet staff and clinical records.
+            Delivery partners added here can login with their credentials and can be assigned farm orders.
           </Text>
         </View>
       </ScrollView>
