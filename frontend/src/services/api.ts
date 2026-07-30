@@ -2,6 +2,10 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const API_BASE = process.env.EXPO_PUBLIC_BACKEND_URL || "";
 
+export function getApiBaseUrl() {
+  return API_BASE;
+}
+
 export type PaymentMethod = "cash" | "upi";
 
 type ApiRequestOptions = RequestInit & {

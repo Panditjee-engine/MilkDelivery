@@ -15,7 +15,7 @@ import {
   ActivityIndicator,
   Image,
 } from "react-native";
-import { api, BusinessLocation, BusinessLocationCreate } from "../../src/services/api";
+import { api, BusinessLocation, BusinessLocationCreate, getApiBaseUrl } from "../../src/services/api";
 import QRCode from "react-native-qrcode-svg";
 import * as Sharing from "expo-sharing";
 import * as ImagePicker from "expo-image-picker";
@@ -361,7 +361,7 @@ function ShareModal({
     try {
       const name = adminUser?.name || "GAU";
       const adminId = String(adminUser?.id || "000");
-      const universalLink = `https://play.google.com/store/apps/details?id=com.badal_12.frontend&referrer=admin_id%3D${adminId}`;
+        const universalLink = `${getApiBaseUrl()}/api/admin/store-redirect?ref=${adminId}`;
       setQrData({
         admin_id: adminId,
         admin_name: name,
