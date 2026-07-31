@@ -51,6 +51,12 @@ const REGISTER_STEPS: Array<{ key: Step; label: string }> = [
   { key: "otp", label: "OTP" },
   { key: "details", label: "Details" },
 ];
+
+const NAME_LABELS: Record<Role, string> = {
+  customer: "Full Name",
+  delivery_partner: "Captain Name",
+  admin: "Business Name",
+};
 // ── Validation helpers
 
 /** Indian mobile: 10 digits, starts 6-9, not all same digit */
@@ -1439,7 +1445,7 @@ export default function RegisterScreen() {
                   )}
 
                   <FloatInput
-                    label="Business Name"
+                    label={NAME_LABELS[role]}
                     value={name}
                     onChangeText={handleNameChange}
                     error={nameErr}

@@ -107,6 +107,12 @@ export default function AdminLayout() {
             href: null,
           }}
         />
+        <Tabs.Screen
+          name="bankaccnt"
+          options={{
+            href: null,
+          }}
+        />
       </Tabs>
     </NotificationProvider>
   );

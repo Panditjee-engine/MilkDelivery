@@ -7,6 +7,7 @@ import { useAuth } from '../../src/contexts/AuthContext';
 import { api } from '../../src/services/api';
 import { Colors } from '../../src/constants/colors';
 import LoadingScreen from '../../src/components/LoadingScreen';
+import { formatDeliveryAddress } from '../../src/utils/address';
 
 export default function DeliveryProfileScreen() {
   const { user, logout } = useAuth();
@@ -98,6 +99,12 @@ export default function DeliveryProfileScreen() {
   const displayUser = profileData || user;
   const completedOrders = myOrders.filter((o) => o.status === 'delivered');
   const totalCompleted = completedOrders.length;
+  const savedAddresses = Array.isArray(displayUser?.addresses) ? displayUser.addresses : [];
+  const defaultAddress =
+    savedAddresses.find((address: any) => address?.is_default) ||
+    savedAddresses[0] ||
+    displayUser?.address ||
+    null;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -173,6 +180,36 @@ export default function DeliveryProfileScreen() {
               </View>
             </View>
           </View>
+        </View>
+
+        {/* Address Management */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Address</Text>
+          <TouchableOpacity
+            style={styles.addressButtonCard}
+            activeOpacity={0.88}
+            onPress={() => router.push('/address-book' as any)}
+          >
+            <View style={styles.addressButtonIcon}>
+              <Ionicons name="location" size={22} color={Colors.primary} />
+            </View>
+            <View style={styles.addressButtonContent}>
+              <View style={styles.addressButtonTop}>
+                <Text style={styles.addressButtonTitle}>Manage Address</Text>
+                <View style={styles.addressButtonPill}>
+                  <Text style={styles.addressButtonPillText}>
+                    {savedAddresses.length ? `${savedAddresses.length} Saved` : 'Add New'}
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.addressButtonText} numberOfLines={2}>
+                {defaultAddress
+                  ? formatDeliveryAddress(defaultAddress)
+                  : 'Add, edit, update or delete your delivery address'}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={Colors.primary} />
+          </TouchableOpacity>
         </View>
 
         {/* Recent Completed Orders */}
@@ -544,6 +581,62 @@ const styles = StyleSheet.create({
   infoDivider: {
     height: 1,
     backgroundColor: '#F5F5F5',
+  },
+  addressButtonCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#DDEFE3',
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
+  addressButtonIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: '#EEF8F1',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  addressButtonContent: {
+    flex: 1,
+  },
+  addressButtonTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginBottom: 5,
+  },
+  addressButtonTitle: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#1A1A1A',
+  },
+  addressButtonPill: {
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: '#ECFDF5',
+  },
+  addressButtonPillText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: Colors.primary,
+  },
+  addressButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6B7280',
+    lineHeight: 17,
   },
 
   ordersContainer: {

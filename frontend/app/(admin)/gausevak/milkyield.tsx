@@ -791,6 +791,74 @@ function AutoRefreshDot({ active }: { active: boolean }) {
   );
 }
 
+// ─── ListHeader — everything that used to sit fixed above the FlatList now
+// scrolls together WITH the list, since it's rendered as ListHeaderComponent.
+function ListHeader({
+  selectedDate,
+  onDateChange,
+  summary,
+  search,
+  onSearchChange,
+  sortBy,
+  onSortChange,
+  filteredCount,
+}: {
+  selectedDate: string;
+  onDateChange: (d: string) => void;
+  summary: Summary;
+  search: string;
+  onSearchChange: (t: string) => void;
+  sortBy: "name" | "total" | "morning" | "evening";
+  onSortChange: (v: "name" | "total" | "morning" | "evening") => void;
+  filteredCount: number;
+}) {
+  return (
+    <View>
+      <DateFilterBar selected={selectedDate} onChange={onDateChange} />
+
+      <SummaryBar summary={summary} />
+
+      <View style={s.searchWrap}>
+        <Ionicons name="search-outline" size={15} color="#9ca3af" />
+        <TextInput
+          style={s.searchInput}
+          placeholder="Search cow name or tag..."
+          placeholderTextColor="#d1d5db"
+          value={search}
+          onChangeText={onSearchChange}
+        />
+        {search.length > 0 && (
+          <TouchableOpacity onPress={() => onSearchChange("")}>
+            <Ionicons name="close-circle" size={15} color="#9ca3af" />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      <View style={s.sortRow}>
+        <Text style={s.sortLabel}>Sort:</Text>
+        {(["name", "total", "morning", "evening"] as const).map((opt) => (
+          <TouchableOpacity
+            key={opt}
+            onPress={() => onSortChange(opt)}
+            style={[s.sortChip, sortBy === opt && s.sortChipActive]}
+          >
+            <Text
+              style={[s.sortChipText, sortBy === opt && s.sortChipTextActive]}
+            >
+              {opt.charAt(0).toUpperCase() + opt.slice(1)}
+            </Text>
+          </TouchableOpacity>
+        ))}
+        <Text style={s.cowCount}>{filteredCount} cows</Text>
+      </View>
+
+      {filteredCount > 0 && (
+        <Text style={s.expandHint}>Tap a card to record milk</Text>
+      )}
+    </View>
+  );
+}
+
 // ─── Main Screen
 export default function MilkYieldScreen() {
   const router = useRouter();
@@ -951,6 +1019,7 @@ export default function MilkYieldScreen() {
     <View style={[s.screen, { paddingTop: insets.top }]}>
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
 
+      {/* This top bar is the ONLY piece that stays fixed/pinned */}
       <View style={s.header}>
         <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
           <Ionicons name="arrow-back" size={20} color="#111827" />
@@ -973,127 +1042,88 @@ export default function MilkYieldScreen() {
         </TouchableOpacity>
       </View>
 
-      <DateFilterBar selected={selectedDate} onChange={setSelectedDate} />
-
+      {/* Everything below (date filter, stats, search, sort) now lives
+          inside ListHeaderComponent, so it scrolls away with the list */}
       {loading ? (
         <View style={s.loadingWrap}>
           <ActivityIndicator size="large" color="#16a34a" />
           <Text style={s.loadingText}>Loading milk data...</Text>
         </View>
       ) : (
-        <>
-          <SummaryBar summary={summary} />
-
-          <View style={s.searchWrap}>
-            <Ionicons name="search-outline" size={15} color="#9ca3af" />
-            <TextInput
-              style={s.searchInput}
-              placeholder="Search cow name or tag..."
-              placeholderTextColor="#d1d5db"
-              value={search}
-              onChangeText={setSearch}
+        <FlatList
+          data={filtered}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={s.listContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor="#16a34a"
             />
-            {search.length > 0 && (
-              <TouchableOpacity onPress={() => setSearch("")}>
-                <Ionicons name="close-circle" size={15} color="#9ca3af" />
-              </TouchableOpacity>
-            )}
-          </View>
-
-          <View style={s.sortRow}>
-            <Text style={s.sortLabel}>Sort:</Text>
-            {(["name", "total", "morning", "evening"] as const).map((opt) => (
-              <TouchableOpacity
-                key={opt}
-                onPress={() => setSortBy(opt)}
-                style={[s.sortChip, sortBy === opt && s.sortChipActive]}
-              >
-                <Text
-                  style={[
-                    s.sortChipText,
-                    sortBy === opt && s.sortChipTextActive,
-                  ]}
-                >
-                  {opt.charAt(0).toUpperCase() + opt.slice(1)}
-                </Text>
-              </TouchableOpacity>
-            ))}
-            <Text style={s.cowCount}>{filtered.length} cows</Text>
-          </View>
-
-          {filtered.length > 0 && (
-            <Text style={s.expandHint}>Tap a card to record milk</Text>
+          }
+          ListHeaderComponent={
+            <ListHeader
+              selectedDate={selectedDate}
+              onDateChange={setSelectedDate}
+              summary={summary}
+              search={search}
+              onSearchChange={setSearch}
+              sortBy={sortBy}
+              onSortChange={setSortBy}
+              filteredCount={filtered.length}
+            />
+          }
+          renderItem={({ item, index }) => (
+            <MilkCard
+              item={item}
+              index={index}
+              selectedDate={selectedDate}
+              onSetCapacity={setModalCow}
+              onMilkSaved={handleMilkSaved}
+            />
           )}
-
-          <FlatList
-            data={filtered}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={s.listContent}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                tintColor="#16a34a"
-              />
-            }
-            renderItem={({ item, index }) => (
-              <MilkCard
-                item={item}
-                index={index}
-                selectedDate={selectedDate}
-                onSetCapacity={setModalCow}
-                onMilkSaved={handleMilkSaved}
-              />
-            )}
-            ListEmptyComponent={
-              <View style={s.empty}>
-                <Ionicons name="water-outline" size={40} color="#d1d5db" />
-                <Text style={s.emptyText}>
-                  {milkRows.length === 0
-                    ? "No milk-active cows found.\nEnable milk recording in cattle settings."
-                    : "No records match your search."}
-                </Text>
-              </View>
-            }
-            ListFooterComponent={
-              <>
-                <TouchableOpacity
-                  style={s.watchMoreBtn}
-                  onPress={() => setShowRedirect(true)}
-                  activeOpacity={0.85}
-                >
-                  <View style={s.watchMoreInner}>
-                    <View style={s.watchMoreLeft}>
-                      <Ionicons
-                        name="stats-chart-outline"
-                        size={20}
-                        color="#fff"
-                      />
-                      <View style={{ marginLeft: 10 }}>
-                        <Text style={s.watchMoreTitle}>
-                          View More in Cockpit
-                        </Text>
-                        <Text style={s.watchMoreSub}>
-                          Full analytics & historical data
-                        </Text>
-                      </View>
-                    </View>
-                    <View style={s.watchMoreArrow}>
-                      <Ionicons
-                        name="arrow-forward"
-                        size={16}
-                        color="#16a34a"
-                      />
+          ListEmptyComponent={
+            <View style={s.empty}>
+              <Ionicons name="water-outline" size={40} color="#d1d5db" />
+              <Text style={s.emptyText}>
+                {milkRows.length === 0
+                  ? "No milk-active cows found.\nEnable milk recording in cattle settings."
+                  : "No records match your search."}
+              </Text>
+            </View>
+          }
+          ListFooterComponent={
+            <>
+              <TouchableOpacity
+                style={s.watchMoreBtn}
+                onPress={() => setShowRedirect(true)}
+                activeOpacity={0.85}
+              >
+                <View style={s.watchMoreInner}>
+                  <View style={s.watchMoreLeft}>
+                    <Ionicons
+                      name="stats-chart-outline"
+                      size={20}
+                      color="#fff"
+                    />
+                    <View style={{ marginLeft: 10 }}>
+                      <Text style={s.watchMoreTitle}>View More in Cockpit</Text>
+                      <Text style={s.watchMoreSub}>
+                        Full analytics & historical data
+                      </Text>
                     </View>
                   </View>
-                </TouchableOpacity>
-                <View style={{ height: 40 }} />
-              </>
-            }
-          />
-        </>
+                  <View style={s.watchMoreArrow}>
+                    <Ionicons name="arrow-forward" size={16} color="#16a34a" />
+                  </View>
+                </View>
+              </TouchableOpacity>
+              <View style={{ height: 40 }} />
+            </>
+          }
+        />
       )}
 
       <CapacityModal

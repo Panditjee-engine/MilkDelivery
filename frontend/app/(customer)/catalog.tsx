@@ -112,9 +112,8 @@ function getRazorpayContact(phone?: string): string | undefined {
 
 function openAddressRequired(router: ReturnType<typeof useRouter>) {
   router.push({
-    pathname: "/(customer)/profile",
+    pathname: "/address-book",
     params: {
-      openAddress: "1",
       addressRequired: "1",
       returnTo: "catalog",
     },
@@ -2787,7 +2786,7 @@ function CartSheet({
             <TouchableOpacity
               style={cartS.addressCard}
               activeOpacity={0.86}
-              onPress={() => setAddressPickerVisible(true)}
+              onPress={onAddAddress}
             >
               <Ionicons name="location-outline" size={14} color={Colors.primary} />
               {selectedAddress ? (
@@ -2805,7 +2804,7 @@ function CartSheet({
                 </Text>
               )}
               <Text style={cartS.changeAddressText}>
-                {selectedAddress ? "Change" : "Add"}
+                {selectedAddress ? "Manage" : "Add"}
               </Text>
             </TouchableOpacity>
 

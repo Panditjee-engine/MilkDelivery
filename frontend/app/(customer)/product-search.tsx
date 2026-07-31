@@ -254,9 +254,8 @@ export default function ProductSearchScreen() {
           onPress: () => {
             setSelectedProduct(null);
             router.push({
-              pathname: "/(customer)/profile",
+              pathname: "/address-book",
               params: {
-                openAddress: "1",
                 addressRequired: "1",
                 returnTo: "catalog",
               },
@@ -502,9 +501,8 @@ export default function ProductSearchScreen() {
                     onPress={() => {
                       setSelectedProduct(null);
                       router.push({
-                        pathname: "/(customer)/profile",
+                        pathname: "/address-book",
                         params: {
-                          openAddress: "1",
                           addressRequired: "1",
                           returnTo: "catalog",
                         },
