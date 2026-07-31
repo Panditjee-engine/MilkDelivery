@@ -145,9 +145,8 @@ export default function ProductDetailsScreen() {
           onPress: () => {
             setBuySheetVisible(false);
             router.push({
-              pathname: "/(customer)/profile",
+              pathname: "/address-book",
               params: {
-                openAddress: "1",
                 addressRequired: "1",
                 returnTo: "catalog",
               },
@@ -406,9 +405,8 @@ export default function ProductDetailsScreen() {
                       setBuySheetVisible(false);
                       if (feedbackType === "address") {
                         router.push({
-                          pathname: "/(customer)/profile",
+                          pathname: "/address-book",
                           params: {
-                            openAddress: "1",
                             addressRequired: "1",
                             returnTo: "catalog",
                           },

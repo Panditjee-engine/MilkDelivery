@@ -26,24 +26,20 @@ export function hasCompleteDeliveryAddress(address?: DeliveryAddress | string | 
     return true;
   }
 
-  const hasArea = Boolean(clean(address.area));
+  const hasArea = Boolean(clean(address.area) || clean(address.full_address));
   const hasCity = Boolean(clean(address.city));
-  const hasPin = Boolean(clean(address.pincode));
 
-  return hasArea && hasCity && hasPin;
+  return hasArea && hasCity;
 }
 
 export function formatDeliveryAddress(address?: DeliveryAddress | string | null) {
   if (!address) return "";
   if (typeof address === "string") return clean(address);
   return [
-    address.flat,
-    address.floor ? `Floor ${address.floor}` : "",
-    address.tower,
+    address.full_address,
     address.area,
     address.city,
     address.pincode,
-    address.landmark ? `Near ${address.landmark}` : "",
   ]
     .map(clean)
     .filter(Boolean)

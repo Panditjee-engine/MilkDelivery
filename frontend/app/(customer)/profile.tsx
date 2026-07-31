@@ -369,13 +369,14 @@ export default function ProfileScreen() {
 
   useEffect(() => {
     if (!isFocused || params.openAddress !== "1") return;
-    const next = normalizeAddressBook(user);
-    setAddressBook(next);
-    const selected = next.find((address) => address.is_default) || next[0] || emptyAddress();
-    setEditingAddressId(selected.id);
-    setEditAddress(selected);
-    setEditModal(true);
-  }, [isFocused, params.openAddress, user?.address]);
+    router.replace({
+      pathname: "/address-book",
+      params: {
+        addressRequired: params.addressRequired,
+        returnTo: params.returnTo,
+      },
+    } as any);
+  }, [isFocused, params.openAddress, params.addressRequired, params.returnTo, user?.address]);
 
   useEffect(() => {
     if (!isFocused) return;
@@ -464,6 +465,30 @@ export default function ProfileScreen() {
   const handleDeleteAccount = () => {
     setDeletePassword("");
     setDeleteModal(true);
+  };
+
+  const handleSaveBasicProfile = async () => {
+    if (!editName.trim()) {
+      showToast("Please enter your name.", "error");
+      return;
+    }
+    setSaving(true);
+    try {
+      await api.updateProfile({
+        name: editName.trim(),
+        phone: editPhone.trim(),
+      });
+      updateUser({
+        name: editName.trim(),
+        phone: editPhone.trim(),
+      } as any);
+      setEditModal(false);
+      showToast("Profile updated successfully", "success");
+    } catch (error: any) {
+      showToast(error?.message || "Could not update profile", "error");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const confirmDeleteAccount = async () => {
@@ -788,8 +813,11 @@ export default function ProfileScreen() {
               <Ionicons name="location" size={17} color="#4F7EFF" />
             </View>
             <Text style={styles.cardTitle}>Delivery Address</Text>
-            <TouchableOpacity style={styles.addIconBtn} onPress={openNewAddress}>
-              <Ionicons name="add" size={17} color={Colors.primary} />
+            <TouchableOpacity
+              style={styles.addIconBtn}
+              onPress={() => router.push("/address-book" as any)}
+            >
+              <Ionicons name="chevron-forward" size={17} color={Colors.primary} />
             </TouchableOpacity>
           </View>
           {addressBook.length > 0 ? (
@@ -799,7 +827,7 @@ export default function ProfileScreen() {
                   key={address.id}
                   style={styles.savedAddressCard}
                   activeOpacity={0.85}
-                  onPress={() => openEditAddress(address)}
+                  onPress={() => router.push("/address-book" as any)}
                 >
                   <View style={styles.addressTopRow}>
                     <View style={styles.addressTypeBadge}>
@@ -812,31 +840,28 @@ export default function ProfileScreen() {
                         {String(address?.label || "home").toUpperCase()}
                       </Text>
                     </View>
-                    <View style={styles.addressActions}>
-                      {address?.is_default && (
-                        <View style={styles.defaultBadge}>
-                          <Text style={styles.defaultBadgeText}>Default</Text>
-                        </View>
-                      )}
-                      <TouchableOpacity
-                        style={styles.addressDeleteBtn}
-                        onPress={() => handleDeleteAddress(address)}
-                      >
-                        <Ionicons name="trash-outline" size={14} color="#dc2626" />
-                      </TouchableOpacity>
-                    </View>
+                    {address?.is_default && (
+                      <View style={styles.defaultBadge}>
+                        <Text style={styles.defaultBadgeText}>Default</Text>
+                      </View>
+                    )}
                   </View>
                   <Text style={styles.savedAddressText}>
                     {formatDeliveryAddress(address)}
                   </Text>
-                  <Text style={styles.savedAddressAction}>Tap to edit address</Text>
+                  <Text style={styles.savedAddressAction}>Tap to manage address</Text>
                 </TouchableOpacity>
               ))}
             </View>
           ) : (
             <TouchableOpacity
               style={styles.emptyAddress}
-              onPress={openNewAddress}
+              onPress={() =>
+                router.push({
+                  pathname: "/address-book",
+                  params: { addressRequired: "1" },
+                } as any)
+              }
             >
               <Ionicons name="add-circle-outline" size={20} color={Colors.primary} />
               <Text style={styles.emptyAddressText}>
@@ -1115,9 +1140,7 @@ export default function ProfileScreen() {
           <View style={styles.modalSheet}>
             <View style={styles.dragHandle} />
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                {editingAddressId ? "Edit Address" : "New Address"}
-              </Text>
+              <Text style={styles.modalTitle}>Edit Profile</Text>
               <TouchableOpacity
                 style={styles.closeBtn}
                 onPress={() => setEditModal(false)}
@@ -1154,108 +1177,9 @@ export default function ProfileScreen() {
                 placeholder="Phone number"
                 keyboardType="phone-pad"
               />
-              <View style={styles.profileDivider} />
-              <Text style={styles.addressSectionLabel}>Delivery Address</Text>
-              <View style={styles.addressTypeRow}>
-                {[
-                  { key: "home", label: "Home", icon: "home-outline" },
-                  { key: "work", label: "Work", icon: "briefcase-outline" },
-                  { key: "other", label: "Other", icon: "location-outline" },
-                ].map((item) => {
-                  const active = (editAddress.label || "home") === item.key;
-                  return (
-                    <TouchableOpacity
-                      key={item.key}
-                      style={[
-                        styles.addressTypeChip,
-                        active && styles.addressTypeChipActive,
-                      ]}
-                      onPress={() => setEditAddress({ ...editAddress, label: item.key })}
-                    >
-                      <Ionicons
-                        name={item.icon as any}
-                        size={14}
-                        color={active ? "#fff" : Colors.primary}
-                      />
-                      <Text
-                        style={[
-                          styles.addressTypeChipText,
-                          active && styles.addressTypeChipTextActive,
-                        ]}
-                      >
-                        {item.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-              <Input
-                label="Flat / House Number"
-                value={editAddress.flat || ""}
-                onChangeText={(t) => setEditAddress({ ...editAddress, flat: t })}
-                placeholder="Flat 204, House 12"
-              />
-              <Input
-                label="Tower / Building"
-                value={editAddress.tower || ""}
-                onChangeText={(t) => setEditAddress({ ...editAddress, tower: t })}
-                placeholder="Tower name or number"
-              />
-              <Input
-                label="Area / Society*"
-                value={editAddress.area || ""}
-                onChangeText={(t) => setEditAddress({ ...editAddress, area: t })}
-                placeholder="Society, colony or area"
-              />
-              <Input
-                label="Floor"
-                value={editAddress.floor || ""}
-                onChangeText={(t) => setEditAddress({ ...editAddress, floor: t })}
-                placeholder="Floor number"
-              />
-              <Input
-                label="City*"
-                value={editAddress.city || ""}
-                onChangeText={(t) => setEditAddress({ ...editAddress, city: t })}
-                placeholder="City"
-              />
-              <Input
-                label="Pincode*"
-                value={editAddress.pincode || ""}
-                onChangeText={(t) => setEditAddress({ ...editAddress, pincode: t.replace(/\D/g, "").slice(0, 6) })}
-                placeholder="6 digit pincode"
-                keyboardType="number-pad"
-              />
-              <Input
-                label="Landmark"
-                value={editAddress.landmark || ""}
-                onChangeText={(t) => setEditAddress({ ...editAddress, landmark: t })}
-                placeholder="Nearby landmark"
-              />
-              <TouchableOpacity
-                style={styles.defaultAddressRow}
-                onPress={() =>
-                  setEditAddress({
-                    ...editAddress,
-                    is_default: true,
-                  })
-                }
-              >
-                <View
-                  style={[
-                    styles.defaultCheck,
-                    editAddress.is_default !== false && styles.defaultCheckActive,
-                  ]}
-                >
-                  {editAddress.is_default !== false && (
-                    <Ionicons name="checkmark" size={13} color="#fff" />
-                  )}
-                </View>
-                <Text style={styles.defaultAddressText}>Use as default delivery address</Text>
-              </TouchableOpacity>
               <Button
-                title={editingAddressId ? "Save Address" : "Add Address"}
-                onPress={handleSaveProfile}
+                title="Save Changes"
+                onPress={handleSaveBasicProfile}
                 loading={saving}
                 style={{ marginTop: 8, marginBottom: 20 }}
               />
