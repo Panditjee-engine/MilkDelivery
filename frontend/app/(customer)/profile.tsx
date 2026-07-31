@@ -1202,7 +1202,7 @@ export default function ProfileScreen() {
                 placeholder="Tower name or number"
               />
               <Input
-                label="Area / Society"
+                label="Area / Society*"
                 value={editAddress.area || ""}
                 onChangeText={(t) => setEditAddress({ ...editAddress, area: t })}
                 placeholder="Society, colony or area"
@@ -1214,13 +1214,13 @@ export default function ProfileScreen() {
                 placeholder="Floor number"
               />
               <Input
-                label="City"
+                label="City*"
                 value={editAddress.city || ""}
                 onChangeText={(t) => setEditAddress({ ...editAddress, city: t })}
                 placeholder="City"
               />
               <Input
-                label="Pincode"
+                label="Pincode*"
                 value={editAddress.pincode || ""}
                 onChangeText={(t) => setEditAddress({ ...editAddress, pincode: t.replace(/\D/g, "").slice(0, 6) })}
                 placeholder="6 digit pincode"

@@ -16,14 +16,21 @@ const clean = (value: unknown) =>
 
 export function hasCompleteDeliveryAddress(address?: DeliveryAddress | string | null) {
   if (!address) return false;
-  if (typeof address === "string") return clean(address).length > 0;
-  if (clean(address.full_address)) return true;
 
-  const hasHome = Boolean(clean(address.flat) || clean((address as any).house) || clean((address as any).house_no));
-  const hasArea = Boolean(clean(address.tower) || clean(address.area));
+  if (typeof address === "string") {
+    return clean(address).length > 0;
+  }
+
+  // If full address is entered, it's valid
+  if (clean(address.full_address)) {
+    return true;
+  }
+
+  const hasArea = Boolean(clean(address.area));
   const hasCity = Boolean(clean(address.city));
-  const hasPin = Boolean(clean(address.pincode) || clean((address as any).pin_code) || clean((address as any).zip));
-  return hasHome && hasArea && hasCity && hasPin;
+  const hasPin = Boolean(clean(address.pincode));
+
+  return hasArea && hasCity && hasPin;
 }
 
 export function formatDeliveryAddress(address?: DeliveryAddress | string | null) {
