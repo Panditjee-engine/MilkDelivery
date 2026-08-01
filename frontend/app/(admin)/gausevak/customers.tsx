@@ -47,6 +47,8 @@ interface Customer {
   claim_status?: string;
   is_active: boolean;
   created_at?: string;
+  customer_source?: "online" | "offline" | "both";
+  is_app_user_only?: boolean;
 }
 
 interface DeliveryPartner {
@@ -63,6 +65,13 @@ type SortOption =
   | "recent_first";
 type FilterOption = "all" | "active" | "inactive" | "linked" | "unlinked";
 type ToastVariant = "success" | "error" | "info";
+const FILTER_CHIP_WIDTHS: Record<FilterOption, number> = {
+  all: 54,
+  active: 76,
+  inactive: 88,
+  linked: 76,
+  unlinked: 78,
+};
 
 const DEFAULT_ZONES = [
   "Zone A",
@@ -140,9 +149,76 @@ function isLinkedCustomer(customer: Customer | any): boolean {
 function normalizeCustomer(raw: any): Customer {
   return {
     ...raw,
+    id: raw?.id || raw?._id,
+    name: raw?.name || raw?.full_name || "Customer",
     linked: isLinkedCustomer(raw),
     is_active: readBool(raw?.is_active, true),
+    customer_source: raw?.customer_source || (raw?.linked_user_id ? "both" : "offline"),
+    is_app_user_only: false,
   };
+}
+
+function normalizeOnlineCustomer(raw: any): Customer {
+  const id = raw?.id || raw?._id;
+  return {
+    ...raw,
+    id,
+    name: raw?.name || raw?.full_name || "Customer",
+    phone: raw?.phone || raw?.mobile || "",
+    email: raw?.email || "",
+    address: raw?.address || raw?.delivery_address,
+    zone: raw?.zone || "",
+    notes: raw?.notes || "",
+    linked_user_id: id,
+    linked: true,
+    is_active: readBool(raw?.is_active, true),
+    customer_source: "online",
+    is_app_user_only: true,
+  };
+}
+
+function customerMergeKey(customer: Customer): string {
+  const phone = String(customer.phone || "").trim().toLowerCase();
+  const email = String(customer.email || "").trim().toLowerCase();
+  if (customer.linked_user_id) return `linked:${customer.linked_user_id}`;
+  if (phone) return `phone:${phone}`;
+  if (email) return `email:${email}`;
+  return `id:${customer.id}`;
+}
+
+function mergeCustomerLists(offlineRows: any[], onlineRows: any[]): Customer[] {
+  const map = new Map<string, Customer>();
+  offlineRows.map(normalizeCustomer).forEach((customer) => {
+    map.set(customerMergeKey(customer), customer);
+  });
+  onlineRows.map(normalizeOnlineCustomer).forEach((customer) => {
+    const key = customerMergeKey(customer);
+    const existing = map.get(key);
+    if (existing) {
+      map.set(key, {
+        ...customer,
+        ...existing,
+        linked: true,
+        linked_user_id: existing.linked_user_id || customer.linked_user_id,
+        customer_source: "both",
+        is_app_user_only: false,
+      });
+      return;
+    }
+    map.set(key, customer);
+  });
+  return [...map.values()];
+}
+
+async function fetchAllAdminCustomerRows() {
+  const pageSize = 200;
+  const rows: any[] = [];
+  for (let skip = 0; skip < 2000; skip += pageSize) {
+    const page = await api.getAdminCustomers({ skip, limit: pageSize });
+    rows.push(...(page ?? []));
+    if (!page || page.length < pageSize) break;
+  }
+  return rows;
 }
 
 function formFromCustomer(customer?: Customer | null): CustomerFormState {
@@ -567,6 +643,18 @@ function CustomerCard({
       }),
     ]).start();
   }, []);
+  const sourceLabel =
+    item.customer_source === "online"
+      ? "Online"
+      : item.customer_source === "both"
+        ? "Online + Offline"
+        : "Offline";
+  const sourceColor =
+    item.customer_source === "online"
+      ? "#7c3aed"
+      : item.customer_source === "both"
+        ? "#2563eb"
+        : "#6b7280";
 
   return (
     <Animated.View style={{ opacity, transform: [{ translateY }] }}>
@@ -622,6 +710,11 @@ function CustomerCard({
                     ]}
                   >
                     {isLinkedCustomer(item) ? "Linked" : "Offline"}
+                  </Text>
+                </View>
+                <View style={[cardS.badge, { backgroundColor: "#f8fafc", borderColor: "#e2e8f0" }]}>
+                  <Text style={[cardS.badgeText, { color: sourceColor }]}>
+                    {sourceLabel}
                   </Text>
                 </View>
                 {item.claim_status ? (
@@ -772,9 +865,16 @@ function CustomerDetailModal({
   }, [visible, customer]);
 
   if (!customer) return null;
+  const canManageOfflineRecord = !customer.is_app_user_only;
+  const sourceLabel =
+    customer.customer_source === "online"
+      ? "Online app customer"
+      : customer.customer_source === "both"
+        ? "Online + offline record"
+        : "Offline customer record";
 
   const handleSave = async () => {
-    if (!form.name.trim()) return;
+    if (!form.name.trim() || !canManageOfflineRecord) return;
     setSaving(true);
     try {
       await onSave(customer.id, buildPayload(form));
@@ -801,8 +901,9 @@ function CustomerDetailModal({
               <View style={modalS.headerActions}>
                 {!editing && (
                   <TouchableOpacity
-                    style={modalS.iconBtn}
+                    style={[modalS.iconBtn, !canManageOfflineRecord && { opacity: 0.45 }]}
                     onPress={() => setEditing(true)}
+                    disabled={!canManageOfflineRecord}
                   >
                     <Ionicons name="create-outline" size={18} color="#2d6a4f" />
                   </TouchableOpacity>
@@ -843,6 +944,10 @@ function CustomerDetailModal({
                   <Text style={detailS.sub}>
                     {customer.phone || "No phone"} {customer.email ? `· ${customer.email}` : ""}
                   </Text>
+                  <View style={detailS.sourcePill}>
+                    <Ionicons name="cloud-done-outline" size={13} color="#2563eb" />
+                    <Text style={detailS.sourcePillText}>{sourceLabel}</Text>
+                  </View>
                 </View>
                 <View style={detailS.infoCard}>
                   <Text style={detailS.infoLabel}>Address</Text>
@@ -880,24 +985,33 @@ function CustomerDetailModal({
                   </View>
                 )}
 
-                <View style={detailS.deleteRow}>
-                  <TouchableOpacity
-                    style={[detailS.deleteBtn, detailS.softDeleteBtn]}
-                    onPress={() => onDelete(customer.id, false)}
-                  >
-                    <Text style={[detailS.deleteText, { color: "#b45309" }]}>
-                      Soft Delete
+                {canManageOfflineRecord ? (
+                  <View style={detailS.deleteRow}>
+                    <TouchableOpacity
+                      style={[detailS.deleteBtn, detailS.softDeleteBtn]}
+                      onPress={() => onDelete(customer.id, false)}
+                    >
+                      <Text style={[detailS.deleteText, { color: "#b45309" }]}>
+                        Soft Delete
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[detailS.deleteBtn, detailS.hardDeleteBtn]}
+                      onPress={() => onDelete(customer.id, true)}
+                    >
+                      <Text style={[detailS.deleteText, { color: "#dc2626" }]}>
+                        Hard Delete
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <View style={detailS.readOnlyNote}>
+                    <Ionicons name="information-circle-outline" size={16} color="#2563eb" />
+                    <Text style={detailS.readOnlyNoteText}>
+                      This is a registered app customer. Create or link an offline record to manage delivery zone, partner, and notes here.
                     </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[detailS.deleteBtn, detailS.hardDeleteBtn]}
-                    onPress={() => onDelete(customer.id, true)}
-                  >
-                    <Text style={[detailS.deleteText, { color: "#dc2626" }]}>
-                      Hard Delete
-                    </Text>
-                  </TouchableOpacity>
-                </View>
+                  </View>
+                )}
               </ScrollView>
             )}
           </View>
@@ -1005,8 +1119,21 @@ export default function CustomersScreen() {
   const fetchCustomers = async () => {
     try {
       setLoading(true);
-      const data = await api.getAdminCustomers();
-      setCustomers((data ?? []).map(normalizeCustomer));
+      const [offlineResult, onlineResult] = await Promise.allSettled([
+        fetchAllAdminCustomerRows(),
+        api.getAllUsers("customer"),
+      ]);
+      if (offlineResult.status === "rejected" && onlineResult.status === "rejected") {
+        throw offlineResult.reason || onlineResult.reason;
+      }
+      const offlineRows = offlineResult.status === "fulfilled" ? offlineResult.value : [];
+      const onlineRows = onlineResult.status === "fulfilled" ? onlineResult.value ?? [] : [];
+      setCustomers(mergeCustomerLists(offlineRows, onlineRows));
+      if (offlineResult.status === "rejected") {
+        showToast("Offline records failed. Showing app customers.", "error");
+      } else if (onlineResult.status === "rejected") {
+        showToast("App customers failed. Showing offline records.", "error");
+      }
     } catch (e: any) {
       showToast(e?.message || "Failed to load customers", "error");
     } finally {
@@ -1125,6 +1252,11 @@ export default function CustomersScreen() {
     payload: ReturnType<typeof buildPayload>,
   ) => {
     try {
+      const current = customers.find((item) => item.id === id);
+      if (current?.is_app_user_only) {
+        showToast("App customers need an offline record before editing here.", "info");
+        return;
+      }
       const updated = await api.updateAdminCustomer(id, payload);
       const normalized = normalizeCustomer(updated);
       setCustomers((prev) => prev.map((item) => (item.id === id ? normalized : item)));
@@ -1137,6 +1269,11 @@ export default function CustomersScreen() {
 
   const handleDelete = async (id: string, hard = false) => {
     try {
+      const current = customers.find((item) => item.id === id);
+      if (current?.is_app_user_only) {
+        showToast("App customers cannot be deleted from offline customer records.", "info");
+        return;
+      }
       await api.deleteAdminCustomer(id, hard);
       setCustomers((prev) => prev.filter((item) => item.id !== id));
       setDetailVisible(false);
@@ -1308,7 +1445,11 @@ export default function CustomersScreen() {
           return (
             <TouchableOpacity
               key={option}
-              style={[styles.filterChip, active && styles.filterChipActive]}
+              style={[
+                styles.filterChip,
+                { width: FILTER_CHIP_WIDTHS[option] },
+                active && styles.filterChipActive,
+              ]}
               onPress={() => setFilter(option)}
             >
               <Text
@@ -1519,10 +1660,19 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   searchInput: { flex: 1, color: "#111827", fontSize: 14 },
-  filterRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingTop: 10, paddingBottom: 10, gap: 8, paddingRight: 16 },
+  filterRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 10,
+    gap: 8,
+    paddingRight: 16,
+  },
   filterChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
+    height: 34,
+    paddingHorizontal: 0,
+    paddingVertical: 0,
     borderRadius: 999,
     backgroundColor: "#fff",
     borderWidth: 1,
@@ -1532,7 +1682,14 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
   },
   filterChipActive: { backgroundColor: "#2d6a4f", borderColor: "#2d6a4f" },
-  filterChipText: { fontSize: 12, fontWeight: "700", color: "#475569", textAlign: "center" },
+  filterChipText: {
+    fontSize: 12,
+    lineHeight: 15,
+    fontWeight: "800",
+    color: "#475569",
+    textAlign: "center",
+    includeFontPadding: false,
+  },
   filterChipTextActive: { color: "#fff" },
   centered: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 24 },
   loadingText: { marginTop: 10, fontSize: 14, color: "#64748b", fontWeight: "600" },
@@ -1711,6 +1868,20 @@ const detailS = StyleSheet.create({
   section: { marginBottom: 14 },
   name: { fontSize: 18, fontWeight: "800", color: "#111827" },
   sub: { fontSize: 13, color: "#64748b", marginTop: 4 },
+  sourcePill: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "#eff6ff",
+    borderColor: "#bfdbfe",
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    marginTop: 9,
+  },
+  sourcePillText: { fontSize: 11, fontWeight: "800", color: "#2563eb" },
   infoCard: {
     backgroundColor: "#fff",
     borderRadius: 14,
@@ -1747,4 +1918,16 @@ const detailS = StyleSheet.create({
   softDeleteBtn: { backgroundColor: "#fffbeb", borderColor: "#fcd34d" },
   hardDeleteBtn: { backgroundColor: "#fff1f2", borderColor: "#fecdd3" },
   deleteText: { fontSize: 13, fontWeight: "800" },
+  readOnlyNote: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    backgroundColor: "#eff6ff",
+    borderColor: "#bfdbfe",
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12,
+    marginTop: 14,
+  },
+  readOnlyNoteText: { flex: 1, fontSize: 12, fontWeight: "600", color: "#1d4ed8", lineHeight: 17 },
 });

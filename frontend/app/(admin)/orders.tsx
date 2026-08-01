@@ -24,6 +24,7 @@ import { useIsFocused } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import { useLocalSearchParams } from "expo-router";
 import { api } from "../../src/services/api";
 import LoadingScreen from "../../src/components/LoadingScreen";
 
@@ -927,6 +928,7 @@ function SubscriptionRow({
 
 export default function AdminOrdersScreen() {
   const isFocused = useIsFocused();
+  const params = useLocalSearchParams<{ tab?: string }>();
 
   const [activeTab, setActiveTab] = useState<"orders" | "subscriptions">(
     "orders"
@@ -999,6 +1001,14 @@ export default function AdminOrdersScreen() {
       friction: 16,
     }).start();
   };
+
+  useEffect(() => {
+    if (params.tab === "subscriptions") {
+      switchTab("subscriptions");
+    } else if (params.tab === "orders") {
+      switchTab("orders");
+    }
+  }, [params.tab]);
 
   // ── Fetch orders
   const fetchOrders = useCallback(async () => {

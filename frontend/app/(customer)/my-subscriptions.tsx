@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { useFocusEffect } from "@react-navigation/native";
 import { api } from "../../src/services/api";
 import { Colors } from "../../src/constants/colors";
 import LoadingScreen from "../../src/components/LoadingScreen";
@@ -270,13 +271,14 @@ export default function MySubscriptionsScreen() {
   const [editEndDate, setEditEndDate] = useState<string | null>(null);
   const [showCalendar, setShowCalendar] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
-
-  useEffect(() => {
-    fetchSubscriptions();
-  }, []);
+  const hasLoadedOnce = useRef(false);
+  const fetchInFlight = useRef(false);
 
   // ── FIX #2: filter out cancelled and buy_once 
-  const fetchSubscriptions = async () => {
+  const fetchSubscriptions = useCallback(async (showInitialLoader = false) => {
+    if (fetchInFlight.current) return;
+    fetchInFlight.current = true;
+    if (showInitialLoader && !hasLoadedOnce.current) setLoading(true);
     try {
       const data = await api.getSubscriptions();
       const filtered = (data || []).filter(
@@ -288,10 +290,18 @@ export default function MySubscriptionsScreen() {
     } catch {
       Alert.alert("Error", "Failed to load subscriptions");
     } finally {
+      hasLoadedOnce.current = true;
+      fetchInFlight.current = false;
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchSubscriptions(!hasLoadedOnce.current);
+    }, [fetchSubscriptions]),
+  );
 
   const onRefresh = () => {
     setRefreshing(true);

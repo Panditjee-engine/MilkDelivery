@@ -14,6 +14,7 @@ import {
   TouchableOpacity,
   TextInput,
   Modal,
+  Alert,
   Image,
   Animated,
   Easing,
@@ -205,6 +206,8 @@ function Snackbar({ visible, message, type }: SnackbarState) {
 // ── Types
 type Product = {
   id?: string;
+  _id?: string;
+  product_id?: string;
   name: string;
   category: string;
   unit: string;
@@ -223,6 +226,9 @@ type Product = {
   seller_address?: string;
   shelf_life?: string;
 };
+
+const getProductId = (product?: Product | null) =>
+  product?.id || product?._id || product?.product_id || "";
 
 type FormData = {
   name: string;
@@ -418,6 +424,10 @@ export default function InventoryScreen() {
   const [editForm, setEditForm] = useState<FormData>({ ...EMPTY_FORM });
   const [editTab, setEditTab] = useState(0);
   const [stockUpdating, setStockUpdating] = useState(false);
+  const [productAction, setProductAction] = useState<{
+    id: string;
+    type: "availability" | "delete";
+  } | null>(null);
   const [showEditSuccessTick, setShowEditSuccessTick] = useState(false);
 
   // ── Fetch Data
@@ -536,7 +546,7 @@ export default function InventoryScreen() {
 
   // ── Open Product Detail
   const openDetail = (product: Product) => {
-    setSelectedProduct(product);
+    setSelectedProduct({ ...product, id: getProductId(product) || product.id });
     setIsEditing(false);
     setDetailModal(true);
     setEditTab(0);
@@ -563,13 +573,23 @@ export default function InventoryScreen() {
 
   // ── Stock Increment / Decrement
   const adjustStock = async (delta: number) => {
-    if (!selectedProduct?.id || stockUpdating) return;
-    const newStock = Math.max(0, selectedProduct.stock + delta);
+    const currentProduct = selectedProduct;
+    const productId = getProductId(currentProduct);
+    if (!productId || stockUpdating) {
+      if (!productId) showSnackbar("Product id missing. Please refresh inventory.", "error");
+      return;
+    }
+    const newStock = Math.max(0, currentProduct!.stock + delta);
     setStockUpdating(true);
     try {
-      await api.updateProduct(selectedProduct.id, { stock: newStock });
+      await api.updateProduct(productId, { stock: newStock });
       setSelectedProduct((prev) =>
         prev ? { ...prev, stock: newStock } : prev,
+      );
+      setProducts((prev) =>
+        prev.map((item) =>
+          getProductId(item) === productId ? { ...item, stock: newStock } : item,
+        ),
       );
       setEditForm((prev) => ({ ...prev, stock: String(newStock) }));
       showSnackbar(`Stock updated to ${newStock}`, "success");
@@ -585,13 +605,17 @@ export default function InventoryScreen() {
 
   // ── Save Edited Product
   const handleSaveEdit = async () => {
-    if (!selectedProduct?.id) return;
+    const productId = getProductId(selectedProduct);
+    if (!productId) {
+      showSnackbar("Product id missing. Please refresh inventory.", "error");
+      return;
+    }
     try {
       const images: string[] = [];
       if (editForm.image2) images.push(editForm.image2);
       if (editForm.image3) images.push(editForm.image3);
 
-      await api.updateProduct(selectedProduct.id, {
+      await api.updateProduct(productId, {
         name: editForm.name,
         category: editForm.category ? editForm.category.toLowerCase() : undefined,
         unit: editForm.unit || undefined,
@@ -626,10 +650,70 @@ export default function InventoryScreen() {
     fetchData();
   };
 
+  const performAvailabilityUpdate = async (
+    product: Product,
+    productId: string,
+    nextState: boolean,
+  ) => {
+    setProductAction({ id: productId, type: "availability" });
+    try {
+      await api.updateProduct(productId, { is_available: nextState });
+      setProducts((prev) =>
+        prev.map((item) =>
+          getProductId(item) === productId
+            ? { ...item, is_available: nextState }
+            : item,
+        ),
+      );
+      if (getProductId(selectedProduct) === productId) {
+        setSelectedProduct((prev) =>
+          prev ? { ...prev, is_available: nextState } : prev,
+        );
+      }
+      showSnackbar(
+        nextState
+          ? `${product.name} is now available`
+          : `${product.name} is now unavailable`,
+        "success",
+      );
+      fetchData();
+    } catch (e: any) {
+      const message = e?.message || "Could not update availability";
+      Alert.alert("Update Failed", message);
+      showSnackbar(message, "error");
+    } finally {
+      setProductAction(null);
+    }
+  };
+
+  const performDeleteProduct = async (id: string) => {
+    setProductAction({ id, type: "delete" });
+    try {
+      await api.deleteProduct(id);
+      setProducts((prev) => prev.filter((item) => getProductId(item) !== id));
+      setDetailModal(false);
+      setSelectedProduct(null);
+      showSnackbar("Product deleted", "success");
+      fetchData();
+    } catch (e: any) {
+      const message = e?.message || "Could not delete product";
+      Alert.alert("Delete Failed", message);
+      showSnackbar(message, "error");
+    } finally {
+      setProductAction(null);
+    }
+  };
+
   // ── Toggle Availability
   const toggleAvailability = async (product: Product) => {
+    const productId = getProductId(product);
+    if (!productId) {
+      Alert.alert("Product Not Ready", "Product id missing. Please refresh inventory.");
+      showSnackbar("Product id missing. Please refresh inventory.", "error");
+      return;
+    }
     const nextState = !product.is_available;
-    showAlert(
+    Alert.alert(
       nextState ? "Make Product Available?" : "Make Product Unavailable?",
       nextState
         ? `${product.name} will be visible for orders.`
@@ -638,28 +722,8 @@ export default function InventoryScreen() {
         { text: "Cancel", style: "cancel" },
         {
           text: nextState ? "Make Available" : "Make Unavailable",
-          style: "default",
-          onPress: async () => {
-            try {
-              await api.updateProduct(product.id!, { is_available: nextState });
-              if (selectedProduct?.id === product.id) {
-                setSelectedProduct((prev) =>
-                  prev ? { ...prev, is_available: nextState } : prev,
-                );
-              }
-              showSnackbar(
-                nextState
-                  ? `${product.name} is now available`
-                  : `${product.name} is now unavailable`,
-                "success",
-              );
-              fetchData();
-            } catch (e: any) {
-              const message = e?.message || "Could not update availability";
-              showAlert("Update Failed", message);
-              showSnackbar(message, "error");
-            }
-          },
+          style: nextState ? "default" : "destructive",
+          onPress: () => performAvailabilityUpdate(product, productId, nextState),
         },
       ],
     );
@@ -667,8 +731,12 @@ export default function InventoryScreen() {
 
   // ── Delete Product
   const deleteProduct = (id?: string) => {
-    if (!id) return;
-    showAlert(
+    if (!id) {
+      Alert.alert("Product Not Ready", "Product id missing. Please refresh inventory.");
+      showSnackbar("Product id missing. Please refresh inventory.", "error");
+      return;
+    }
+    Alert.alert(
       "Delete Product",
       "Are you sure you want to delete this product? This action cannot be undone.",
       [
@@ -676,13 +744,7 @@ export default function InventoryScreen() {
         {
           text: "Delete",
           style: "destructive",
-          onPress: async () => {
-            await api.deleteProduct(id);
-            setDetailModal(false);
-            setSelectedProduct(null);
-            showSnackbar("Product deleted", "success");
-            fetchData();
-          },
+          onPress: () => performDeleteProduct(id),
         },
       ],
     );
@@ -1029,6 +1091,12 @@ export default function InventoryScreen() {
   const renderProductDetail = () => {
     if (!selectedProduct) return null;
     const p = selectedProduct;
+    const selectedProductId = getProductId(p);
+    const availabilityBusy =
+      productAction?.id === selectedProductId &&
+      productAction.type === "availability";
+    const deleteBusy =
+      productAction?.id === selectedProductId && productAction.type === "delete";
     const allImages = [p.image, ...(p.images || [])].filter(Boolean) as string[];
     const hasMrp = p.mrp && p.mrp > p.price;
 
@@ -1237,8 +1305,10 @@ export default function InventoryScreen() {
                       ? "#FFF0F0"
                       : C.successBg,
                   },
+                  (availabilityBusy || deleteBusy) && styles.actionDisabled,
                 ]}
                 onPress={() => toggleAvailability(selectedProduct!)}
+                disabled={availabilityBusy || deleteBusy}
               >
                 <Ionicons
                   name={
@@ -1260,18 +1330,27 @@ export default function InventoryScreen() {
                   ]}
                 >
                   {selectedProduct?.is_available
-                    ? "Mark Unavailable"
-                    : "Mark Available"}
+                    ? availabilityBusy
+                      ? "Updating..."
+                      : "Mark Unavailable"
+                    : availabilityBusy
+                      ? "Updating..."
+                      : "Mark Available"}
                 </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.detailSmallBtn, { backgroundColor: "#FFF0F0" }]}
-                onPress={() => deleteProduct(selectedProduct?.id)}
+                style={[
+                  styles.detailSmallBtn,
+                  { backgroundColor: "#FFF0F0" },
+                  deleteBusy && styles.actionDisabled,
+                ]}
+                onPress={() => deleteProduct(selectedProductId)}
+                disabled={availabilityBusy || deleteBusy}
               >
                 <Ionicons name="trash-outline" size={16} color="#DC2626" />
                 <Text style={[styles.detailSmallBtnText, { color: "#DC2626" }]}>
-                  Delete
+                  {deleteBusy ? "Deleting..." : "Delete"}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -2316,5 +2395,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: C.border,
   },
+  actionDisabled: { opacity: 0.55 },
   detailSmallBtnText: { fontSize: 13, fontWeight: "600" },
 });
