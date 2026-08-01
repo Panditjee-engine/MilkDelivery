@@ -646,6 +646,7 @@ export default function AdminDashboard() {
   const [products, setProducts] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
+  const [subscriptions, setSubscriptions] = useState<any[]>([]);
   const [pendingRechargeRequests, setPendingRechargeRequests] = useState<any[]>(
     [],
   );
@@ -662,6 +663,7 @@ export default function AdminDashboard() {
         productsData,
         usersData,
         ordersData,
+        subscriptionsData,
         rechargeRequestsData,
       ] =
         await Promise.allSettled([
@@ -669,6 +671,7 @@ export default function AdminDashboard() {
           api.getProducts(),
           api.getAllUsers("customer"),
           api.getAllOrders(),
+          api.getAdminSubscriptionsAll().catch(() => []),
           api.getAdminRechargeRequests("pending").catch(() => []),
         ]);
       if (dashboardData.status === "fulfilled") setStats(dashboardData.value);
@@ -680,6 +683,12 @@ export default function AdminDashboard() {
       }
       if (ordersData.status === "fulfilled" && Array.isArray(ordersData.value)) {
         setOrders(ordersData.value);
+      }
+      if (
+        subscriptionsData.status === "fulfilled" &&
+        Array.isArray(subscriptionsData.value)
+      ) {
+        setSubscriptions(subscriptionsData.value);
       }
       if (
         rechargeRequestsData.status === "fulfilled" &&
@@ -714,7 +723,26 @@ useEffect(() => {
     day: "numeric",
   });
 
+  const todayKey = getLocalDateKey();
   const totalOrdersToday = orders.length;
+  const recurringSubscriptions = subscriptions.filter((sub: any) => {
+    const pattern = String(sub.pattern || "").toLowerCase();
+    return pattern !== "buy_once" && pattern !== "";
+  });
+  const todaySubscriptions = recurringSubscriptions.filter((sub: any) => {
+    const raw = sub.created_at || sub.start_date;
+    if (!raw) return false;
+    if (typeof raw === "string" && /^\d{4}-\d{2}-\d{2}/.test(raw)) {
+      return raw.slice(0, 10) === todayKey;
+    }
+    const parsed = new Date(raw);
+    return !Number.isNaN(parsed.getTime()) && getLocalDateKey(parsed) === todayKey;
+  });
+  const todaySubscriptionAmount = todaySubscriptions.reduce(
+    (sum: number, sub: any) =>
+      sum + Number(sub.total_amount || sub.amount || 0),
+    0,
+  );
   const deliveredToday = orders.filter(
     (o: any) => o.status?.toLowerCase() === "delivered",
   ).length;
@@ -723,7 +751,6 @@ useEffect(() => {
     (sum: number, order: any) => sum + Number(order.total_amount || order.total || 0),
     0,
   );
-  const todayKey = getLocalDateKey();
   const todayPaidRevenue = orders
     .filter(
       (order: any) =>
@@ -915,6 +942,36 @@ useEffect(() => {
           <View style={styles.todayOrderRight}>
             <Text style={styles.todayOrderCount}>{totalOrdersToday}</Text>
             <Text style={styles.todayOrderMeta}>{money(todayTotalAmount)}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={C.dark} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.todayOrderCard}
+          activeOpacity={0.82}
+          onPress={() =>
+            router.push({
+              pathname: "/(admin)/orders",
+              params: { tab: "subscriptions" },
+            } as any)
+          }
+        >
+          <View style={styles.todayOrderLeft}>
+            <View style={styles.todayOrderIcon}>
+              <Ionicons name="repeat-outline" size={22} color={C.dark} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.todayOrderTitle}>Today Subscriptions</Text>
+              <Text style={styles.todayOrderSub}>
+                Tap to view all customer subscriptions
+              </Text>
+            </View>
+          </View>
+          <View style={styles.todayOrderRight}>
+            <Text style={styles.todayOrderCount}>{todaySubscriptions.length}</Text>
+            <Text style={styles.todayOrderMeta}>
+              {money(todaySubscriptionAmount)}
+            </Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color={C.dark} />
         </TouchableOpacity>
