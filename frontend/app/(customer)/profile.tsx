@@ -8,6 +8,9 @@ import {
   Modal,
   Animated,
   Dimensions,
+  Image,
+  Switch,
+  TextInput,
 } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -16,7 +19,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Calendar } from "react-native-calendars";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { api } from "../../src/services/api";
-import { Colors } from "../../src/constants/colors";
+import { Colors as AppColors } from "../../src/constants/colors";
 import Button from "../../src/components/Button";
 import Input from "../../src/components/Input";
 import {
@@ -25,6 +28,25 @@ import {
 } from "../../src/utils/address";
 
 const { width } = Dimensions.get("window");
+
+// ─── Theme Colors (From HTML) ────────────────────────────────────────────────
+const Theme = {
+  primary: "#a04100",
+  primaryContainer: "#ffdbcc",
+  secondary: "#6b3dca",
+  background: "#f8f9ff",
+  surface: "#f8f9ff",
+  surfaceContainerLowest: "#ffffff",
+  surfaceContainerLow: "#f2f3f9",
+  surfaceContainerHigh: "#e7e8ee",
+  surfaceContainerHighest: "#e1e2e8",
+  onSurface: "#191c20",
+  onSurfaceVariant: "#5a4136",
+  outlineVariant: "#e2bfb0",
+  error: "#ba1a1a",
+  errorContainer: "#ffdad6",
+  onPrimary: "#ffffff",
+};
 
 // ─── Custom Alert ─────────────────────────────────────────────────────────────
 
@@ -126,7 +148,7 @@ function CustomAlert({
               <Ionicons
                 name={config.icon as any}
                 size={28}
-                color={config.iconColor || Colors.primary}
+                color={config.iconColor || Theme.primary}
               />
             </View>
           )}
@@ -215,7 +237,7 @@ const alertStyles = StyleSheet.create({
     borderRadius: 14,
     alignItems: "center",
   },
-  actionDefault: { backgroundColor: Colors.primary },
+  actionDefault: { backgroundColor: Theme.primary },
   actionDestructive: {
     backgroundColor: "#FEF2F2",
     borderWidth: 1.5,
@@ -336,9 +358,8 @@ const toastStyles = StyleSheet.create({
 
 export default function ProfileScreen() {
   const { user, logout, updateUser } = useAuth();
-  const router = useRouter()
+  const router = useRouter();
 
-  // Pure state storage for vacations to bypass backend API
   const params = useLocalSearchParams<{
     openAddress?: string;
     addressRequired?: string;
@@ -348,19 +369,20 @@ export default function ProfileScreen() {
   const [orders, setOrders] = useState<any[]>([]);
   const [ordersExpanded, setOrdersExpanded] = useState(false);
   const [vacationModal, setVacationModal] = useState(false);
-  const [editModal, setEditModal] = useState(false);
+  
+  // UI States matching the new HTML logic
+  const [isEditProfileExpanded, setIsEditProfileExpanded] = useState(false);
+  const [isVacationEnabled, setIsVacationEnabled] = useState(false);
+
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [selectingStart, setSelectingStart] = useState(true);
   const [editName, setEditName] = useState(user?.name || "");
   const [editPhone, setEditPhone] = useState(user?.phone || "");
   const [addressBook, setAddressBook] = useState<any[]>(() =>
-    normalizeAddressBook(user),
+    normalizeAddressBook(user)
   );
-  const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
-  const [editAddress, setEditAddress] = useState(() =>
-    normalizeAddressBook(user)[0] || emptyAddress(),
-  );
+  
   const [saving, setSaving] = useState(false);
   const [deleteModal, setDeleteModal] = useState(false);
   const [deletePassword, setDeletePassword] = useState("");
@@ -412,7 +434,7 @@ export default function ProfileScreen() {
     if (!isFocused || params.addressRequired !== "1") return;
     showToast(
       "Please add your delivery address before placing the order.",
-      "error",
+      "error"
     );
   }, [isFocused, params.addressRequired]);
 
@@ -423,7 +445,6 @@ export default function ProfileScreen() {
 
   const fetchData = async () => {
     try {
-      // API call to /vacations removed completely to fix 404
       const ordersData = await api.getOrders();
       setOrders(ordersData || []);
     } catch (error) {
@@ -436,7 +457,7 @@ export default function ProfileScreen() {
     setOrdersExpanded(!ordersExpanded);
     Animated.timing(chevronAnim, {
       toValue,
-      duration: 250,
+      duration: 300,
       useNativeDriver: true,
     }).start();
   };
@@ -482,7 +503,7 @@ export default function ProfileScreen() {
         name: editName.trim(),
         phone: editPhone.trim(),
       } as any);
-      setEditModal(false);
+      setIsEditProfileExpanded(false);
       showToast("Profile updated successfully", "success");
     } catch (error: any) {
       showToast(error?.message || "Could not update profile", "error");
@@ -502,7 +523,7 @@ export default function ProfileScreen() {
       iconBg: "#FEF2F2",
       title: "Delete Account",
       message:
-        "This will permanently delete your Gau Satva account and remove your personal profile data. This action cannot be undone.",
+        "This will permanently delete your account and remove your personal profile data. This action cannot be undone.",
       actions: [
         { text: "Cancel", style: "cancel" },
         {
@@ -515,7 +536,10 @@ export default function ProfileScreen() {
               setDeleteModal(false);
               router.replace("/(auth)/login");
             } catch (error: any) {
-              showToast(error?.message || "Could not delete account. Please try again.", "error");
+              showToast(
+                error?.message || "Could not delete account. Please try again.",
+                "error"
+              );
             } finally {
               setDeletingAccount(false);
             }
@@ -549,56 +573,14 @@ export default function ProfileScreen() {
       return;
     }
 
-    // Handles the vacation simulation purely inside local state
     const newVacation = {
       id: Math.random().toString(36).substring(7),
       start_date: startDate,
       end_date: endDate,
     };
     setVacations((prev) => [...prev, newVacation]);
-
     setVacationModal(false);
-    setStartDate("");
-    setEndDate("");
-    setSelectingStart(true);
     showToast("Vacation saved! Deliveries will be paused.", "success");
-  };
-
-  const handleDeleteVacation = (id: string) => {
-    showAlert({
-      icon: "trash-outline",
-      iconColor: "#EF4444",
-      iconBg: "#FEF2F2",
-      title: "Remove Vacation",
-      message: "This vacation period will be deleted and deliveries will resume.",
-      actions: [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: () => {
-            setVacations((prev) => prev.filter((v) => v.id !== id));
-            showToast("Vacation removed");
-          },
-        },
-      ],
-    });
-  };
-
-  const openNewAddress = () => {
-    const next = {
-      ...emptyAddress(),
-      is_default: addressBook.length === 0,
-    };
-    setEditingAddressId(null);
-    setEditAddress(next);
-    setEditModal(true);
-  };
-
-  const openEditAddress = (address: any) => {
-    setEditingAddressId(address.id);
-    setEditAddress(address);
-    setEditModal(true);
   };
 
   const handleDeleteAddress = (address: any) => {
@@ -646,85 +628,20 @@ export default function ProfileScreen() {
     });
   };
 
-  const handleSaveProfile = async () => {
-    const normalizedAddress = {
-      id: editAddress.id || `addr_${Date.now()}`,
-      label: editAddress.label || "home",
-      is_default: editAddress.is_default ?? true,
-      tower: editAddress.tower?.trim() || "",
-      flat: editAddress.flat?.trim() || "",
-      floor: editAddress.floor?.trim() || "",
-      area: editAddress.area?.trim() || "",
-      city: editAddress.city?.trim() || "",
-      pincode: editAddress.pincode?.trim() || "",
-      landmark: editAddress.landmark?.trim() || "",
-    };
-
-    if (!hasCompleteDeliveryAddress(normalizedAddress)) {
-      showToast("Flat, building/area, city and pincode are required for delivery.", "error");
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const nextBook = editingAddressId
-        ? addressBook.map((address) =>
-            address.id === editingAddressId ? { ...address, ...normalizedAddress } : address,
-          )
-        : [...addressBook, normalizedAddress];
-      const normalizedBook = nextBook.map((address) => ({
-        ...address,
-        is_default: normalizedAddress.is_default ? address.id === normalizedAddress.id : address.is_default,
-      }));
-      if (!normalizedBook.some((address) => address.is_default)) {
-        normalizedBook[normalizedBook.length - 1].is_default = true;
-      }
-      const defaultAddress =
-        normalizedBook.find((address) => address.is_default) ||
-        normalizedBook[normalizedBook.length - 1];
-
-      await api.updateProfile({
-        name: editName,
-        phone: editPhone,
-        address: defaultAddress,
-        addresses: normalizedBook,
-      });
-      setAddressBook(normalizedBook);
-      setEditAddress(defaultAddress);
-      setEditingAddressId(defaultAddress.id);
-      updateUser({
-        name: editName,
-        phone: editPhone,
-        address: defaultAddress,
-        addresses: normalizedBook,
-      } as any);
-      setEditModal(false);
-      showToast("Address saved successfully", "success");
-      if (params.returnTo === "catalog") {
-        router.replace("/(customer)/catalog");
-      }
-    } catch (error: any) {
-      showToast(error.message || "Failed to update profile", "error");
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const formatDate = (dateStr: string) => {
     if (!dateStr) return "—";
     return new Date(dateStr).toLocaleDateString("en-IN", {
       month: "short",
       day: "numeric",
-      year: "numeric",
     });
   };
 
   const getMarkedDates = () => {
     const marks: any = {};
     if (startDate)
-      marks[startDate] = { selected: true, startingDay: true, color: Colors.primary };
+      marks[startDate] = { selected: true, startingDay: true, color: AppColors.primary };
     if (endDate)
-      marks[endDate] = { selected: true, endingDay: true, color: Colors.primary };
+      marks[endDate] = { selected: true, endingDay: true, color: AppColors.primary };
     if (startDate && endDate) {
       let current = new Date(startDate);
       const end = new Date(endDate);
@@ -733,7 +650,7 @@ export default function ProfileScreen() {
         marks[dateStr] = {
           ...marks[dateStr],
           selected: true,
-          color: Colors.primary,
+          color: AppColors.primary,
           textColor: "#fff",
         };
         current.setDate(current.getDate() + 1);
@@ -745,19 +662,14 @@ export default function ProfileScreen() {
   };
 
   const statusConfig = (status: string) => {
-    switch (status) {
+    switch (status?.toLowerCase()) {
       case "delivered":
-        return { color: "#16a34a", bg: "#F0FDF4", border: "#BBF7D0", label: "Delivered",        icon: "checkmark-circle" };
-      case "out_for_delivery":
-        return { color: "#d97706", bg: "#FFFBEB", border: "#FDE68A", label: "Out for Delivery", icon: "bicycle"          };
-      case "assigned":
-        return { color: "#2563EB", bg: "#EFF6FF", border: "#BFDBFE", label: "Rider Assigned",   icon: "bicycle-outline"  };
-      case "cancelled":
-        return { color: "#dc2626", bg: "#FEF2F2", border: "#FECACA", label: "Cancelled",        icon: "close-circle"     };
-      case "skipped":
-        return { color: "#9CA3AF", bg: "#F3F4F6", border: "#E5E7EB", label: "Skipped",          icon: "play-skip-forward-outline" };
+        return { color: Theme.primary, bg: `${Theme.primary}1A`, label: "DELIVERED" };
+      case "shipped":
+        return { color: Theme.secondary, bg: `${Theme.secondary}1A`, label: "SHIPPED" };
+      case "processing":
       default:
-        return { color: "#6366f1", bg: "#EEF2FF", border: "#C7D2FE", label: status?.replace(/_/g, " ") || "Pending", icon: "time" };
+        return { color: Theme.onSurfaceVariant, bg: Theme.surfaceContainerHigh, label: "PROCESSING" };
     }
   };
 
@@ -772,174 +684,194 @@ export default function ProfileScreen() {
       <Toast visible={toast.visible} message={toast.message} type={toast.type} />
       <CustomAlert config={alertConfig} onDismiss={hideAlert} />
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 40 }}
-      >
-        {/* ── Hero ── */}
-        <View style={styles.hero}>
-          <View style={styles.heroBg} />
-          <View style={styles.avatarRing}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>
-                {user?.name?.charAt(0).toUpperCase() || "U"}
-              </Text>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        
+        {/* ── Profile Header ── */}
+        <View style={styles.heroSection}>
+          <View style={styles.avatarContainer}>
+            <View style={styles.avatarGradient}>
+              <View style={styles.avatarInner}>
+                <Image
+                  style={styles.avatarImage}
+                  source={{
+                    uri: user?.profile_image || "https://ui-avatars.com/api/?name=" + encodeURIComponent(user?.name || 'User') + "&background=a04100&color=fff",
+                  }}
+                />
+              </View>
             </View>
-            <View style={styles.avatarBadge}>
-              <Ionicons name="checkmark" size={10} color="#fff" />
-            </View>
+            <TouchableOpacity style={styles.cameraButton}>
+              <Ionicons name="camera" size={20} color={Theme.onPrimary} />
+            </TouchableOpacity>
           </View>
-          <Text style={styles.userName}>{user?.name}</Text>
-          <Text style={styles.userEmail}>{user?.email}</Text>
-          {user?.phone && (
-            <View style={styles.phoneBadge}>
-              <Ionicons name="call-outline" size={11} color={Colors.primary} />
-              <Text style={styles.phoneText}>{user.phone}</Text>
-            </View>
-          )}
-          <TouchableOpacity
-            style={styles.editBtn}
-            onPress={() => setEditModal(true)}
-          >
-            <Ionicons name="create-outline" size={15} color="#fff" />
-            <Text style={styles.editBtnText}>Edit Profile</Text>
-          </TouchableOpacity>
+          <View style={styles.userInfo}>
+            <Text style={styles.userName}>{user?.name}</Text>
+            <Text style={styles.userEmail}>{user?.email}</Text>
+          </View>
         </View>
 
-        {/* ── Delivery Address ── */}
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <View style={[styles.cardIconBox, { backgroundColor: "#EEF4FF" }]}>
-              <Ionicons name="location" size={17} color="#4F7EFF" />
-            </View>
-            <Text style={styles.cardTitle}>Delivery Address</Text>
+        {/* ── Edit Profile Section ── */}
+        <View style={styles.editProfileSection}>
+          <TouchableOpacity
+            style={styles.editProfileToggle}
+            activeOpacity={0.8}
+            onPress={() => setIsEditProfileExpanded(!isEditProfileExpanded)}
+          >
+            <Ionicons name="pencil" size={20} color={Theme.onPrimary} />
+            <Text style={styles.editProfileToggleText}>EDIT PROFILE</Text>
+          </TouchableOpacity>
+
+          {isEditProfileExpanded && (
+            <Animated.View style={styles.editProfileFields}>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>FULL NAME</Text>
+                <TextInput
+                  style={styles.inputField}
+                  value={editName}
+                  onChangeText={setEditName}
+                  placeholder="Enter your name"
+                />
+              </View>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>PHONE NUMBER</Text>
+                <TextInput
+                  style={styles.inputField}
+                  value={editPhone}
+                  onChangeText={setEditPhone}
+                  keyboardType="phone-pad"
+                  placeholder="Enter your phone number"
+                />
+              </View>
+              <TouchableOpacity onPress={handleSaveBasicProfile} style={styles.saveChangesBtn}>
+                <Text style={styles.saveChangesText}>{saving ? "SAVING..." : "SAVE CHANGES"}</Text>
+              </TouchableOpacity>
+            </Animated.View>
+          )}
+        </View>
+
+        {/* ── Account Settings ── */}
+        <View style={styles.sectionContainer}>
+          <Text style={styles.sectionTitle}>Account Settings</Text>
+          <View style={styles.cardBlock}>
+            
             <TouchableOpacity
-              style={styles.addIconBtn}
+              style={styles.cardRow}
               onPress={() => router.push("/address-book" as any)}
             >
-              <Ionicons name="chevron-forward" size={17} color={Colors.primary} />
-            </TouchableOpacity>
-          </View>
-          {addressBook.length > 0 ? (
-            <View style={styles.addressList}>
-              {addressBook.map((address) => (
-                <TouchableOpacity
-                  key={address.id}
-                  style={styles.savedAddressCard}
-                  activeOpacity={0.85}
-                  onPress={() => router.push("/address-book" as any)}
-                >
-                  <View style={styles.addressTopRow}>
-                    <View style={styles.addressTypeBadge}>
-                      <Ionicons
-                        name={address?.label === "work" ? "briefcase-outline" : address?.label === "other" ? "location-outline" : "home-outline"}
-                        size={13}
-                        color={Colors.primary}
-                      />
-                      <Text style={styles.addressTypeText}>
-                        {String(address?.label || "home").toUpperCase()}
-                      </Text>
-                    </View>
-                    {address?.is_default && (
-                      <View style={styles.defaultBadge}>
-                        <Text style={styles.defaultBadgeText}>Default</Text>
-                      </View>
-                    )}
-                  </View>
-                  <Text style={styles.savedAddressText}>
-                    {formatDeliveryAddress(address)}
-                  </Text>
-                  <Text style={styles.savedAddressAction}>Tap to manage address</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          ) : (
-            <TouchableOpacity
-              style={styles.emptyAddress}
-              onPress={() =>
-                router.push({
-                  pathname: "/address-book",
-                  params: { addressRequired: "1" },
-                } as any)
-              }
-            >
-              <Ionicons name="add-circle-outline" size={20} color={Colors.primary} />
-              <Text style={styles.emptyAddressText}>
-                {user?.address ? "Complete delivery address" : "Add delivery address"}
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* ── Vacation Mode (Card visual design untouched) ── */}
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <View style={[styles.cardIconBox, { backgroundColor: "#FFF4E6" }]}>
-              <Ionicons name="airplane" size={17} color="#f59e0b" />
-            </View>
-            <Text style={styles.cardTitle}>Vacation Mode</Text>
-            <TouchableOpacity
-              style={styles.addIconBtn}
-              onPress={() => {
-                setStartDate("");
-                setEndDate("");
-                setSelectingStart(true);
-                setVacationModal(true);
-              }}
-            >
-              <Ionicons name="add" size={17} color={Colors.primary} />
-            </TouchableOpacity>
-          </View>
-          <Text style={styles.hintText}>
-            Deliveries are automatically skipped on these dates.
-          </Text>
-          {vacations.length > 0 ? (
-            <View style={styles.vacationList}>
-              {vacations.map((v) => (
-                <View key={v.id} style={styles.vacationChip}>
-                  <Ionicons name="sunny-outline" size={14} color="#d97706" />
-                  <Text style={styles.vacationChipText}>
-                    {formatDate(v.start_date)} → {formatDate(v.end_date)}
-                  </Text>
-                  <TouchableOpacity
-                    style={styles.vacationDeleteBtn}
-                    onPress={() => handleDeleteVacation(v.id)}
-                  >
-                    <Ionicons name="close" size={12} color="#d97706" />
-                  </TouchableOpacity>
+              <View style={styles.cardRowLeft}>
+                <View style={[styles.iconBox, { backgroundColor: `${Theme.secondary}1A` }]}>
+                  <Ionicons name="location" size={20} color={Theme.secondary} />
                 </View>
-              ))}
-            </View>
-          ) : (
-            <View style={styles.emptyState}>
-              <Ionicons name="calendar-outline" size={22} color="#d1d5db" />
-              <Text style={styles.emptyText}>No vacations scheduled</Text>
-            </View>
-          )}
-        </View>
+                <Text style={styles.cardRowText}>Add Delivery Address</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={Theme.onSurfaceVariant} />
+            </TouchableOpacity>
 
-        {/* ── Recent Orders ── */}
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <View style={[styles.cardIconBox, { backgroundColor: "#F0FDF4" }]}>
-              <Ionicons name="receipt" size={17} color="#22c55e" />
+            <View style={styles.cardRow}>
+              <View style={styles.cardRowLeft}>
+                <View style={[styles.iconBox, { backgroundColor: `#b3927c33` }]}>
+                  <Ionicons name="umbrella" size={20} color="#745945" />
+                </View>
+                <View>
+                  <Text style={styles.cardRowText}>Vacation Mode</Text>
+                  <Text style={styles.cardRowSubText}>Pause all active deliveries</Text>
+                </View>
+              </View>
+              <Switch
+                value={isVacationEnabled}
+                onValueChange={(val) => {
+                  setIsVacationEnabled(val);
+                  if (val) {
+                    setStartDate("");
+                    setEndDate("");
+                    setVacationModal(true);
+                  }
+                }}
+                trackColor={{ false: Theme.surfaceContainerHighest, true: Theme.primary }}
+                thumbColor="#ffffff"
+              />
             </View>
-            <Text style={styles.cardTitle}>Orders</Text>
-            {orders && orders.length > 3 && (
-              <TouchableOpacity style={styles.expandBtn} onPress={toggleOrders}>
-                <Text style={styles.expandBtnText}>
-                  {ordersExpanded ? "Show less" : `+${orders.length - 3} more`}
+
+            {isVacationEnabled && vacations.length > 0 && (
+              <View style={styles.vacationDatesBox}>
+                <View style={styles.vacationDateGrid}>
+                  <View style={styles.vacationDateCol}>
+                    <Text style={styles.inputLabel}>START DATE</Text>
+                    <View style={styles.dateDisplay}>
+                      <Ionicons name="calendar-outline" size={20} color={Theme.primary} />
+                      <Text style={styles.dateDisplayText}>{formatDate(vacations[0]?.start_date)}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.vacationDateCol}>
+                    <Text style={styles.inputLabel}>END DATE</Text>
+                    <View style={styles.dateDisplay}>
+                      <Ionicons name="calendar" size={20} color={Theme.primary} />
+                      <Text style={styles.dateDisplayText}>{formatDate(vacations[0]?.end_date)}</Text>
+                    </View>
+                  </View>
+                </View>
+                <Text style={styles.vacationDisclaimer}>
+                  Deliveries will resume automatically.
                 </Text>
-                <Animated.View style={{ transform: [{ rotate: chevronRotate }] }}>
-                  <Ionicons name="chevron-down" size={14} color={Colors.primary} />
-                </Animated.View>
-              </TouchableOpacity>
+              </View>
             )}
           </View>
+        </View>
 
-          {orders && orders.length > 0 ? (
-            <>
-              {visibleOrders.map((order, i) => {
+        {/* ── Saved Addresses ── */}
+        <View style={styles.sectionContainer}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Saved Addresses</Text>
+            <TouchableOpacity onPress={() => router.push("/address-book" as any)}>
+              <Ionicons name="add-circle" size={24} color={Theme.primary} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.addressList}>
+            {addressBook.map((addr) => (
+              <View key={addr.id} style={styles.addressCard}>
+                <View style={styles.addressCardLeft}>
+                  <View style={[styles.iconBox, { backgroundColor: `${Theme.primary}1A` }]}>
+                    <Ionicons
+                      name={addr.label === "work" ? "briefcase" : "home"}
+                      size={20}
+                      color={Theme.primary}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.addressLabel}>{addr.label ? addr.label.charAt(0).toUpperCase() + addr.label.slice(1) : "Home"}</Text>
+                    <Text style={styles.addressText} numberOfLines={2}>
+                      {formatDeliveryAddress(addr)}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.addressActions}>
+                  <TouchableOpacity style={styles.actionBtnIcon} onPress={() => router.push("/address-book" as any)}>
+                    <Ionicons name="pencil" size={20} color={Theme.onSurfaceVariant} />
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.actionBtnIcon} onPress={() => handleDeleteAddress(addr)}>
+                    <Ionicons name="trash" size={20} color={Theme.onSurfaceVariant} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))}
+            {addressBook.length === 0 && (
+              <Text style={styles.emptyStateText}>No saved addresses yet.</Text>
+            )}
+          </View>
+        </View>
+
+        {/* ── Order History ── */}
+        <View style={styles.sectionContainer}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Recent Orders</Text>
+            <TouchableOpacity onPress={() => router.push("/(customer)/subscriptions" as any)}>
+              <Text style={styles.viewAllText}>VIEW ALL</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.orderList}>
+            {visibleOrders.length > 0 ? (
+              visibleOrders.map((order) => {
                 const sc = statusConfig(order.status);
                 const productName =
                   order.product_name ||
@@ -947,86 +879,57 @@ export default function ProfileScreen() {
                   (order.items?.length > 0
                     ? order.items[0]?.name || `Order #${String(order.id).slice(-4)}`
                     : `Order #${String(order.id).slice(-4)}`);
+
                 return (
-                  <View
-                    key={order.id}
-                    style={[
-                      styles.orderRow,
-                      i < visibleOrders.length - 1 && styles.orderRowBorder,
-                    ]}
-                  >
-                    <View style={styles.orderLeft}>
-                      <View style={[styles.orderIconBox, { backgroundColor: sc.bg }]}>
-                        <Ionicons name={sc.icon as any} size={16} color={sc.color} />
+                  <View key={order.id} style={styles.orderCard}>
+                    <View style={styles.orderCardLeft}>
+                      <View style={styles.orderImageBox}>
+                        <Image
+                          source={{ uri: order.product?.image_url || order.items?.[0]?.image_url || "https://via.placeholder.com/150" }}
+                          style={styles.orderImage}
+                        />
                       </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.orderName} numberOfLines={1}>
-                          {productName}
-                        </Text>
-                        <Text style={styles.orderDate}>
-                          {formatDate(order.delivery_date || order.created_at)}
-                        </Text>
-                        <Text style={styles.orderItems}>
-                          {order.items?.length || 0} item
-                          {(order.items?.length || 0) !== 1 ? "s" : ""}
-                        </Text>
+                      <View style={styles.orderMeta}>
+                        <Text style={styles.orderName} numberOfLines={1}>{productName}</Text>
+                        <View style={[styles.orderStatusPill, { backgroundColor: sc.bg }]}>
+                          <Text style={[styles.orderStatusText, { color: sc.color }]}>{sc.label}</Text>
+                        </View>
                       </View>
                     </View>
-                    <View style={styles.orderRight}>
-                      <View
-                        style={[
-                          styles.statusPill,
-                          { backgroundColor: sc.bg, borderColor: sc.border },
-                        ]}
-                      >
-                        <Text style={[styles.statusText, { color: sc.color }]}>
-                          {sc.label}
-                        </Text>
-                      </View>
-                      <Text style={styles.orderAmt}>
-                        ₹{order.total_amount?.toFixed(2) ?? "0.00"}
-                      </Text>
-                    </View>
+                    <Text style={styles.orderPrice}>₹{order.total_amount?.toFixed(2) ?? "0.00"}</Text>
                   </View>
                 );
-              })}
-            </>
-          ) : (
-            <View style={styles.emptyState}>
-              <Ionicons name="bag-outline" size={22} color="#d1d5db" />
-              <Text style={styles.emptyText}>No orders yet</Text>
-            </View>
+              })
+            ) : (
+              <Text style={styles.emptyStateText}>No recent orders.</Text>
+            )}
+          </View>
+
+          {orders.length > 3 && (
+            <TouchableOpacity style={styles.showMoreBtn} onPress={toggleOrders}>
+              <Text style={styles.showMoreText}>{ordersExpanded ? "SHOW LESS" : "SHOW MORE"}</Text>
+              <Animated.View style={{ transform: [{ rotate: chevronRotate }] }}>
+                <Ionicons name="chevron-down" size={20} color={Theme.onSurfaceVariant} />
+              </Animated.View>
+            </TouchableOpacity>
           )}
         </View>
 
-        {/* ── Logout ── */}
-        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-          <View style={styles.logoutIcon}>
-            <Ionicons name="log-out-outline" size={18} color="#ef4444" />
-          </View>
-          <Text style={styles.logoutText}>Log Out</Text>
-          <Ionicons
-            name="chevron-forward"
-            size={16}
-            color="#fca5a5"
-            style={{ marginLeft: "auto" }}
-          />
-        </TouchableOpacity>
+        {/* ── Account Actions ── */}
+        <View style={styles.accountActionsSection}>
+          <TouchableOpacity style={styles.actionButton} onPress={handleLogout}>
+            <Ionicons name="log-out" size={20} color={Theme.onSurface} />
+            <Text style={styles.actionButtonText}>LOGOUT</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteAccount}>
+            <Ionicons name="trash-bin" size={20} color={Theme.error} />
+            <Text style={styles.deleteButtonText}>DELETE ACCOUNT</Text>
+          </TouchableOpacity>
+        </View>
 
-        <TouchableOpacity style={styles.deleteAccountBtn} onPress={handleDeleteAccount}>
-          <View style={styles.logoutIcon}>
-            <Ionicons name="trash-outline" size={18} color="#dc2626" />
-          </View>
-          <Text style={styles.deleteAccountText}>Delete Account</Text>
-          <Ionicons
-            name="chevron-forward"
-            size={16}
-            color="#fca5a5"
-            style={{ marginLeft: "auto" }}
-          />
-        </TouchableOpacity>
       </ScrollView>
 
+      {/* Delete Account Modal */}
       <Modal visible={deleteModal} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalSheet}>
@@ -1034,7 +937,7 @@ export default function ProfileScreen() {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Delete Account</Text>
               <TouchableOpacity onPress={() => setDeleteModal(false)}>
-                <Ionicons name="close" size={22} color="#6B7280" />
+                <Ionicons name="close" size={24} color={Theme.onSurfaceVariant} />
               </TouchableOpacity>
             </View>
             <View style={styles.modalBody}>
@@ -1058,51 +961,18 @@ export default function ProfileScreen() {
         </View>
       </Modal>
 
-      {/* ── Vacation Modal ── */}
+      {/* Vacation Selection Modal */}
       <Modal visible={vacationModal} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalSheet}>
             <View style={styles.dragHandle} />
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add Vacation</Text>
-              <TouchableOpacity
-                style={styles.closeBtn}
-                onPress={() => setVacationModal(false)}
-              >
-                <Ionicons name="close" size={15} color="#666" />
-              </TouchableOpacity>
-            </View>
-            <View style={styles.dateTabs}>
-              <TouchableOpacity
-                style={[styles.dateTab, selectingStart && styles.dateTabActive]}
-                onPress={() => setSelectingStart(true)}
-              >
-                <Text style={styles.dateTabLabel}>FROM</Text>
-                <Text
-                  style={[
-                    styles.dateTabValue,
-                    selectingStart && styles.dateTabValueActive,
-                  ]}
-                >
-                  {startDate || "—"}
-                </Text>
-              </TouchableOpacity>
-              <View style={styles.dateArrow}>
-                <Ionicons name="arrow-forward" size={14} color="#ccc" />
-              </View>
-              <TouchableOpacity
-                style={[styles.dateTab, !selectingStart && styles.dateTabActive]}
-                onPress={() => setSelectingStart(false)}
-              >
-                <Text style={styles.dateTabLabel}>TO</Text>
-                <Text
-                  style={[
-                    styles.dateTabValue,
-                    !selectingStart && styles.dateTabValueActive,
-                  ]}
-                >
-                  {endDate || "—"}
-                </Text>
+              <Text style={styles.modalTitle}>Select Vacation Dates</Text>
+              <TouchableOpacity onPress={() => {
+                setVacationModal(false);
+                setIsVacationEnabled(vacations.length > 0);
+              }}>
+                <Ionicons name="close" size={24} color={Theme.onSurfaceVariant} />
               </TouchableOpacity>
             </View>
             <Calendar
@@ -1118,15 +988,15 @@ export default function ProfileScreen() {
                 }
               }}
               theme={{
-                todayTextColor: Colors.primary,
-                selectedDayBackgroundColor: Colors.primary,
-                arrowColor: Colors.primary,
+                todayTextColor: Theme.primary,
+                selectedDayBackgroundColor: Theme.primary,
+                arrowColor: Theme.primary,
                 textDayFontWeight: "600",
                 textMonthFontWeight: "800",
               }}
             />
             <Button
-              title="Save Vacation"
+              title="Save Dates"
               onPress={handleAddVacation}
               style={{ marginTop: 16 }}
             />
@@ -1134,59 +1004,6 @@ export default function ProfileScreen() {
         </View>
       </Modal>
 
-      {/* ── Edit Profile Modal ── */}
-      <Modal visible={editModal} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalSheet}>
-            <View style={styles.dragHandle} />
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Edit Profile</Text>
-              <TouchableOpacity
-                style={styles.closeBtn}
-                onPress={() => setEditModal(false)}
-              >
-                <Ionicons name="close" size={15} color="#666" />
-              </TouchableOpacity>
-            </View>
-            <ScrollView showsVerticalScrollIndicator={false}>
-              {params.addressRequired === "1" && (
-                <View style={styles.addressRequiredBanner}>
-                  <View style={styles.addressRequiredIcon}>
-                    <Ionicons name="location" size={18} color="#dc2626" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.addressRequiredTitle}>
-                      Delivery address required
-                    </Text>
-                    <Text style={styles.addressRequiredText}>
-                      Add your address to continue placing the order.
-                    </Text>
-                  </View>
-                </View>
-              )}
-              <Input
-                label="Name"
-                value={editName}
-                onChangeText={setEditName}
-                placeholder="Your name"
-              />
-              <Input
-                label="Phone"
-                value={editPhone}
-                onChangeText={setEditPhone}
-                placeholder="Phone number"
-                keyboardType="phone-pad"
-              />
-              <Button
-                title="Save Changes"
-                onPress={handleSaveBasicProfile}
-                loading={saving}
-                style={{ marginTop: 8, marginBottom: 20 }}
-              />
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 }
@@ -1194,369 +1011,390 @@ export default function ProfileScreen() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F4F4F6" },
-
-  // Hero
-  hero: {
+  container: { flex: 1, backgroundColor: Theme.background },
+  scrollContent: {
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 40,
+    gap: 40,
+  },
+  
+  // Hero Section
+  heroSection: {
     alignItems: "center",
-    paddingTop: 36,
-    paddingBottom: 32,
-    paddingHorizontal: 20,
-    backgroundColor: "#fff",
-    marginBottom: 16,
+    paddingTop: 24,
+  },
+  avatarContainer: {
+    position: "relative",
+  },
+  avatarGradient: {
+    width: 128,
+    height: 128,
+    borderRadius: 64,
+    backgroundColor: Theme.primary,
+    padding: 4,
+  },
+  avatarInner: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 64,
+    backgroundColor: Theme.surfaceContainerHighest,
+    borderWidth: 4,
+    borderColor: Theme.background,
     overflow: "hidden",
   },
-  heroBg: {
-    position: "absolute",
-    top: -60,
-    left: -60,
-    right: -60,
-    height: 180,
-    backgroundColor: Colors.primary + "0D",
-    borderRadius: 100,
+  avatarImage: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
   },
-  avatarRing: {
-    width: 94,
-    height: 94,
-    borderRadius: 47,
-    borderWidth: 2.5,
-    borderColor: Colors.primary + "35",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 14,
-  },
-  avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: Colors.primary,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  avatarText: { fontSize: 30, fontWeight: "800", color: "#fff" },
-  avatarBadge: {
+  cameraButton: {
     position: "absolute",
     bottom: 4,
     right: 4,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: "#22c55e",
-    borderWidth: 2.5,
-    borderColor: "#fff",
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Theme.primary,
     justifyContent: "center",
     alignItems: "center",
-  },
-  userName: { fontSize: 22, fontWeight: "800", color: "#111", letterSpacing: -0.5 },
-  userEmail: { fontSize: 13, color: "#aaa", marginTop: 3, fontWeight: "400" },
-  phoneBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    backgroundColor: Colors.primary + "10",
-    paddingHorizontal: 11,
-    paddingVertical: 5,
-    borderRadius: 20,
-    marginTop: 10,
-  },
-  phoneText: { fontSize: 12, color: Colors.primary, fontWeight: "600" },
-  editBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: Colors.primary,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 22,
-    marginTop: 14,
-    shadowColor: Colors.primary,
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
+    shadowColor: "#000",
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 2 },
     elevation: 4,
   },
-  editBtnText: { fontSize: 13, fontWeight: "700", color: "#fff" },
+  userInfo: {
+    alignItems: "center",
+    marginTop: 12,
+  },
+  userName: {
+    fontSize: 28,
+    fontWeight: "700",
+    color: Theme.onSurface,
+    lineHeight: 34,
+  },
+  userEmail: {
+    fontSize: 16,
+    color: Theme.onSurfaceVariant,
+    marginTop: 2,
+  },
 
-  // Cards
-  card: {
-    backgroundColor: "#fff",
-    borderRadius: 22,
-    marginHorizontal: 16,
-    marginBottom: 14,
-    padding: 18,
+  // Edit Profile Section
+  editProfileSection: {
+    gap: 12,
+  },
+  editProfileToggle: {
+    width: "100%",
+    height: 48,
+    backgroundColor: Theme.primary,
+    borderRadius: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
     shadowColor: "#000",
-    shadowOpacity: 0.04,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+  editProfileToggleText: {
+    color: Theme.onPrimary,
+    fontSize: 14,
+    fontWeight: "600",
+    letterSpacing: 0.5,
+  },
+  editProfileFields: {
+    backgroundColor: Theme.surfaceContainerLow,
+    borderRadius: 16,
+    padding: 20,
+    gap: 16,
+  },
+  inputGroup: {
+    gap: 4,
+  },
+  inputLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: Theme.onSurfaceVariant,
+    letterSpacing: 0.5,
+    marginLeft: 4,
+  },
+  inputField: {
+    width: "100%",
+    height: 48,
+    backgroundColor: Theme.surface,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    fontSize: 16,
+    color: Theme.onSurface,
+  },
+  saveChangesBtn: {
+    width: "100%",
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  saveChangesText: {
+    color: Theme.primary,
+    fontSize: 14,
+    fontWeight: "600",
+    letterSpacing: 0.5,
+  },
+
+  // Shared Section Styles
+  sectionContainer: {
+    gap: 12,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 4,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: "600",
+    color: Theme.onSurface,
+  },
+  viewAllText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: Theme.primary,
+    letterSpacing: 0.5,
+  },
+
+  // Cards & Lists
+  cardBlock: {
+    backgroundColor: Theme.surfaceContainerLowest,
+    borderRadius: 16,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 2 },
     elevation: 2,
   },
-  cardHeader: {
+  cardRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: Theme.surfaceContainerHighest,
+  },
+  cardRowLeft: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    marginBottom: 14,
+    gap: 12,
   },
-  cardIconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 11,
+  iconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: "center",
     alignItems: "center",
   },
-  cardTitle: { fontSize: 15, fontWeight: "700", color: "#111", flex: 1 },
-  addIconBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: Colors.primary + "14",
-    justifyContent: "center",
+  cardRowText: {
+    fontSize: 16,
+    color: Theme.onSurface,
+  },
+  cardRowSubText: {
+    fontSize: 12,
+    color: Theme.onSurfaceVariant,
+  },
+  
+  // Vacation Expand
+  vacationDatesBox: {
+    padding: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: Theme.outlineVariant,
+  },
+  vacationDateGrid: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  vacationDateCol: {
+    flex: 1,
+    gap: 4,
+  },
+  dateDisplay: {
+    flexDirection: "row",
     alignItems: "center",
+    gap: 8,
+    backgroundColor: Theme.surface,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Theme.outlineVariant,
+  },
+  dateDisplayText: {
+    fontSize: 16,
+    color: Theme.onSurface,
+  },
+  vacationDisclaimer: {
+    fontSize: 12,
+    color: Theme.onSurfaceVariant,
+    marginTop: 12,
+    marginLeft: 4,
   },
 
-  // Address
-  addressGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  addressList: { gap: 10 },
-  savedAddressCard: {
-    backgroundColor: "#F8FBF7",
-    borderWidth: 1,
-    borderColor: Colors.primary + "22",
+  // Saved Addresses
+  addressList: {
+    gap: 12,
+  },
+  addressCard: {
+    backgroundColor: Theme.surfaceContainerLowest,
+    padding: 16,
     borderRadius: 16,
-    padding: 14,
-  },
-  addressTopRow: {
     flexDirection: "row",
-    alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 8,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
   },
-  addressTypeBadge: {
+  addressCardLeft: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    backgroundColor: "#fff",
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderWidth: 1,
-    borderColor: Colors.primary + "20",
+    gap: 12,
+    flex: 1,
   },
-  addressTypeText: { fontSize: 10, fontWeight: "900", color: Colors.primary },
-  defaultBadge: {
-    backgroundColor: Colors.primary,
-    borderRadius: 999,
-    paddingHorizontal: 9,
-    paddingVertical: 4,
+  addressLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: Theme.onSurface,
   },
-  defaultBadgeText: { fontSize: 10, fontWeight: "900", color: "#fff" },
+  addressText: {
+    fontSize: 12,
+    color: Theme.onSurfaceVariant,
+  },
   addressActions: {
     flexDirection: "row",
-    alignItems: "center",
     gap: 8,
   },
-  addressDeleteBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 10,
-    backgroundColor: "#FEF2F2",
-    borderWidth: 1,
-    borderColor: "#FECACA",
-    alignItems: "center",
-    justifyContent: "center",
+  actionBtnIcon: {
+    padding: 8,
   },
-  savedAddressText: {
+  emptyStateText: {
     fontSize: 14,
-    fontWeight: "700",
-    color: "#111827",
-    lineHeight: 20,
+    color: Theme.onSurfaceVariant,
+    fontStyle: "italic",
+    paddingHorizontal: 4,
   },
-  savedAddressAction: {
-    marginTop: 8,
-    fontSize: 12,
-    fontWeight: "800",
-    color: Colors.primary,
-  },
-  addressPill: {
-    flex: 1,
-    minWidth: 90,
-    backgroundColor: "#F8F8FA",
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  addressPillLabel: {
-    fontSize: 10,
-    color: "#aaa",
-    fontWeight: "600",
-    textTransform: "uppercase",
-    marginBottom: 3,
-  },
-  addressPillValue: { fontSize: 14, fontWeight: "700", color: "#111" },
-  emptyAddress: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingVertical: 4,
-  },
-  emptyAddressText: { fontSize: 14, color: Colors.primary, fontWeight: "600" },
-  addressTypeRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginBottom: 12,
-  },
-  addressTypeChip: {
-    flex: 1,
-    minHeight: 40,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.primary + "22",
-    backgroundColor: Colors.primary + "08",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-  },
-  addressTypeChipActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  addressTypeChipText: {
-    fontSize: 12,
-    fontWeight: "900",
-    color: Colors.primary,
-  },
-  addressTypeChipTextActive: { color: "#fff" },
-  defaultAddressRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    backgroundColor: "#F8F8FA",
-    borderRadius: 14,
-    padding: 12,
-    marginTop: 4,
-    marginBottom: 8,
-  },
-  defaultCheck: {
-    width: 22,
-    height: 22,
-    borderRadius: 7,
-    borderWidth: 1.5,
-    borderColor: Colors.primary,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  defaultCheckActive: { backgroundColor: Colors.primary },
-  defaultAddressText: { fontSize: 13, fontWeight: "800", color: "#111827" },
-
-  // Vacation
-  hintText: { fontSize: 12, color: "#bbb", marginBottom: 12, marginTop: -6 },
-  vacationList: { gap: 8 },
-  vacationChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 9,
-    backgroundColor: "#FFFBEB",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#FDE68A",
-    paddingHorizontal: 13,
-    paddingVertical: 10,
-  },
-  vacationChipText: { flex: 1, fontSize: 13, fontWeight: "600", color: "#92400e" },
-  vacationDeleteBtn: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: "#FEF3C7",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  emptyState: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingVertical: 4,
-  },
-  emptyText: { fontSize: 13, color: "#d1d5db", fontStyle: "italic" },
 
   // Orders
-  expandBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: Colors.primary + "12",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 10,
+  orderList: {
+    gap: 12,
   },
-  expandBtnText: { fontSize: 12, fontWeight: "700", color: Colors.primary },
-  orderRow: {
+  orderCard: {
+    backgroundColor: Theme.surfaceContainerLowest,
+    padding: 16,
+    borderRadius: 16,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 13,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
   },
-  orderRowBorder: { borderBottomWidth: 1, borderBottomColor: "#F3F4F6" },
-  orderLeft: { flexDirection: "row", alignItems: "center", gap: 12, flex: 1 },
-  orderIconBox: {
-    width: 38,
-    height: 38,
+  orderCardLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    flex: 1,
+  },
+  orderImageBox: {
+    width: 48,
+    height: 48,
     borderRadius: 12,
-    justifyContent: "center",
-    alignItems: "center",
+    backgroundColor: Theme.surfaceContainerHigh,
+    overflow: "hidden",
   },
-  orderName: { fontSize: 14, fontWeight: "700", color: "#111", marginBottom: 1 },
-  orderDate: { fontSize: 12, color: "#aaa", marginBottom: 1 },
-  orderItems: { fontSize: 11, color: "#bbb" },
-  orderRight: { alignItems: "flex-end", gap: 5 },
-  statusPill: {
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    borderRadius: 20,
-    borderWidth: 1,
+  orderImage: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
   },
-  statusText: { fontSize: 10, fontWeight: "700", textTransform: "capitalize" },
-  orderAmt: { fontSize: 14, fontWeight: "800", color: "#111" },
-
-  // Logout
-  logoutBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginHorizontal: 16,
-    marginTop: 4,
-    padding: 16,
-    backgroundColor: "#FEF2F2",
-    borderRadius: 18,
-    gap: 12,
-    borderWidth: 1,
-    borderColor: "#FECACA",
+  orderMeta: {
+    flex: 1,
   },
-  logoutIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    backgroundColor: "#FEE2E2",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  logoutText: { fontSize: 15, fontWeight: "700", color: "#ef4444" },
-  deleteAccountBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginHorizontal: 16,
-    marginTop: 10,
-    padding: 16,
-    backgroundColor: "#FFF7F7",
-    borderRadius: 18,
-    gap: 12,
-    borderWidth: 1,
-    borderColor: "#FECACA",
-  },
-  deleteAccountText: { fontSize: 15, fontWeight: "800", color: "#dc2626" },
-  deleteAccountHelp: {
+  orderName: {
     fontSize: 14,
-    color: "#6B7280",
-    lineHeight: 20,
-    marginBottom: 14,
+    fontWeight: "600",
+    color: Theme.onSurface,
+    marginBottom: 4,
+  },
+  orderStatusPill: {
+    alignSelf: "flex-start",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+  },
+  orderStatusText: {
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  orderPrice: {
+    fontSize: 20,
+    fontWeight: "600",
+    color: Theme.onSurfaceVariant,
+  },
+  showMoreBtn: {
+    width: "100%",
+    paddingVertical: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  showMoreText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: Theme.onSurfaceVariant,
+  },
+
+  // Account Actions
+  accountActionsSection: {
+    paddingTop: 24,
+    gap: 12,
+  },
+  actionButton: {
+    width: "100%",
+    height: 48,
+    backgroundColor: Theme.surfaceContainerHigh,
+    borderRadius: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  actionButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: Theme.onSurface,
+    letterSpacing: 0.5,
+  },
+  deleteButton: {
+    width: "100%",
+    height: 48,
+    backgroundColor: Theme.errorContainer,
+    borderRadius: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  deleteButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: Theme.error,
+    letterSpacing: 0.5,
   },
 
   // Modals
@@ -1567,20 +1405,11 @@ const styles = StyleSheet.create({
   },
   modalSheet: {
     backgroundColor: "#fff",
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     padding: 24,
-    paddingBottom: 36,
-    maxHeight: "93%",
-  },
-  modalBody: { paddingBottom: 4 },
-  dragHandle: {
-    width: 36,
-    height: 4,
-    backgroundColor: "#E5E7EB",
-    borderRadius: 2,
-    alignSelf: "center",
-    marginBottom: 20,
+    paddingBottom: 40,
+    maxHeight: "90%",
   },
   modalHeader: {
     flexDirection: "row",
@@ -1588,77 +1417,20 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 20,
   },
-  modalTitle: { fontSize: 20, fontWeight: "800", color: "#111" },
-  closeBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: "#F3F4F6",
-    justifyContent: "center",
-    alignItems: "center",
+  modalTitle: { fontSize: 20, fontWeight: "700", color: Theme.onSurface },
+  dragHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: Theme.surfaceContainerHighest,
+    borderRadius: 2,
+    alignSelf: "center",
+    marginBottom: 20,
   },
-  dateTabs: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
+  modalBody: { paddingBottom: 4 },
+  deleteAccountHelp: {
+    fontSize: 14,
+    color: Theme.onSurfaceVariant,
+    lineHeight: 20,
     marginBottom: 16,
   },
-  dateArrow: { paddingHorizontal: 2 },
-  dateTab: {
-    flex: 1,
-    backgroundColor: "#F8F8FA",
-    borderRadius: 14,
-    padding: 13,
-    borderWidth: 1.5,
-    borderColor: "transparent",
-  },
-  dateTabActive: {
-    borderColor: Colors.primary,
-    backgroundColor: Colors.primary + "08",
-  },
-  dateTabLabel: {
-    fontSize: 10,
-    color: "#bbb",
-    fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  dateTabValue: { fontSize: 15, fontWeight: "700", color: "#111", marginTop: 4 },
-  dateTabValueActive: { color: Colors.primary },
-  addressSectionLabel: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#999",
-    textTransform: "uppercase",
-    letterSpacing: 1,
-    marginTop: 12,
-    marginBottom: 8,
-  },
-  profileDivider: {
-    height: 1,
-    backgroundColor: "#F1F5F9",
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  addressRequiredBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    backgroundColor: "#FEF2F2",
-    borderColor: "#FECACA",
-    borderWidth: 1,
-    borderRadius: 16,
-    padding: 12,
-    marginBottom: 16,
-  },
-  addressRequiredIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 11,
-    backgroundColor: "#FEE2E2",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  addressRequiredTitle: { fontSize: 13, fontWeight: "900", color: "#991B1B" },
-  addressRequiredText: { fontSize: 11.5, color: "#B91C1C", marginTop: 2 },
 });
