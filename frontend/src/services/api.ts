@@ -969,8 +969,10 @@ class ApiService {
   }
 
   async getOrders() {
-    return this.request<any[]>("/orders", { timeoutMs: 60_000 });
-  }
+  return this.request<any[]>("/delivery/my-orders", {
+    timeoutMs: 60_000,
+  });
+}
 
   async getOrder(id: string) {
     return this.request<any>(`/orders/${id}`);
@@ -3370,6 +3372,17 @@ async getFarmSales(search?: string) {
     if (search) params.append("search", search);
     const query = params.toString() ? `?${params.toString()}` : "";
     return this.request<FarmSale[]>(`/farm-sales${query}`);
+  }
+
+// inside your api service object/class (src/services/api.ts)
+async updateSubscriptionStatus(subscriptionId: string, status: string) {
+    return this.request<any>("/delivery/subscription-status-update", {
+      method: "POST",
+      body: JSON.stringify({
+        order_id: subscriptionId,
+        status: status,
+      }),
+    });
   }
 
   // Logout

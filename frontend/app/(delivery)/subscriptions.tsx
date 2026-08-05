@@ -367,7 +367,7 @@ export default function SubscriptionsScreen() {
     );
   }, []);
 
-  const handleMarkDelivered = useCallback(async (sub: Subscription) => {
+const handleMarkDelivered = useCallback(async (sub: Subscription) => {
     const key = `${sub.id}:${todayStr()}`;
     Alert.alert(
       "📦 Mark as Delivered",
@@ -378,25 +378,17 @@ export default function SubscriptionsScreen() {
           text: "Confirm Delivered",
           onPress: async () => {
             try {
-              const orders: any[] = await api.getOrders().catch(() => []);
-              const todayOrder = orders.find(
-                (o) =>
-                  o.subscription_id === sub.id &&
-                  o.delivery_date === todayStr(),
-              );
-              if (todayOrder) {
-                await api
-                  .updateOrderStatus(todayOrder.id, "delivered")
-                  .catch(() => null);
-              }
-            } catch {
-              /* graceful */
-            } finally {
+              // Directly call the dedicated subscription delivery update endpoint
+              // This guarantees the backend upserts the order for today so it won't vanish on refresh
+              await api.updateSubscriptionStatus(sub.id, "delivered");
+              
               setDeliveredToday((prev) => new Set([...prev, key]));
               Alert.alert(
                 "✅ Delivered!",
                 "Marked as delivered for today. See you tomorrow!",
               );
+            } catch (err: any) {
+              Alert.alert("Error", err?.message || "Could not update status");
             }
           },
         },
