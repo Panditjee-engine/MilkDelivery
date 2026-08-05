@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { api } from "../../src/services/api";
 
@@ -114,6 +114,54 @@ const formatQuantity = (value: number) =>
   Number.isInteger(value)
     ? String(value)
     : value.toFixed(2).replace(/\.?0+$/, "");
+
+const parseUnitDescriptor = (unit?: string) => {
+  const text = String(unit || "").trim().toLowerCase();
+  const match = text.match(
+    /(\d+(?:\.\d+)?)?\s*(ml|milliliter|millilitre|l|ltr|liter|litre|g|gm|gram|kg|kilogram|pc|pcs|piece|pieces|unit|units)/,
+  );
+  if (!match) return null;
+  const size = Number.parseFloat(match[1] || "1");
+  const token = match[2];
+  if (["ml", "milliliter", "millilitre"].includes(token)) {
+    return { kind: "volume", packSize: size };
+  }
+  if (["l", "ltr", "liter", "litre"].includes(token)) {
+    return { kind: "volume", packSize: size * 1000 };
+  }
+  if (["g", "gm", "gram"].includes(token)) {
+    return { kind: "weight", packSize: size };
+  }
+  if (["kg", "kilogram"].includes(token)) {
+    return { kind: "weight", packSize: size * 1000 };
+  }
+  return { kind: "count", packSize: size };
+};
+
+const formatBaseMetric = (amount: number, kind?: string) => {
+  if (kind === "volume") {
+    return amount >= 1000
+      ? `${formatQuantity(amount / 1000)} L`
+      : `${formatQuantity(amount)} ml`;
+  }
+  if (kind === "weight") {
+    return amount >= 1000
+      ? `${formatQuantity(amount / 1000)} kg`
+      : `${formatQuantity(amount)} g`;
+  }
+  return `${formatQuantity(amount)} qty`;
+};
+
+const formatPackedQuantity = (quantity: number, unit?: string) => {
+  const parsed = parseUnitDescriptor(unit);
+  if (!parsed) return `${formatQuantity(quantity)} ${unit || "qty"}`;
+  const total = quantity * parsed.packSize;
+  const hasPackSize = /\d/.test(String(unit || ""));
+  const totalText = formatBaseMetric(total, parsed.kind);
+  return hasPackSize
+    ? `${formatQuantity(quantity)} x ${unit} = ${totalText}`
+    : totalText;
+};
 const normalizeName = (value: string) => value.trim().toLowerCase();
 
 const matchesProduct = (
@@ -146,6 +194,7 @@ const addressText = (order: Order) => {
 
 export default function AdminOrderSummaryScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ date?: string }>();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
@@ -182,6 +231,28 @@ export default function AdminOrderSummaryScreen() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  useEffect(() => {
+    const dateParam = Array.isArray(params.date) ? params.date[0] : params.date;
+    if (!dateParam) return;
+    const key = getOrderDateKey(dateParam);
+    if (!key) return;
+    if (key === getLocalDateKey()) {
+      setDateFilter("TODAY");
+      setCustomStartDate("");
+      setCustomEndDate("");
+      return;
+    }
+    if (key === getTomorrowDateKey()) {
+      setDateFilter("TOMORROW");
+      setCustomStartDate("");
+      setCustomEndDate("");
+      return;
+    }
+    setDateFilter("CUSTOM");
+    setCustomStartDate(key);
+    setCustomEndDate(key);
+  }, [params.date]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -603,7 +674,9 @@ export default function AdminOrderSummaryScreen() {
               : `Total ${selectedProduct}`}
           </Text>
           <Text style={s.totalValue}>
-            Qty: {formatQuantity(summary.quantity)} · Units: {unit}
+            {selectedProduct === "All"
+              ? `${formatQuantity(summary.quantity)} items`
+              : formatPackedQuantity(summary.quantity, unit)}
           </Text>
         </View>
         <View style={s.totalRight}>

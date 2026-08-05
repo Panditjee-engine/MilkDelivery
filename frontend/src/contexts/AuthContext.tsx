@@ -17,6 +17,7 @@ interface User {
   zone?: string;
   referral_admin_id?: string;
   admin_id?: string; 
+  manual_qr_recharge_enabled?: boolean;
 }
 
 interface Worker {

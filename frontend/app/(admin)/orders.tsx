@@ -62,11 +62,12 @@ interface Order {
   items: {
     product_name?: string;
     product_id?: string;
-    product?: { id?: string; _id?: string; name?: string };
+    product?: { id?: string; _id?: string; name?: string; unit?: string };
     id?: string;
     _id?: string;
     quantity?: number;
     name?: string;
+    unit?: string;
   }[];
   address?: { tower?: string; flat?: string; area?: string };
   delivery_partner_name?: string;
@@ -81,6 +82,7 @@ interface SubscriptionItem {
   quantity: number;
   price: number;
   amount: number;
+  unit?: string;
 }
 
 interface Subscription {
@@ -126,6 +128,157 @@ const getOrderItemProductId = (item: Order["items"][number]) =>
   "";
 
 const getProductId = (product: any) => product?.id || product?._id || "";
+
+const formatQuantity = (value: number) =>
+  Number.isInteger(value)
+    ? String(value)
+    : value.toFixed(2).replace(/\.?0+$/, "");
+
+const parseUnitDescriptor = (unit?: string) => {
+  const text = String(unit || "").trim().toLowerCase();
+  const match = text.match(
+    /(\d+(?:\.\d+)?)?\s*(ml|milliliter|millilitre|l|ltr|liter|litre|g|gm|gram|kg|kilogram|pc|pcs|piece|pieces|unit|units)/,
+  );
+  if (!match) return null;
+  const size = Number.parseFloat(match[1] || "1");
+  const token = match[2];
+  if (["ml", "milliliter", "millilitre"].includes(token)) {
+    return { kind: "volume", packSize: size };
+  }
+  if (["l", "ltr", "liter", "litre"].includes(token)) {
+    return { kind: "volume", packSize: size * 1000 };
+  }
+  if (["g", "gm", "gram"].includes(token)) return { kind: "weight", packSize: size };
+  if (["kg", "kilogram"].includes(token)) {
+    return { kind: "weight", packSize: size * 1000 };
+  }
+  return { kind: "count", packSize: size };
+};
+
+const formatBaseMetric = (amount: number, kind?: string) => {
+  if (kind === "volume") {
+    return amount >= 1000
+      ? `${formatQuantity(amount / 1000)} L`
+      : `${formatQuantity(amount)} ml`;
+  }
+  if (kind === "weight") {
+    return amount >= 1000
+      ? `${formatQuantity(amount / 1000)} kg`
+      : `${formatQuantity(amount)} g`;
+  }
+  return `${formatQuantity(amount)} qty`;
+};
+
+const getOrderItemUnit = (item: Order["items"][number], products: any[]) => {
+  const itemId = getOrderItemProductId(item);
+  const product = products.find((p) => getProductId(p) === itemId);
+  return item.unit || item.product?.unit || product?.unit || "qty";
+};
+
+const formatOrderItemQuantity = (
+  item: Order["items"][number],
+  products: any[],
+) => {
+  const quantity = Number(item.quantity || 1);
+  const unit = getOrderItemUnit(item, products);
+  const parsed = parseUnitDescriptor(unit);
+  if (!parsed) return `${formatQuantity(quantity)} ${unit}`;
+  const total = quantity * parsed.packSize;
+  const totalText = formatBaseMetric(total, parsed.kind);
+  return /\d/.test(String(unit))
+    ? `${formatQuantity(quantity)} x ${unit} = ${totalText}`
+    : totalText;
+};
+
+const getSubscriptionItemProduct = (item: SubscriptionItem, products: any[]) => {
+  const byId = products.find(
+    (p) =>
+      String(p.id || "") === String(item.product_id || "") ||
+      String(p._id || "") === String(item.product_id || ""),
+  );
+  if (byId) return byId;
+
+  const itemName = normalizeName(item.product_name || "");
+  if (!itemName) return undefined;
+  return products.find((p) => {
+    const productName = normalizeName(p.name || p.product_name || "");
+    return (
+      productName &&
+      (productName === itemName ||
+        productName.includes(itemName) ||
+        itemName.includes(productName))
+    );
+  });
+};
+
+const getSubscriptionItemName = (
+  item: SubscriptionItem,
+  productNames: Record<string, string>,
+  products: any[],
+) =>
+  item.product_name ||
+  productNames[item.product_id] ||
+  getSubscriptionItemProduct(item, products)?.name ||
+  item.product_id ||
+  "Product";
+
+const extractUnitLabel = (value?: string) => {
+  const match = String(value || "").match(
+    /(\d+(?:\.\d+)?)?\s*(ml|milliliter|millilitre|l|ltr|liter|litre|g|gm|gram|kg|kilogram|pc|pcs|piece|pieces|unit|units)\b/i,
+  );
+  return match ? match[0].replace(/\s+/g, "") : "";
+};
+
+const getSubscriptionItemUnit = (
+  item: SubscriptionItem,
+  productNames: Record<string, string>,
+  products: any[],
+) => {
+  const product = getSubscriptionItemProduct(item, products);
+  return (
+    item.unit ||
+    product?.unit ||
+    extractUnitLabel(getSubscriptionItemName(item, productNames, products)) ||
+    extractUnitLabel(product?.name || product?.product_name) ||
+    "qty"
+  );
+};
+
+const isGheeText = (text: string) =>
+  /\b(ghee|ghi)\b/.test(text.toLowerCase());
+
+const isMilkSubscriptionItem = (
+  item: SubscriptionItem,
+  productNames: Record<string, string>,
+  products: any[],
+) => {
+  const product = getSubscriptionItemProduct(item, products);
+  const name = getSubscriptionItemName(item, productNames, products);
+  const unit = getSubscriptionItemUnit(item, productNames, products);
+  const category = String(product?.category || product?.category_name || "");
+  const text = `${name} ${category} ${unit}`.toLowerCase();
+  if (isGheeText(text)) return false;
+  return (
+    /\b(milk|doodh)\b/.test(text) ||
+    category.toLowerCase().includes("milk") ||
+    category.toLowerCase().includes("dairy")
+  );
+};
+
+const formatSubscriptionItemQuantity = (
+  item: SubscriptionItem,
+  productNames: Record<string, string>,
+  products: any[],
+) => {
+  const quantity = Number(item.quantity || 1);
+  const unit = getSubscriptionItemUnit(item, productNames, products);
+  const parsed = parseUnitDescriptor(unit);
+  if (!parsed) return `${formatQuantity(quantity)} ${unit}`;
+  const totalText = formatBaseMetric(quantity * parsed.packSize, parsed.kind);
+  return /\d/.test(unit)
+    ? `${formatQuantity(quantity)} x ${unit} = ${totalText}`
+    : totalText;
+};
 
 const normalizeName = (value: string) => value.trim().toLowerCase();
 
@@ -179,6 +332,49 @@ const dateFromKey = (dateKey?: string) => {
   const [year, month, day] = dateKey.split("-").map(Number);
   if (!year || !month || !day) return new Date();
   return new Date(year, month - 1, day);
+};
+
+const shouldSubscriptionDeliverOn = (sub: Subscription, dateKey: string) => {
+  const status = String(sub.status || "").toLowerCase();
+  if (
+    sub.is_active === false ||
+    ["cancelled", "canceled", "inactive", "paused", "rejected"].includes(status)
+  ) {
+    return false;
+  }
+
+  const pattern = String(sub.pattern || "").toLowerCase();
+  const startKey = getOrderDateKey(sub.start_date);
+  const endKey = getOrderDateKey(sub.end_date);
+  if (!pattern || !startKey || dateKey < startKey) return false;
+  if (endKey && dateKey > endKey) return false;
+
+  const target = dateFromKey(dateKey);
+  const start = dateFromKey(startKey);
+  const daysDiff = Math.floor(
+    (target.getTime() - start.getTime()) / (24 * 60 * 60 * 1000),
+  );
+  const mondayZeroDay = (target.getDay() + 6) % 7;
+  const customDays = Array.isArray(sub.custom_days) ? sub.custom_days : [];
+
+  if (pattern === "daily") return true;
+  if (pattern === "alternate") return daysDiff % 2 === 0;
+  if (pattern === "custom" || pattern === "weekly") {
+    return customDays.map(Number).includes(mondayZeroDay);
+  }
+  if (pattern === "buy_once") return dateKey === startKey;
+  return false;
+};
+
+const subscriptionOverlapsRange = (
+  sub: Subscription,
+  startKey: string,
+  endKey: string,
+) => {
+  const subStart = getOrderDateKey(sub.start_date);
+  const subEnd = getOrderDateKey(sub.end_date) || "9999-12-31";
+  if (!subStart) return false;
+  return (!startKey || subEnd >= startKey) && (!endKey || subStart <= endKey);
 };
 
 // ─── Product Name Cache ───────────────────────────────────────────────────────
@@ -420,6 +616,7 @@ interface SubModalProps {
   visible: boolean;
   subscription: Subscription | null;
   productNames: Record<string, string>;
+  products: any[];
   onDismiss: () => void;
 }
 
@@ -427,6 +624,7 @@ function SubscriptionDetailModal({
   visible,
   subscription,
   productNames,
+  products,
   onDismiss,
 }: SubModalProps) {
   const slideAnim = useRef(new Animated.Value(400)).current;
@@ -641,7 +839,11 @@ function SubscriptionDetailModal({
                   <Text style={sm.sectionLabel}>ITEMS</Text>
                   <View style={sm.itemsCard}>
                     {subscription.items?.map((item, i) => {
-                      const name = resolveItemName(item, productNames);
+                      const name = getSubscriptionItemName(
+                        item,
+                        productNames,
+                        products,
+                      );
                       return (
                         <View
                           key={i}
@@ -653,7 +855,11 @@ function SubscriptionDetailModal({
                               {name}
                             </Text>
                             <Text style={sm.itemUnitPrice}>
-                              ₹{item.price} / unit
+                              {formatSubscriptionItemQuantity(
+                                item,
+                                productNames,
+                                products,
+                              )}
                             </Text>
                           </View>
                           <View style={sm.itemRight}>
@@ -722,6 +928,7 @@ interface SubRowProps {
   onToggle: () => void;
   onViewDetail: () => void;
   productNames: Record<string, string>;
+  products: any[];
 }
 
 function SubscriptionRow({
@@ -730,6 +937,7 @@ function SubscriptionRow({
   onToggle,
   onViewDetail,
   productNames,
+  products,
 }: SubRowProps) {
   const pc = PATTERN_CONFIG[item.pattern] ?? PATTERN_CONFIG.daily;
   const itemCount = item.items?.length ?? 0;
@@ -738,9 +946,13 @@ function SubscriptionRow({
   const itemSummaryLine = item.items
     ?.slice(0, 2)
     .map((p) => {
-      const name = resolveItemName(p, productNames);
+      const name = getSubscriptionItemName(p, productNames, products);
       const short = name.length > 14 ? name.slice(0, 13) + "…" : name;
-      return `${short} ×${p.quantity}`;
+      return `${short} · ${formatSubscriptionItemQuantity(
+        p,
+        productNames,
+        products,
+      )}`;
     })
     .join("  ·  ")
     .concat(item.items?.length > 2 ? `  +${item.items.length - 2} more` : "");
@@ -1183,14 +1395,15 @@ export default function AdminOrdersScreen() {
   }, [allOrders, products]);
 
   const customerOptions = useMemo(() => {
-    const names = allOrders
+    const source = activeTab === "orders" ? allOrders : allSubscriptions;
+    const names = source
       .map(
-        (order) =>
-          order.customer_name || order.customer_phone || "Unknown Customer"
+        (item) =>
+          item.customer_name || item.customer_phone || "Unknown Customer"
       )
       .filter(Boolean);
     return ["ALL", ...Array.from(new Set(names))];
-  }, [allOrders]);
+  }, [activeTab, allOrders, allSubscriptions]);
 
   const filteredOrders = useMemo(() => {
     const selectedProductMeta = products.find((product) => {
@@ -1243,19 +1456,100 @@ export default function AdminOrdersScreen() {
   ]);
 
   const filteredSubs = allSubscriptions.filter((s) => {
-    if (subFilter === "ACTIVE") return s.is_active === true;
-    if (subFilter === "INACTIVE") return s.is_active === false;
-    return true;
+    const statusMatch =
+      subFilter === "ALL" ||
+      (subFilter === "ACTIVE" ? s.is_active === true : s.is_active === false);
+    const customerMatch =
+      selectedCustomer === "ALL" ||
+      s.customer_name === selectedCustomer ||
+      s.customer_phone === selectedCustomer;
+    const dateMatch =
+      dateFilter === "ALL" ||
+      (dateFilter === "CUSTOM"
+        ? subscriptionOverlapsRange(s, customStartDate, customEndDate)
+        : shouldSubscriptionDeliverOn(
+            s,
+            dateFilter === "TODAY" ? getLocalDateKey() : getTomorrowDateKey(),
+          ));
+    return statusMatch && customerMatch && dateMatch;
   });
 
+  const subscriptionSummary = useMemo(() => {
+    const productMap = new Map<
+      string,
+      { subscriptions: number; quantity: number; unit: string; isMilk: boolean; isGhee: boolean }
+    >();
+    let milkSubscriptions = 0;
+    let gheeSubscriptions = 0;
+
+    filteredSubs.forEach((sub) => {
+      const items = sub.items || [];
+      const hasGhee = items.some((item) => {
+        const name = getSubscriptionItemName(item, productNames, products);
+        return isGheeText(name);
+      });
+      const hasMilk = items.some((item) =>
+        isMilkSubscriptionItem(item, productNames, products),
+      );
+      if (hasMilk) milkSubscriptions += 1;
+      if (hasGhee) gheeSubscriptions += 1;
+
+      const seenInSub = new Set<string>();
+      items.forEach((item) => {
+        const name = getSubscriptionItemName(item, productNames, products);
+        const unit = getSubscriptionItemUnit(item, productNames, products);
+        const key = normalizeName(name);
+        const current = productMap.get(key) || {
+          subscriptions: 0,
+          quantity: 0,
+          unit,
+          isMilk: isMilkSubscriptionItem(item, productNames, products),
+          isGhee: isGheeText(name),
+        };
+        productMap.set(key, {
+          ...current,
+          subscriptions: current.subscriptions + (seenInSub.has(key) ? 0 : 1),
+          quantity: current.quantity + Number(item.quantity || 1),
+          unit: current.unit || unit,
+          isMilk: current.isMilk || isMilkSubscriptionItem(item, productNames, products),
+          isGhee: current.isGhee || isGheeText(name),
+        });
+        seenInSub.add(key);
+      });
+    });
+
+    const productsSummary = Array.from(productMap.entries())
+      .map(([nameKey, data]) => ({
+        name:
+          filteredSubs
+            .flatMap((sub) => sub.items || [])
+            .map((item) => getSubscriptionItemName(item, productNames, products))
+            .find((name) => normalizeName(name) === nameKey) || "Product",
+        ...data,
+      }))
+      .sort((a, b) => b.subscriptions - a.subscriptions);
+    const fullCreamMilk = productsSummary.find((item) =>
+      normalizeName(item.name).includes("full cream milk"),
+    );
+
+    return {
+      total: filteredSubs.length,
+      milkSubscriptions,
+      gheeSubscriptions,
+      fullCreamMilk,
+      productsSummary,
+    };
+  }, [filteredSubs, productNames, products]);
+
   const activeFilterCount = [
-    filter !== "ALL",
+    activeTab === "orders" ? filter !== "ALL" : subFilter !== "ALL",
     dateFilter !== "ALL",
     selectedCustomer !== "ALL",
   ].filter(Boolean).length;
 
   const resetFilters = () => {
     setFilter("ALL");
+    setSubFilter("ALL");
     setDateFilter("ALL");
     setProductFilter("ALL");
     setSelectedCustomer("ALL");
@@ -1362,7 +1656,9 @@ export default function AdminOrdersScreen() {
                   numberOfLines={1}
                 >
                   {getOrderItemName(p)}
-                  {p.quantity != null ? ` ×${p.quantity}` : ""}
+                  {p.quantity != null
+                    ? ` · ${formatOrderItemQuantity(p, products)}`
+                    : ""}
                 </Text>
               </View>
             ))}
@@ -1514,7 +1810,9 @@ export default function AdminOrdersScreen() {
                   </Text>
                   {p.quantity != null && (
                     <View style={styles.expandedItemQtyBadge}>
-                      <Text style={styles.expandedItemQty}>×{p.quantity}</Text>
+                      <Text style={styles.expandedItemQty}>
+                        {formatOrderItemQuantity(p, products)}
+                      </Text>
                     </View>
                   )}
                 </View>
@@ -1602,6 +1900,7 @@ export default function AdminOrdersScreen() {
       onToggle={() => toggleSubExpand(item.id)}
       onViewDetail={() => setSelectedSub(item)}
       productNames={productNames}
+      products={products}
     />
   );
 
@@ -1619,6 +1918,7 @@ export default function AdminOrdersScreen() {
         visible={!!selectedSub}
         subscription={selectedSub}
         productNames={productNames}
+        products={products}
         onDismiss={() => setSelectedSub(null)}
       />
 
@@ -1631,6 +1931,11 @@ export default function AdminOrdersScreen() {
           {activeTab === "orders" && (
             <Text style={styles.activeFilterText}>
               {filteredOrders.length} shown · {filter} · {dateFilter}
+            </Text>
+          )}
+          {activeTab === "subscriptions" && (
+            <Text style={styles.activeFilterText}>
+              {filteredSubs.length} shown · {subFilter} · {dateFilter}
             </Text>
           )}
           {activeTab === "orders" && ordersCount > 0 && (
@@ -1647,22 +1952,20 @@ export default function AdminOrdersScreen() {
           )}
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          {activeTab === "orders" && (
-            <TouchableOpacity
-              style={styles.headerFilterBtn}
-              onPress={() => setFilterSheetVisible(true)}
-              activeOpacity={0.82}
-            >
-              <Ionicons name="options-outline" size={19} color="#BB6B3F" />
-              {activeFilterCount ? (
-                <View style={styles.filterCountDot}>
-                  <Text style={styles.filterCountText}>
-                    {activeFilterCount}
-                  </Text>
-                </View>
-              ) : null}
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            style={styles.headerFilterBtn}
+            onPress={() => setFilterSheetVisible(true)}
+            activeOpacity={0.82}
+          >
+            <Ionicons name="options-outline" size={19} color="#BB6B3F" />
+            {activeFilterCount ? (
+              <View style={styles.filterCountDot}>
+                <Text style={styles.filterCountText}>
+                  {activeFilterCount}
+                </Text>
+              </View>
+            ) : null}
+          </TouchableOpacity>
           <View style={styles.countBadge}>
             <Text style={styles.countText}>{tabCount}</Text>
           </View>
@@ -1795,26 +2098,62 @@ export default function AdminOrdersScreen() {
       {/* SUBSCRIPTIONS TAB */}
       {activeTab === "subscriptions" && (
         <>
-          <View style={styles.filterRow}>
-            {(["ALL", "ACTIVE", "INACTIVE"] as const).map((f) => (
-              <TouchableOpacity
-                key={f}
-                style={[
-                  styles.filterChip,
-                  subFilter === f && styles.filterChipActive,
-                ]}
-                onPress={() => setSubFilter(f)}
-              >
-                <Text
-                  style={[
-                    styles.filterText,
-                    subFilter === f && styles.filterTextActive,
-                  ]}
-                >
-                  {f}
+          <View style={styles.subscriptionSummaryWrap}>
+            <View style={styles.subscriptionSummaryGrid}>
+              <View style={styles.subscriptionSummaryCard}>
+                <Text style={styles.subscriptionSummaryValue}>
+                  {subscriptionSummary.total}
                 </Text>
-              </TouchableOpacity>
-            ))}
+                <Text style={styles.subscriptionSummaryLabel}>Total Subs</Text>
+              </View>
+              <View style={styles.subscriptionSummaryCard}>
+                <Text style={styles.subscriptionSummaryValue}>
+                  {subscriptionSummary.milkSubscriptions}
+                </Text>
+                <Text style={styles.subscriptionSummaryLabel}>Milk Subs</Text>
+              </View>
+              <View style={styles.subscriptionSummaryCard}>
+                <Text style={styles.subscriptionSummaryValue}>
+                  {subscriptionSummary.gheeSubscriptions}
+                </Text>
+                <Text style={styles.subscriptionSummaryLabel}>Ghee Subs</Text>
+              </View>
+              <View style={styles.subscriptionSummaryCard}>
+                <Text style={styles.subscriptionSummaryValue}>
+                  {subscriptionSummary.fullCreamMilk?.subscriptions || 0}
+                </Text>
+                <Text style={styles.subscriptionSummaryLabel}>
+                  Full Cream Milk
+                </Text>
+              </View>
+            </View>
+
+            {subscriptionSummary.productsSummary.length > 0 ? (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.subscriptionProductChips}
+              >
+                {subscriptionSummary.productsSummary.slice(0, 6).map((item) => (
+                  <View key={item.name} style={styles.subscriptionProductChip}>
+                    <Text
+                      style={styles.subscriptionProductName}
+                      numberOfLines={1}
+                    >
+                      {item.name}
+                    </Text>
+                    <Text style={styles.subscriptionProductMeta}>
+                      {item.subscriptions} subs ·{" "}
+                      {formatBaseMetric(
+                        item.quantity *
+                          (parseUnitDescriptor(item.unit)?.packSize || 1),
+                        parseUnitDescriptor(item.unit)?.kind,
+                      )}
+                    </Text>
+                  </View>
+                ))}
+              </ScrollView>
+            ) : null}
           </View>
 
           {subsLoading && !subsRefreshing ? (
@@ -1842,8 +2181,10 @@ export default function AdminOrdersScreen() {
                   </View>
                   <Text style={styles.emptyTitle}>No subscriptions found</Text>
                   <Text style={styles.emptyDesc}>
-                    {subFilter !== "ALL"
-                      ? `No ${subFilter.toLowerCase()} subscriptions.`
+                    {subFilter !== "ALL" ||
+                    dateFilter !== "ALL" ||
+                    selectedCustomer !== "ALL"
+                      ? "Try changing customer, status or date filter."
                       : "Recurring subscriptions (daily, alternate, custom) appear here."}
                   </Text>
                 </View>
@@ -1865,7 +2206,9 @@ export default function AdminOrdersScreen() {
           <View style={styles.filterSheet}>
             <View style={styles.sheetHandle} />
             <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>Filter Orders</Text>
+              <Text style={styles.sheetTitle}>
+                {activeTab === "orders" ? "Filter Orders" : "Filter Subscriptions"}
+              </Text>
               <TouchableOpacity
                 style={styles.sheetCloseBtn}
                 onPress={() => setFilterSheetVisible(false)}
@@ -1937,25 +2280,36 @@ export default function AdminOrdersScreen() {
 
             <Text style={styles.sheetLabel}>Status</Text>
             <View style={styles.filterRowSheet}>
-              {ORDER_FILTERS.map((f) => (
-                <TouchableOpacity
-                  key={f}
-                  style={[
-                    styles.filterChip,
-                    filter === f && styles.filterChipActive,
-                  ]}
-                  onPress={() => setFilter(f)}
-                >
-                  <Text
+              {(activeTab === "orders"
+                ? ORDER_FILTERS
+                : (["ALL", "ACTIVE", "INACTIVE"] as const)
+              ).map((f) => {
+                const active =
+                  activeTab === "orders" ? filter === f : subFilter === f;
+                return (
+                  <TouchableOpacity
+                    key={f}
                     style={[
-                      styles.filterText,
-                      filter === f && styles.filterTextActive,
+                      styles.filterChip,
+                      active && styles.filterChipActive,
                     ]}
+                    onPress={() =>
+                      activeTab === "orders"
+                        ? setFilter(f as typeof filter)
+                        : setSubFilter(f as typeof subFilter)
+                    }
                   >
-                    {f}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+                    <Text
+                      style={[
+                        styles.filterText,
+                        active && styles.filterTextActive,
+                      ]}
+                    >
+                      {f}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
 
             <Text style={styles.sheetLabel}>Date</Text>
@@ -2042,7 +2396,8 @@ export default function AdminOrdersScreen() {
                 onPress={() => setFilterSheetVisible(false)}
               >
                 <Text style={styles.applyBtnText}>
-                  Show {filteredOrders.length} Orders
+                  Show {tabCount}{" "}
+                  {activeTab === "orders" ? "Orders" : "Subscriptions"}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -2641,6 +2996,65 @@ const styles = StyleSheet.create({
   },
   productFilterText: { fontSize: 12, fontWeight: "800", color: "#8B6854" },
   productFilterTextActive: { color: "#fff" },
+  subscriptionSummaryWrap: {
+    marginHorizontal: 16,
+    marginBottom: 10,
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: "#FFE1CC",
+  },
+  subscriptionSummaryGrid: {
+    flexDirection: "row",
+    gap: 7,
+  },
+  subscriptionSummaryCard: {
+    flex: 1,
+    minHeight: 58,
+    borderRadius: 12,
+    backgroundColor: "#FFF8F4",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 5,
+  },
+  subscriptionSummaryValue: {
+    fontSize: 16,
+    fontWeight: "900",
+    color: "#3D1F0A",
+  },
+  subscriptionSummaryLabel: {
+    marginTop: 2,
+    fontSize: 9,
+    fontWeight: "800",
+    color: "#8B6854",
+    textAlign: "center",
+  },
+  subscriptionProductChips: {
+    gap: 7,
+    paddingTop: 9,
+  },
+  subscriptionProductChip: {
+    minWidth: 132,
+    maxWidth: 176,
+    borderRadius: 12,
+    backgroundColor: "#FFF3E8",
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderWidth: 1,
+    borderColor: "#FFE4CC",
+  },
+  subscriptionProductName: {
+    fontSize: 11,
+    fontWeight: "900",
+    color: "#3D1F0A",
+  },
+  subscriptionProductMeta: {
+    marginTop: 2,
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#BB6B3F",
+  },
   filterRow: {
     flexDirection: "row",
     paddingHorizontal: 16,
@@ -2870,6 +3284,7 @@ const styles = StyleSheet.create({
   itemTag: {
     flexDirection: "row",
     alignItems: "center",
+    maxWidth: "100%",
     backgroundColor: "#FFF3E8",
     borderRadius: 10,
     paddingHorizontal: 10,
@@ -2878,7 +3293,12 @@ const styles = StyleSheet.create({
     borderColor: "#FFE4CC",
   },
   itemTagCancelled: { backgroundColor: "#F8F8F8", borderColor: "#E8E8E8" },
-  itemTagText: { fontSize: 12, fontWeight: "600", color: "#BB6B3F" },
+  itemTagText: {
+    flexShrink: 1,
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#BB6B3F",
+  },
   summaryFooter: {
     flexDirection: "row",
     alignItems: "center",
@@ -2986,12 +3406,18 @@ const styles = StyleSheet.create({
     color: "#1A1A1A",
   },
   expandedItemQtyBadge: {
+    maxWidth: "58%",
     backgroundColor: "#F5EDE8",
     borderRadius: 8,
     paddingHorizontal: 8,
     paddingVertical: 3,
   },
-  expandedItemQty: { fontSize: 12, color: "#8B6854", fontWeight: "700" },
+  expandedItemQty: {
+    fontSize: 12,
+    color: "#8B6854",
+    fontWeight: "700",
+    textAlign: "right",
+  },
   otpExpandedRow: {
     flexDirection: "row",
     justifyContent: "space-between",
