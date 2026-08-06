@@ -17,6 +17,7 @@ import {
   Platform,
   Keyboard,
   NativeModules,
+  AppState,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -540,6 +541,7 @@ export default function WalletScreen() {
 
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fetchingRef = useRef(false);
 
   const syncManualQrAccess = useCallback(async () => {
     try {
@@ -556,14 +558,6 @@ export default function WalletScreen() {
       setReference("");
     }
   }, [manualQrEnabled, rechargeMode]);
-
-  useFocusEffect(
-    useCallback(() => {
-      syncManualQrAccess();
-      const interval = setInterval(syncManualQrAccess, 5000);
-      return () => clearInterval(interval);
-    }, [syncManualQrAccess]),
-  );
 
   useEffect(() => {
     if (!rechargeModal) return;
@@ -633,7 +627,9 @@ export default function WalletScreen() {
     else setToast(null);
   };
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
+    if (fetchingRef.current) return;
+    fetchingRef.current = true;
     try {
       const [walletData, txData, requestData, qrData, meData] = await Promise.all([
         api.getWallet(),
@@ -642,7 +638,7 @@ export default function WalletScreen() {
         api.getPaymentQr().catch(() => null),
         api.getMe().catch(() => null),
       ]);
-      setBalance(walletData.balance);
+      setBalance(Number(walletData.balance || 0));
       setTransactions(txData);
       setRechargeRequests(Array.isArray(requestData) ? requestData : []);
       setPaymentQr(qrData);
@@ -650,19 +646,34 @@ export default function WalletScreen() {
     } catch (error) {
       console.error("Error fetching wallet:", error);
     } finally {
+      fetchingRef.current = false;
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [updateUser]);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchData();
+      const interval = setInterval(fetchData, 2500);
+      const appStateSub = AppState.addEventListener("change", (state) => {
+        if (state === "active") fetchData();
+      });
+      return () => {
+        clearInterval(interval);
+        appStateSub.remove();
+      };
+    }, [fetchData]),
+  );
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     fetchData();
-  }, []);
+  }, [fetchData]);
 
   const handleRecharge = async () => {
     const amount = parseFloat(rechargeAmount);
