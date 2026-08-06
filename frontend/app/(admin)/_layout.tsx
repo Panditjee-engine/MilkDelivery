@@ -1,13 +1,14 @@
 import React from "react";
-import { Tabs } from "expo-router";
+import { Tabs, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors } from "../../src/constants/colors";
-import { Platform } from "react-native";
+import { Platform, TouchableOpacity } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { NotificationProvider } from "../../src/contexts/NotificationContext";
 
 export default function AdminLayout() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   return (
     <NotificationProvider>
       <Tabs
@@ -60,6 +61,14 @@ export default function AdminLayout() {
           name="gausevak"
           options={{
             title: "Gausevak",
+            popToTopOnBlur: true,
+            tabBarButton: (props) => (
+              <TouchableOpacity
+                {...(props as any)}
+                activeOpacity={0.7}
+                onPress={() => router.replace("/(admin)/gausevak" as any)}
+              />
+            ),
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="heart" size={size} color={color} />
             ),
@@ -108,7 +117,7 @@ export default function AdminLayout() {
           }}
         />
         <Tabs.Screen
-          name="bankaccnt"
+          name="customer-manager"
           options={{
             href: null,
           }}

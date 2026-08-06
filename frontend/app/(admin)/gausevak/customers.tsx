@@ -17,7 +17,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "../../../src/services/api";
 
@@ -1094,6 +1094,7 @@ function CreateCustomerModal({
 
 export default function CustomersScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ from?: string }>();
   const insets = useSafeAreaInsets();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [partners, setPartners] = useState<DeliveryPartner[]>([]);
@@ -1233,6 +1234,18 @@ export default function CustomersScreen() {
     recent_first: { label: "Recent First", icon: "time-outline" },
   };
 
+  const handleBack = () => {
+    if (params.from === "dashboard") {
+      router.replace("/(admin)/dashboard" as any);
+      return;
+    }
+    if (params.from === "gausevak") {
+      router.replace("/(admin)/gausevak" as any);
+      return;
+    }
+    router.back();
+  };
+
   const handleCreate = async (payload: ReturnType<typeof buildPayload>) => {
     try {
       setCreating(true);
@@ -1326,7 +1339,7 @@ export default function CustomersScreen() {
         end={{ x: 1, y: 1 }}
         style={[styles.header, { paddingTop: Math.max(insets.top, 12) }]}
       >
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backBtn} onPress={handleBack}>
           <Ionicons name="arrow-back" size={20} color="#7ca9d4" />
         </TouchableOpacity>
         <View style={styles.headerCenter}>

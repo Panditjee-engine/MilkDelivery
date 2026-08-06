@@ -584,6 +584,19 @@ class ApiService {
     return data;
   }
 
+  async connectGaushala(referralCode: string) {
+    return this.request<{
+      message: string;
+      admin_id: string;
+      admin_name: string;
+      referral_code: string;
+      user?: any;
+    }>("/auth/connect-gaushala", {
+      method: "POST",
+      body: JSON.stringify({ referral_code: referralCode }),
+    });
+  }
+
   async requestAuthOtp(data: { phone: string }) {
     return this.request<{ message: string; dev_code?: string }>("/auth/send-register-otp", {
       method: "POST",

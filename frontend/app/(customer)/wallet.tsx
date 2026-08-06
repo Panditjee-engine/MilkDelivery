@@ -17,6 +17,7 @@ import {
   Platform,
   Keyboard,
   NativeModules,
+  AppState,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -28,6 +29,7 @@ import { Colors } from "../../src/constants/colors";
 import LoadingScreen from "../../src/components/LoadingScreen";
 import Button from "../../src/components/Button";
 import { useAuth } from "../../src/contexts/AuthContext";
+import { useFocusEffect } from "@react-navigation/native";
 
 const quickAmounts = [100, 200, 500, 1000];
 const MIN_AMOUNT = 100;
@@ -518,7 +520,7 @@ const ss = StyleSheet.create({
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function WalletScreen() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [balance, setBalance] = useState(0);
@@ -535,9 +537,34 @@ export default function WalletScreen() {
   const [toast, setToast] = useState<ToastType>(null);
   const [successVisible, setSuccessVisible] = useState(false);
   const [successAmount, setSuccessAmount] = useState(0);
+  const manualQrEnabled = user?.manual_qr_recharge_enabled === true;
 
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fetchingRef = useRef(false);
+
+  const syncManualQrAccess = useCallback(async () => {
+    try {
+      const latestUser = await api.getMe();
+      if (latestUser) updateUser(latestUser);
+    } catch {
+      // Keep wallet usable even if profile sync briefly fails.
+    }
+  }, [updateUser]);
+
+  useEffect(() => {
+    if (!manualQrEnabled && rechargeMode === "manual") {
+      setRechargeMode("online");
+      setReference("");
+    }
+  }, [manualQrEnabled, rechargeMode]);
+
+  useEffect(() => {
+    if (!rechargeModal) return;
+    syncManualQrAccess();
+    const interval = setInterval(syncManualQrAccess, 2000);
+    return () => clearInterval(interval);
+  }, [rechargeModal, syncManualQrAccess]);
 
   const triggerShake = () => {
     shakeAnim.setValue(0);
@@ -600,34 +627,53 @@ export default function WalletScreen() {
     else setToast(null);
   };
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
+    if (fetchingRef.current) return;
+    fetchingRef.current = true;
     try {
-      const [walletData, txData, requestData, qrData] = await Promise.all([
+      const [walletData, txData, requestData, qrData, meData] = await Promise.all([
         api.getWallet(),
         api.getWalletTransactions(),
         api.getRechargeRequests().catch(() => []),
         api.getPaymentQr().catch(() => null),
+        api.getMe().catch(() => null),
       ]);
-      setBalance(walletData.balance);
+      setBalance(Number(walletData.balance || 0));
       setTransactions(txData);
       setRechargeRequests(Array.isArray(requestData) ? requestData : []);
       setPaymentQr(qrData);
+      if (meData) updateUser(meData);
     } catch (error) {
       console.error("Error fetching wallet:", error);
     } finally {
+      fetchingRef.current = false;
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [updateUser]);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchData();
+      const interval = setInterval(fetchData, 2500);
+      const appStateSub = AppState.addEventListener("change", (state) => {
+        if (state === "active") fetchData();
+      });
+      return () => {
+        clearInterval(interval);
+        appStateSub.remove();
+      };
+    }, [fetchData]),
+  );
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     fetchData();
-  }, []);
+  }, [fetchData]);
 
   const handleRecharge = async () => {
     const amount = parseFloat(rechargeAmount);
@@ -684,7 +730,9 @@ export default function WalletScreen() {
     if (!canUseRazorpayNativeModule()) {
       Alert.alert(
         "Development build needed",
-        "Online Razorpay payments cannot run inside Expo Go because the native Razorpay module is not included there. Please use an Android/iOS development build, or use QR Manual for testing.",
+        manualQrEnabled
+          ? "Online Razorpay payments cannot run inside Expo Go because the native Razorpay module is not included there. Please use an Android/iOS development build, or use QR Manual for testing."
+          : "Online Razorpay payments cannot run inside Expo Go because the native Razorpay module is not included there. Please use an Android/iOS development build or production app.",
       );
       return;
     }
@@ -1145,7 +1193,9 @@ export default function WalletScreen() {
               <View style={styles.modeTabs}>
                 {[
                   { key: "online" as RechargeMode, label: "Online", icon: "card-outline" },
-                  { key: "manual" as RechargeMode, label: "QR Manual", icon: "qr-code-outline" },
+                  ...(manualQrEnabled
+                    ? [{ key: "manual" as RechargeMode, label: "QR Manual", icon: "qr-code-outline" }]
+                    : []),
                 ].map((mode) => {
                   const active = rechargeMode === mode.key;
                   return (
@@ -1168,7 +1218,7 @@ export default function WalletScreen() {
                 })}
               </View>
 
-              {rechargeMode === "online" ? (
+              {rechargeMode === "online" || !manualQrEnabled ? (
                 <View style={styles.onlineBox}>
                   <View style={styles.onlineIcon}>
                     <Ionicons name="shield-checkmark-outline" size={22} color={Colors.primary} />
@@ -1247,7 +1297,8 @@ export default function WalletScreen() {
                   placeholderTextColor="#ddd"
                   autoFocus
                   maxLength={5}
-                  returnKeyType="next"
+                  returnKeyType="done"
+                  onSubmitEditing={Keyboard.dismiss}
                 />
                 {rechargeAmount.length > 0 && (
                   <TouchableOpacity
@@ -1293,7 +1344,7 @@ export default function WalletScreen() {
                 ))}
               </View>
 
-              {rechargeMode === "manual" && (
+              {manualQrEnabled && rechargeMode === "manual" && (
                 <>
                   <Text style={styles.quickLabel}>Payment Reference</Text>
                   <TextInput
@@ -1309,25 +1360,28 @@ export default function WalletScreen() {
                 </>
               )}
 
-              <Button
-                title={
-                  isValidAmount
-                    ? rechargeMode === "online"
-                      ? `Pay ₹${rechargeAmount} Online`
-                      : `Submit ₹${rechargeAmount} Request`
-                    : rechargeMode === "online"
-                      ? "Enter Amount"
-                      : "Enter Amount & Reference"
-                }
-                onPress={rechargeMode === "online" ? handleOnlineRecharge : handleRecharge}
-                loading={recharging}
-                disabled={!isValidAmount}
-              />
-              <Text style={styles.mockNote}>
-                {rechargeMode === "online"
-                  ? "Online recharge is credited only after Razorpay signature verification."
-                  : "Amount will be usable only after admin approval."}
-              </Text>
+              {isValidAmount ? (
+                <>
+                  <Button
+                    title={
+                      rechargeMode === "online" || !manualQrEnabled
+                        ? `Pay ₹${rechargeAmount} Online`
+                        : `Submit ₹${rechargeAmount} Request`
+                    }
+                    onPress={
+                      rechargeMode === "online" || !manualQrEnabled
+                        ? handleOnlineRecharge
+                        : handleRecharge
+                    }
+                    loading={recharging}
+                  />
+                  <Text style={styles.mockNote}>
+                    {rechargeMode === "online" || !manualQrEnabled
+                      ? "Online recharge is credited only after Razorpay signature verification."
+                      : "Amount will be usable only after admin approval."}
+                  </Text>
+                </>
+              ) : null}
 
               {/* Safe bottom padding so content clears the home bar */}
               <View style={{ height: 12 }} />

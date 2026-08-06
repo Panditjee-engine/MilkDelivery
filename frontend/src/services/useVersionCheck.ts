@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import Constants from "expo-constants";
+import { Platform } from "react-native";
 
 const API_BASE = process.env.EXPO_PUBLIC_BACKEND_URL || "";
 
@@ -14,6 +15,8 @@ export interface VersionCheckResult {
     updateAvailable: boolean;
     forceUpdate: boolean;
     currentVersion: string;
+    platform: "android" | "ios";
+    releaseNotes?: string;
     updateUrl: string;
 }
 
@@ -25,7 +28,7 @@ export function useVersionCheck() {
         const checkVersion = async () => {
             try {
                 const res = await fetch(
-                    `${API_BASE}/api/version/check?app_version=${APP_VERSION}`
+                    `${API_BASE}/api/version/check?app_version=${encodeURIComponent(APP_VERSION)}&platform=${Platform.OS}`
                 );
                 if (!res.ok) return;
                 const data = await res.json();
@@ -33,6 +36,8 @@ export function useVersionCheck() {
                     updateAvailable: data.update_available,
                     forceUpdate: data.force_update,
                     currentVersion: data.current_version,
+                    platform: data.platform || Platform.OS,
+                    releaseNotes: data.release_notes,
                     updateUrl: data.update_url,
                 });
             } catch (err) {
