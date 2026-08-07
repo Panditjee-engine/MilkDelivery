@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, RefreshControl, Modal, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAuth } from '../../src/contexts/AuthContext';
 import { api } from '../../src/services/api';
 import { Colors } from '../../src/constants/colors';
 import LoadingScreen from '../../src/components/LoadingScreen';
 import { formatDeliveryAddress } from '../../src/utils/address';
+import { APP_VERSION } from "../../src/services/useVersionCheck";
 
 export default function DeliveryProfileScreen() {
   const { user, logout } = useAuth();
@@ -326,6 +327,14 @@ export default function DeliveryProfileScreen() {
               <Ionicons name="chevron-forward" size={18} color="#ddd" />
             </TouchableOpacity>
           </View>
+        </View>
+
+          {/* ── Version ── */}
+        <View style={styles.versionStrip}>
+          <MaterialCommunityIcons name="cow" size={14} color="#4CAF50" />
+          <Text style={[styles.versionTxt, { color: "#4CAF50" }]}>
+            GauSatva Version-{APP_VERSION}
+          </Text>
         </View>
 
         {/* Logout Button */}
@@ -702,6 +711,17 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.primary,
   },
+
+  // Version
+  versionStrip: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 12,
+    marginBottom: 4,
+  },
+  versionTxt: { fontSize: 12, fontWeight: "600" },
 
   logoutButton: {
     flexDirection: 'row',

@@ -12,6 +12,8 @@ import {
   ScrollView,
   FlatList,
   TouchableOpacity,
+  Easing,
+  TouchableWithoutFeedback,
   RefreshControl,
   Modal,
   Animated,
@@ -100,7 +102,7 @@ type PaymentMethod = "wallet" | "cash_on_delivery" | "online";
 function canUseRazorpayNativeModule(): boolean {
   return Boolean(
     Constants.appOwnership !== "expo" &&
-      (NativeModules.RNRazorpayCheckout || NativeModules.RazorpayCheckout),
+    (NativeModules.RNRazorpayCheckout || NativeModules.RazorpayCheckout),
   );
 }
 
@@ -2579,25 +2581,25 @@ function PaymentMethodSelector({
     sub: string;
     icon: keyof typeof Ionicons.glyphMap;
   }> = [
-    {
-      key: "wallet",
-      title: "Wallet",
-      sub: `Balance ₹${walletBalance.toFixed(2)}`,
-      icon: "wallet-outline",
-    },
-    {
-      key: "online",
-      title: "Online",
-      sub: "UPI, card, netbanking",
-      icon: "card-outline",
-    },
-    {
-      key: "cash_on_delivery",
-      title: "Cash on Delivery",
-      sub: "Pay at delivery",
-      icon: "cash-outline",
-    },
-  ];
+      {
+        key: "wallet",
+        title: "Wallet",
+        sub: `Balance ₹${walletBalance.toFixed(2)}`,
+        icon: "wallet-outline",
+      },
+      {
+        key: "online",
+        title: "Online",
+        sub: "UPI, card, netbanking",
+        icon: "card-outline",
+      },
+      {
+        key: "cash_on_delivery",
+        title: "Cash on Delivery",
+        sub: "Pay at delivery",
+        icon: "cash-outline",
+      },
+    ];
 
   return (
     <View style={payS.wrap}>
@@ -2838,63 +2840,63 @@ function CartSheet({
               </View>
             ) : (
               <View>
-              {cart.map((item) => {
-                const theme = getCategoryTheme(item.product.category);
-                return (
-                  <View key={item.id} style={cartS.item}>
-                    <View style={[cartS.icon, { backgroundColor: theme.bg }]}>
-                      <Ionicons
-                        name={theme.icon as any}
-                        size={14}
-                        color={theme.accent}
-                      />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={cartS.itemName} numberOfLines={2}>
-                        {item.product.name}
-                      </Text>
-                      <Text style={cartS.itemPrice}>
-                        ₹{(item.product.price * item.quantity).toFixed(2)}
-                      </Text>
-                    </View>
-                    <View style={cartS.qtyRow}>
-                      <TouchableOpacity
-                        style={cartS.qtyBtn}
-                        onPress={() =>
-                          item.quantity > 1
-                            ? onUpdateQty(item.id, item.quantity - 1)
-                            : onRemove(item.id)
-                        }
-                      >
+                {cart.map((item) => {
+                  const theme = getCategoryTheme(item.product.category);
+                  return (
+                    <View key={item.id} style={cartS.item}>
+                      <View style={[cartS.icon, { backgroundColor: theme.bg }]}>
                         <Ionicons
-                          name={
-                            item.quantity === 1 ? "trash-outline" : "remove"
-                          }
-                          size={11}
-                          color={item.quantity === 1 ? T.red : T.text}
+                          name={theme.icon as any}
+                          size={14}
+                          color={theme.accent}
                         />
-                      </TouchableOpacity>
-                      <Text style={cartS.qtyVal}>{item.quantity}</Text>
-                      <TouchableOpacity
-                        style={[
-                          cartS.qtyBtn,
-                          { backgroundColor: theme.accent },
-                        ]}
-                        onPress={() => {
-                          const m = item.product.stock ?? 0;
-                          if (item.quantity >= m) {
-                            alert(`Only ${m} available`);
-                            return;
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={cartS.itemName} numberOfLines={2}>
+                          {item.product.name}
+                        </Text>
+                        <Text style={cartS.itemPrice}>
+                          ₹{(item.product.price * item.quantity).toFixed(2)}
+                        </Text>
+                      </View>
+                      <View style={cartS.qtyRow}>
+                        <TouchableOpacity
+                          style={cartS.qtyBtn}
+                          onPress={() =>
+                            item.quantity > 1
+                              ? onUpdateQty(item.id, item.quantity - 1)
+                              : onRemove(item.id)
                           }
-                          onUpdateQty(item.id, item.quantity + 1);
-                        }}
-                      >
-                        <Ionicons name="add" size={11} color="#fff" />
-                      </TouchableOpacity>
+                        >
+                          <Ionicons
+                            name={
+                              item.quantity === 1 ? "trash-outline" : "remove"
+                            }
+                            size={11}
+                            color={item.quantity === 1 ? T.red : T.text}
+                          />
+                        </TouchableOpacity>
+                        <Text style={cartS.qtyVal}>{item.quantity}</Text>
+                        <TouchableOpacity
+                          style={[
+                            cartS.qtyBtn,
+                            { backgroundColor: theme.accent },
+                          ]}
+                          onPress={() => {
+                            const m = item.product.stock ?? 0;
+                            if (item.quantity >= m) {
+                              alert(`Only ${m} available`);
+                              return;
+                            }
+                            onUpdateQty(item.id, item.quantity + 1);
+                          }}
+                        >
+                          <Ionicons name="add" size={11} color="#fff" />
+                        </TouchableOpacity>
+                      </View>
                     </View>
-                  </View>
-                );
-              })}
+                  );
+                })}
               </View>
             )}
           </ScrollView>
@@ -3365,6 +3367,201 @@ const pillS = StyleSheet.create({
   },
 });
 
+// ─── Banner / New Arrival Details Modal (scrollable, bottom sheet)
+function BannerDetailsModal({
+  slide,
+  visible,
+  onClose,
+}: {
+  slide: CatalogSlide | null;
+  visible: boolean;
+  onClose: () => void;
+}) {
+  const slideAnim = useRef(new Animated.Value(400)).current;
+  const backdropAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (visible) {
+      Animated.parallel([
+        Animated.spring(slideAnim, {
+          toValue: 0,
+          tension: 65,
+          friction: 11,
+          useNativeDriver: true,
+        }),
+        Animated.timing(backdropAnim, {
+          toValue: 1,
+          duration: 250,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(slideAnim, {
+          toValue: 400,
+          duration: 220,
+          easing: Easing.in(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(backdropAnim, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [visible]);
+
+  if (!slide) return null;
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="none"
+      statusBarTranslucent
+      onRequestClose={onClose}
+    >
+      <TouchableWithoutFeedback onPress={onClose}>
+        <Animated.View
+          style={[bannerModalS.backdrop, { opacity: backdropAnim }]}
+        />
+      </TouchableWithoutFeedback>
+
+      <Animated.View
+        style={[bannerModalS.sheet, { transform: [{ translateY: slideAnim }] }]}
+      >
+        <View style={bannerModalS.handle} />
+
+        <TouchableOpacity
+          style={bannerModalS.closeBtn}
+          onPress={onClose}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="close" size={20} color="#555" />
+        </TouchableOpacity>
+
+        <ScrollView
+          style={bannerModalS.contentScroll}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 32, paddingTop: 8 }}
+        >
+          <LinearGradient
+            colors={(slide.colors as [string, string]) ?? ["#123524", "#1f6f43"]}
+            style={bannerModalS.imageBox}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          >
+            <Image
+              source={slide.image}
+              style={bannerModalS.image}
+              resizeMode="contain"
+            />
+          </LinearGradient>
+
+          <Text style={bannerModalS.kicker}>{slide.kicker}</Text>
+          <Text style={bannerModalS.title}>{slide.title}</Text>
+
+          <View style={bannerModalS.descBox}>
+            <Text style={bannerModalS.descLabel}>Details</Text>
+            <Text style={bannerModalS.descText}>{slide.subtitle}</Text>
+          </View>
+        </ScrollView>
+      </Animated.View>
+    </Modal>
+  );
+}
+
+const bannerModalS = StyleSheet.create({
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.5)",
+  },
+  sheet: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    maxHeight: "88%",
+    shadowColor: "#000",
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: -6 },
+    elevation: 20,
+  },
+  handle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#E5E7EB",
+    alignSelf: "center",
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  closeBtn: {
+    position: "absolute",
+    top: 16,
+    right: 18,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#F3F4F6",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 10,
+  },
+  contentScroll: {
+    paddingHorizontal: 20,
+    marginTop: 16,
+  },
+  imageBox: {
+    height: 180,
+    borderRadius: 20,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
+    overflow: "hidden",
+  },
+  image: { width: "70%", height: "80%" },
+  kicker: {
+    fontSize: 10,
+    fontWeight: "900",
+    color: T.amber,
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
+    marginBottom: 6,
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: "900",
+    color: T.text,
+    letterSpacing: -0.5,
+    marginBottom: 14,
+  },
+  descBox: {
+    backgroundColor: "#F7F6F4",
+    borderRadius: 14,
+    padding: 14,
+  },
+  descLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: T.faint,
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+    marginBottom: 6,
+  },
+  descText: {
+    fontSize: 13.5,
+    color: T.muted,
+    lineHeight: 20,
+    fontWeight: "500",
+  },
+});
+
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 export default function CatalogScreen() {
   const router = useRouter();
@@ -3402,6 +3599,8 @@ export default function CatalogScreen() {
   const [activeNewSlide, setActiveNewSlide] = useState(0);
   const [catalogSlides, setCatalogSlides] = useState<CatalogSlide[]>([]);
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
+  const [selectedBannerSlide, setSelectedBannerSlide] = useState<CatalogSlide | null>(null);
+  const [bannerModalVisible, setBannerModalVisible] = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isFocused = useIsFocused();
   const { addToCartProduct, addToCartQty } = useLocalSearchParams<{
@@ -3840,6 +4039,15 @@ export default function CatalogScreen() {
       setCancelling(null);
     }
   };
+  const openBannerDetails = (slide: CatalogSlide) => {
+    setSelectedBannerSlide(slide);
+    setBannerModalVisible(true);
+  };
+
+  const closeBannerModal = () => {
+    setBannerModalVisible(false);
+    setTimeout(() => setSelectedBannerSlide(null), 300);
+  };
 
   const grouped = useMemo(() => {
     if (selectedCategory) {
@@ -3932,7 +4140,10 @@ export default function CatalogScreen() {
         >
           {newSlides.map((slide) => (
             <View key={slide.id} style={mainS.newSlide}>
-              <TouchableOpacity activeOpacity={0.88}>
+              <TouchableOpacity
+                activeOpacity={0.88}
+                onPress={() => openBannerDetails(slide)}
+              >
                 <LinearGradient
                   colors={slide.colors as [string, string]}
                   style={mainS.newCard}
@@ -3940,9 +4151,11 @@ export default function CatalogScreen() {
                   end={{ x: 1, y: 1 }}
                 >
                   <View style={mainS.newTextBox}>
-                    <Text style={mainS.newKicker}>{slide.kicker}</Text>
-                    <Text style={mainS.newCardTitle}>{slide.title}</Text>
-                    <Text style={mainS.newCardSub}>{slide.subtitle}</Text>
+                    <Text style={mainS.newKicker} numberOfLines={1}>{slide.kicker}</Text>
+                    <Text style={mainS.newCardTitle} numberOfLines={1}>{slide.title}</Text>
+                    <Text style={mainS.newCardSub} numberOfLines={2} ellipsizeMode="tail">
+                      {slide.subtitle}
+                    </Text>
                   </View>
                   <Image
                     source={slide.image}
@@ -3966,7 +4179,7 @@ export default function CatalogScreen() {
             />
           ))}
         </View>
-      </View>
+      </View >
 
       <ScrollView
         horizontal
@@ -4111,6 +4324,11 @@ export default function CatalogScreen() {
         productName={toastProduct}
         isSubscription={toastIsSub}
       />
+      <BannerDetailsModal
+        slide={selectedBannerSlide}
+        visible={bannerModalVisible}
+        onClose={closeBannerModal}
+      />
     </SafeAreaView>
   );
 }
@@ -4179,9 +4397,10 @@ const mainS = StyleSheet.create({
     height: 150,
     borderRadius: 24,
     overflow: "hidden",
-    padding: 18,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     shadowColor: "#123524",
     shadowOpacity: 0.16,
     shadowRadius: 16,
@@ -4213,9 +4432,10 @@ const mainS = StyleSheet.create({
     maxWidth: 190,
   },
   newImage: {
-    width: 135,
-    height: 120,
+    width: 120,
+    height: 100,
     marginRight: -6,
+    marginTop: 10,
     zIndex: 2,
   },
   newGlow: {

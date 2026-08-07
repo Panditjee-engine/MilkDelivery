@@ -12,13 +12,15 @@ import {
 import { useIsFocused } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { Calendar } from "react-native-calendars";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { api } from "../../src/services/api";
 import { Colors } from "../../src/constants/colors";
 import Button from "../../src/components/Button";
 import Input from "../../src/components/Input";
+import { APP_VERSION } from "../../src/services/useVersionCheck";
+
 import {
   formatDeliveryAddress,
   hasCompleteDeliveryAddress,
@@ -669,8 +671,8 @@ export default function ProfileScreen() {
     try {
       const nextBook = editingAddressId
         ? addressBook.map((address) =>
-            address.id === editingAddressId ? { ...address, ...normalizedAddress } : address,
-          )
+          address.id === editingAddressId ? { ...address, ...normalizedAddress } : address,
+        )
         : [...addressBook, normalizedAddress];
       const normalizedBook = nextBook.map((address) => ({
         ...address,
@@ -747,15 +749,15 @@ export default function ProfileScreen() {
   const statusConfig = (status: string) => {
     switch (status) {
       case "delivered":
-        return { color: "#16a34a", bg: "#F0FDF4", border: "#BBF7D0", label: "Delivered",        icon: "checkmark-circle" };
+        return { color: "#16a34a", bg: "#F0FDF4", border: "#BBF7D0", label: "Delivered", icon: "checkmark-circle" };
       case "out_for_delivery":
-        return { color: "#d97706", bg: "#FFFBEB", border: "#FDE68A", label: "Out for Delivery", icon: "bicycle"          };
+        return { color: "#d97706", bg: "#FFFBEB", border: "#FDE68A", label: "Out for Delivery", icon: "bicycle" };
       case "assigned":
-        return { color: "#2563EB", bg: "#EFF6FF", border: "#BFDBFE", label: "Rider Assigned",   icon: "bicycle-outline"  };
+        return { color: "#2563EB", bg: "#EFF6FF", border: "#BFDBFE", label: "Rider Assigned", icon: "bicycle-outline" };
       case "cancelled":
-        return { color: "#dc2626", bg: "#FEF2F2", border: "#FECACA", label: "Cancelled",        icon: "close-circle"     };
+        return { color: "#dc2626", bg: "#FEF2F2", border: "#FECACA", label: "Cancelled", icon: "close-circle" };
       case "skipped":
-        return { color: "#9CA3AF", bg: "#F3F4F6", border: "#E5E7EB", label: "Skipped",          icon: "play-skip-forward-outline" };
+        return { color: "#9CA3AF", bg: "#F3F4F6", border: "#E5E7EB", label: "Skipped", icon: "play-skip-forward-outline" };
       default:
         return { color: "#6366f1", bg: "#EEF2FF", border: "#C7D2FE", label: status?.replace(/_/g, " ") || "Pending", icon: "time" };
     }
@@ -997,6 +999,14 @@ export default function ProfileScreen() {
               <Text style={styles.emptyText}>No orders yet</Text>
             </View>
           )}
+        </View>
+
+        {/* ── Version ── */}
+        <View style={styles.versionStrip}>
+          <MaterialCommunityIcons name="cow" size={14} color="#4CAF50" />
+          <Text style={[styles.versionTxt, { color: "#4CAF50" }]}>
+            GauSatva Version-{APP_VERSION}
+          </Text>
         </View>
 
         {/* ── Logout ── */}
@@ -1516,7 +1526,16 @@ const styles = StyleSheet.create({
   },
   statusText: { fontSize: 10, fontWeight: "700", textTransform: "capitalize" },
   orderAmt: { fontSize: 14, fontWeight: "800", color: "#111" },
-
+  // Version
+  versionStrip: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 12,
+    marginBottom: 4,
+  },
+  versionTxt: { fontSize: 12, fontWeight: "600" },
   // Logout
   logoutBtn: {
     flexDirection: "row",

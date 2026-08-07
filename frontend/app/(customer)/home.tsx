@@ -230,7 +230,13 @@ function BrandHeader() {
   );
 }
 
-function HomeBannerSlider({ banners }: { banners: BannerSlide[] }) {
+function HomeBannerSlider({
+  banners,
+  onBannerPress,
+}: {
+  banners: BannerSlide[];
+  onBannerPress: (banner: BannerSlide) => void;
+}) {
   const [activeIndex, setActiveIndex] = useState(0);
   const slides = banners.length > 0 ? banners : homeBanners;
 
@@ -248,7 +254,12 @@ function HomeBannerSlider({ banners }: { banners: BannerSlide[] }) {
         }}
       >
         {slides.map((banner) => (
-          <View key={banner.id} style={s.bannerSlide}>
+          <TouchableOpacity
+            key={banner.id}
+            style={s.bannerSlide}
+            activeOpacity={0.9}
+            onPress={() => onBannerPress(banner)}
+          >
             <LinearGradient
               colors={["#123524", "#1f6f43"]}
               style={s.bannerCard}
@@ -256,9 +267,11 @@ function HomeBannerSlider({ banners }: { banners: BannerSlide[] }) {
               end={{ x: 1, y: 1 }}
             >
               <View style={s.bannerTextBox}>
-                <Text style={s.bannerKicker}>Gau Satva</Text>
-                <Text style={s.bannerTitle}>{banner.title}</Text>
-                <Text style={s.bannerSubtitle}>{banner.subtitle}</Text>
+                <Text style={s.bannerKicker} numberOfLines={1}>Gau Satva</Text>
+                <Text style={s.bannerTitle} numberOfLines={1}>{banner.title}</Text>
+                <Text style={s.bannerSubtitle} numberOfLines={2} ellipsizeMode="tail">
+                  {banner.subtitle}
+                </Text>
               </View>
               <Image
                 source={banner.image}
@@ -267,7 +280,7 @@ function HomeBannerSlider({ banners }: { banners: BannerSlide[] }) {
               />
               <View style={s.bannerGlow} />
             </LinearGradient>
-          </View>
+          </TouchableOpacity>
         ))}
       </ScrollView>
       <View style={s.bannerDots}>
@@ -277,8 +290,7 @@ function HomeBannerSlider({ banners }: { banners: BannerSlide[] }) {
             style={[s.bannerDot, activeIndex === index && s.bannerDotActive]}
           />
         ))}
-      </View> 
-      
+      </View>
     </View>
   );
 }
@@ -773,6 +785,114 @@ const modalStyles = StyleSheet.create({
   },
 });
 
+// ─── Banner / Content Details Modal (scrollable)
+function BannerDetailsModal({
+  banner,
+  visible,
+  onClose,
+}: {
+  banner: BannerSlide | null;
+  visible: boolean;
+  onClose: () => void;
+}) {
+  const slideAnim = useRef(new Animated.Value(400)).current;
+  const backdropAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (visible) {
+      Animated.parallel([
+        Animated.spring(slideAnim, {
+          toValue: 0,
+          tension: 65,
+          friction: 11,
+          useNativeDriver: true,
+        }),
+        Animated.timing(backdropAnim, {
+          toValue: 1,
+          duration: 250,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(slideAnim, {
+          toValue: 400,
+          duration: 220,
+          easing: Easing.in(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(backdropAnim, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [visible]);
+
+  if (!banner) return null;
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="none"
+      statusBarTranslucent
+      onRequestClose={onClose}
+    >
+      <TouchableWithoutFeedback onPress={onClose}>
+        <Animated.View
+          style={[modalStyles.backdrop, { opacity: backdropAnim }]}
+        />
+      </TouchableWithoutFeedback>
+
+      <Animated.View
+        style={[modalStyles.sheet, { transform: [{ translateY: slideAnim }] }]}
+      >
+        <View style={modalStyles.handle} />
+
+        <TouchableOpacity
+          style={modalStyles.closeBtn}
+          onPress={onClose}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="close" size={20} color="#555" />
+        </TouchableOpacity>
+
+        {/* Yahi ScrollView popup ko scrollable banata hai */}
+        <ScrollView
+          style={modalStyles.contentScroll}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 32, paddingTop: 8 }}
+        >
+          <View style={[modalStyles.imageBox, { backgroundColor: "#F0FDF4", marginHorizontal: 0 }]}>
+            {banner.image ? (
+              <Image
+                source={banner.image}
+                style={modalStyles.productImage}
+                resizeMode="contain"
+              />
+            ) : (
+              <View style={modalStyles.imagePlaceholder}>
+                <Ionicons name="image-outline" size={52} color={Colors.primary} />
+              </View>
+            )}
+          </View>
+
+          <Text style={[modalStyles.productName, { marginTop: 18 }]}>
+            {banner.title}
+          </Text>
+
+          <View style={modalStyles.descBox}>
+            <Text style={modalStyles.descLabel}>Details</Text>
+            <Text style={modalStyles.descText}>{banner.subtitle}</Text>
+          </View>
+        </ScrollView>
+      </Animated.View>
+    </Modal>
+  );
+}
+
 // ─── Product grid — tapping ANYWHERE opens product details
 function ProductGridCard({
   product,
@@ -990,6 +1110,20 @@ export default function CustomerHome() {
   const [selectedAdminName, setSelectedAdminName] = useState<string | undefined>(undefined);
   const [modalVisible, setModalVisible] = useState(false);
 
+  // state add karo (baaki states ke sath)
+  const [selectedBanner, setSelectedBanner] = useState<BannerSlide | null>(null);
+  const [bannerModalVisible, setBannerModalVisible] = useState(false);
+
+  const openBannerDetails = (banner: BannerSlide) => {
+    setSelectedBanner(banner);
+    setBannerModalVisible(true);
+  };
+
+  const closeBannerModal = () => {
+    setBannerModalVisible(false);
+    setTimeout(() => setSelectedBanner(null), 300);
+  };
+
   // Wallet card entrance
   const walletAnim = useRef(new Animated.Value(0)).current;
   const headerAnim = useRef(new Animated.Value(0)).current;
@@ -1189,7 +1323,7 @@ export default function CustomerHome() {
           </TouchableOpacity>
         </Animated.View>
 
-        <HomeBannerSlider banners={contentSlides} />
+        <HomeBannerSlider banners={contentSlides} onBannerPress={openBannerDetails} />
 
         {/* ── Recent Order ── */}
         <View style={s.sectionWrap}>
@@ -1225,7 +1359,7 @@ export default function CustomerHome() {
                     style={[
                       s.orderItem,
                       i < Math.min(recentOrder.items.length, 3) - 1 &&
-                        s.orderItemBorder,
+                      s.orderItemBorder,
                     ]}
                   >
                     <Text style={s.orderItemName}>{item.product_name}</Text>
@@ -1302,6 +1436,11 @@ export default function CustomerHome() {
         visible={modalVisible}
         onClose={closeModal}
         onBuyNow={handleBuyNow}
+      />
+      <BannerDetailsModal
+        banner={selectedBanner}
+        visible={bannerModalVisible}
+        onClose={closeBannerModal}
       />
     </SafeAreaView>
   );
@@ -1782,9 +1921,10 @@ const s = StyleSheet.create({
     height: 150,
     borderRadius: 24,
     overflow: "hidden",
-    padding: 18,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     shadowColor: "#123524",
     shadowOpacity: 0.16,
     shadowRadius: 16,
@@ -1816,9 +1956,10 @@ const s = StyleSheet.create({
     maxWidth: 190,
   },
   bannerImage: {
-    width: 135,
-    height: 120,
+    width: 120,
+    height: 100,
     marginRight: -6,
+    marginTop: 10,   // 👈 add
     zIndex: 2,
   },
   bannerGlow: {

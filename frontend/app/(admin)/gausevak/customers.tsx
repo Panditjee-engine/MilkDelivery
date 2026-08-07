@@ -30,6 +30,11 @@ interface CustomerAddress {
   landmark?: string;
   lat?: number;
   lng?: number;
+  // ── Online/app customer address fields (different shape from offline records)
+  tower?: string;
+  flat?: string;
+  floor?: string;
+  area?: string;
 }
 
 interface Customer {
@@ -140,9 +145,9 @@ function isLinkedCustomer(customer: Customer | any): boolean {
   if (typeof linkedValue !== "undefined") return readBool(linkedValue, false);
   return Boolean(
     customer?.linked_user_id ||
-      customer?.user_id ||
-      customer?.claimed_user_id ||
-      customer?.customer_user_id,
+    customer?.user_id ||
+    customer?.claimed_user_id ||
+    customer?.customer_user_id,
   );
 }
 
@@ -271,16 +276,31 @@ function buildPayload(form: CustomerFormState) {
 
 function formatAddress(address?: CustomerAddress) {
   if (!address) return "No address added";
-  return [
-    address.line1,
-    address.line2,
-    address.landmark,
-    address.city,
-    address.state,
+
+  // Online/app customers use tower+flat+floor+area instead of line1/line2
+  const isOnlineShape = !address.line1 && (address.tower || address.flat || address.area);
+
+ if (isOnlineShape) {
+  const firstLine = [address.flat, address.tower].filter(Boolean).join(", ");
+  const lines = [
+    firstLine,
+    address.area,
+    address.landmark ? `Near ${address.landmark}` : "",
+    [address.city, address.state].filter(Boolean).join(", "),
     address.pincode,
-  ]
+  ].filter(Boolean);
+  return lines.length ? lines.join("\n") : "No address added";
+}
+
+  const firstLine = [address.line1, address.line2, address.landmark]
     .filter(Boolean)
     .join(", ");
+  const lines = [
+    firstLine,
+    [address.city, address.state].filter(Boolean).join(", "),
+    address.pincode,
+  ].filter(Boolean);
+  return lines.length ? lines.join("\n") : "No address added";
 }
 
 function formatCreatedAt(date?: string) {
@@ -815,7 +835,7 @@ function CustomerFormBody({
         value={form.address_landmark}
         onChangeText={setField("address_landmark")}
       />
-   
+
 
       <View style={formS.switchRow}>
         <Text style={formS.switchLabel}>Customer Active</Text>
@@ -1891,7 +1911,7 @@ const detailS = StyleSheet.create({
     gap: 6,
   },
   infoLabel: { fontSize: 11, fontWeight: "800", color: "#64748b", textTransform: "uppercase", marginTop: 6 },
-  infoValue: { fontSize: 13, color: "#111827", fontWeight: "600" },
+  infoValue: { fontSize: 13, color: "#111827", fontWeight: "600", lineHeight: 19, flexShrink: 1 },
   claimRow: { flexDirection: "row", gap: 10, marginTop: 14 },
   claimBtn: {
     flex: 1,

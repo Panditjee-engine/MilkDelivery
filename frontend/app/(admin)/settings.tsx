@@ -24,7 +24,9 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAuth } from "../../src/contexts/AuthContext";
+import { APP_VERSION } from "../../src/services/useVersionCheck";
 
 // ── Palette
 const C = {
@@ -306,7 +308,7 @@ function SettingModal({
         style={{ flex: 1 }}
       >
         <Pressable style={mS.overlay} onPress={onClose}>
-          <Pressable style={mS.sheet} onPress={() => {}}>
+          <Pressable style={mS.sheet} onPress={() => { }}>
             <View style={mS.drag} />
             <View style={mS.header}>
               <View style={mS.headerLeft}>
@@ -361,7 +363,7 @@ function ShareModal({
     try {
       const name = adminUser?.name || "GAU";
       const adminId = String(adminUser?.id || "000");
-        const universalLink = `${getApiBaseUrl()}/api/admin/store-redirect?ref=${adminId}`;
+      const universalLink = `${getApiBaseUrl()}/api/admin/store-redirect?ref=${adminId}`;
       setQrData({
         admin_id: adminId,
         admin_name: name,
@@ -1831,8 +1833,10 @@ export default function AdminSettingsScreen() {
         </View>
 
         <View style={s.versionStrip}>
-          <Ionicons name="leaf-outline" size={13} color={C.light} />
-          <Text style={s.versionTxt}>GauSatva v1.0.0</Text>
+          <MaterialCommunityIcons name="cow" size={16} color="#1e5e20" />
+          <Text style={[s.versionTxt, { color: "#1a5c1b" }]}>
+            GauSatva Version-{APP_VERSION}
+          </Text>
         </View>
 
         <TouchableOpacity
@@ -2140,7 +2144,7 @@ export default function AdminSettingsScreen() {
         title="Business Locations"
         icon="location-outline"
         onClose={closeModal}
-        onSave={() => {}}
+        onSave={() => { }}
       >
         {locationsLoading ? (
           <ActivityIndicator
@@ -2391,7 +2395,7 @@ export default function AdminSettingsScreen() {
         title={pwStepTitle}
         icon="lock-closed-outline"
         onClose={closeModal}
-        onSave={() => {}}
+        onSave={() => { }}
       >
         {/* Step indicator */}
         <View style={mS.stepRow}>

@@ -15,13 +15,14 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 
 import { useAuth } from "../../src/contexts/AuthContext";
 import { Colors } from "../../src/constants/colors";
 import Input from "../../src/components/Input";
 import Button from "../../src/components/Button";
 import { api } from "../../src/services/api";
+import { APP_VERSION } from "../../src/services/useVersionCheck";
 
 type ToastType = "error" | "success" | "warn";
 
@@ -1441,6 +1442,13 @@ export default function LoginScreen() {
             <Text style={styles.demoTitle}>Gausatv</Text>
             <Text style={styles.demoText}>Dairy and cattle management</Text>
           </View>
+
+          <View style={styles.versionStrip}>
+            <MaterialCommunityIcons name="cow" size={14} color="#4CAF50" />
+            <Text style={[styles.versionTxt, { color: "#4CAF50" }]}> 
+              GauSatva Version-{APP_VERSION}
+            </Text>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -1551,4 +1559,15 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   demoText: { fontSize: 12, color: Colors.textSecondary },
-});
+  versionStrip: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    marginTop: 14,
+  },
+  versionTxt: {
+    fontSize: 12,
+    fontWeight: "600",
+  }
+  })
