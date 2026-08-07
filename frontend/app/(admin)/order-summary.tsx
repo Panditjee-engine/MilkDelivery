@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { api } from "../../src/services/api";
 
@@ -49,7 +49,7 @@ type Order = {
   total_amount?: number;
   total?: number;
   items?: OrderItem[];
-  address?: { flat?: string; tower?: string; area?: string; address?: string };
+  address?: any;
 };
 
 const C = {
@@ -114,6 +114,54 @@ const formatQuantity = (value: number) =>
   Number.isInteger(value)
     ? String(value)
     : value.toFixed(2).replace(/\.?0+$/, "");
+
+const parseUnitDescriptor = (unit?: string) => {
+  const text = String(unit || "").trim().toLowerCase();
+  const match = text.match(
+    /(\d+(?:\.\d+)?)?\s*(ml|milliliter|millilitre|l|ltr|liter|litre|g|gm|gram|kg|kilogram|pc|pcs|piece|pieces|unit|units)/,
+  );
+  if (!match) return null;
+  const size = Number.parseFloat(match[1] || "1");
+  const token = match[2];
+  if (["ml", "milliliter", "millilitre"].includes(token)) {
+    return { kind: "volume", packSize: size };
+  }
+  if (["l", "ltr", "liter", "litre"].includes(token)) {
+    return { kind: "volume", packSize: size * 1000 };
+  }
+  if (["g", "gm", "gram"].includes(token)) {
+    return { kind: "weight", packSize: size };
+  }
+  if (["kg", "kilogram"].includes(token)) {
+    return { kind: "weight", packSize: size * 1000 };
+  }
+  return { kind: "count", packSize: size };
+};
+
+const formatBaseMetric = (amount: number, kind?: string) => {
+  if (kind === "volume") {
+    return amount >= 1000
+      ? `${formatQuantity(amount / 1000)} L`
+      : `${formatQuantity(amount)} ml`;
+  }
+  if (kind === "weight") {
+    return amount >= 1000
+      ? `${formatQuantity(amount / 1000)} kg`
+      : `${formatQuantity(amount)} g`;
+  }
+  return `${formatQuantity(amount)} qty`;
+};
+
+const formatPackedQuantity = (quantity: number, unit?: string) => {
+  const parsed = parseUnitDescriptor(unit);
+  if (!parsed) return `${formatQuantity(quantity)} ${unit || "qty"}`;
+  const total = quantity * parsed.packSize;
+  const hasPackSize = /\d/.test(String(unit || ""));
+  const totalText = formatBaseMetric(total, parsed.kind);
+  return hasPackSize
+    ? `${formatQuantity(quantity)} x ${unit} = ${totalText}`
+    : totalText;
+};
 const normalizeName = (value: string) => value.trim().toLowerCase();
 
 const matchesProduct = (
@@ -141,11 +189,42 @@ const matchesProduct = (
 const addressText = (order: Order) => {
   const a = order.address;
   if (!a) return "Address not available";
-  return [a.flat, a.tower, a.area, a.address].filter(Boolean).join(", ");
+  if (typeof a === "string") return a.trim() || "Address not available";
+  const full = [
+    a.full_address,
+    a.address,
+    a.line1,
+    a.line2,
+    a.flat,
+    a.house,
+    a.house_no,
+    a.building,
+    a.tower,
+    a.floor,
+    a.society,
+    a.area,
+    a.landmark,
+    a.city,
+    a.state,
+    a.pincode,
+    a.pin_code,
+  ]
+    .filter(Boolean)
+    .join(", ");
+  return full || "Address not available";
+};
+
+const orderAmount = (order: Order) => Number(order.total_amount || order.total || 0);
+
+const orderProductTitle = (items: OrderItem[]) => {
+  if (!items.length) return "Product details";
+  const first = itemName(items[0]);
+  return items.length > 1 ? `${first} +${items.length - 1} more` : first;
 };
 
 export default function AdminOrderSummaryScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ date?: string }>();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
@@ -163,6 +242,7 @@ export default function AdminOrderSummaryScreen() {
   >(null);
   const [filterSheetVisible, setFilterSheetVisible] = useState(false);
   const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false);
+  const [expandedOrderIds, setExpandedOrderIds] = useState<Record<string, boolean>>({});
   const todayKey = getLocalDateKey();
 
   const fetchData = useCallback(async () => {
@@ -182,6 +262,28 @@ export default function AdminOrderSummaryScreen() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  useEffect(() => {
+    const dateParam = Array.isArray(params.date) ? params.date[0] : params.date;
+    if (!dateParam) return;
+    const key = getOrderDateKey(dateParam);
+    if (!key) return;
+    if (key === getLocalDateKey()) {
+      setDateFilter("TODAY");
+      setCustomStartDate("");
+      setCustomEndDate("");
+      return;
+    }
+    if (key === getTomorrowDateKey()) {
+      setDateFilter("TOMORROW");
+      setCustomStartDate("");
+      setCustomEndDate("");
+      return;
+    }
+    setDateFilter("CUSTOM");
+    setCustomStartDate(key);
+    setCustomEndDate(key);
+  }, [params.date]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -274,6 +376,13 @@ export default function AdminOrderSummaryScreen() {
     setCustomerDropdownOpen(false);
   };
 
+  const toggleOrder = (orderId: string) => {
+    setExpandedOrderIds((current) => ({
+      ...current,
+      [orderId]: !current[orderId],
+    }));
+  };
+
   const handleCustomDateChange = (_event: any, selectedDate?: Date) => {
     if (Platform.OS === "android") setDatePickerTarget(null);
     if (!selectedDate || !datePickerTarget) return;
@@ -325,9 +434,25 @@ export default function AdminOrderSummaryScreen() {
         : (item.items || []).filter((orderItem) =>
             matchesProduct(orderItem, selectedProduct, selectedProductMeta),
           );
+    const expanded = expandedOrderIds[item.id] === true;
+    const totalQty = visibleItems.reduce((sum, orderItem) => sum + qty(orderItem), 0);
+    const productTitle = orderProductTitle(visibleItems);
+    const itemUnit = (orderItem: OrderItem) => {
+      const id = itemProductId(orderItem);
+      const meta = products.find(
+        (product) =>
+          productId(product) === id ||
+          normalizeName(product.name) === normalizeName(itemName(orderItem)),
+      );
+      return meta?.unit || (selectedProduct === "All" ? undefined : unit);
+    };
 
     return (
-      <View style={s.orderCard}>
+      <TouchableOpacity
+        style={s.orderCard}
+        activeOpacity={0.86}
+        onPress={() => toggleOrder(item.id)}
+      >
         <View style={s.orderTop}>
           <View style={s.customerIcon}>
             <Ionicons name="person-outline" size={16} color={C.dark} />
@@ -340,32 +465,60 @@ export default function AdminOrderSummaryScreen() {
               {item.customer_phone || "Phone not available"}
             </Text>
           </View>
-          <Text style={s.amountText}>
-            ₹{Number(item.total_amount || item.total || 0)}
-          </Text>
-        </View>
-
-        <View style={s.detailLine}>
-          <Ionicons name="location-outline" size={13} color={C.muted} />
-          <Text style={s.detailText}>{addressText(item)}</Text>
-        </View>
-        <View style={s.detailLine}>
-          <Ionicons name="calendar-outline" size={13} color={C.muted} />
-          <Text style={s.detailText}>
-            {item.delivery_date || todayKey}
-            {item.delivery_slot ? ` · ${item.delivery_slot}` : ""}
-          </Text>
-        </View>
-
-        <View style={s.itemsWrap}>
-          {visibleItems.map((orderItem, index) => (
-            <View key={`${item.id}-${index}`} style={s.itemPill}>
-              <Text style={s.itemName}>{itemName(orderItem)}</Text>
-              <Text style={s.itemQty}>×{formatQuantity(qty(orderItem))}</Text>
+          <View style={s.productSummary}>
+            <Text style={s.productSummaryTitle} numberOfLines={1}>
+              {productTitle}
+            </Text>
+            <View style={s.productSummaryMeta}>
+              <Text style={s.productSummaryQty}>
+                {formatQuantity(totalQty || visibleItems.length)} qty
+              </Text>
+              <Ionicons
+                name={expanded ? "chevron-up" : "chevron-down"}
+                size={15}
+                color={C.dark}
+              />
             </View>
-          ))}
+          </View>
         </View>
-      </View>
+
+        {expanded ? (
+          <View style={s.collapsedBody}>
+            <View style={s.detailLine}>
+              <Ionicons name="location-outline" size={13} color={C.muted} />
+              <Text style={s.detailText}>{addressText(item)}</Text>
+            </View>
+            <View style={s.detailLine}>
+              <Ionicons name="calendar-outline" size={13} color={C.muted} />
+              <Text style={s.detailText}>
+                {item.delivery_date || todayKey}
+                {item.delivery_slot ? ` · ${item.delivery_slot}` : ""}
+              </Text>
+            </View>
+
+            <View style={s.itemsWrap}>
+              {visibleItems.map((orderItem, index) => (
+                <View key={`${item.id}-${index}`} style={s.itemPill}>
+                  <Text style={s.itemName} numberOfLines={1}>
+                    {itemName(orderItem)}
+                  </Text>
+                  <Text style={s.itemQty}>
+                    {formatPackedQuantity(
+                      qty(orderItem),
+                      itemUnit(orderItem),
+                    )}
+                  </Text>
+                </View>
+              ))}
+            </View>
+
+            <View style={s.amountRow}>
+              <Text style={s.amountLabel}>Amount</Text>
+              <Text style={s.amountText}>₹{orderAmount(item)}</Text>
+            </View>
+          </View>
+        ) : null}
+      </TouchableOpacity>
     );
   };
 
@@ -603,7 +756,9 @@ export default function AdminOrderSummaryScreen() {
               : `Total ${selectedProduct}`}
           </Text>
           <Text style={s.totalValue}>
-            Qty: {formatQuantity(summary.quantity)} · Units: {unit}
+            {selectedProduct === "All"
+              ? `${formatQuantity(summary.quantity)} items`
+              : formatPackedQuantity(summary.quantity, unit)}
           </Text>
         </View>
         <View style={s.totalRight}>
@@ -944,7 +1099,6 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    marginBottom: 12,
   },
   customerIcon: {
     width: 38,
@@ -961,6 +1115,35 @@ const s = StyleSheet.create({
     color: C.muted,
     marginTop: 2,
   },
+  productSummary: {
+    flexShrink: 0,
+    width: 132,
+    alignItems: "flex-end",
+    gap: 4,
+  },
+  productSummaryTitle: {
+    maxWidth: 132,
+    fontSize: 13,
+    fontWeight: "900",
+    color: C.dark,
+    textAlign: "right",
+  },
+  productSummaryMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  productSummaryQty: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: C.muted,
+  },
+  collapsedBody: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#FFF0E4",
+  },
   amountText: { fontSize: 15, fontWeight: "900", color: C.dark },
   detailLine: {
     flexDirection: "row",
@@ -975,18 +1158,29 @@ const s = StyleSheet.create({
     color: C.muted,
     lineHeight: 16,
   },
-  itemsWrap: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 5 },
+  itemsWrap: { gap: 7, marginTop: 5 },
   itemPill: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    justifyContent: "space-between",
+    gap: 10,
     backgroundColor: C.soft,
     borderRadius: 14,
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
-  itemName: { fontSize: 12, fontWeight: "800", color: C.text },
-  itemQty: { fontSize: 12, fontWeight: "900", color: C.dark },
+  itemName: { flex: 1, fontSize: 12, fontWeight: "800", color: C.text },
+  itemQty: { fontSize: 12, fontWeight: "900", color: C.dark, textAlign: "right" },
+  amountRow: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: "#FFF0E4",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  amountLabel: { fontSize: 12, fontWeight: "800", color: C.muted },
   empty: { alignItems: "center", paddingVertical: 60, gap: 10 },
   emptyTitle: { fontSize: 15, color: C.muted, fontWeight: "800" },
 });

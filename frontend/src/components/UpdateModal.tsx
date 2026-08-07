@@ -14,7 +14,6 @@ import {
   StyleSheet,
   Linking,
   Image,
-  Platform,
 } from "react-native";
 import { VersionCheckResult } from "../services/useVersionCheck";
 
@@ -27,6 +26,7 @@ export default function UpdateModal({ versionInfo }: Props) {
 
   // Force update hai toh modal close nahi hoga
   const canDismiss = !versionInfo.forceUpdate;
+  const storeName = versionInfo.platform === "ios" ? "App Store" : "Play Store";
 
   const handleUpdate = () => {
     Linking.openURL(versionInfo.updateUrl);
@@ -67,13 +67,16 @@ export default function UpdateModal({ versionInfo }: Props) {
           {/* Message */}
           <Text style={styles.message}>
             {versionInfo.forceUpdate
-              ? `A new update is available (v${versionInfo.currentVersion}) Please update the app to continue using it.`
-              : `A new update is available (v${versionInfo.currentVersion}) Please update the app for a better experience!`}
+              ? `Version ${versionInfo.currentVersion} is available on ${storeName}. Please update the app to continue using it.`
+              : `Version ${versionInfo.currentVersion} is available on ${storeName}. Please update the app for a better experience.`}
           </Text>
+          {versionInfo.releaseNotes ? (
+            <Text style={styles.notes}>{versionInfo.releaseNotes}</Text>
+          ) : null}
 
           {/* Buttons */}
           <TouchableOpacity style={styles.updateBtn} onPress={handleUpdate}>
-            <Text style={styles.updateBtnText}>update Now</Text>
+            <Text style={styles.updateBtnText}>Update Now</Text>
           </TouchableOpacity>
 
           {canDismiss && (
@@ -133,6 +136,14 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 21,
     marginBottom: 24,
+  },
+  notes: {
+    fontSize: 12,
+    color: "#6b7280",
+    textAlign: "center",
+    lineHeight: 18,
+    marginTop: -12,
+    marginBottom: 20,
   },
   updateBtn: {
     backgroundColor: "#4CAF50",

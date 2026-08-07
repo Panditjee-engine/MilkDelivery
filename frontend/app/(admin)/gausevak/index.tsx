@@ -100,7 +100,7 @@ const MENU = [
     title: "Customers",
     subtitle: "Offline customer records",
     icon: "people",
-    route: "/(admin)/gausevak/customers",
+    route: "/(admin)/customer-manager?from=gausevak",
     gradient: ["#2b3f13", "#5f7f1f"] as const,
     accent: "#b7e36d",
   },

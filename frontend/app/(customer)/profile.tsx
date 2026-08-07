@@ -367,6 +367,9 @@ export default function ProfileScreen() {
   const [deleteModal, setDeleteModal] = useState(false);
   const [deletePassword, setDeletePassword] = useState("");
   const [deletingAccount, setDeletingAccount] = useState(false);
+  const [connectModal, setConnectModal] = useState(false);
+  const [connectReferralCode, setConnectReferralCode] = useState("");
+  const [connectingGaushala, setConnectingGaushala] = useState(false);
   const isFocused = useIsFocused();
 
   useEffect(() => {
@@ -467,6 +470,37 @@ export default function ProfileScreen() {
   const handleDeleteAccount = () => {
     setDeletePassword("");
     setDeleteModal(true);
+  };
+
+  const handleOpenConnectGaushala = () => {
+    setConnectReferralCode("");
+    setConnectModal(true);
+  };
+
+  const handleConnectGaushala = async () => {
+    const code = connectReferralCode.trim().toUpperCase();
+    if (!code) {
+      showToast("Please enter referral code.", "error");
+      return;
+    }
+    setConnectingGaushala(true);
+    try {
+      const result = await api.connectGaushala(code);
+      if (result.user) {
+        updateUser(result.user);
+      } else {
+        updateUser({
+          admin_id: result.admin_id,
+          referral_admin_id: result.admin_id,
+        } as any);
+      }
+      setConnectModal(false);
+      showToast(`Connected with ${result.admin_name || "Gaushala"}`, "success");
+    } catch (error: any) {
+      showToast(error?.message || "Could not connect with gaushala", "error");
+    } finally {
+      setConnectingGaushala(false);
+    }
   };
 
   const handleSaveBasicProfile = async () => {
@@ -808,6 +842,8 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
 
+       
+
         {/* ── Delivery Address ── */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
@@ -1001,6 +1037,51 @@ export default function ProfileScreen() {
           )}
         </View>
 
+
+         {/* ── Connect with Gaushala ── */}
+        <TouchableOpacity
+          style={[
+            styles.card,
+            styles.connectCard,
+            (user as any)?.admin_id && styles.connectCardLinked,
+          ]}
+          activeOpacity={0.88}
+          onPress={(user as any)?.admin_id ? undefined : handleOpenConnectGaushala}
+        >
+          <View style={styles.cardHeader}>
+            <View style={[styles.cardIconBox, { backgroundColor: "#ECFDF5" }]}>
+              <Ionicons name="business-outline" size={17} color="#16a34a" />
+            </View>
+            <Text style={styles.cardTitle}>Connect with Gaushala</Text>
+            <View
+              style={[
+                styles.connectionBadge,
+                (user as any)?.admin_id && styles.connectionBadgeActive,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.connectionBadgeText,
+                  (user as any)?.admin_id && styles.connectionBadgeTextActive,
+                ]}
+              >
+                {(user as any)?.admin_id ? "Connected" : "Referral"}
+              </Text>
+            </View>
+          </View>
+          <Text style={styles.connectText}>
+            {(user as any)?.admin_id
+              ? "Your account is connected with a nearby gaushala."
+              : "Enter your gaushala referral code to see nearby products, content and services."}
+          </Text>
+          {!(user as any)?.admin_id && (
+            <View style={styles.connectActionRow}>
+              <Text style={styles.connectActionText}>Tap to enter referral code</Text>
+              <Ionicons name="chevron-forward" size={16} color={Colors.primary} />
+            </View>
+          )}
+        </TouchableOpacity>
+
         {/* ── Version ── */}
         <View style={styles.versionStrip}>
           <MaterialCommunityIcons name="cow" size={14} color="#4CAF50" />
@@ -1140,6 +1221,45 @@ export default function ProfileScreen() {
               onPress={handleAddVacation}
               style={{ marginTop: 16 }}
             />
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={connectModal} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <View style={styles.dragHandle} />
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Connect with Gaushala</Text>
+              <TouchableOpacity
+                onPress={() => setConnectModal(false)}
+                disabled={connectingGaushala}
+              >
+                <Ionicons name="close" size={22} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.modalBody}>
+              <View style={styles.connectModalIcon}>
+                <Ionicons name="business" size={26} color="#16a34a" />
+              </View>
+              <Text style={styles.connectModalText}>
+                Enter the referral code shared by your nearby gaushala.
+              </Text>
+              <Input
+                label="Referral Code"
+                placeholder="Example: RAM347"
+                value={connectReferralCode}
+                onChangeText={(text) => setConnectReferralCode(text.toUpperCase())}
+                autoCapitalize="characters"
+              />
+              <Button
+                title={connectingGaushala ? "Connecting..." : "Connect Gaushala"}
+                onPress={handleConnectGaushala}
+                loading={connectingGaushala}
+                disabled={connectingGaushala}
+                style={{ marginTop: 8 }}
+              />
+            </View>
           </View>
         </View>
       </Modal>
@@ -1321,6 +1441,53 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary + "14",
     justifyContent: "center",
     alignItems: "center",
+  },
+  connectCard: {
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+    backgroundColor: "#FCFFFD",
+  },
+  connectCardLinked: {
+    borderColor: Colors.primary + "24",
+    backgroundColor: "#F8FBF7",
+  },
+  connectionBadge: {
+    borderRadius: 999,
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  connectionBadgeActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  connectionBadgeText: {
+    fontSize: 11,
+    fontWeight: "900",
+    color: "#16a34a",
+  },
+  connectionBadgeTextActive: { color: "#fff" },
+  connectText: {
+    fontSize: 13,
+    color: "#64748B",
+    fontWeight: "600",
+    lineHeight: 19,
+  },
+  connectActionRow: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#E2E8F0",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  connectActionText: {
+    fontSize: 12,
+    fontWeight: "900",
+    color: Colors.primary,
   },
 
   // Address
@@ -1608,6 +1775,26 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   modalTitle: { fontSize: 20, fontWeight: "800", color: "#111" },
+  connectModalIcon: {
+    width: 58,
+    height: 58,
+    borderRadius: 18,
+    backgroundColor: "#ECFDF5",
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+    alignItems: "center",
+    justifyContent: "center",
+    alignSelf: "center",
+    marginBottom: 12,
+  },
+  connectModalText: {
+    fontSize: 14,
+    color: "#64748B",
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: 18,
+    fontWeight: "600",
+  },
   closeBtn: {
     width: 32,
     height: 32,

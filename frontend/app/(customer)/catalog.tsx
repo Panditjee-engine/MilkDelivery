@@ -1132,8 +1132,7 @@ function ProductCard({
           <TouchableOpacity
             style={[
               cardS.halfBtn,
-              cardS.halfOutline,
-              { borderColor: theme.accent },
+              cardS.onceBtn,
             ]}
             onPress={(event) => {
               event.stopPropagation?.();
@@ -1141,7 +1140,8 @@ function ProductCard({
             }}
             activeOpacity={0.7}
           >
-            <Text style={[cardS.halfTxt, { color: theme.accent }]}>Once</Text>
+            <Ionicons name="flash-outline" size={10} color="#fff" />
+            <Text style={[cardS.halfTxt, { color: "#fff" }]}>Once</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[cardS.halfBtn, { backgroundColor: T.amber }]}
@@ -1152,7 +1152,13 @@ function ProductCard({
             activeOpacity={0.7}
           >
             <Ionicons name="repeat-outline" size={10} color="#fff" />
-            <Text style={[cardS.halfTxt, { color: "#fff" }]}>Sub</Text>
+            <Text
+              style={[cardS.halfTxt, cardS.actionTextEllipsis, { color: "#fff" }]}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
+              Subscription Complete
+            </Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -1258,7 +1264,18 @@ const cardS = StyleSheet.create({
     borderRadius: T.radius.sm,
   },
   halfOutline: { borderWidth: 1.5, backgroundColor: "transparent" },
+  onceBtn: {
+    backgroundColor: T.green,
+    borderWidth: 1,
+    borderColor: "#15803D",
+    shadowColor: T.green,
+    shadowOpacity: 0.22,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
   halfTxt: { fontSize: 10, fontWeight: "800" },
+  actionTextEllipsis: { flexShrink: 1, maxWidth: "100%" },
   fullBtn: {
     flex: 1,
     flexDirection: "row",
