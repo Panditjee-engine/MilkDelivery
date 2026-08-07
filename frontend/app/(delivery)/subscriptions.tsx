@@ -55,9 +55,13 @@ interface Subscription {
   admin_name?: string;
   is_accepted?: boolean;
   accepted_by?: string;
+  on_vacation_today?: boolean;
+  vacation_start_date?: string;
+  vacation_end_date?: string;
 }
 
-// ── Helpers ────────────────────────────────────────────────────────────────
+// ── Helpers ───
+// ─────────────────────────────────────────────────────────────
 
 const getPattern = (s: any): string =>
   String(s?.pattern ?? s?.subscription_type ?? s?.frequency ?? "")
@@ -166,6 +170,8 @@ function getNextDeliveryDate(sub: Subscription): string | null {
   }
   return null;
 }
+
+const isOnVacation = (sub: any): boolean => !!sub.on_vacation_today;
 
 // Expiry is ONLY based on end_date vs today — nothing else
 const isEffectivelyExpired = (
@@ -397,9 +403,9 @@ const handleMarkDelivered = useCallback(async (sub: Subscription) => {
   }, []);
 
   // ── Filters ──────────────────────────────────────────────────────────────
-  const filtered = subscriptions.filter((sub) => {
+const filtered = subscriptions.filter((sub) => {
     const accepted = acceptedIds.has(sub.id);
-    const deliversToday = isDeliveryToday(sub);
+    const deliversToday = isDeliveryToday(sub) && !isOnVacation(sub); // ← added guard
     const expired = isEffectivelyExpired(sub, accepted, deliversToday);
 
     if (filter === "expired") return expired;
@@ -411,7 +417,8 @@ const handleMarkDelivered = useCallback(async (sub: Subscription) => {
       return accepted && !expired;
     }
     return true;
-  });
+});
+
 
   const pendingCount = subscriptions.filter((s) => {
     const accepted = acceptedIds.has(s.id);
@@ -521,30 +528,27 @@ const handleMarkDelivered = useCallback(async (sub: Subscription) => {
           <ErrorState error={error} onRetry={fetchData} />
         ) : filtered.length > 0 ? (
           filtered.map((sub) => {
-            const key = `${sub.id}:${todayStr()}`;
-            const accepted = acceptedIds.has(sub.id);
-            const delivers = isDeliveryToday(sub);
-            return (
-              <SubCard
-                key={sub.id}
-                sub={sub}
-                context={filter}
-                isShiftOff={isShiftOff}
-                deliversToday={delivers}
-                isAccepted={accepted}
-                isEffectivelyExpired={isEffectivelyExpired(
-                  sub,
-                  accepted,
-                  delivers,
-                )}
-                isDeliveredToday={deliveredToday.has(key)}
-                isExpanded={expandedId === sub.id}
-                onToggleExpand={() => toggleExpand(sub.id)}
-                onAccept={() => handleAccept(sub)}
-                onMarkDelivered={() => handleMarkDelivered(sub)}
-              />
-            );
-          })
+  const key = `${sub.id}:${todayStr()}`;
+  const accepted = acceptedIds.has(sub.id);
+  const delivers = isDeliveryToday(sub) && !isOnVacation(sub); // ← guard here too
+  return (
+    <SubCard
+      key={sub.id}
+      sub={sub}
+      context={filter}
+      isShiftOff={isShiftOff}
+      deliversToday={delivers}
+      isAccepted={accepted}
+      isOnVacation={isOnVacation(sub)}   // ← new prop
+      isEffectivelyExpired={isEffectivelyExpired(sub, accepted, delivers)}
+      isDeliveredToday={deliveredToday.has(key)}
+      isExpanded={expandedId === sub.id}
+      onToggleExpand={() => toggleExpand(sub.id)}
+      onAccept={() => handleAccept(sub)}
+      onMarkDelivered={() => handleMarkDelivered(sub)}
+    />
+  );
+})
         ) : (
           <EmptyState filter={filter} />
         )}
@@ -564,6 +568,7 @@ function SubCard({
   isAccepted,
   isEffectivelyExpired,
   isDeliveredToday,
+   isOnVacation,               //
   isExpanded,
   onToggleExpand,
   onAccept,
@@ -577,6 +582,7 @@ function SubCard({
   isEffectivelyExpired: boolean;
   isDeliveredToday: boolean;
   isExpanded: boolean;
+   isOnVacation: boolean;
   onToggleExpand: () => void;
   onAccept: () => void;
   onMarkDelivered: () => void;
@@ -603,7 +609,7 @@ function SubCard({
   
   const dateLabel = getDeliveryDateLabel(sub, deliversToday);
   const canQuickDeliver =
-    context === "today" && isAccepted && deliversToday && !expired;
+    context === "today" && isAccepted && deliversToday && !expired && !isOnVacation;
 
   const expiredMessage = trueExpired
     ? `Expired on ${sub.end_date}`
@@ -737,6 +743,12 @@ function SubCard({
       <>
         <Ionicons name="close-circle-outline" size={12} color="#ef4444" />
         <Text style={styles.quickRowExpiredText}>{expiredMessage}</Text>
+      </>) : isOnVacation ? (
+      <>
+        <Ionicons name="airplane-outline" size={12} color="#d97706" />
+        <Text style={[styles.quickRowText, { color: "#d97706" }]}>
+          Paused — resumes {sub.vacation_end_date || "soon"}
+        </Text>
       </>
     ) : context === "assigned" ? (
       <>
@@ -846,6 +858,14 @@ function SubCard({
     </View>
   </View>
 )}
+{isOnVacation && !expired && (
+  <View style={styles.vacationBadge}>
+    <Ionicons name="airplane" size={10} color="#fff" />
+    <Text style={styles.vacationBadgeText}>
+      On Vacation{sub.vacation_end_date ? ` till ${sub.vacation_end_date}` : ""}
+    </Text>
+  </View>
+)}
           {/* Horizontal Calendar Timeline view with Month & Date for Today Tab */}
           {context === "today" && calendarTimeline.length > 0 && (
             <View style={styles.calendarSection}>
@@ -932,6 +952,13 @@ function SubCard({
                 <Ionicons name="close-circle" size={16} color="#ef4444" />
                 <Text style={styles.expiredPillText}>{expiredMessage}</Text>
               </View>
+              ) : isOnVacation ? (
+  <View style={styles.vacationPill}>
+    <Ionicons name="airplane" size={14} color="#d97706" />
+    <Text style={styles.vacationPillText}>
+      Customer on vacation — no delivery until {sub.vacation_end_date || "further notice"}
+    </Text>
+  </View>
             ) : !isAccepted ? (
               <TouchableOpacity
                 style={[styles.acceptBtn, isShiftOff && styles.btnDisabled]}
@@ -1456,4 +1483,27 @@ const styles = StyleSheet.create({
     marginTop: 14,
   },
   retryBtnText: { fontSize: 13, fontWeight: "600", color: "#fff" },
+  vacationBadge: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 3,
+  backgroundColor: "#d97706",
+  paddingHorizontal: 8,
+  paddingVertical: 3,
+  borderRadius: 6,
+},
+vacationBadgeText: { fontSize: 10, fontWeight: "700", color: "#fff" },
+vacationPill: {
+  flex: 1,
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 6,
+  paddingVertical: 11,
+  borderRadius: 10,
+  backgroundColor: "#FFFBEB",
+  borderWidth: 1,
+  borderColor: "#FDE68A",
+},
+vacationPillText: { fontSize: 11.5, fontWeight: "700", color: "#92400e", flex: 1, textAlign: "center" },
 });
