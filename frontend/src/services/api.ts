@@ -1157,6 +1157,21 @@ class ApiService {
     });
   }
 
+  async updateAdminOrderStatus(orderId: string, status: string) {
+    return this.request<any>(`/admin/orders/${orderId}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+    });
+  }
+
+  async bulkUpdateAdminOrderStatus(orderIds: string[], status: string) {
+    const results: any[] = [];
+    for (const orderId of orderIds) {
+      results.push(await this.updateAdminOrderStatus(orderId, status));
+    }
+    return { updated: results.length, failed: 0, results };
+  }
+
   // Recurring subscriptions whose customers are tagged to this rider
   async getAssignedSubscriptions(): Promise<any[]> {
     return this.request<any[]>("/subscriptions/delivery/assigned");
@@ -1169,6 +1184,21 @@ class ApiService {
         method: "PUT",
       },
     );
+  }
+
+  async updateAdminSubscriptionStatus(subscriptionId: string, status: string) {
+    return this.request<any>(`/subscriptions/admin/${subscriptionId}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+    });
+  }
+
+  async bulkUpdateAdminSubscriptionStatus(subscriptionIds: string[], status: string) {
+    const results: any[] = [];
+    for (const subscriptionId of subscriptionIds) {
+      results.push(await this.updateAdminSubscriptionStatus(subscriptionId, status));
+    }
+    return { updated: results.length, failed: 0, results };
   }
 
   async cancelUserOrder(orderId: string) {

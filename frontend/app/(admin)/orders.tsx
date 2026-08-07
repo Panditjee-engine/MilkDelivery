@@ -19,6 +19,7 @@ import {
   Modal,
   Animated,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -69,7 +70,7 @@ interface Order {
     name?: string;
     unit?: string;
   }[];
-  address?: { tower?: string; flat?: string; area?: string };
+  address?: any;
   delivery_partner_name?: string;
   delivery_partner_phone?: string;
   pattern?: string;
@@ -98,9 +99,11 @@ interface Subscription {
   custom_days?: number[];
   total_amount?: number;
   total_quantity?: number;
+  delivery_status?: string;
   items: SubscriptionItem[];
   customer_name?: string;
   customer_phone?: string;
+  customer_address?: any;
   created_at?: string;
 }
 
@@ -302,6 +305,60 @@ const itemMatchesProduct = (
     itemValue.includes(metaValue) ||
     metaValue.includes(itemValue)
   );
+};
+
+const buildAddressText = (address: any) => {
+  if (!address) return "";
+  if (typeof address === "string") return address.trim();
+  const value = [
+    address.full_address,
+    address.address,
+    address.line1,
+    address.line2,
+    address.flat,
+    address.house,
+    address.house_no,
+    address.building,
+    address.tower,
+    address.floor,
+    address.society,
+    address.area,
+    address.landmark,
+    address.city,
+    address.state,
+    address.pincode,
+    address.pin_code,
+  ]
+    .filter(Boolean)
+    .join(", ");
+  return value;
+};
+
+const pickUserAddress = (user: any) => {
+  if (!user) return null;
+  if (user.address || user.delivery_address) return user.address || user.delivery_address;
+  const addresses = Array.isArray(user.addresses) ? user.addresses : [];
+  return (
+    addresses.find((address) => address?.is_default || address?.default) ||
+    addresses[0] ||
+    null
+  );
+};
+
+const orderProductTitle = (items: Order["items"]) => {
+  if (!items?.length) return "Product details";
+  const first = getOrderItemName(items[0]) || "Product";
+  return items.length > 1 ? `${first} +${items.length - 1} more` : first;
+};
+
+const subscriptionProductTitle = (
+  items: SubscriptionItem[],
+  productNames: Record<string, string>,
+  products: any[],
+) => {
+  if (!items?.length) return "Product details";
+  const first = getSubscriptionItemName(items[0], productNames, products);
+  return items.length > 1 ? `${first} +${items.length - 1} more` : first;
 };
 
 // ─── Date Helpers ─────────────────────────────────────────────────────────────
@@ -925,22 +982,37 @@ function SubscriptionDetailModal({
 interface SubRowProps {
   item: Subscription;
   expanded: boolean;
+  selected: boolean;
   onToggle: () => void;
+  onToggleSelected: () => void;
   onViewDetail: () => void;
+  onMarkDelivered: () => void;
   productNames: Record<string, string>;
   products: any[];
+  bulkLoading: boolean;
 }
 
 function SubscriptionRow({
   item,
   expanded,
+  selected,
   onToggle,
+  onToggleSelected,
   onViewDetail,
+  onMarkDelivered,
   productNames,
   products,
+  bulkLoading,
 }: SubRowProps) {
   const pc = PATTERN_CONFIG[item.pattern] ?? PATTERN_CONFIG.daily;
   const itemCount = item.items?.length ?? 0;
+  const productTitle = subscriptionProductTitle(item.items || [], productNames, products);
+  const address = buildAddressText(item.customer_address);
+  const canDeliver =
+    item.is_active !== false &&
+    !["delivered", "cancelled", "skipped"].includes(
+      String(item.delivery_status || item.status || "").toLowerCase(),
+    );
 
   // FIXED: use resolveItemName for summary line
   const itemSummaryLine = item.items
@@ -964,9 +1036,23 @@ function SubscriptionRow({
         onPress={onToggle}
         style={ss.summary}
       >
-        <View style={ss.cardHeader}>
-          <View style={ss.idRow}>
-            <View style={[ss.iconBox, { backgroundColor: pc.bg }]}>
+          <View style={ss.cardHeader}>
+            <View style={ss.idRow}>
+              {canDeliver ? (
+                <TouchableOpacity
+                  style={[styles.selectBox, selected && styles.selectBoxActive]}
+                  onPress={(event) => {
+                    event.stopPropagation?.();
+                    onToggleSelected();
+                  }}
+                  activeOpacity={0.75}
+                >
+                  {selected ? (
+                    <Ionicons name="checkmark" size={14} color="#fff" />
+                  ) : null}
+                </TouchableOpacity>
+              ) : null}
+              <View style={[ss.iconBox, { backgroundColor: pc.bg }]}>
               <Ionicons name={pc.icon} size={14} color={pc.color} />
             </View>
             <View>
@@ -977,16 +1063,26 @@ function SubscriptionRow({
             </View>
           </View>
           <View style={ss.headerRight}>
-            <View style={[ss.patternPill, { backgroundColor: pc.bg }]}>
-              <Text style={[ss.patternText, { color: pc.color }]}>
-                {pc.label}
+            <View style={ss.headerRightInfo}>
+              <View
+                style={[
+                  ss.subStatusPill,
+                  item.is_active ? ss.subStatusActive : ss.subStatusInactive,
+                ]}
+              >
+                <Text
+                  style={[
+                    ss.subStatusText,
+                    { color: item.is_active ? "#16A34A" : "#FF5C5C" },
+                  ]}
+                >
+                  {item.is_active ? "Active" : "Inactive"}
+                </Text>
+              </View>
+              <Text style={ss.headerProductName} numberOfLines={1}>
+                {productTitle}
               </Text>
             </View>
-            {!item.is_active && (
-              <View style={ss.inactivePill}>
-                <Text style={ss.inactivePillText}>Inactive</Text>
-              </View>
-            )}
             <Ionicons
               name={expanded ? "chevron-up" : "chevron-down"}
               size={16}
@@ -1006,34 +1102,6 @@ function SubscriptionRow({
             )}
           </View>
         )}
-
-        {/* Item summary — FIXED: shows product_name */}
-        {itemSummaryLine ? (
-          <View style={ss.itemSummaryRow}>
-            <Ionicons name="bag-outline" size={12} color="#FFBF55" />
-            <Text style={ss.itemSummaryText} numberOfLines={1}>
-              {itemSummaryLine}
-            </Text>
-          </View>
-        ) : null}
-
-        <View style={ss.footer}>
-          <View style={ss.datesRow}>
-            {item.start_date && (
-              <View style={ss.dateBit}>
-                <Ionicons name="calendar-outline" size={11} color="#FFBF55" />
-                <Text style={ss.dateText}>{item.start_date}</Text>
-              </View>
-            )}
-            {item.end_date && (
-              <>
-                <Text style={ss.dateSep}>→</Text>
-                <Text style={ss.dateText}>{item.end_date}</Text>
-              </>
-            )}
-          </View>
-          <Text style={ss.amountText}>₹{item.total_amount ?? 0}</Text>
-        </View>
       </TouchableOpacity>
 
       {/* Expanded section — FIXED: uses resolveItemName */}
@@ -1052,6 +1120,42 @@ function SubscriptionRow({
               </View>
             </View>
           )}
+
+          <View style={ss.divider} />
+          <View style={[ss.patternPill, { alignSelf: "flex-start", backgroundColor: pc.bg }]}>
+            <Ionicons name={pc.icon} size={12} color={pc.color} />
+            <Text style={[ss.patternText, { color: pc.color }]}>
+              {pc.label}
+            </Text>
+          </View>
+
+          <View style={ss.datesRowExpanded}>
+            {item.start_date && (
+              <View style={ss.dateBit}>
+                <Ionicons name="calendar-outline" size={11} color="#FFBF55" />
+                <Text style={ss.dateText}>Start {item.start_date}</Text>
+              </View>
+            )}
+            {item.end_date && (
+              <View style={ss.dateBit}>
+                <Ionicons name="calendar-number-outline" size={11} color="#FFBF55" />
+                <Text style={ss.dateText}>End {item.end_date}</Text>
+              </View>
+            )}
+          </View>
+
+          {address ? (
+            <>
+              <View style={ss.divider} />
+              <Text style={ss.sectionLabel}>ADDRESS</Text>
+              <View style={ss.slotRow}>
+                <View style={ss.slotIcon}>
+                  <Ionicons name="location-outline" size={13} color="#FF9675" />
+                </View>
+                <Text style={ss.slotText}>{address}</Text>
+              </View>
+            </>
+          ) : null}
 
           {item.pattern === "custom" && item.custom_days && (
             <>
@@ -1097,7 +1201,11 @@ function SubscriptionRow({
                         {name}
                       </Text>
                       <Text style={ss.itemCardPricePerUnit}>
-                        ₹{p.price} / unit
+                        {formatSubscriptionItemQuantity(
+                          p,
+                          productNames,
+                          products,
+                        )}
                       </Text>
                     </View>
                   </View>
@@ -1122,6 +1230,20 @@ function SubscriptionRow({
           </View>
 
           <View style={ss.divider} />
+          {canDeliver ? (
+            <>
+              <TouchableOpacity
+                style={styles.deliveredExpandedBtn}
+                onPress={onMarkDelivered}
+                activeOpacity={0.8}
+                disabled={bulkLoading}
+              >
+                <Ionicons name="checkmark-circle-outline" size={16} color="#16A34A" />
+                <Text style={styles.deliveredExpandedText}>Mark Delivered</Text>
+              </TouchableOpacity>
+              <View style={styles.actionGap} />
+            </>
+          ) : null}
           <TouchableOpacity
             style={ss.detailBtn}
             onPress={onViewDetail}
@@ -1160,6 +1282,9 @@ export default function AdminOrdersScreen() {
   const [expandedOrderIds, setExpandedOrderIds] = useState<Set<string>>(
     new Set()
   );
+  const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(
+    new Set()
+  );
 
   const [filter, setFilter] = useState<"ALL" | "PENDING" | "DELIVERED">("ALL");
   const [dateFilter, setDateFilter] =
@@ -1184,7 +1309,9 @@ export default function AdminOrdersScreen() {
     "ALL"
   );
   const [expandedSubIds, setExpandedSubIds] = useState<Set<string>>(new Set());
+  const [selectedSubIds, setSelectedSubIds] = useState<Set<string>>(new Set());
   const [selectedSub, setSelectedSub] = useState<Subscription | null>(null);
+  const [bulkLoading, setBulkLoading] = useState(false);
 
   const [productNames, setProductNames] = useState<Record<string, string>>({});
   const [resolvingNames, setResolvingNames] = useState(false);
@@ -1278,10 +1405,40 @@ export default function AdminOrdersScreen() {
         return p !== "buy_once" && p !== "";
       });
 
-      setAllSubscriptions(recurring);
+      const customers = await api.getAllUsers("customer").catch(() => []);
+      const customerMap = new Map<string, any>();
+      (Array.isArray(customers) ? customers : []).forEach((customer) => {
+        [
+          customer.id,
+          customer._id,
+          customer.phone,
+          customer.name,
+        ]
+          .filter(Boolean)
+          .forEach((key) => customerMap.set(String(key), customer));
+      });
+
+      const withAddress = recurring.map((sub) => {
+        if (buildAddressText(sub.customer_address)) return sub;
+        const customer =
+          customerMap.get(String(sub.user_id || "")) ||
+          customerMap.get(String(sub.customer_phone || "")) ||
+          customerMap.get(String(sub.customer_name || ""));
+        const address = pickUserAddress(customer);
+        return address
+          ? {
+              ...sub,
+              customer_address: address,
+              customer_name: sub.customer_name || customer?.name,
+              customer_phone: sub.customer_phone || customer?.phone,
+            }
+          : sub;
+      });
+
+      setAllSubscriptions(withAddress);
 
       // Only resolve names for items that DON'T have product_name stored
-      const needsResolution = recurring.flatMap((s) =>
+      const needsResolution = withAddress.flatMap((s) =>
         (s.items ?? [])
           .filter((item) => !item.product_name)
           .map((item) => item.product_id)
@@ -1351,6 +1508,22 @@ export default function AdminOrdersScreen() {
   const toggleSubExpand = (id: string) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setExpandedSubIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const toggleOrderSelected = (id: string) => {
+    setSelectedOrderIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSubSelected = (id: string) => {
+    setSelectedSubIds((prev) => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
@@ -1541,6 +1714,111 @@ export default function AdminOrdersScreen() {
     };
   }, [filteredSubs, productNames, products]);
 
+  const selectableOrders = useMemo(
+    () =>
+      filteredOrders.filter((order) => {
+        const status = String(order.status || "").toLowerCase();
+        return status !== "delivered" && status !== "cancelled" && status !== "skipped";
+      }),
+    [filteredOrders],
+  );
+
+  const selectableTodayOrders = useMemo(
+    () =>
+      selectableOrders.filter(
+        (order) => getOrderDateKey(order.delivery_date) === getLocalDateKey(),
+      ),
+    [selectableOrders],
+  );
+
+  const selectableSubs = useMemo(
+    () =>
+      filteredSubs.filter((sub) => {
+        const status = String(sub.delivery_status || sub.status || "").toLowerCase();
+        return status !== "delivered" && status !== "cancelled" && status !== "skipped" && sub.is_active !== false;
+      }),
+    [filteredSubs],
+  );
+
+  const selectableTodaySubs = useMemo(
+    () => selectableSubs.filter((sub) => shouldSubscriptionDeliverOn(sub, getLocalDateKey())),
+    [selectableSubs],
+  );
+
+  const setSelectedOrders = (ids: string[]) => setSelectedOrderIds(new Set(ids));
+  const setSelectedSubs = (ids: string[]) => setSelectedSubIds(new Set(ids));
+
+  const handleSingleOrderDelivered = async (order: Order) => {
+    setBulkLoading(true);
+    try {
+      await api.updateAdminOrderStatus(order.id, "delivered");
+      await fetchOrders();
+      setSelectedOrderIds((prev) => {
+        const next = new Set(prev);
+        next.delete(order.id);
+        return next;
+      });
+    } catch (e: any) {
+      Alert.alert("Could not mark delivered", e?.message || "Please try again.");
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  const handleSingleSubDelivered = async (sub: Subscription) => {
+    setBulkLoading(true);
+    try {
+      await api.updateAdminSubscriptionStatus(sub.id, "delivered");
+      await fetchSubscriptions();
+      setSelectedSubIds((prev) => {
+        const next = new Set(prev);
+        next.delete(sub.id);
+        return next;
+      });
+    } catch (e: any) {
+      Alert.alert("Could not mark delivered", e?.message || "Please try again.");
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  const handleBulkDelivered = async () => {
+    const isOrders = activeTab === "orders";
+    const ids = Array.from(isOrders ? selectedOrderIds : selectedSubIds);
+    if (!ids.length) {
+      Alert.alert("Select items", `Select ${isOrders ? "orders" : "subscriptions"} first.`);
+      return;
+    }
+    Alert.alert(
+      "Mark Delivered?",
+      `Mark ${ids.length} selected ${isOrders ? "orders" : "subscriptions"} as delivered?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Mark Delivered",
+          onPress: async () => {
+            setBulkLoading(true);
+            try {
+              if (isOrders) {
+                await api.bulkUpdateAdminOrderStatus(ids, "delivered");
+                setSelectedOrderIds(new Set());
+                await fetchOrders();
+              } else {
+                await api.bulkUpdateAdminSubscriptionStatus(ids, "delivered");
+                setSelectedSubIds(new Set());
+                await fetchSubscriptions();
+              }
+            } catch (e: any) {
+              Alert.alert("Bulk update failed", e?.message || "Please try again.");
+            } finally {
+              setBulkLoading(false);
+            }
+          },
+        },
+      ],
+    );
+  };
+
   const activeFilterCount = [
     activeTab === "orders" ? filter !== "ALL" : subFilter !== "ALL",
     dateFilter !== "ALL",
@@ -1585,6 +1863,12 @@ export default function AdminOrdersScreen() {
     inputRange: [0, 1],
     outputRange: ["2%", "52%"],
   });
+  const selectedCount =
+    activeTab === "orders" ? selectedOrderIds.size : selectedSubIds.size;
+  const visibleSelectableCount =
+    activeTab === "orders" ? selectableOrders.length : selectableSubs.length;
+  const todaySelectableCount =
+    activeTab === "orders" ? selectableTodayOrders.length : selectableTodaySubs.length;
 
   if (globalLoading) return <LoadingScreen />;
 
@@ -1596,6 +1880,9 @@ export default function AdminOrdersScreen() {
     const delivered = isDelivered(item);
     const cancelled = isCancelled(item);
     const cancellable = isCancellable(item);
+    const selected = selectedOrderIds.has(item.id);
+    const productTitle = orderProductTitle(item.items || []);
+    const address = buildAddressText(item.address);
 
     return (
       <View style={[styles.card, cancelled && styles.cardCancelled]}>
@@ -1606,6 +1893,20 @@ export default function AdminOrdersScreen() {
         >
           <View style={styles.cardHeader}>
             <View style={styles.orderIdRow}>
+              {cancellable ? (
+                <TouchableOpacity
+                  style={[styles.selectBox, selected && styles.selectBoxActive]}
+                  onPress={(event) => {
+                    event.stopPropagation?.();
+                    toggleOrderSelected(item.id);
+                  }}
+                  activeOpacity={0.75}
+                >
+                  {selected ? (
+                    <Ionicons name="checkmark" size={14} color="#fff" />
+                  ) : null}
+                </TouchableOpacity>
+              ) : null}
               <View
                 style={[
                   styles.receiptIcon,
@@ -1623,10 +1924,21 @@ export default function AdminOrdersScreen() {
               </Text>
             </View>
             <View style={styles.headerRight}>
-              <View style={[styles.statusPill, { backgroundColor: sc.bg }]}>
-                <Ionicons name={sc.icon} size={11} color={sc.color} />
-                <Text style={[styles.statusText, { color: sc.color }]}>
-                  {sc.label}
+              <View style={styles.headerRightInfo}>
+                <View style={[styles.statusPill, { backgroundColor: sc.bg }]}>
+                  <Ionicons name={sc.icon} size={11} color={sc.color} />
+                  <Text style={[styles.statusText, { color: sc.color }]}>
+                    {sc.label}
+                  </Text>
+                </View>
+                <Text
+                  style={[
+                    styles.headerProductName,
+                    cancelled && { color: "#bbb" },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {productTitle}
                 </Text>
               </View>
               <Ionicons
@@ -1644,25 +1956,6 @@ export default function AdminOrdersScreen() {
               <Text style={styles.customerText}>{item.customer_name}</Text>
             </View>
           )}
-
-          <View style={styles.itemTagsRow}>
-            {item.items?.map((p, i) => (
-              <View
-                key={i}
-                style={[styles.itemTag, cancelled && styles.itemTagCancelled]}
-              >
-                <Text
-                  style={[styles.itemTagText, cancelled && { color: "#bbb" }]}
-                  numberOfLines={1}
-                >
-                  {getOrderItemName(p)}
-                  {p.quantity != null
-                    ? ` · ${formatOrderItemQuantity(p, products)}`
-                    : ""}
-                </Text>
-              </View>
-            ))}
-          </View>
 
           <View style={styles.summaryFooter}>
             {!delivered && !cancelled && item.admin_otp ? (
@@ -1709,13 +2002,6 @@ export default function AdminOrdersScreen() {
             )}
 
             <View style={styles.footerRight}>
-              {item.total_amount !== undefined && (
-                <Text
-                  style={[styles.summaryAmount, cancelled && { color: "#bbb" }]}
-                >
-                  ₹{item.total_amount}
-                </Text>
-              )}
               {cancellable && (
                 <TouchableOpacity
                   style={styles.cancelChip}
@@ -1819,20 +2105,16 @@ export default function AdminOrdersScreen() {
               ))}
             </View>
 
-            {item.address && (
+            {address ? (
               <>
                 <View style={styles.divider} />
                 <Text style={styles.colLabel}>ADDRESS</Text>
                 <View style={styles.detailRow}>
                   <Ionicons name="location-outline" size={13} color="#8B6854" />
-                  <Text style={styles.detailText}>
-                    {[item.address.flat, item.address.tower, item.address.area]
-                      .filter(Boolean)
-                      .join(", ")}
-                  </Text>
+                  <Text style={styles.detailText}>{address}</Text>
                 </View>
               </>
-            )}
+            ) : null}
 
             {!delivered && !cancelled && item.admin_otp && (
               <>
@@ -1872,6 +2154,16 @@ export default function AdminOrdersScreen() {
               <>
                 <View style={styles.divider} />
                 <TouchableOpacity
+                  style={styles.deliveredExpandedBtn}
+                  onPress={() => handleSingleOrderDelivered(item)}
+                  activeOpacity={0.8}
+                  disabled={bulkLoading}
+                >
+                  <Ionicons name="checkmark-circle-outline" size={16} color="#16A34A" />
+                  <Text style={styles.deliveredExpandedText}>Mark Delivered</Text>
+                </TouchableOpacity>
+                <View style={styles.actionGap} />
+                <TouchableOpacity
                   style={styles.cancelExpandedBtn}
                   onPress={() => setCancelTarget(item)}
                   activeOpacity={0.8}
@@ -1897,10 +2189,14 @@ export default function AdminOrdersScreen() {
     <SubscriptionRow
       item={item}
       expanded={expandedSubIds.has(item.id)}
+      selected={selectedSubIds.has(item.id)}
       onToggle={() => toggleSubExpand(item.id)}
+      onToggleSelected={() => toggleSubSelected(item.id)}
       onViewDetail={() => setSelectedSub(item)}
+      onMarkDelivered={() => handleSingleSubDelivered(item)}
       productNames={productNames}
       products={products}
+      bulkLoading={bulkLoading}
     />
   );
 
@@ -2018,6 +2314,76 @@ export default function AdminOrdersScreen() {
             Subscriptions
           </Text>
         </TouchableOpacity>
+      </View>
+
+      <View style={styles.bulkBar}>
+        <View style={styles.bulkHeaderRow}>
+          <Text style={styles.bulkHeading}>
+            {activeTab === "orders"
+              ? "Orders Mark Delivered"
+              : "Subscriptions Mark Delivered"}
+          </Text>
+          <TouchableOpacity
+            style={[
+              styles.bulkDeliveredBtn,
+              (selectedCount === 0 || bulkLoading) && styles.bulkBtnDisabled,
+            ]}
+            onPress={handleBulkDelivered}
+            disabled={selectedCount === 0 || bulkLoading}
+          >
+            {bulkLoading ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Ionicons name="checkmark-circle" size={15} color="#fff" />
+            )}
+            <Text style={styles.bulkDeliveredText}>Mark Delivered</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.bulkInfo}>
+          <Ionicons name="checkmark-done-outline" size={15} color="#BB6B3F" />
+          <Text style={styles.bulkInfoText}>
+            {selectedCount} selected
+          </Text>
+        </View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.bulkActions}
+        >
+          <TouchableOpacity
+            style={styles.bulkChip}
+            onPress={() =>
+              activeTab === "orders"
+                ? setSelectedOrders(selectableTodayOrders.map((item) => item.id))
+                : setSelectedSubs(selectableTodaySubs.map((item) => item.id))
+            }
+            disabled={todaySelectableCount === 0 || bulkLoading}
+          >
+            <Text style={styles.bulkChipText}>Select Today ({todaySelectableCount})</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.bulkChip}
+            onPress={() =>
+              activeTab === "orders"
+                ? setSelectedOrders(selectableOrders.map((item) => item.id))
+                : setSelectedSubs(selectableSubs.map((item) => item.id))
+            }
+            disabled={visibleSelectableCount === 0 || bulkLoading}
+          >
+            <Text style={styles.bulkChipText}>Select Visible ({visibleSelectableCount})</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.bulkChip}
+            onPress={() =>
+              activeTab === "orders"
+                ? setSelectedOrderIds(new Set())
+                : setSelectedSubIds(new Set())
+            }
+            disabled={selectedCount === 0 || bulkLoading}
+          >
+            <Text style={styles.bulkChipText}>Clear</Text>
+          </TouchableOpacity>
+        </ScrollView>
       </View>
 
       {/* ORDERS TAB */}
@@ -2743,8 +3109,32 @@ const ss = StyleSheet.create({
     fontWeight: "500",
     marginTop: 1,
   },
-  headerRight: { flexDirection: "row", alignItems: "center", gap: 6 },
-  patternPill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
+  headerRight: { flexDirection: "row", alignItems: "center", gap: 6, maxWidth: "48%" },
+  headerRightInfo: { alignItems: "flex-end", flexShrink: 1 },
+  headerProductName: {
+    marginTop: 4,
+    maxWidth: 150,
+    fontSize: 11,
+    fontWeight: "900",
+    color: "#BB6B3F",
+    textAlign: "right",
+  },
+  subStatusPill: {
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 20,
+  },
+  subStatusActive: { backgroundColor: "#ECFDF5" },
+  subStatusInactive: { backgroundColor: "#FFF0F0" },
+  subStatusText: { fontSize: 10.5, fontWeight: "900" },
+  patternPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+  },
   patternText: { fontSize: 11, fontWeight: "700" },
   inactivePill: {
     paddingHorizontal: 8,
@@ -2783,6 +3173,13 @@ const ss = StyleSheet.create({
     justifyContent: "space-between",
   },
   datesRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+  datesRowExpanded: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 10,
+  },
   dateBit: { flexDirection: "row", alignItems: "center", gap: 4 },
   dateText: { fontSize: 12, color: "#8B6854", fontWeight: "500" },
   dateSep: {
@@ -2817,7 +3214,7 @@ const ss = StyleSheet.create({
     fontWeight: "600",
     marginBottom: 1,
   },
-  slotText: { fontSize: 13, color: "#1A1A1A", fontWeight: "600" },
+  slotText: { flex: 1, fontSize: 13, color: "#1A1A1A", fontWeight: "600" },
   daysRow: { flexDirection: "row", gap: 6, flexWrap: "wrap" },
   dayChip: {
     width: 30,
@@ -2976,6 +3373,56 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   countText: { fontSize: 13, fontWeight: "800", color: "#FF9675" },
+  bulkBar: {
+    marginHorizontal: 16,
+    marginBottom: 10,
+    borderRadius: 16,
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#FFE1CC",
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    gap: 8,
+  },
+  bulkHeading: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "900",
+    color: "#3D1F0A",
+  },
+  bulkHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  bulkInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  bulkInfoText: { fontSize: 12, fontWeight: "900", color: "#8B6854" },
+  bulkActions: { gap: 8, alignItems: "center" },
+  bulkChip: {
+    borderRadius: 999,
+    backgroundColor: "#FFF8F4",
+    borderWidth: 1,
+    borderColor: "#FFE1CC",
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+  },
+  bulkChipText: { fontSize: 11.5, fontWeight: "900", color: "#8B6854" },
+  bulkDeliveredBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderRadius: 999,
+    backgroundColor: "#16A34A",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  bulkBtnDisabled: { opacity: 0.55 },
+  bulkDeliveredText: { fontSize: 11.5, fontWeight: "900", color: "#fff" },
   productFilterScroll: { flexGrow: 0, maxHeight: 52 },
   productFilterContent: {
     paddingHorizontal: 20,
@@ -3249,6 +3696,17 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   orderIdRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  selectBox: {
+    width: 24,
+    height: 24,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: "#FFD6C2",
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  selectBoxActive: { backgroundColor: "#16A34A", borderColor: "#16A34A" },
   receiptIcon: {
     width: 28,
     height: 28,
@@ -3258,7 +3716,21 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   orderId: { fontSize: 15, fontWeight: "800", color: "#1A1A1A" },
-  headerRight: { flexDirection: "row", alignItems: "center" },
+  headerRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    maxWidth: "50%",
+  },
+  headerRightInfo: { alignItems: "flex-end", flexShrink: 1 },
+  headerProductName: {
+    marginTop: 4,
+    maxWidth: 150,
+    fontSize: 11,
+    fontWeight: "900",
+    color: "#BB6B3F",
+    textAlign: "right",
+  },
   statusPill: {
     flexDirection: "row",
     alignItems: "center",
@@ -3445,6 +3917,19 @@ const styles = StyleSheet.create({
   amountBox: { alignItems: "flex-end" },
   amountLabel: { fontSize: 10, color: "#8B6854", fontWeight: "600" },
   amountValue: { fontSize: 18, fontWeight: "800", color: "#1A1A1A" },
+  deliveredExpandedBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 13,
+    borderRadius: 14,
+    backgroundColor: "#ECFDF5",
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+  },
+  deliveredExpandedText: { fontSize: 14, fontWeight: "800", color: "#16A34A" },
+  actionGap: { height: 8 },
   cancelExpandedBtn: {
     flexDirection: "row",
     alignItems: "center",

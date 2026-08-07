@@ -49,7 +49,7 @@ type Order = {
   total_amount?: number;
   total?: number;
   items?: OrderItem[];
-  address?: { flat?: string; tower?: string; area?: string; address?: string };
+  address?: any;
 };
 
 const C = {
@@ -189,7 +189,37 @@ const matchesProduct = (
 const addressText = (order: Order) => {
   const a = order.address;
   if (!a) return "Address not available";
-  return [a.flat, a.tower, a.area, a.address].filter(Boolean).join(", ");
+  if (typeof a === "string") return a.trim() || "Address not available";
+  const full = [
+    a.full_address,
+    a.address,
+    a.line1,
+    a.line2,
+    a.flat,
+    a.house,
+    a.house_no,
+    a.building,
+    a.tower,
+    a.floor,
+    a.society,
+    a.area,
+    a.landmark,
+    a.city,
+    a.state,
+    a.pincode,
+    a.pin_code,
+  ]
+    .filter(Boolean)
+    .join(", ");
+  return full || "Address not available";
+};
+
+const orderAmount = (order: Order) => Number(order.total_amount || order.total || 0);
+
+const orderProductTitle = (items: OrderItem[]) => {
+  if (!items.length) return "Product details";
+  const first = itemName(items[0]);
+  return items.length > 1 ? `${first} +${items.length - 1} more` : first;
 };
 
 export default function AdminOrderSummaryScreen() {
@@ -212,6 +242,7 @@ export default function AdminOrderSummaryScreen() {
   >(null);
   const [filterSheetVisible, setFilterSheetVisible] = useState(false);
   const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false);
+  const [expandedOrderIds, setExpandedOrderIds] = useState<Record<string, boolean>>({});
   const todayKey = getLocalDateKey();
 
   const fetchData = useCallback(async () => {
@@ -345,6 +376,13 @@ export default function AdminOrderSummaryScreen() {
     setCustomerDropdownOpen(false);
   };
 
+  const toggleOrder = (orderId: string) => {
+    setExpandedOrderIds((current) => ({
+      ...current,
+      [orderId]: !current[orderId],
+    }));
+  };
+
   const handleCustomDateChange = (_event: any, selectedDate?: Date) => {
     if (Platform.OS === "android") setDatePickerTarget(null);
     if (!selectedDate || !datePickerTarget) return;
@@ -396,9 +434,25 @@ export default function AdminOrderSummaryScreen() {
         : (item.items || []).filter((orderItem) =>
             matchesProduct(orderItem, selectedProduct, selectedProductMeta),
           );
+    const expanded = expandedOrderIds[item.id] === true;
+    const totalQty = visibleItems.reduce((sum, orderItem) => sum + qty(orderItem), 0);
+    const productTitle = orderProductTitle(visibleItems);
+    const itemUnit = (orderItem: OrderItem) => {
+      const id = itemProductId(orderItem);
+      const meta = products.find(
+        (product) =>
+          productId(product) === id ||
+          normalizeName(product.name) === normalizeName(itemName(orderItem)),
+      );
+      return meta?.unit || (selectedProduct === "All" ? undefined : unit);
+    };
 
     return (
-      <View style={s.orderCard}>
+      <TouchableOpacity
+        style={s.orderCard}
+        activeOpacity={0.86}
+        onPress={() => toggleOrder(item.id)}
+      >
         <View style={s.orderTop}>
           <View style={s.customerIcon}>
             <Ionicons name="person-outline" size={16} color={C.dark} />
@@ -411,32 +465,60 @@ export default function AdminOrderSummaryScreen() {
               {item.customer_phone || "Phone not available"}
             </Text>
           </View>
-          <Text style={s.amountText}>
-            ₹{Number(item.total_amount || item.total || 0)}
-          </Text>
-        </View>
-
-        <View style={s.detailLine}>
-          <Ionicons name="location-outline" size={13} color={C.muted} />
-          <Text style={s.detailText}>{addressText(item)}</Text>
-        </View>
-        <View style={s.detailLine}>
-          <Ionicons name="calendar-outline" size={13} color={C.muted} />
-          <Text style={s.detailText}>
-            {item.delivery_date || todayKey}
-            {item.delivery_slot ? ` · ${item.delivery_slot}` : ""}
-          </Text>
-        </View>
-
-        <View style={s.itemsWrap}>
-          {visibleItems.map((orderItem, index) => (
-            <View key={`${item.id}-${index}`} style={s.itemPill}>
-              <Text style={s.itemName}>{itemName(orderItem)}</Text>
-              <Text style={s.itemQty}>×{formatQuantity(qty(orderItem))}</Text>
+          <View style={s.productSummary}>
+            <Text style={s.productSummaryTitle} numberOfLines={1}>
+              {productTitle}
+            </Text>
+            <View style={s.productSummaryMeta}>
+              <Text style={s.productSummaryQty}>
+                {formatQuantity(totalQty || visibleItems.length)} qty
+              </Text>
+              <Ionicons
+                name={expanded ? "chevron-up" : "chevron-down"}
+                size={15}
+                color={C.dark}
+              />
             </View>
-          ))}
+          </View>
         </View>
-      </View>
+
+        {expanded ? (
+          <View style={s.collapsedBody}>
+            <View style={s.detailLine}>
+              <Ionicons name="location-outline" size={13} color={C.muted} />
+              <Text style={s.detailText}>{addressText(item)}</Text>
+            </View>
+            <View style={s.detailLine}>
+              <Ionicons name="calendar-outline" size={13} color={C.muted} />
+              <Text style={s.detailText}>
+                {item.delivery_date || todayKey}
+                {item.delivery_slot ? ` · ${item.delivery_slot}` : ""}
+              </Text>
+            </View>
+
+            <View style={s.itemsWrap}>
+              {visibleItems.map((orderItem, index) => (
+                <View key={`${item.id}-${index}`} style={s.itemPill}>
+                  <Text style={s.itemName} numberOfLines={1}>
+                    {itemName(orderItem)}
+                  </Text>
+                  <Text style={s.itemQty}>
+                    {formatPackedQuantity(
+                      qty(orderItem),
+                      itemUnit(orderItem),
+                    )}
+                  </Text>
+                </View>
+              ))}
+            </View>
+
+            <View style={s.amountRow}>
+              <Text style={s.amountLabel}>Amount</Text>
+              <Text style={s.amountText}>₹{orderAmount(item)}</Text>
+            </View>
+          </View>
+        ) : null}
+      </TouchableOpacity>
     );
   };
 
@@ -1017,7 +1099,6 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    marginBottom: 12,
   },
   customerIcon: {
     width: 38,
@@ -1034,6 +1115,35 @@ const s = StyleSheet.create({
     color: C.muted,
     marginTop: 2,
   },
+  productSummary: {
+    flexShrink: 0,
+    width: 132,
+    alignItems: "flex-end",
+    gap: 4,
+  },
+  productSummaryTitle: {
+    maxWidth: 132,
+    fontSize: 13,
+    fontWeight: "900",
+    color: C.dark,
+    textAlign: "right",
+  },
+  productSummaryMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  productSummaryQty: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: C.muted,
+  },
+  collapsedBody: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#FFF0E4",
+  },
   amountText: { fontSize: 15, fontWeight: "900", color: C.dark },
   detailLine: {
     flexDirection: "row",
@@ -1048,18 +1158,29 @@ const s = StyleSheet.create({
     color: C.muted,
     lineHeight: 16,
   },
-  itemsWrap: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 5 },
+  itemsWrap: { gap: 7, marginTop: 5 },
   itemPill: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    justifyContent: "space-between",
+    gap: 10,
     backgroundColor: C.soft,
     borderRadius: 14,
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
-  itemName: { fontSize: 12, fontWeight: "800", color: C.text },
-  itemQty: { fontSize: 12, fontWeight: "900", color: C.dark },
+  itemName: { flex: 1, fontSize: 12, fontWeight: "800", color: C.text },
+  itemQty: { fontSize: 12, fontWeight: "900", color: C.dark, textAlign: "right" },
+  amountRow: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: "#FFF0E4",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  amountLabel: { fontSize: 12, fontWeight: "800", color: C.muted },
   empty: { alignItems: "center", paddingVertical: 60, gap: 10 },
   emptyTitle: { fontSize: 15, color: C.muted, fontWeight: "800" },
 });

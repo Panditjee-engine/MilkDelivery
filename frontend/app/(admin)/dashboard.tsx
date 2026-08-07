@@ -514,6 +514,116 @@ const buildTomorrowDeliverySummary = (
   };
 };
 
+const buildTodayDeliveredSummary = (
+  orders: any[],
+  subscriptions: any[],
+  products: any[],
+) => {
+  const dateKey = getLocalDateKey();
+  const deliveredOrdersForToday = orders.filter(
+    (order: any) =>
+      cleanStatus(order?.status) === "delivered" &&
+      orderDateKey(order) === dateKey,
+  );
+  const deliveredSubscriptionOrderIds = new Set(
+    deliveredOrdersForToday
+      .flatMap((order: any) => [
+        order?.subscription_id,
+        ...(order?.items || []).map((item: any) => item?.subscription_id),
+      ])
+      .filter(Boolean)
+      .map(String),
+  );
+  const directDeliveredSubscriptionsForToday = subscriptions.filter((sub: any) => {
+    const subId = String(sub?.id || sub?._id || "");
+    const status = cleanStatus(sub?.delivery_status || sub?.status);
+    const date =
+      deliveryDateKey({ delivery_date: sub?.delivered_at || sub?.delivery_date }) ||
+      deliveryDateKey(sub);
+    return (
+      status === "delivered" &&
+      date === dateKey &&
+      !deliveredSubscriptionOrderIds.has(subId)
+    );
+  });
+  const productMap = new Map<
+    string,
+    {
+      qty: number;
+      unit: string;
+      totalBase: number;
+      metricKind?: string;
+      orderQty: number;
+      subscriptionQty: number;
+      orderBase: number;
+      subscriptionBase: number;
+    }
+  >();
+
+  const addItems = (
+    items: any[] = [],
+    fallback: any = {},
+    source: "order" | "subscription",
+  ) => {
+    const sourceItems = items.length ? items : [fallback];
+    sourceItems.forEach((item) => {
+      const name = getItemName(item, products);
+      const unit = getItemUnit(item, products);
+      const qty = getItemQuantity(item);
+      const parsed = parseUnitDescriptor(unit);
+      const totalBase = parsed ? qty * parsed.packSize : qty;
+      const current = productMap.get(name) || {
+        qty: 0,
+        unit,
+        totalBase: 0,
+        metricKind: parsed?.kind,
+        orderQty: 0,
+        subscriptionQty: 0,
+        orderBase: 0,
+        subscriptionBase: 0,
+      };
+      productMap.set(name, {
+        qty: current.qty + qty,
+        unit: current.unit || unit,
+        totalBase: current.totalBase + totalBase,
+        metricKind: current.metricKind || parsed?.kind,
+        orderQty: current.orderQty + (source === "order" ? qty : 0),
+        subscriptionQty:
+          current.subscriptionQty + (source === "subscription" ? qty : 0),
+        orderBase: current.orderBase + (source === "order" ? totalBase : 0),
+        subscriptionBase:
+          current.subscriptionBase + (source === "subscription" ? totalBase : 0),
+      });
+    });
+  };
+
+  deliveredOrdersForToday.forEach((order: any) => {
+    const subscriptionId =
+      order?.subscription_id ||
+      (order?.items || []).find((item: any) => item?.subscription_id)?.subscription_id;
+    addItems(order?.items || [], order, subscriptionId ? "subscription" : "order");
+  });
+  directDeliveredSubscriptionsForToday.forEach((sub: any) =>
+    addItems(sub?.items || [], sub, "subscription"),
+  );
+
+  const topProducts = Array.from(productMap.entries())
+    .map(([name, item]) => ({ name, ...item }))
+    .sort((a, b) => b.qty - a.qty)
+    .slice(0, 8);
+
+  return {
+    dateKey,
+    deliveredCount:
+      deliveredOrdersForToday.length + directDeliveredSubscriptionsForToday.length,
+    orderCount: deliveredOrdersForToday.length,
+    subscriptionCount:
+      deliveredSubscriptionOrderIds.size + directDeliveredSubscriptionsForToday.length,
+    productCount: topProducts.length,
+    topProducts,
+  };
+};
+
 const resolveMilkTotalText = (summary: any, products: any[]) => {
   if (summary?.milkBaseMl > 0) return formatBaseMetric(summary.milkBaseMl, "volume");
 
@@ -1100,6 +1210,10 @@ export default function AdminDashboard() {
     [],
   );
   const [modalType, setModalType] = useState<ModalType>(null);
+  const [deliveredProductsExpanded, setDeliveredProductsExpanded] =
+    useState(true);
+  const [tomorrowQuantityExpanded, setTomorrowQuantityExpanded] =
+    useState(true);
   const isFocused = useIsFocused();
   const fetchingRef = useRef(false);
 
@@ -1173,30 +1287,33 @@ useEffect(() => {
   });
 
   const todayKey = getLocalDateKey();
-  const totalOrdersToday = orders.length;
+  const todayOrders = orders.filter((order: any) => {
+    const scheduledDate = deliveryDateKey(order);
+    return scheduledDate ? scheduledDate === todayKey : orderDateKey(order) === todayKey;
+  });
+  const totalOrdersToday = todayOrders.length;
   const recurringSubscriptions = subscriptions.filter((sub: any) => {
     const pattern = String(sub.pattern || "").toLowerCase();
     return pattern !== "buy_once" && pattern !== "";
   });
-  const todaySubscriptions = recurringSubscriptions.filter((sub: any) => {
-    const raw = sub.created_at || sub.start_date;
-    if (!raw) return false;
-    if (typeof raw === "string" && /^\d{4}-\d{2}-\d{2}/.test(raw)) {
-      return raw.slice(0, 10) === todayKey;
-    }
-    const parsed = new Date(raw);
-    return !Number.isNaN(parsed.getTime()) && getLocalDateKey(parsed) === todayKey;
-  });
+  const todaySubscriptions = recurringSubscriptions.filter((sub: any) =>
+    shouldSubscriptionDeliverOn(sub, todayKey) ||
+    (
+      cleanStatus(sub?.delivery_status || sub?.status) === "delivered" &&
+      (deliveryDateKey({ delivery_date: sub?.delivered_at || sub?.delivery_date }) === todayKey ||
+        sub?.last_delivered_date === todayKey)
+    ),
+  );
   const todaySubscriptionAmount = todaySubscriptions.reduce(
     (sum: number, sub: any) =>
       sum + Number(sub.total_amount || sub.amount || 0),
     0,
   );
-  const deliveredToday = orders.filter(
+  const deliveredToday = todayOrders.filter(
     (o: any) => o.status?.toLowerCase() === "delivered",
   ).length;
   const pending = totalOrdersToday - deliveredToday;
-  const todayTotalAmount = orders.reduce(
+  const todayTotalAmount = todayOrders.reduce(
     (sum: number, order: any) => sum + Number(order.total_amount || order.total || 0),
     0,
   );
@@ -1223,21 +1340,21 @@ useEffect(() => {
     (sum: number, order: any) => sum + Number(order.total_amount || order.total || 0),
     0,
   );
-  const paidPendingOrders = orders.filter(
+  const avgOrderValue = paidOrders.length ? Math.round(paidRevenue / paidOrders.length) : 0;
+  const activeProducts = products.filter((p: any) => p.is_available !== false).length;
+  const inactiveProducts = Math.max(products.length - activeProducts, 0);
+  const paidPendingOrders = todayOrders.filter(
     (order: any) =>
       String(order.status || "").toLowerCase() !== "delivered" &&
       isPaidOrder(order),
   );
-  const avgOrderValue = paidOrders.length ? Math.round(paidRevenue / paidOrders.length) : 0;
-  const activeProducts = products.filter((p: any) => p.is_available !== false).length;
-  const inactiveProducts = Math.max(products.length - activeProducts, 0);
-  const cashOrders = orders.filter((order: any) =>
+  const cashOrders = todayOrders.filter((order: any) =>
     ["cash_on_delivery", "cod", "cash"].includes(String(order.payment_method || "").toLowerCase()),
   ).length;
-  const onlineOrders = orders.filter((order: any) =>
+  const onlineOrders = todayOrders.filter((order: any) =>
     ["online", "razorpay"].includes(String(order.payment_method || "").toLowerCase()),
   ).length;
-  const walletOrders = orders.filter(
+  const walletOrders = todayOrders.filter(
     (order: any) => String(order.payment_method || "").toLowerCase() === "wallet",
   ).length;
 
@@ -1304,6 +1421,11 @@ useEffect(() => {
   const last7Revenue = last7.reduce((sum, day) => sum + day.revenue, 0);
   const paymentMixLabel = `Wallet ${walletOrders} · Online ${onlineOrders} · COD ${cashOrders}`;
   const tomorrowDelivery = buildTomorrowDeliverySummary(
+    orders,
+    subscriptions,
+    products,
+  );
+  const todayDeliveredSummary = buildTodayDeliveredSummary(
     orders,
     subscriptions,
     products,
@@ -1405,6 +1527,99 @@ useEffect(() => {
           <Ionicons name="chevron-forward" size={18} color={C.dark} />
         </TouchableOpacity>
 
+        <View style={styles.deliveredProductCard}>
+          <TouchableOpacity
+            style={styles.deliveredProductHeader}
+            activeOpacity={0.78}
+            onPress={() => setDeliveredProductsExpanded((value) => !value)}
+          >
+            <View style={styles.deliveredProductTitleRow}>
+              <View style={styles.deliveredProductIcon}>
+                <Ionicons name="checkmark-done" size={18} color="#fff" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.deliveredProductTitle}>
+                  Today Delivered Products
+                </Text>
+                <Text style={styles.deliveredProductSub}>
+                  Total delivered quantity by product
+                </Text>
+              </View>
+            </View>
+            <View style={styles.deliveredTotalPill}>
+              <Text style={styles.deliveredTotalValue}>
+                {todayDeliveredSummary.deliveredCount}
+              </Text>
+              <Text style={styles.deliveredTotalLabel}>Delivered</Text>
+            </View>
+            <Ionicons
+              name={deliveredProductsExpanded ? "chevron-up" : "chevron-down"}
+              size={17}
+              color="#15803D"
+            />
+          </TouchableOpacity>
+
+          {deliveredProductsExpanded ? (
+            <>
+              <View style={styles.deliveredMiniStats}>
+                <View style={styles.deliveredMiniStat}>
+                  <Text style={styles.deliveredMiniValue}>
+                    {todayDeliveredSummary.orderCount}
+                  </Text>
+                  <Text style={styles.deliveredMiniLabel}>Orders</Text>
+                </View>
+                <View style={styles.deliveredMiniStat}>
+                  <Text style={styles.deliveredMiniValue}>
+                    {todayDeliveredSummary.subscriptionCount}
+                  </Text>
+                  <Text style={styles.deliveredMiniLabel}>Subscriptions</Text>
+                </View>
+                <View style={styles.deliveredMiniStat}>
+                  <Text style={styles.deliveredMiniValue}>
+                    {todayDeliveredSummary.productCount}
+                  </Text>
+                  <Text style={styles.deliveredMiniLabel}>Products</Text>
+                </View>
+              </View>
+
+              {todayDeliveredSummary.topProducts.length > 0 ? (
+                <View style={styles.deliveredProductList}>
+                  {todayDeliveredSummary.topProducts.map((product) => (
+                    <View key={product.name} style={styles.deliveredProductRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.deliveredProductName} numberOfLines={1}>
+                          {product.name}
+                        </Text>
+                        <Text style={styles.deliveredProductBreakup}>
+                          Orders {formatSplitQuantity(
+                            product,
+                            product.orderQty,
+                            product.orderBase,
+                          )} · Subs {formatSplitQuantity(
+                            product,
+                            product.subscriptionQty,
+                            product.subscriptionBase,
+                          )}
+                        </Text>
+                      </View>
+                      <Text style={styles.deliveredProductQty}>
+                        {formatPackedQuantity(product.qty, product.unit)}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <View style={styles.deliveredEmptyBox}>
+                  <Ionicons name="cube-outline" size={18} color={C.textLight} />
+                  <Text style={styles.deliveredEmptyText}>
+                    No product delivered today yet.
+                  </Text>
+                </View>
+              )}
+            </>
+          ) : null}
+        </View>
+
         <TouchableOpacity
           style={styles.todayOrderCard}
           activeOpacity={0.82}
@@ -1437,14 +1652,18 @@ useEffect(() => {
 
         <View style={styles.tomorrowQuantityWrap}>
           <View style={styles.tomorrowQuantityHeader}>
-            <View>
+            <TouchableOpacity
+              style={styles.tomorrowTitlePress}
+              activeOpacity={0.78}
+              onPress={() => setTomorrowQuantityExpanded((value) => !value)}
+            >
               <Text style={styles.tomorrowQuantityTitle}>
                 Tomorrow Delivery Quantity
               </Text>
               <Text style={styles.tomorrowQuantitySub}>
                 {tomorrowLabel} · orders + subscriptions
               </Text>
-            </View>
+            </TouchableOpacity>
             <TouchableOpacity
               style={styles.tomorrowSummaryBtn}
               activeOpacity={0.75}
@@ -1458,50 +1677,63 @@ useEffect(() => {
               <Text style={styles.tomorrowSummaryText}>View</Text>
               <Ionicons name="chevron-forward" size={13} color={C.dark} />
             </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.collapseIconBtn}
+              activeOpacity={0.75}
+              onPress={() => setTomorrowQuantityExpanded((value) => !value)}
+            >
+              <Ionicons
+                name={tomorrowQuantityExpanded ? "chevron-up" : "chevron-down"}
+                size={16}
+                color={C.dark}
+              />
+            </TouchableOpacity>
           </View>
 
-          {tomorrowDelivery.topProducts.length > 0 ? (
-            <View style={styles.tomorrowProductRow}>
-              {tomorrowDelivery.topProducts.map((product) => (
-                <View key={product.name} style={styles.tomorrowProductChip}>
-                  <View style={styles.tomorrowProductTop}>
-                    <Text style={styles.tomorrowProductName} numberOfLines={1}>
-                      {product.name}
-                    </Text>
-                    <Text style={styles.tomorrowProductQty}>
-                      {formatPackedQuantity(product.qty, product.unit)}
-                    </Text>
-                  </View>
-                  <View style={styles.tomorrowSourceRow}>
-                    <View style={styles.tomorrowSourcePill}>
-                      <Text style={styles.tomorrowSourceLabel}>Orders</Text>
-                      <Text style={styles.tomorrowSourceValue}>
-                        {formatSplitQuantity(
-                          product,
-                          product.orderQty,
-                          product.orderBase,
-                        )}
+          {tomorrowQuantityExpanded ? (
+            tomorrowDelivery.topProducts.length > 0 ? (
+              <View style={styles.tomorrowProductRow}>
+                {tomorrowDelivery.topProducts.map((product) => (
+                  <View key={product.name} style={styles.tomorrowProductChip}>
+                    <View style={styles.tomorrowProductTop}>
+                      <Text style={styles.tomorrowProductName} numberOfLines={1}>
+                        {product.name}
+                      </Text>
+                      <Text style={styles.tomorrowProductQty}>
+                        {formatPackedQuantity(product.qty, product.unit)}
                       </Text>
                     </View>
-                    <View style={styles.tomorrowSourcePill}>
-                      <Text style={styles.tomorrowSourceLabel}>Subscriptions</Text>
-                      <Text style={styles.tomorrowSourceValue}>
-                        {formatSplitQuantity(
-                          product,
-                          product.subscriptionQty,
-                          product.subscriptionBase,
-                        )}
-                      </Text>
+                    <View style={styles.tomorrowSourceRow}>
+                      <View style={styles.tomorrowSourcePill}>
+                        <Text style={styles.tomorrowSourceLabel}>Orders</Text>
+                        <Text style={styles.tomorrowSourceValue}>
+                          {formatSplitQuantity(
+                            product,
+                            product.orderQty,
+                            product.orderBase,
+                          )}
+                        </Text>
+                      </View>
+                      <View style={styles.tomorrowSourcePill}>
+                        <Text style={styles.tomorrowSourceLabel}>Subscriptions</Text>
+                        <Text style={styles.tomorrowSourceValue}>
+                          {formatSplitQuantity(
+                            product,
+                            product.subscriptionQty,
+                            product.subscriptionBase,
+                          )}
+                        </Text>
+                      </View>
                     </View>
                   </View>
-                </View>
-              ))}
-            </View>
-          ) : (
-            <Text style={styles.tomorrowEmptyText}>
-              No delivery quantity planned for tomorrow.
-            </Text>
-          )}
+                ))}
+              </View>
+            ) : (
+              <Text style={styles.tomorrowEmptyText}>
+                No delivery quantity planned for tomorrow.
+              </Text>
+            )
+          ) : null}
         </View>
 
         {pendingRechargeRequests.length > 0 ? (
@@ -1922,7 +2154,7 @@ useEffect(() => {
         type={modalType}
         products={products}
         customers={customers}
-        orders={orders}
+        orders={todayOrders}
         onClose={() => setModalType(null)}
       />
     </SafeAreaView>
@@ -2138,6 +2370,143 @@ const styles = StyleSheet.create({
   todayOrderCount: { fontSize: 20, fontWeight: "900", color: C.dark },
   todayOrderMeta: { fontSize: 10.5, fontWeight: "800", color: C.textMuted },
 
+  deliveredProductCard: {
+    marginHorizontal: 20,
+    marginBottom: 10,
+    backgroundColor: "#fff",
+    borderRadius: 15,
+    padding: 12,
+    borderWidth: 1.5,
+    borderColor: "#D9F4DD",
+    shadowColor: "#15803D",
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
+  deliveredProductHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  deliveredProductTitleRow: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  deliveredProductIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 11,
+    backgroundColor: "#16A34A",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  deliveredProductTitle: {
+    fontSize: 13,
+    fontWeight: "900",
+    color: C.text,
+  },
+  deliveredProductSub: {
+    fontSize: 10.5,
+    color: C.textMuted,
+    fontWeight: "600",
+    marginTop: 2,
+  },
+  deliveredTotalPill: {
+    minWidth: 62,
+    borderRadius: 13,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    backgroundColor: "#EAF8ED",
+    alignItems: "center",
+  },
+  deliveredTotalValue: {
+    fontSize: 18,
+    fontWeight: "900",
+    color: "#15803D",
+  },
+  deliveredTotalLabel: {
+    fontSize: 8.5,
+    fontWeight: "900",
+    color: "#4D7C55",
+    marginTop: -1,
+  },
+  deliveredMiniStats: {
+    flexDirection: "row",
+    gap: 7,
+    marginTop: 10,
+    marginBottom: 8,
+  },
+  deliveredMiniStat: {
+    flex: 1,
+    borderRadius: 11,
+    backgroundColor: "#F6FBF5",
+    borderWidth: 1,
+    borderColor: "#E5F6E7",
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+  },
+  deliveredMiniValue: {
+    fontSize: 14,
+    fontWeight: "900",
+    color: "#15803D",
+  },
+  deliveredMiniLabel: {
+    fontSize: 8.5,
+    fontWeight: "800",
+    color: C.textMuted,
+    marginTop: 1,
+  },
+  deliveredProductList: {
+    gap: 7,
+  },
+  deliveredProductRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderRadius: 12,
+    backgroundColor: "#FFFDF8",
+    borderWidth: 1,
+    borderColor: "#EEF7E8",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  deliveredProductName: {
+    fontSize: 11.5,
+    fontWeight: "900",
+    color: C.text,
+  },
+  deliveredProductBreakup: {
+    fontSize: 9.5,
+    fontWeight: "700",
+    color: C.textMuted,
+    marginTop: 2,
+  },
+  deliveredProductQty: {
+    maxWidth: 132,
+    fontSize: 11,
+    fontWeight: "900",
+    color: "#15803D",
+    textAlign: "right",
+  },
+  deliveredEmptyBox: {
+    marginTop: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 12,
+    backgroundColor: "#FFF8EF",
+    padding: 10,
+  },
+  deliveredEmptyText: {
+    fontSize: 10.5,
+    color: C.textMuted,
+    fontWeight: "700",
+  },
+
   tomorrowQuantityWrap: {
     marginHorizontal: 20,
     marginBottom: 10,
@@ -2158,6 +2527,9 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: 10,
     marginBottom: 9,
+  },
+  tomorrowTitlePress: {
+    flex: 1,
   },
   tomorrowQuantityTitle: {
     fontSize: 13,
@@ -2183,6 +2555,16 @@ const styles = StyleSheet.create({
     fontSize: 10.5,
     color: C.dark,
     fontWeight: "900",
+  },
+  collapseIconBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 10,
+    backgroundColor: "#FFF8F4",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#FFE8D6",
   },
   tomorrowQuantityGrid: {
     flexDirection: "row",
