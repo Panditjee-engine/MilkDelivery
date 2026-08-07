@@ -426,15 +426,18 @@ export default function ProfileScreen() {
     fetchData();
   }, [isFocused]);
 
-  const fetchData = async () => {
-    try {
-      // API call to /vacations removed completely to fix 404
-      const ordersData = await api.getOrders();
-      setOrders(ordersData || []);
-    } catch (error) {
-      console.error("Error fetching profile orders data:", error);
-    }
-  };
+const fetchData = async () => {
+  try {
+    const [ordersData, vacationsData] = await Promise.all([
+      api.getOrders(),
+      api.getVacations().catch(() => []),
+    ]);
+    setOrders(ordersData || []);
+    setVacations(vacationsData || []);
+  } catch (error) {
+    console.error("Error fetching profile data:", error);
+  }
+};
 
   const toggleOrders = () => {
     const toValue = ordersExpanded ? 0 : 1;
@@ -561,65 +564,68 @@ export default function ProfileScreen() {
     });
   };
 
-  const handleAddVacation = async () => {
-    if (!startDate || !endDate) {
-      showAlert({
-        icon: "calendar-outline",
-        iconColor: "#f59e0b",
-        iconBg: "#FFF9EC",
-        title: "Select Dates",
-        message: "Please pick both a start and end date for your vacation.",
-        actions: [{ text: "OK", style: "default" }],
-      });
-      return;
-    }
-    if (startDate > endDate) {
-      showAlert({
-        icon: "alert-circle-outline",
-        iconColor: "#EF4444",
-        iconBg: "#FEF2F2",
-        title: "Invalid Range",
-        message: "The end date must be after the start date.",
-        actions: [{ text: "Got it", style: "default" }],
-      });
-      return;
-    }
+const handleAddVacation = async () => {
+  if (!startDate || !endDate) {
+    showAlert({
+      icon: "calendar-outline",
+      iconColor: "#f59e0b",
+      iconBg: "#FFF9EC",
+      title: "Select Dates",
+      message: "Please pick both a start and end date for your vacation.",
+      actions: [{ text: "OK", style: "default" }],
+    });
+    return;
+  }
+  if (startDate > endDate) {
+    showAlert({
+      icon: "alert-circle-outline",
+      iconColor: "#EF4444",
+      iconBg: "#FEF2F2",
+      title: "Invalid Range",
+      message: "The end date must be after the start date.",
+      actions: [{ text: "Got it", style: "default" }],
+    });
+    return;
+  }
 
-    // Handles the vacation simulation purely inside local state
-    const newVacation = {
-      id: Math.random().toString(36).substring(7),
-      start_date: startDate,
-      end_date: endDate,
-    };
+  try {
+    const newVacation = await api.createVacation(startDate, endDate);
     setVacations((prev) => [...prev, newVacation]);
-
     setVacationModal(false);
     setStartDate("");
     setEndDate("");
     setSelectingStart(true);
     showToast("Vacation saved! Deliveries will be paused.", "success");
-  };
+  } catch (error: any) {
+    showToast(error?.message || "Could not save vacation", "error");
+  }
+};
 
-  const handleDeleteVacation = (id: string) => {
-    showAlert({
-      icon: "trash-outline",
-      iconColor: "#EF4444",
-      iconBg: "#FEF2F2",
-      title: "Remove Vacation",
-      message: "This vacation period will be deleted and deliveries will resume.",
-      actions: [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: () => {
+const handleDeleteVacation = (id: string) => {
+  showAlert({
+    icon: "trash-outline",
+    iconColor: "#EF4444",
+    iconBg: "#FEF2F2",
+    title: "Remove Vacation",
+    message: "This vacation period will be deleted and deliveries will resume.",
+    actions: [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await api.deleteVacation(id);
             setVacations((prev) => prev.filter((v) => v.id !== id));
             showToast("Vacation removed");
-          },
+          } catch (error: any) {
+            showToast(error?.message || "Could not remove vacation", "error");
+          }
         },
-      ],
-    });
-  };
+      },
+    ],
+  });
+};
 
   const openNewAddress = () => {
     const next = {

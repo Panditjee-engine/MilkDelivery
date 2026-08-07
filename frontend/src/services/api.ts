@@ -890,23 +890,22 @@ class ApiService {
 
   //----
 
-  async getVacations() {
-    return this.request<any[]>("/vacations");
-  }
+async getVacations() {
+  return this.request<any[]>("/subscriptions/vacations");
+}
 
-  async createVacation(startDate: string, endDate: string) {
-    return this.request<any>("/vacations", {
-      method: "POST",
-      body: JSON.stringify({ start_date: startDate, end_date: endDate }),
-    });
-  }
+async createVacation(startDate: string, endDate: string) {
+  return this.request<any>("/subscriptions/vacations", {
+    method: "POST",
+    body: JSON.stringify({ start_date: startDate, end_date: endDate }),
+  });
+}
 
-  async deleteVacation(id: string) {
-    return this.request<any>(`/vacations/${id}`, {
-      method: "DELETE",
-    });
-  }
-
+ async deleteVacation(id: string) {
+  return this.request<any>(`/subscriptions/vacations/${id}`, {
+    method: "DELETE",
+  });
+}
   async getWallet() {
     return this.request<any>("/wallet");
   }
@@ -982,8 +981,10 @@ class ApiService {
   }
 
   async getOrders() {
-    return this.request<any[]>("/orders", { timeoutMs: 60_000 });
-  }
+  return this.request<any[]>("/delivery/my-orders", {
+    timeoutMs: 60_000,
+  });
+}
 
   async getOrder(id: string) {
     return this.request<any>(`/orders/${id}`);
@@ -3413,6 +3414,17 @@ async getFarmSales(search?: string) {
     if (search) params.append("search", search);
     const query = params.toString() ? `?${params.toString()}` : "";
     return this.request<FarmSale[]>(`/farm-sales${query}`);
+  }
+
+// inside your api service object/class (src/services/api.ts)
+async updateSubscriptionStatus(subscriptionId: string, status: string) {
+    return this.request<any>("/delivery/subscription-status-update", {
+      method: "POST",
+      body: JSON.stringify({
+        order_id: subscriptionId,
+        status: status,
+      }),
+    });
   }
 
   // Logout
