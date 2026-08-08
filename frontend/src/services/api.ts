@@ -888,24 +888,28 @@ class ApiService {
     return this.request<any[]>(`/subscriptions/admin/all`);
   }
 
+  async getAdminVacationsAll(): Promise<any[]> {
+    return this.request<any[]>(`/subscriptions/admin/vacations`);
+  }
+
   //----
 
-async getVacations() {
-  return this.request<any[]>("/subscriptions/vacations");
-}
+  async getVacations() {
+    return this.request<any[]>("/subscriptions/vacations");
+  }
 
-async createVacation(startDate: string, endDate: string) {
-  return this.request<any>("/subscriptions/vacations", {
-    method: "POST",
-    body: JSON.stringify({ start_date: startDate, end_date: endDate }),
-  });
-}
+  async createVacation(startDate: string, endDate: string) {
+    return this.request<any>("/subscriptions/vacations", {
+      method: "POST",
+      body: JSON.stringify({ start_date: startDate, end_date: endDate }),
+    });
+  }
 
- async deleteVacation(id: string) {
-  return this.request<any>(`/subscriptions/vacations/${id}`, {
-    method: "DELETE",
-  });
-}
+  async deleteVacation(id: string) {
+    return this.request<any>(`/subscriptions/vacations/${id}`, {
+      method: "DELETE",
+    });
+  }
   async getWallet() {
     return this.request<any>("/wallet");
   }
@@ -981,10 +985,10 @@ async createVacation(startDate: string, endDate: string) {
   }
 
   async getOrders() {
-  return this.request<any[]>("/delivery/my-orders", {
-    timeoutMs: 60_000,
-  });
-}
+    return this.request<any[]>("/delivery/my-orders", {
+      timeoutMs: 60_000,
+    });
+  }
 
   async getOrder(id: string) {
     return this.request<any>(`/orders/${id}`);
@@ -1315,16 +1319,16 @@ async createVacation(startDate: string, endDate: string) {
 
   //cow gneder and new born promotion by anurag
   async promoteNewbornCow(id: string) {
-  return this.request<any>(`/gausevak/cows/${id}/promote`, {
-    method: "PATCH",
-  });
-}
+    return this.request<any>(`/gausevak/cows/${id}/promote`, {
+      method: "PATCH",
+    });
+  }
 
-// async promoteCowToMature(id: string) {
-//   return this.request<any>(`/gausevak/cows/${id}/promote-to-mature`, {
-//     method: "PATCH",
-//   });
-// }
+  // async promoteCowToMature(id: string) {
+  //   return this.request<any>(`/gausevak/cows/${id}/promote-to-mature`, {
+  //     method: "PATCH",
+  //   });
+  // }
 
   async createInsemination(data: {
     cowSrNo: string;
@@ -1570,20 +1574,20 @@ async createVacation(startDate: string, endDate: string) {
     return this.request<any[]>("/admin/workers");
   }
 
-async createWorker(data: {
-  name: string;
-  email: string;
-  password: string;
-  phone?: string;
-  designation?: string;
-  farm_name?: string;
-  farm_location_id?: string;
-}) {
-  return this.request<any>("/admin/workers", {
-    method: "POST",
-    body: JSON.stringify(data),
-  });
-}
+  async createWorker(data: {
+    name: string;
+    email: string;
+    password: string;
+    phone?: string;
+    designation?: string;
+    farm_name?: string;
+    farm_location_id?: string;
+  }) {
+    return this.request<any>("/admin/workers", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
 
   async getAdminCustomers(params?: {
     zone?: string;
@@ -1993,12 +1997,12 @@ async createWorker(data: {
         const trimmed = text.trim();
         const data = trimmed
           ? (() => {
-              try {
-                return JSON.parse(trimmed);
-              } catch {
-                return null;
-              }
-            })()
+            try {
+              return JSON.parse(trimmed);
+            } catch {
+              return null;
+            }
+          })()
           : null;
 
         if (response.ok && data) return data;
@@ -2010,9 +2014,9 @@ async createWorker(data: {
 
         throw new Error(
           (data &&
-          typeof data === "object" &&
-          "detail" in data &&
-          typeof data.detail === "string"
+            typeof data === "object" &&
+            "detail" in data &&
+            typeof data.detail === "string"
             ? data.detail
             : trimmed) || "Failed to fetch worker points",
         );
@@ -2180,28 +2184,28 @@ async createWorker(data: {
 
   //worker undo milk log by anurag
   async workerDeleteMilkEntry(entryId: string): Promise<{
-  success: boolean;
-  deleted_entry: {
-    id: string;
-    cow_id: string;
-    cow_name: string;
-    cow_tag: string;
-    quantity: number;
-    shift: "morning" | "evening";
-    date: string;
-    worker_name: string;
-  };
-}> {
-  const token = await AsyncStorage.getItem("worker_token");
-  const response = await fetch(`${API_BASE}/api/worker/milk/${entryId}`, {
-    method: "DELETE",
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  const result = await response.json();
-  if (!response.ok)
-    throw new Error(result.detail || "Failed to delete milk entry");
-  return result;
-}
+    success: boolean;
+    deleted_entry: {
+      id: string;
+      cow_id: string;
+      cow_name: string;
+      cow_tag: string;
+      quantity: number;
+      shift: "morning" | "evening";
+      date: string;
+      worker_name: string;
+    };
+  }> {
+    const token = await AsyncStorage.getItem("worker_token");
+    const response = await fetch(`${API_BASE}/api/worker/milk/${entryId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const result = await response.json();
+    if (!response.ok)
+      throw new Error(result.detail || "Failed to delete milk entry");
+    return result;
+  }
 
   async workerLogin(identifier: string, password: string) {
     const response = await fetch(`${API_BASE}/api/worker/auth/login`, {
@@ -2256,48 +2260,48 @@ async createWorker(data: {
     });
   }
 
-async updateWorker(
-  id: string,
-  data: Partial<{
-    name: string;
-    phone: string;
-    designation: string;
-    farm_name: string;
-    farm_location_id: string;
-    is_active: boolean;
-    password: string;
-  }>,
-) {
-  return this.request<any>(`/admin/workers/${id}`, {
-    method: "PUT",
-    body: JSON.stringify(data),
-  });
-}
+  async updateWorker(
+    id: string,
+    data: Partial<{
+      name: string;
+      phone: string;
+      designation: string;
+      farm_name: string;
+      farm_location_id: string;
+      is_active: boolean;
+      password: string;
+    }>,
+  ) {
+    return this.request<any>(`/admin/workers/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
 
   //worker id delete by anurag
   async deleteWorker(id: string) {
-  return this.request<{ success: boolean; id: string }>(`/admin/workers/${id}`, {
-    method: "DELETE",
-  });
-}
+    return this.request<{ success: boolean; id: string }>(`/admin/workers/${id}`, {
+      method: "DELETE",
+    });
+  }
 
-//vet id delete pass eidt by anurag
-async deleteVeterinarian(id: string) {
-  return this.request<{ success: boolean; id: string }>(
-    `/admin/veterinarians/${id}`,
-    { method: "DELETE" }
-  );
-}
+  //vet id delete pass eidt by anurag
+  async deleteVeterinarian(id: string) {
+    return this.request<{ success: boolean; id: string }>(
+      `/admin/veterinarians/${id}`,
+      { method: "DELETE" }
+    );
+  }
 
-async resetVeterinarianPassword(id: string, new_password: string) {
-  return this.request<{ success: boolean; message: string }>(
-    `/admin/veterinarians/${id}/password`,
-    {
-      method: "PATCH",
-      body: JSON.stringify({ new_password }),
-    }
-  );
-}
+  async resetVeterinarianPassword(id: string, new_password: string) {
+    return this.request<{ success: boolean; message: string }>(
+      `/admin/veterinarians/${id}/password`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ new_password }),
+      }
+    );
+  }
 
   // ── Bank Account ─────────────────────────────────────────
 
@@ -2581,39 +2585,39 @@ async resetVeterinarianPassword(id: string, new_password: string) {
     return this.request<any[]>("/admin/veterinarians");
   }
 
-async createVeterinarian(data: {
-  name: string;
-  email: string;
-  password: string;
-  phone?: string;
-  specialization?: string;
-  license_number?: string;
-  farm_location_ids?: string[];        // ← was farm_location_id: string
-  farm_location_labels?: string[];     // ← was farm_location_label: string
-}) {
-  return this.request<any>("/admin/veterinarians", {
-    method: "POST",
-    body: JSON.stringify(data),
-  });
-}
+  async createVeterinarian(data: {
+    name: string;
+    email: string;
+    password: string;
+    phone?: string;
+    specialization?: string;
+    license_number?: string;
+    farm_location_ids?: string[];        // ← was farm_location_id: string
+    farm_location_labels?: string[];     // ← was farm_location_label: string
+  }) {
+    return this.request<any>("/admin/veterinarians", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
 
   async updateVeterinarian(
-  id: string,
-  data: Partial<{
-    name: string;
-    phone: string;
-    specialization: string;
-    license_number: string;
-    is_active: boolean;
-    farm_location_ids: string[];       // ← was farm_location_id: string
-    farm_location_labels: string[];    // ← was farm_location_label: string
-  }>,
-) {
-  return this.request<any>(`/admin/veterinarians/${id}`, {
-    method: "PUT",
-    body: JSON.stringify(data),
-  });
-}
+    id: string,
+    data: Partial<{
+      name: string;
+      phone: string;
+      specialization: string;
+      license_number: string;
+      is_active: boolean;
+      farm_location_ids: string[];       // ← was farm_location_id: string
+      farm_location_labels: string[];    // ← was farm_location_label: string
+    }>,
+  ) {
+    return this.request<any>(`/admin/veterinarians/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
 
   async vetLogin(email: string, password: string) {
     const response = await fetch(`${API_BASE}/api/vet/auth/login`, {
@@ -2678,26 +2682,26 @@ async createVeterinarian(data: {
   }
 
   async vetUpdateHealth(data: {
-  cow_id: string;
-  cow_name: string;
-  cow_tag: string;
-  condition: string;
-  date: string;
-}) {
-  const token = await AsyncStorage.getItem("vet_token");
-  const response = await fetch(`${API_BASE}/api/vet/health-update`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(data),
-  });
-  const result = await response.json();
-  if (!response.ok)
-    throw new Error(result.detail || "Failed to update health status");
-  return result;
-}
+    cow_id: string;
+    cow_name: string;
+    cow_tag: string;
+    condition: string;
+    date: string;
+  }) {
+    const token = await AsyncStorage.getItem("vet_token");
+    const response = await fetch(`${API_BASE}/api/vet/health-update`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(data),
+    });
+    const result = await response.json();
+    if (!response.ok)
+      throw new Error(result.detail || "Failed to update health status");
+    return result;
+  }
 
   async getVetInseminationRecords() {
     const token = await AsyncStorage.getItem("vet_token");
@@ -2731,7 +2735,7 @@ async createVeterinarian(data: {
     return data;
   }
 
-async getAnimalMedicineRecords(animalId: string) {
+  async getAnimalMedicineRecords(animalId: string) {
     const token = await AsyncStorage.getItem("vet_token");
     const response = await fetch(
       `${API_BASE}/api/vet/cow/${animalId}/medicine`,
@@ -2745,7 +2749,7 @@ async getAnimalMedicineRecords(animalId: string) {
     return data;
   }
 
-async getAnimalHealthRecords(animalId: string) {
+  async getAnimalHealthRecords(animalId: string) {
     const token = await AsyncStorage.getItem("vet_token");
     const response = await fetch(
       `${API_BASE}/api/vet/cow/${animalId}/health`,
@@ -2759,7 +2763,7 @@ async getAnimalHealthRecords(animalId: string) {
     return data;
   }
 
-async getAnimalMilkRecords(animalId: string) {
+  async getAnimalMilkRecords(animalId: string) {
     const token = await AsyncStorage.getItem("vet_token");
     const response = await fetch(
       `${API_BASE}/api/vet/cow/${animalId}/milk`,
@@ -2773,7 +2777,7 @@ async getAnimalMilkRecords(animalId: string) {
     return data;
   }
 
-async getAnimalFeedRecords(animalId: string) {
+  async getAnimalFeedRecords(animalId: string) {
     const token = await AsyncStorage.getItem("vet_token");
     const response = await fetch(
       `${API_BASE}/api/vet/cow/${animalId}/feed`,
@@ -2825,7 +2829,7 @@ async getAnimalFeedRecords(animalId: string) {
     });
   }
 
-async vetGetHealthLogs(date?: string) {
+  async vetGetHealthLogs(date?: string) {
     const token = await AsyncStorage.getItem("vet_token");
     const response = await fetch(`${API_BASE}/api/vet/health-records`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -3152,7 +3156,7 @@ async vetGetHealthLogs(date?: string) {
       throw new Error(result.detail || "Failed to save milk entry");
     return result;
   }
- 
+
   async vetGetTodayMilk() {
     const token = await AsyncStorage.getItem("vet_token");
     const response = await fetch(`${API_BASE}/api/vet/milk/today`, {
@@ -3163,7 +3167,7 @@ async vetGetHealthLogs(date?: string) {
       throw new Error(data.detail || "Failed to fetch today's milk");
     return data;
   }
- 
+
   async vetDeleteMilkEntry(entryId: string): Promise<{
     success: boolean;
     deleted_entry: {
@@ -3187,9 +3191,9 @@ async vetGetHealthLogs(date?: string) {
       throw new Error(result.detail || "Failed to delete milk entry");
     return result;
   }
- 
+
   // ── Vet Feed ─────────────────────────────────────────
- 
+
   async vetGetFeedStatus(date: string, shift: "morning" | "evening") {
     const token = await AsyncStorage.getItem("vet_token");
     const response = await fetch(
@@ -3201,7 +3205,7 @@ async vetGetHealthLogs(date?: string) {
       throw new Error(data.detail || "Failed to fetch feed status");
     return data;
   }
- 
+
   async vetMarkFed(data: {
     cow_id: string;
     cow_name: string;
@@ -3222,7 +3226,7 @@ async vetGetHealthLogs(date?: string) {
     if (!response.ok) throw new Error(result.detail || "Failed to mark fed");
     return result;
   }
- 
+
   async vetUnmarkFed(
     cow_id: string,
     date: string,
@@ -3238,8 +3242,8 @@ async vetGetHealthLogs(date?: string) {
     return result;
   }
 
-//farm sale by worker by golu
-// ── Farm Sale ─────────────────────────────────────────
+  //farm sale by worker by golu
+  // ── Farm Sale ─────────────────────────────────────────
 
   async workerCreateFarmSale(data: FarmSaleCreate): Promise<FarmSale> {
     const token = await AsyncStorage.getItem("worker_token");
@@ -3257,26 +3261,26 @@ async vetGetHealthLogs(date?: string) {
     return result;
   }
 
-async workerGetFarmSales(params?: {
-  date?: string;
-  all_time?: boolean;
-}): Promise<FarmSale[]> {
-  const token = await AsyncStorage.getItem("worker_token");
-  const p = new URLSearchParams();
-  if (params?.all_time) {
-    p.append("all_time", "true");
-  } else if (params?.date) {
-    p.append("date", params.date);
+  async workerGetFarmSales(params?: {
+    date?: string;
+    all_time?: boolean;
+  }): Promise<FarmSale[]> {
+    const token = await AsyncStorage.getItem("worker_token");
+    const p = new URLSearchParams();
+    if (params?.all_time) {
+      p.append("all_time", "true");
+    } else if (params?.date) {
+      p.append("date", params.date);
+    }
+    const q = p.toString() ? `?${p.toString()}` : "";
+    const response = await fetch(`${API_BASE}/api/worker/farm-sale${q}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await response.json();
+    if (!response.ok)
+      throw new Error(data.detail || "Failed to fetch farm sale entries");
+    return data;
   }
-  const q = p.toString() ? `?${p.toString()}` : "";
-  const response = await fetch(`${API_BASE}/api/worker/farm-sale${q}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  const data = await response.json();
-  if (!response.ok)
-    throw new Error(data.detail || "Failed to fetch farm sale entries");
-  return data;
-}
 
   async workerDeleteFarmSale(saleId: string): Promise<{
     success: boolean;
@@ -3296,7 +3300,7 @@ async workerGetFarmSales(params?: {
     return result;
   }
 
- async getAdminFarmSales(params?: {
+  async getAdminFarmSales(params?: {
     date?: string;
     worker_id?: string;
     all?: boolean;
@@ -3318,7 +3322,7 @@ async workerGetFarmSales(params?: {
     }>(`/admin/farm-sales${q}`);
   }
 
- async adminUpdateFarmSale(
+  async adminUpdateFarmSale(
     saleId: string,
     data: Partial<{
       customer_name: string;
@@ -3350,29 +3354,29 @@ async workerGetFarmSales(params?: {
       method: "DELETE",
     });
   }
-  
-//Farm/business multiple Adresses
-async getBusinessLocations(): Promise<BusinessLocation[]> {
-  return this.request<BusinessLocation[]>("/admin/locations");
-}
 
-async createBusinessLocation(data: BusinessLocationCreate): Promise<BusinessLocation> {
-  return this.request<BusinessLocation>("/admin/locations", {
-    method: "POST",
-    body: JSON.stringify(data),
-  });
-}
+  //Farm/business multiple Adresses
+  async getBusinessLocations(): Promise<BusinessLocation[]> {
+    return this.request<BusinessLocation[]>("/admin/locations");
+  }
 
-async updateBusinessLocation(id: string, data: BusinessLocationCreate): Promise<BusinessLocation> {
-  return this.request<BusinessLocation>(`/admin/locations/${id}`, {
-    method: "PUT",
-    body: JSON.stringify(data),
-  });
-}
+  async createBusinessLocation(data: BusinessLocationCreate): Promise<BusinessLocation> {
+    return this.request<BusinessLocation>("/admin/locations", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
 
-async deleteBusinessLocation(id: string): Promise<{ success: boolean; id: string }> {
-  return this.request(`/admin/locations/${id}`, { method: "DELETE" });
-}
+  async updateBusinessLocation(id: string, data: BusinessLocationCreate): Promise<BusinessLocation> {
+    return this.request<BusinessLocation>(`/admin/locations/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteBusinessLocation(id: string): Promise<{ success: boolean; id: string }> {
+    return this.request(`/admin/locations/${id}`, { method: "DELETE" });
+  }
 
   async workerGetAdminPaymentQr(): Promise<{
     admin_id: string;
@@ -3391,33 +3395,33 @@ async deleteBusinessLocation(id: string): Promise<{ success: boolean; id: string
   }
 
   async workerUpdateFarmSale(
-  saleId: string,
-  data: Partial<FarmSaleCreate>,
-): Promise<FarmSale> {
-  const token = await AsyncStorage.getItem("worker_token");
-  const response = await fetch(`${API_BASE}/api/worker/farm-sale/${saleId}`, {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(data),
-  });
-  const result = await response.json();
-  if (!response.ok)
-    throw new Error(result.detail || "Failed to update farm sale entry");
-  return result;
-}
+    saleId: string,
+    data: Partial<FarmSaleCreate>,
+  ): Promise<FarmSale> {
+    const token = await AsyncStorage.getItem("worker_token");
+    const response = await fetch(`${API_BASE}/api/worker/farm-sale/${saleId}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(data),
+    });
+    const result = await response.json();
+    if (!response.ok)
+      throw new Error(result.detail || "Failed to update farm sale entry");
+    return result;
+  }
 
-async getFarmSales(search?: string) {
+  async getFarmSales(search?: string) {
     const params = new URLSearchParams();
     if (search) params.append("search", search);
     const query = params.toString() ? `?${params.toString()}` : "";
     return this.request<FarmSale[]>(`/farm-sales${query}`);
   }
 
-// inside your api service object/class (src/services/api.ts)
-async updateSubscriptionStatus(subscriptionId: string, status: string) {
+  // inside your api service object/class (src/services/api.ts)
+  async updateSubscriptionStatus(subscriptionId: string, status: string) {
     return this.request<any>("/delivery/subscription-status-update", {
       method: "POST",
       body: JSON.stringify({

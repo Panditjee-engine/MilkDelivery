@@ -105,6 +105,9 @@ interface Subscription {
   customer_phone?: string;
   customer_address?: any;
   created_at?: string;
+  on_vacation_today?: boolean;        // ← NEW
+  vacation_start_date?: string | null; // ← NEW
+  vacation_end_date?: string | null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -1005,11 +1008,13 @@ function SubscriptionRow({
   bulkLoading,
 }: SubRowProps) {
   const pc = PATTERN_CONFIG[item.pattern] ?? PATTERN_CONFIG.daily;
+  const onVacation = !!item.on_vacation_today;
   const itemCount = item.items?.length ?? 0;
   const productTitle = subscriptionProductTitle(item.items || [], productNames, products);
   const address = buildAddressText(item.customer_address);
   const canDeliver =
     item.is_active !== false &&
+    !item.on_vacation_today &&   // ← NEW
     !["delivered", "cancelled", "skipped"].includes(
       String(item.delivery_status || item.status || "").toLowerCase(),
     );
@@ -1036,23 +1041,23 @@ function SubscriptionRow({
         onPress={onToggle}
         style={ss.summary}
       >
-          <View style={ss.cardHeader}>
-            <View style={ss.idRow}>
-              {canDeliver ? (
-                <TouchableOpacity
-                  style={[styles.selectBox, selected && styles.selectBoxActive]}
-                  onPress={(event) => {
-                    event.stopPropagation?.();
-                    onToggleSelected();
-                  }}
-                  activeOpacity={0.75}
-                >
-                  {selected ? (
-                    <Ionicons name="checkmark" size={14} color="#fff" />
-                  ) : null}
-                </TouchableOpacity>
-              ) : null}
-              <View style={[ss.iconBox, { backgroundColor: pc.bg }]}>
+        <View style={ss.cardHeader}>
+          <View style={ss.idRow}>
+            {canDeliver ? (
+              <TouchableOpacity
+                style={[styles.selectBox, selected && styles.selectBoxActive]}
+                onPress={(event) => {
+                  event.stopPropagation?.();
+                  onToggleSelected();
+                }}
+                activeOpacity={0.75}
+              >
+                {selected ? (
+                  <Ionicons name="checkmark" size={14} color="#fff" />
+                ) : null}
+              </TouchableOpacity>
+            ) : null}
+            <View style={[ss.iconBox, { backgroundColor: pc.bg }]}>
               <Ionicons name={pc.icon} size={14} color={pc.color} />
             </View>
             <View>
@@ -1067,18 +1072,29 @@ function SubscriptionRow({
               <View
                 style={[
                   ss.subStatusPill,
-                  item.is_active ? ss.subStatusActive : ss.subStatusInactive,
+                  onVacation
+                    ? ss.subStatusVacation
+                    : item.is_active
+                      ? ss.subStatusActive
+                      : ss.subStatusInactive,
                 ]}
               >
                 <Text
                   style={[
                     ss.subStatusText,
-                    { color: item.is_active ? "#16A34A" : "#FF5C5C" },
+                    {
+                      color: onVacation ? "#B45309" : item.is_active ? "#16A34A" : "#FF5C5C",
+                    },
                   ]}
                 >
-                  {item.is_active ? "Active" : "Inactive"}
+                  {onVacation ? "On Vacation" : item.is_active ? "Active" : "Inactive"}
                 </Text>
               </View>
+              {onVacation && item.vacation_start_date && (
+                <Text style={ss.vacationDates}>
+                  {item.vacation_start_date} → {item.vacation_end_date}
+                </Text>
+              )}
               <Text style={ss.headerProductName} numberOfLines={1}>
                 {productTitle}
               </Text>
@@ -1427,13 +1443,34 @@ export default function AdminOrdersScreen() {
         const address = pickUserAddress(customer);
         return address
           ? {
-              ...sub,
-              customer_address: address,
-              customer_name: sub.customer_name || customer?.name,
-              customer_phone: sub.customer_phone || customer?.phone,
-            }
+            ...sub,
+            customer_address: address,
+            customer_name: sub.customer_name || customer?.name,
+            customer_phone: sub.customer_phone || customer?.phone,
+          }
           : sub;
       });
+
+      const vacations = await api.getAdminVacationsAll().catch(() => []);
+      const today = getLocalDateKey();
+      const withVacation = withAddress.map((sub) => {
+        const userVacation = vacations.find((v: any) => {
+          const vacUserId = String(v.user_id || v.customer_id || "");
+          if (!vacUserId || vacUserId !== String(sub.user_id || "")) return false;
+          const start = getOrderDateKey(v.start_date);
+          const end = getOrderDateKey(v.end_date);
+          return start && end && today >= start && today <= end;
+        });
+        return userVacation
+          ? {
+            ...sub,
+            on_vacation_today: true,
+            vacation_start_date: userVacation.start_date,
+            vacation_end_date: userVacation.end_date,
+          }
+          : { ...sub, on_vacation_today: false };
+      });
+      console.log("RAW SUB SAMPLE:", JSON.stringify(withAddress.find(s => s.customer_name) || withAddress[0]));
 
       setAllSubscriptions(withAddress);
 
@@ -1608,13 +1645,13 @@ export default function AdminOrdersScreen() {
         dateFilter === "ALL" ||
         (dateFilter === "CUSTOM"
           ? (!customStartDate ||
-              getOrderDateKey(order.delivery_date) >= customStartDate) &&
-            (!customEndDate ||
-              getOrderDateKey(order.delivery_date) <= customEndDate)
+            getOrderDateKey(order.delivery_date) >= customStartDate) &&
+          (!customEndDate ||
+            getOrderDateKey(order.delivery_date) <= customEndDate)
           : getOrderDateKey(order.delivery_date) ===
-            (dateFilter === "TODAY"
-              ? getLocalDateKey()
-              : getTomorrowDateKey()));
+          (dateFilter === "TODAY"
+            ? getLocalDateKey()
+            : getTomorrowDateKey()));
       return statusMatch && customerMatch && productMatch && dateMatch;
     });
   }, [
@@ -1641,9 +1678,9 @@ export default function AdminOrdersScreen() {
       (dateFilter === "CUSTOM"
         ? subscriptionOverlapsRange(s, customStartDate, customEndDate)
         : shouldSubscriptionDeliverOn(
-            s,
-            dateFilter === "TODAY" ? getLocalDateKey() : getTomorrowDateKey(),
-          ));
+          s,
+          dateFilter === "TODAY" ? getLocalDateKey() : getTomorrowDateKey(),
+        ));
     return statusMatch && customerMatch && dateMatch;
   });
 
@@ -2448,8 +2485,8 @@ export default function AdminOrdersScreen() {
                   <Text style={styles.emptyTitle}>No orders found</Text>
                   <Text style={styles.emptyDesc}>
                     {filter !== "ALL" ||
-                    dateFilter !== "ALL" ||
-                    selectedCustomer !== "ALL"
+                      dateFilter !== "ALL" ||
+                      selectedCustomer !== "ALL"
                       ? "Try changing customer, product or date filter."
                       : "One-time orders placed by your customers will appear here."}
                   </Text>
@@ -2512,7 +2549,7 @@ export default function AdminOrdersScreen() {
                       {item.subscriptions} subs ·{" "}
                       {formatBaseMetric(
                         item.quantity *
-                          (parseUnitDescriptor(item.unit)?.packSize || 1),
+                        (parseUnitDescriptor(item.unit)?.packSize || 1),
                         parseUnitDescriptor(item.unit)?.kind,
                       )}
                     </Text>
@@ -2548,8 +2585,8 @@ export default function AdminOrdersScreen() {
                   <Text style={styles.emptyTitle}>No subscriptions found</Text>
                   <Text style={styles.emptyDesc}>
                     {subFilter !== "ALL" ||
-                    dateFilter !== "ALL" ||
-                    selectedCustomer !== "ALL"
+                      dateFilter !== "ALL" ||
+                      selectedCustomer !== "ALL"
                       ? "Try changing customer, status or date filter."
                       : "Recurring subscriptions (daily, alternate, custom) appear here."}
                   </Text>
@@ -2732,8 +2769,8 @@ export default function AdminOrdersScreen() {
                         datePickerTarget === "start"
                           ? customStartDate || getLocalDateKey()
                           : customEndDate ||
-                              customStartDate ||
-                              getLocalDateKey()
+                          customStartDate ||
+                          getLocalDateKey()
                       )}
                       mode="date"
                       display={Platform.OS === "ios" ? "inline" : "default"}
@@ -3125,8 +3162,15 @@ const ss = StyleSheet.create({
     borderRadius: 20,
   },
   subStatusActive: { backgroundColor: "#ECFDF5" },
+  subStatusVacation: { backgroundColor: "#FFFBEB" },
   subStatusInactive: { backgroundColor: "#FFF0F0" },
   subStatusText: { fontSize: 10.5, fontWeight: "900" },
+  vacationDates: {
+    fontSize: 10,
+    color: "#92400E",
+    marginTop: 4,
+    textAlign: "right",
+  },
   patternPill: {
     flexDirection: "row",
     alignItems: "center",
@@ -3972,4 +4016,30 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 20,
   },
+  subStatusVacation: { backgroundColor: "#FFFBEB" },
+  vacationDates: {
+    marginTop: 3,
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#B45309",
+    textAlign: "right",
+  },
+  vacationBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#FFFBEB",
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  vacationBannerText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#92400e",
+  },
+
 });
