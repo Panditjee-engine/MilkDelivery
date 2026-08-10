@@ -74,7 +74,15 @@ const isRecurring = (s: any): boolean => {
   return p !== "buy_once" && p !== "one_time" && p !== "once";
 };
 
-const todayStr = () => new Date().toISOString().split("T")[0];
+const todayStr = () => {
+  const now = new Date();
+
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+};
 
 /** Date-only diff in days between two YYYY-MM-DD strings */
 const dateDiffDays = (aStr: string, bStr: string): number =>
@@ -319,6 +327,16 @@ export default function SubscriptionsScreen() {
         )
         .map((o: any) => `${o.subscription_id}:${today}`),
     );
+     recurring.forEach((s: any) => {
+      const deliveredByStatus =
+        String(s.status || "").toLowerCase() === "delivered" &&
+        !!s.delivered_at;
+      const deliveredByDate = s.last_delivered_date === today;
+      if (deliveredByStatus || deliveredByDate) {
+        deliveredKeys.add(`${s.id}:${today}`);
+      }
+    });
+
     setDeliveredToday(deliveredKeys);
   } catch (err: any) {
     setError(err?.message || "Failed to load subscriptions");

@@ -990,6 +990,12 @@ class ApiService {
     });
   }
 
+  async getCustomerOrders() {
+    return this.request<any[]>("/orders", {
+      timeoutMs: 60_000,
+    });
+  }
+
   async getOrder(id: string) {
     return this.request<any>(`/orders/${id}`);
   }

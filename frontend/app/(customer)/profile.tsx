@@ -429,7 +429,7 @@ export default function ProfileScreen() {
 const fetchData = async () => {
   try {
     const [ordersData, vacationsData] = await Promise.all([
-      api.getOrders(),
+      api.getCustomerOrders(),
       api.getVacations().catch(() => []),
     ]);
     setOrders(ordersData || []);
