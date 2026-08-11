@@ -1026,6 +1026,9 @@ function SubscriptionRow({
       String(item.delivery_status || item.status || "").toLowerCase(),
     );
 
+  const isDeliveredToday =
+    String(item.delivery_status || "").toLowerCase() === "delivered";
+
   // FIXED: use resolveItemName for summary line
   const itemSummaryLine = item.items
     ?.slice(0, 2)
@@ -1097,10 +1100,16 @@ function SubscriptionRow({
                   {onVacation ? "On Vacation" : item.is_active ? "Active" : "Inactive"}
                 </Text>
               </View>
-              {onVacation && item.vacation_start_date && (
+             {onVacation && item.vacation_start_date && (
                 <Text style={ss.vacationDates}>
                   {item.vacation_start_date} → {item.vacation_end_date}
                 </Text>
+              )}
+              {isDeliveredToday && (
+                <View style={ss.deliveredTodayPill}>
+                  <Ionicons name="checkmark-circle" size={10} color="#16A34A" />
+                  <Text style={ss.deliveredTodayText}>Delivered Today</Text>
+                </View>
               )}
               <Text style={ss.headerProductName} numberOfLines={1}>
                 {productTitle}
@@ -1263,6 +1272,19 @@ function SubscriptionRow({
                 <Ionicons name="checkmark-circle-outline" size={16} color="#16A34A" />
                 <Text style={styles.deliveredExpandedText}>Mark Delivered</Text>
               </TouchableOpacity>
+              <View style={styles.actionGap} />
+            </>
+          ) : isDeliveredToday ? (
+            <>
+              <View style={styles.deliveredDoneBanner}>
+                <Ionicons name="checkmark-done-circle" size={18} color="#16A34A" />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.deliveredDoneTitle}>Delivered Today</Text>
+                  <Text style={styles.deliveredDoneSub}>
+                    Order for today has been marked complete.
+                  </Text>
+                </View>
+              </View>
               <View style={styles.actionGap} />
             </>
           ) : notStartedYet ? (
@@ -3195,6 +3217,21 @@ const ss = StyleSheet.create({
     marginTop: 4,
     textAlign: "right",
   },
+  deliveredTodayPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: "#ECFDF5",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 20,
+    marginTop: 4,
+  },
+  deliveredTodayText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#16A34A",
+  },
   patternPill: {
     flexDirection: "row",
     alignItems: "center",
@@ -3997,6 +4034,17 @@ const styles = StyleSheet.create({
     borderColor: "#BBF7D0",
   },
   deliveredExpandedText: { fontSize: 14, fontWeight: "800", color: "#16A34A" },
+  deliveredDoneBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    backgroundColor: "#ECFDF5",
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+  },
   actionGap: { height: 8 },
   cancelExpandedBtn: {
     flexDirection: "row",
@@ -4009,6 +4057,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#FFCDD2",
   },
+  deliveredDoneTitle: { fontSize: 13.5, fontWeight: "800", color: "#16A34A" },
+  deliveredDoneSub: { fontSize: 11.5, color: "#15803d", marginTop: 1 },
   cancelExpandedText: { fontSize: 14, fontWeight: "700", color: "#FF5C5C" },
   loadingWrapper: {
     flex: 1,
