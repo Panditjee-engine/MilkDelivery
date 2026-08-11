@@ -1007,14 +1007,21 @@ function SubscriptionRow({
   products,
   bulkLoading,
 }: SubRowProps) {
-  const pc = PATTERN_CONFIG[item.pattern] ?? PATTERN_CONFIG.daily;
+ const pc = PATTERN_CONFIG[item.pattern] ?? PATTERN_CONFIG.daily;
   const onVacation = !!item.on_vacation_today;
   const itemCount = item.items?.length ?? 0;
   const productTitle = subscriptionProductTitle(item.items || [], productNames, products);
   const address = buildAddressText(item.customer_address);
+
+  // ← NEW: block "Mark Delivered" before the subscription's start date
+  const todayKey = getLocalDateKey();
+  const startKey = getOrderDateKey(item.start_date);
+  const notStartedYet = !!startKey && todayKey < startKey;
+
   const canDeliver =
     item.is_active !== false &&
-    !item.on_vacation_today &&   // ← NEW
+    !item.on_vacation_today &&
+    !notStartedYet &&            // ← NEW
     !["delivered", "cancelled", "skipped"].includes(
       String(item.delivery_status || item.status || "").toLowerCase(),
     );
@@ -1244,8 +1251,7 @@ function SubscriptionRow({
               <Text style={ss.itemsTotalVal}>₹{item.total_amount ?? 0}</Text>
             </View>
           </View>
-
-          <View style={ss.divider} />
+<View style={ss.divider} />
           {canDeliver ? (
             <>
               <TouchableOpacity
@@ -1257,6 +1263,16 @@ function SubscriptionRow({
                 <Ionicons name="checkmark-circle-outline" size={16} color="#16A34A" />
                 <Text style={styles.deliveredExpandedText}>Mark Delivered</Text>
               </TouchableOpacity>
+              <View style={styles.actionGap} />
+            </>
+          ) : notStartedYet ? (
+            <>
+              <View style={styles.unassignedRow}>
+                <Ionicons name="time-outline" size={13} color="#FFBF55" />
+                <Text style={styles.unassignedText}>
+                  Starts on {item.start_date}
+                </Text>
+              </View>
               <View style={styles.actionGap} />
             </>
           ) : null}
@@ -1768,11 +1784,19 @@ export default function AdminOrdersScreen() {
     [selectableOrders],
   );
 
-  const selectableSubs = useMemo(
+ const selectableSubs = useMemo(
     () =>
       filteredSubs.filter((sub) => {
         const status = String(sub.delivery_status || sub.status || "").toLowerCase();
-        return status !== "delivered" && status !== "cancelled" && status !== "skipped" && sub.is_active !== false;
+        const startKey = getOrderDateKey(sub.start_date);
+        const notStartedYet = !!startKey && getLocalDateKey() < startKey; // ← NEW
+        return (
+          status !== "delivered" &&
+          status !== "cancelled" &&
+          status !== "skipped" &&
+          sub.is_active !== false &&
+          !notStartedYet // ← NEW
+        );
       }),
     [filteredSubs],
   );
