@@ -316,7 +316,7 @@ export default function SubscriptionsScreen() {
     setAcceptedIds(accepted);
 
     // ← NEW: rebuild "delivered today" from actual order status
-    const today = todayStr();
+     const today = todayStr();
     const deliveredKeys = new Set<string>(
       (Array.isArray(orders) ? orders : [])
         .filter(
@@ -327,12 +327,8 @@ export default function SubscriptionsScreen() {
         )
         .map((o: any) => `${o.subscription_id}:${today}`),
     );
-     recurring.forEach((s: any) => {
-      const deliveredByStatus =
-        String(s.status || "").toLowerCase() === "delivered" &&
-        !!s.delivered_at;
-      const deliveredByDate = s.last_delivered_date === today;
-      if (deliveredByStatus || deliveredByDate) {
+    recurring.forEach((s: any) => {
+      if (String(s.delivery_status || "").toLowerCase() === "delivered") {
         deliveredKeys.add(`${s.id}:${today}`);
       }
     });
