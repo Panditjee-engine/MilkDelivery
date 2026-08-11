@@ -471,7 +471,7 @@ async function resolveProductNames(
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const ORDER_FILTERS = ["ALL", "PENDING", "DELIVERED"] as const;
+const ORDER_FILTERS = ["ACTIVE", "PENDING", "DELIVERED", "CANCELLED", "ALL"] as const;
 const DATE_FILTERS = ["ALL", "TODAY", "TOMORROW", "CUSTOM"] as const;
 
 const statusConfig: Record<
@@ -1302,7 +1302,7 @@ export default function AdminOrdersScreen() {
     new Set()
   );
 
-  const [filter, setFilter] = useState<"ALL" | "PENDING" | "DELIVERED">("ALL");
+  const [filter, setFilter] = useState<(typeof ORDER_FILTERS)[number]>("ACTIVE");
   const [dateFilter, setDateFilter] =
     useState<(typeof DATE_FILTERS)[number]>("ALL");
   const [productFilter, setProductFilter] = useState("ALL");
@@ -1322,7 +1322,7 @@ export default function AdminOrdersScreen() {
   const [subsLoading, setSubsLoading] = useState(false);
   const [subsRefreshing, setSubsRefreshing] = useState(false);
   const [subFilter, setSubFilter] = useState<"ALL" | "ACTIVE" | "INACTIVE">(
-    "ALL"
+    "ACTIVE"
   );
   const [expandedSubIds, setExpandedSubIds] = useState<Set<string>>(new Set());
   const [selectedSubIds, setSelectedSubIds] = useState<Set<string>>(new Set());
@@ -1627,11 +1627,20 @@ export default function AdminOrdersScreen() {
     });
     return allOrders.filter((order) => {
       const status = order.status?.toLowerCase();
+      const isCancelled =
+        status === "cancelled" ||
+        status === "canceled" ||
+        status === "rejected" ||
+        status === "skipped";
       const statusMatch =
         filter === "ALL" ||
-        (filter === "DELIVERED"
-          ? status === "delivered"
-          : status !== "delivered" && status !== "cancelled");
+        (filter === "ACTIVE"
+          ? !isCancelled
+          : filter === "DELIVERED"
+            ? status === "delivered"
+            : filter === "CANCELLED"
+              ? isCancelled
+              : status !== "delivered" && !isCancelled);
       const customerMatch =
         selectedCustomer === "ALL" ||
         order.customer_name === selectedCustomer ||
@@ -1857,14 +1866,14 @@ export default function AdminOrdersScreen() {
   };
 
   const activeFilterCount = [
-    activeTab === "orders" ? filter !== "ALL" : subFilter !== "ALL",
+    activeTab === "orders" ? filter !== "ACTIVE" : subFilter !== "ACTIVE",
     dateFilter !== "ALL",
     selectedCustomer !== "ALL",
   ].filter(Boolean).length;
 
   const resetFilters = () => {
-    setFilter("ALL");
-    setSubFilter("ALL");
+    setFilter("ACTIVE");
+    setSubFilter("ACTIVE");
     setDateFilter("ALL");
     setProductFilter("ALL");
     setSelectedCustomer("ALL");
@@ -2685,7 +2694,7 @@ export default function AdminOrdersScreen() {
             <View style={styles.filterRowSheet}>
               {(activeTab === "orders"
                 ? ORDER_FILTERS
-                : (["ALL", "ACTIVE", "INACTIVE"] as const)
+                : (["ACTIVE", "INACTIVE", "ALL"] as const)
               ).map((f) => {
                 const active =
                   activeTab === "orders" ? filter === f : subFilter === f;

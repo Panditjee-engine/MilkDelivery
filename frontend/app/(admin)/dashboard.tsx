@@ -1209,6 +1209,11 @@ export default function AdminDashboard() {
   const [pendingRechargeRequests, setPendingRechargeRequests] = useState<any[]>(
     [],
   );
+  const [notificationSummary, setNotificationSummary] = useState<{
+    unread: number;
+    read: number;
+    total: number;
+  }>({ unread: 0, read: 0, total: 0 });
   const [modalType, setModalType] = useState<ModalType>(null);
   const [deliveredProductsExpanded, setDeliveredProductsExpanded] =
     useState(true);
@@ -1228,6 +1233,7 @@ export default function AdminDashboard() {
         ordersData,
         subscriptionsData,
         rechargeRequestsData,
+        notificationSummaryData,
       ] =
         await Promise.allSettled([
           api.getAdminDashboard(),
@@ -1236,6 +1242,7 @@ export default function AdminDashboard() {
           api.getAllOrders(),
           api.getAdminSubscriptionsAll().catch(() => []),
           api.getAdminRechargeRequests("pending").catch(() => []),
+          api.getAdminNotificationSummary().catch(() => null),
         ]);
       if (dashboardData.status === "fulfilled") setStats(dashboardData.value);
       if (productsData.status === "fulfilled" && Array.isArray(productsData.value)) {
@@ -1258,6 +1265,16 @@ export default function AdminDashboard() {
         Array.isArray(rechargeRequestsData.value)
       ) {
         setPendingRechargeRequests(rechargeRequestsData.value);
+      }
+      if (
+        notificationSummaryData.status === "fulfilled" &&
+        notificationSummaryData.value
+      ) {
+        setNotificationSummary({
+          unread: Number(notificationSummaryData.value.unread || 0),
+          read: Number(notificationSummaryData.value.read || 0),
+          total: Number(notificationSummaryData.value.total || 0),
+        });
       }
     } catch (error) {
       console.error("Error fetching dashboard:", error);
@@ -1457,9 +1474,25 @@ useEffect(() => {
             <Text style={styles.userName}>{user?.name}</Text>
             <Text style={styles.date}>{today}</Text>
           </View>
-          <View style={styles.adminBadge}>
-            <Ionicons name="shield-checkmark" size={22} color={C.deep} />
-          </View>
+          <TouchableOpacity
+            style={styles.notificationBell}
+            activeOpacity={0.78}
+            onPress={() => router.push("/(admin)/notification" as any)}
+          >
+            <Ionicons name="notifications" size={22} color={C.deep} />
+            {notificationSummary.unread > 0 ? (
+              <View style={styles.notificationUnreadBadge}>
+                <Text style={styles.notificationBadgeText}>
+                  {notificationSummary.unread > 99 ? "99+" : notificationSummary.unread}
+                </Text>
+              </View>
+            ) : null}
+            <View style={styles.notificationReadPill}>
+              <Text style={styles.notificationReadText}>
+                R {notificationSummary.read}
+              </Text>
+            </View>
+          </TouchableOpacity>
         </View>
 
 
@@ -2288,6 +2321,54 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 4,
+  },
+  notificationBell: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: C.light,
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: C.primary,
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+    position: "relative",
+  },
+  notificationUnreadBadge: {
+    position: "absolute",
+    top: -6,
+    right: -6,
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    paddingHorizontal: 5,
+    backgroundColor: "#EF4444",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: "#fff",
+  },
+  notificationBadgeText: {
+    fontSize: 9,
+    fontWeight: "900",
+    color: "#fff",
+  },
+  notificationReadPill: {
+    position: "absolute",
+    bottom: -7,
+    alignSelf: "center",
+    borderRadius: 999,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#FFE1CC",
+  },
+  notificationReadText: {
+    fontSize: 8,
+    fontWeight: "900",
+    color: C.deep,
   },
 
   revenueCard: {

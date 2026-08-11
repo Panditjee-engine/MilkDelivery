@@ -105,6 +105,34 @@ export interface InsuranceNotificationSettings {
   updated_at?: string;
 }
 
+export interface AdminNotificationItem {
+  id: string;
+  admin_id?: string;
+  event?: string;
+  category: "order" | "subscription" | "wallet" | "vacation" | "general" | string;
+  title: string;
+  body: string;
+  data?: Record<string, any>;
+  status?: string;
+  is_read: boolean;
+  read_at?: string | null;
+  sent_at?: string;
+}
+
+export interface AdminNotificationInbox {
+  total: number;
+  unread: number;
+  read: number;
+  data: AdminNotificationItem[];
+}
+
+export interface AdminNotificationSummary {
+  total: number;
+  unread: number;
+  read: number;
+  latest?: AdminNotificationItem | null;
+}
+
 export type MedicineCategory =
   | "Antibiotic"
   | "Vaccine"
@@ -3424,6 +3452,37 @@ class ApiService {
     if (search) params.append("search", search);
     const query = params.toString() ? `?${params.toString()}` : "";
     return this.request<FarmSale[]>(`/farm-sales${query}`);
+  }
+
+  async getAdminNotifications(category: string = "all", limit: number = 100) {
+    const params = new URLSearchParams();
+    params.append("limit", String(limit));
+    if (category && category !== "all") params.append("category", category);
+    return this.request<AdminNotificationInbox>(
+      `/notifications/admin/inbox?${params.toString()}`,
+      { timeoutMs: 30_000 },
+    );
+  }
+
+  async getAdminNotificationSummary() {
+    return this.request<AdminNotificationSummary>("/notifications/admin/summary", {
+      timeoutMs: 20_000,
+      silentErrorLog: true,
+    });
+  }
+
+  async markAdminNotificationRead(notificationId: string) {
+    return this.request<{ message: string; id: string }>(
+      `/notifications/admin/${notificationId}/read`,
+      { method: "PATCH" },
+    );
+  }
+
+  async markAllAdminNotificationsRead() {
+    return this.request<{ message: string; updated: number }>(
+      "/notifications/admin/read-all",
+      { method: "PATCH" },
+    );
   }
 
   // inside your api service object/class (src/services/api.ts)
