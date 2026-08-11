@@ -2554,66 +2554,9 @@ export default function AdminOrdersScreen() {
       )}
 
       {/* SUBSCRIPTIONS TAB */}
+      {/* SUBSCRIPTIONS TAB */}
       {activeTab === "subscriptions" && (
         <>
-          <View style={styles.subscriptionSummaryWrap}>
-            <View style={styles.subscriptionSummaryGrid}>
-              <View style={styles.subscriptionSummaryCard}>
-                <Text style={styles.subscriptionSummaryValue}>
-                  {subscriptionSummary.total}
-                </Text>
-                <Text style={styles.subscriptionSummaryLabel}>Total Subs</Text>
-              </View>
-              <View style={styles.subscriptionSummaryCard}>
-                <Text style={styles.subscriptionSummaryValue}>
-                  {subscriptionSummary.milkSubscriptions}
-                </Text>
-                <Text style={styles.subscriptionSummaryLabel}>Milk Subs</Text>
-              </View>
-              <View style={styles.subscriptionSummaryCard}>
-                <Text style={styles.subscriptionSummaryValue}>
-                  {subscriptionSummary.gheeSubscriptions}
-                </Text>
-                <Text style={styles.subscriptionSummaryLabel}>Ghee Subs</Text>
-              </View>
-              <View style={styles.subscriptionSummaryCard}>
-                <Text style={styles.subscriptionSummaryValue}>
-                  {subscriptionSummary.fullCreamMilk?.subscriptions || 0}
-                </Text>
-                <Text style={styles.subscriptionSummaryLabel}>
-                  Full Cream Milk
-                </Text>
-              </View>
-            </View>
-
-            {subscriptionSummary.productsSummary.length > 0 ? (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.subscriptionProductChips}
-              >
-                {subscriptionSummary.productsSummary.slice(0, 6).map((item) => (
-                  <View key={item.name} style={styles.subscriptionProductChip}>
-                    <Text
-                      style={styles.subscriptionProductName}
-                      numberOfLines={1}
-                    >
-                      {item.name}
-                    </Text>
-                    <Text style={styles.subscriptionProductMeta}>
-                      {item.subscriptions} subs ·{" "}
-                      {formatBaseMetric(
-                        item.quantity *
-                        (parseUnitDescriptor(item.unit)?.packSize || 1),
-                        parseUnitDescriptor(item.unit)?.kind,
-                      )}
-                    </Text>
-                  </View>
-                ))}
-              </ScrollView>
-            ) : null}
-          </View>
-
           {subsLoading && !subsRefreshing ? (
             <View style={styles.loadingWrapper}>
               <ActivityIndicator size="large" color="#FF9675" />
@@ -2631,6 +2574,65 @@ export default function AdminOrdersScreen() {
                   onRefresh={onSubsRefresh}
                   tintColor="#FF9675"
                 />
+              }
+              ListHeaderComponent={
+                <View style={styles.subscriptionSummaryWrap}>
+                  <View style={styles.subscriptionSummaryGrid}>
+                    <View style={styles.subscriptionSummaryCard}>
+                      <Text style={styles.subscriptionSummaryValue}>
+                        {subscriptionSummary.total}
+                      </Text>
+                      <Text style={styles.subscriptionSummaryLabel}>Total Subs</Text>
+                    </View>
+                    <View style={styles.subscriptionSummaryCard}>
+                      <Text style={styles.subscriptionSummaryValue}>
+                        {subscriptionSummary.milkSubscriptions}
+                      </Text>
+                      <Text style={styles.subscriptionSummaryLabel}>Milk Subs</Text>
+                    </View>
+                    <View style={styles.subscriptionSummaryCard}>
+                      <Text style={styles.subscriptionSummaryValue}>
+                        {subscriptionSummary.gheeSubscriptions}
+                      </Text>
+                      <Text style={styles.subscriptionSummaryLabel}>Ghee Subs</Text>
+                    </View>
+                    <View style={styles.subscriptionSummaryCard}>
+                      <Text style={styles.subscriptionSummaryValue}>
+                        {subscriptionSummary.fullCreamMilk?.subscriptions || 0}
+                      </Text>
+                      <Text style={styles.subscriptionSummaryLabel}>
+                        Full Cream Milk
+                      </Text>
+                    </View>
+                  </View>
+
+                  {subscriptionSummary.productsSummary.length > 0 ? (
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.subscriptionProductChips}
+                    >
+                      {subscriptionSummary.productsSummary.slice(0, 6).map((item) => (
+                        <View key={item.name} style={styles.subscriptionProductChip}>
+                          <Text
+                            style={styles.subscriptionProductName}
+                            numberOfLines={1}
+                          >
+                            {item.name}
+                          </Text>
+                          <Text style={styles.subscriptionProductMeta}>
+                            {item.subscriptions} subs ·{" "}
+                            {formatBaseMetric(
+                              item.quantity *
+                              (parseUnitDescriptor(item.unit)?.packSize || 1),
+                              parseUnitDescriptor(item.unit)?.kind,
+                            )}
+                          </Text>
+                        </View>
+                      ))}
+                    </ScrollView>
+                  ) : null}
+                </View>
               }
               ListEmptyComponent={
                 <View style={styles.emptyState}>
