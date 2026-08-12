@@ -311,7 +311,10 @@ function patternLabel(p: string) {
 }
 function formatDate(s: string): string {
   if (!s) return "";
-  const d = new Date(s + "T00:00:00");
+  // Normalize: take just the date portion if a full ISO timestamp was passed
+  const datePart = String(s).split("T")[0];
+  const d = new Date(datePart + "T00:00:00");
+  if (isNaN(d.getTime())) return "";
   return `${d.getDate()} ${MONTH_NAMES[d.getMonth()].slice(0, 3)} ${d.getFullYear()}`;
 }
 function dateToString(d: Date): string {
