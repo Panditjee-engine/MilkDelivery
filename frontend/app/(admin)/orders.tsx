@@ -1018,10 +1018,10 @@ function SubscriptionRow({
   const startKey = getOrderDateKey(item.start_date);
   const notStartedYet = !!startKey && todayKey < startKey;
 
-  const canDeliver =
+ const canDeliver =
     item.is_active !== false &&
     !item.on_vacation_today &&
-    !notStartedYet &&            // ← NEW
+    !notStartedYet &&
     !["delivered", "cancelled", "skipped"].includes(
       String(item.delivery_status || item.status || "").toLowerCase(),
     );
