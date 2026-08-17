@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useIsFocused } from "@react-navigation/native";
 import { api, AdminNotificationItem } from "../../src/services/api";
 
@@ -67,6 +67,7 @@ const formatTime = (value?: string) => {
 
 export default function AdminNotificationScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ from?: string; tab?: string }>();
   const isFocused = useIsFocused();
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [items, setItems] = useState<AdminNotificationItem[]>([]);
@@ -127,6 +128,25 @@ export default function AdminNotificationScreen() {
 
   const total = useMemo(() => unread + read, [read, unread]);
 
+  const goBackToSource = () => {
+    if (params.from === "settings") {
+      router.replace("/(admin)/settings" as any);
+      return;
+    }
+    if (params.from === "orders") {
+      router.replace({
+        pathname: "/(admin)/orders",
+        params: params.tab === "subscriptions" ? { tab: "subscriptions" } : { tab: "orders" },
+      } as any);
+      return;
+    }
+    if (params.from === "wallet") {
+      router.replace("/(admin)/wallet" as any);
+      return;
+    }
+    router.replace("/(admin)/dashboard" as any);
+  };
+
   const renderItem = ({ item }: { item: AdminNotificationItem }) => {
     const cfg = categoryStyle[item.category] || categoryStyle.general;
     return (
@@ -173,7 +193,7 @@ export default function AdminNotificationScreen() {
   return (
     <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backBtn} onPress={goBackToSource}>
           <Ionicons name="chevron-back" size={22} color={C.text} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>

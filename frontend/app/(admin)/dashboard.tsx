@@ -1477,7 +1477,12 @@ useEffect(() => {
           <TouchableOpacity
             style={styles.notificationBell}
             activeOpacity={0.78}
-            onPress={() => router.push("/(admin)/notification" as any)}
+            onPress={() =>
+              router.push({
+                pathname: "/(admin)/notification",
+                params: { from: "dashboard" },
+              } as any)
+            }
           >
             <Ionicons name="notifications" size={22} color={C.deep} />
             {notificationSummary.unread > 0 ? (
