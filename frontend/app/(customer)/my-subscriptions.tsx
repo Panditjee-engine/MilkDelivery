@@ -97,11 +97,25 @@ function getTotalQty(sub: Subscription): number {
   return sub.total_quantity ?? sub.quantity ?? 1;
 }
 
-// ── FIX #1: also check status field 
+// ── Status is now the single source of truth (backend keeps it in sync
+// with end_date expiry and cancellation) — no more end_date math here.
 function isSubscriptionActive(sub: Subscription): boolean {
-  if (sub.status === "cancelled") return false;
-  if (!sub.end_date) return true;
-  return new Date(sub.end_date + "T23:59:59") >= new Date();
+  return String(sub.status || "").toLowerCase() === "active";
+}
+
+// ── Distinct badge for the two "not active" reasons: cancelled by the
+// customer/admin vs expired automatically once end_date passed.
+function getStatusBadge(
+  sub: Subscription,
+): { label: string; bg: string; color: string } | null {
+  const status = String(sub.status || "").toLowerCase();
+  if (status === "cancelled") {
+    return { label: "Cancelled", bg: "#FEE2E2", color: "#ef4444" };
+  }
+  if (status === "inactive") {
+    return { label: "Expired", bg: "#F3F4F6", color: "#6B7280" };
+  }
+  return null;
 }
 
 const PATTERN_LABELS: Record<string, string> = {
@@ -274,17 +288,17 @@ export default function MySubscriptionsScreen() {
   const hasLoadedOnce = useRef(false);
   const fetchInFlight = useRef(false);
 
-  // ── FIX #2: filter out cancelled and buy_once 
+  // ── Use the history endpoint so cancelled/expired subs still come back
+  // for the "Past" tab — api.getSubscriptions() now only returns
+  // status === "active" ones on the backend.
   const fetchSubscriptions = useCallback(async (showInitialLoader = false) => {
     if (fetchInFlight.current) return;
     fetchInFlight.current = true;
     if (showInitialLoader && !hasLoadedOnce.current) setLoading(true);
     try {
-      const data = await api.getSubscriptions();
+      const data = await api.getSubscriptionHistory();
       const filtered = (data || []).filter(
-        (sub: Subscription) =>
-          sub.pattern !== "buy_once" &&
-          sub.status !== "cancelled"
+        (sub: Subscription) => sub.pattern !== "buy_once",
       );
       setSubscriptions(filtered);
     } catch {
@@ -323,7 +337,6 @@ export default function MySubscriptionsScreen() {
     setShowEditModal(true);
   };
 
-  // ── FIX #3: send correct multi-item shape to backend 
   const saveEdit = async () => {
     if (!editingSub) return;
     setActionLoading(true);
@@ -376,7 +389,6 @@ export default function MySubscriptionsScreen() {
             try {
               await api.cancelSubscription(sub.id);
               Alert.alert("Cancelled", "Subscription cancelled.");
-              // ── FIX #4: refetch instead of optimistic remove 
               await fetchSubscriptions();
             } catch (e: any) {
               Alert.alert("Error", e.message || "Failed to cancel");
@@ -535,11 +547,13 @@ function SubscriptionCard({
   const pattern = PATTERN_LABELS[sub.pattern] ?? sub.pattern;
   const icon = PATTERN_ICONS[sub.pattern] ?? "repeat-outline";
 
-  // ── FIX #5: show cancelled badge 
-  const isCancelled = sub.status === "cancelled";
+  // Distinct badge: "Cancelled" (customer/admin action) vs "Expired"
+  // (end_date lapsed automatically) — falls back to null when active.
+  const statusBadge = getStatusBadge(sub);
+  const isDimmed = !!statusBadge;
 
   return (
-    <View style={[C.card, isCancelled && { opacity: 0.6 }]}>
+    <View style={[C.card, isDimmed && { opacity: 0.6 }]}>
       <TouchableOpacity style={C.row} onPress={toggle} activeOpacity={0.75}>
         <View style={C.iconBox}>
           <Ionicons name="cube" size={26} color={Colors.primary} />
@@ -548,9 +562,15 @@ function SubscriptionCard({
         <View style={C.info}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
             <Text style={C.name} numberOfLines={1}>{name}</Text>
-            {isCancelled && (
-              <View style={C.cancelledBadge}>
-                <Text style={C.cancelledBadgeTxt}>Cancelled</Text>
+            {statusBadge && (
+              <View
+                style={[C.statusBadge, { backgroundColor: statusBadge.bg }]}
+              >
+                <Text
+                  style={[C.statusBadgeTxt, { color: statusBadge.color }]}
+                >
+                  {statusBadge.label}
+                </Text>
               </View>
             )}
           </View>
@@ -619,7 +639,7 @@ function SubscriptionCard({
             )}
           </View>
 
-          {isActive && !isCancelled && (
+          {isActive && !isDimmed && (
             <View style={C.actions}>
               <TouchableOpacity style={C.editBtn} onPress={() => onEdit(sub)}>
                 <Ionicons name="create-outline" size={15} color={Colors.primary} />
@@ -698,13 +718,12 @@ const C = StyleSheet.create({
   },
   info: { flex: 1, gap: 4 },
   name: { fontSize: 14, fontWeight: "700", color: "#111" },
-  cancelledBadge: {
-    backgroundColor: "#FEE2E2",
+  statusBadge: {
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 5,
   },
-  cancelledBadgeTxt: { fontSize: 9, fontWeight: "700", color: "#ef4444" },
+  statusBadgeTxt: { fontSize: 9, fontWeight: "700" },
   patternPill: {
     flexDirection: "row",
     alignItems: "center",

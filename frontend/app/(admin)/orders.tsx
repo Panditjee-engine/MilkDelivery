@@ -36,7 +36,7 @@ if (
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Types
 
 type OrderStatus =
   | "UNASSIGNED"
@@ -105,17 +105,45 @@ interface Subscription {
   customer_phone?: string;
   customer_address?: any;
   created_at?: string;
-  on_vacation_today?: boolean;        // ← NEW
+  on_vacation_today?: boolean; // ← NEW
   vacation_start_date?: string | null; // ← NEW
   vacation_end_date?: string | null;
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Helpers
+//for get all subscription order till end dat eto check mark delivered order
+const getSubscriptionDeliveryDates = (
+  sub: Subscription,
+  maxDates = 60,
+): string[] => {
+  const startKey = getOrderDateKey(sub.start_date);
+  if (!startKey) return [];
+  const endKey =
+    getOrderDateKey(sub.end_date) ||
+    getLocalDateKey(
+      (() => {
+        const d = dateFromKey(startKey);
+        d.setDate(d.getDate() + 89); // cap ~90 days ahead if no end_date
+        return d;
+      })(),
+    );
+
+  const dates: string[] = [];
+  let cursor = dateFromKey(startKey);
+  const end = dateFromKey(endKey);
+  while (cursor <= end && dates.length < maxDates) {
+    const key = getLocalDateKey(cursor);
+    if (shouldSubscriptionDeliverOn(sub, key)) dates.push(key);
+    cursor = new Date(cursor);
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return dates;
+};
 
 /** Resolve product name: stored name → cache → product_id */
 const resolveItemName = (
   item: SubscriptionItem,
-  productNames: Record<string, string>
+  productNames: Record<string, string>,
 ): string =>
   item.product_name ||
   productNames[item.product_id] ||
@@ -141,7 +169,9 @@ const formatQuantity = (value: number) =>
     : value.toFixed(2).replace(/\.?0+$/, "");
 
 const parseUnitDescriptor = (unit?: string) => {
-  const text = String(unit || "").trim().toLowerCase();
+  const text = String(unit || "")
+    .trim()
+    .toLowerCase();
   const match = text.match(
     /(\d+(?:\.\d+)?)?\s*(ml|milliliter|millilitre|l|ltr|liter|litre|g|gm|gram|kg|kilogram|pc|pcs|piece|pieces|unit|units)/,
   );
@@ -154,7 +184,8 @@ const parseUnitDescriptor = (unit?: string) => {
   if (["l", "ltr", "liter", "litre"].includes(token)) {
     return { kind: "volume", packSize: size * 1000 };
   }
-  if (["g", "gm", "gram"].includes(token)) return { kind: "weight", packSize: size };
+  if (["g", "gm", "gram"].includes(token))
+    return { kind: "weight", packSize: size };
   if (["kg", "kilogram"].includes(token)) {
     return { kind: "weight", packSize: size * 1000 };
   }
@@ -196,7 +227,10 @@ const formatOrderItemQuantity = (
     : totalText;
 };
 
-const getSubscriptionItemProduct = (item: SubscriptionItem, products: any[]) => {
+const getSubscriptionItemProduct = (
+  item: SubscriptionItem,
+  products: any[],
+) => {
   const byId = products.find(
     (p) =>
       String(p.id || "") === String(item.product_id || "") ||
@@ -250,8 +284,7 @@ const getSubscriptionItemUnit = (
   );
 };
 
-const isGheeText = (text: string) =>
-  /\b(ghee|ghi)\b/.test(text.toLowerCase());
+const isGheeText = (text: string) => /\b(ghee|ghi)\b/.test(text.toLowerCase());
 
 const isMilkSubscriptionItem = (
   item: SubscriptionItem,
@@ -291,7 +324,7 @@ const normalizeName = (value: string) => value.trim().toLowerCase();
 const itemMatchesProduct = (
   item: Order["items"][number],
   product: string,
-  productMeta?: any
+  productMeta?: any,
 ) => {
   if (product === "ALL") return true;
   const productId = getProductId(productMeta);
@@ -339,7 +372,8 @@ const buildAddressText = (address: any) => {
 
 const pickUserAddress = (user: any) => {
   if (!user) return null;
-  if (user.address || user.delivery_address) return user.address || user.delivery_address;
+  if (user.address || user.delivery_address)
+    return user.address || user.delivery_address;
   const addresses = Array.isArray(user.addresses) ? user.addresses : [];
   return (
     addresses.find((address) => address?.is_default || address?.default) ||
@@ -426,6 +460,10 @@ const shouldSubscriptionDeliverOn = (sub: Subscription, dateKey: string) => {
   return false;
 };
 
+//new helper for cehck status not is active true false
+const isSubscriptionActive = (sub: Subscription) =>
+  String(sub.status || "").toLowerCase() === "active";
+
 const subscriptionOverlapsRange = (
   sub: Subscription,
   startKey: string,
@@ -437,7 +475,7 @@ const subscriptionOverlapsRange = (
   return (!startKey || subEnd >= startKey) && (!endKey || subStart <= endKey);
 };
 
-// ─── Product Name Cache ───────────────────────────────────────────────────────
+// ─── Product Name Cache
 
 const productNameCache: Record<string, string> = {};
 
@@ -455,11 +493,11 @@ async function resolveProductName(productId: string): Promise<string> {
 }
 
 async function resolveProductNames(
-  productIds: string[]
+  productIds: string[],
 ): Promise<Record<string, string>> {
   // Only fetch for IDs that don't have a stored product_name
   const unresolved = [...new Set(productIds)].filter(
-    (id) => !productNameCache[id]
+    (id) => !productNameCache[id],
   );
   await Promise.all(unresolved.map(resolveProductName));
   const result: Record<string, string> = {};
@@ -469,9 +507,15 @@ async function resolveProductNames(
   return result;
 }
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// ─── Constants
 
-const ORDER_FILTERS = ["ACTIVE", "PENDING", "DELIVERED", "CANCELLED", "ALL"] as const;
+const ORDER_FILTERS = [
+  "ACTIVE",
+  "PENDING",
+  "DELIVERED",
+  "CANCELLED",
+  "ALL",
+] as const;
 const DATE_FILTERS = ["ALL", "TODAY", "TOMORROW", "CUSTOM"] as const;
 
 const statusConfig: Record<
@@ -544,7 +588,7 @@ const PATTERN_CONFIG: Record<
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const DAY_ABBR = ["M", "T", "W", "T", "F", "S", "S"];
 
-// ─── Cancel Modal ─────────────────────────────────────────────────────────────
+// ─── Cancel Modal
 
 interface CancelModalProps {
   visible: boolean;
@@ -591,7 +635,7 @@ function CancelModal({
     ?.map((i) =>
       i.quantity
         ? `${getOrderItemName(i)} ×${i.quantity}`
-        : getOrderItemName(i)
+        : getOrderItemName(i),
     )
     .join(", ");
 
@@ -670,7 +714,7 @@ function CancelModal({
   );
 }
 
-// ─── Subscription Detail Modal ────────────────────────────────────────────────
+// ─── Subscription Detail Modal
 
 interface SubModalProps {
   visible: boolean;
@@ -689,6 +733,23 @@ function SubscriptionDetailModal({
 }: SubModalProps) {
   const slideAnim = useRef(new Animated.Value(400)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
+
+  type OrderRecord = { delivery_date: string; status: string };
+  const [orderRecords, setOrderRecords] = useState<OrderRecord[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+
+  useEffect(() => {
+    if (visible && subscription?.id) {
+      setOrdersLoading(true);
+      api
+        .getAdminSubscriptionOrders(subscription.id)
+        .then(setOrderRecords)
+        .catch(() => setOrderRecords([]))
+        .finally(() => setOrdersLoading(false));
+    } else {
+      setOrderRecords([]);
+    }
+  }, [visible, subscription?.id]);
 
   useEffect(() => {
     if (visible) {
@@ -711,6 +772,20 @@ function SubscriptionDetailModal({
     }
   }, [visible]);
 
+  const orderStatusByDate = useMemo(() => {
+    const map: Record<string, string> = {};
+    orderRecords.forEach((o) => {
+      map[o.delivery_date] = o.status;
+    });
+    return map;
+  }, [orderRecords]);
+
+  const scheduleDates = useMemo(
+    () => (subscription ? getSubscriptionDeliveryDates(subscription) : []),
+    [subscription],
+  );
+
+  // ── ALL hooks are declared above this line. Nothing below may be a hook. ──
   if (!subscription) return null;
 
   const patternLabel: Record<string, string> = {
@@ -788,7 +863,8 @@ function SubscriptionDetailModal({
             renderItem={() => (
               <View style={sm.body}>
                 {/* Customer */}
-                {(subscription.customer_name || subscription.customer_phone) && (
+                {(subscription.customer_name ||
+                  subscription.customer_phone) && (
                   <View style={sm.section}>
                     <Text style={sm.sectionLabel}>CUSTOMER</Text>
                     <View style={sm.infoRow}>
@@ -894,7 +970,7 @@ function SubscriptionDetailModal({
                     )}
                 </View>
 
-                {/* Items — FIXED: uses resolveItemName */}
+                {/* Items */}
                 <View style={sm.section}>
                   <Text style={sm.sectionLabel}>ITEMS</Text>
                   <View style={sm.itemsCard}>
@@ -940,12 +1016,92 @@ function SubscriptionDetailModal({
                   </View>
                 </View>
 
+                {/* Delivery Calendar — one row per scheduled delivery date */}
+                <View style={sm.section}>
+                  <Text style={sm.sectionLabel}>
+                    DELIVERY CALENDAR{" "}
+                    {ordersLoading
+                      ? "· loading…"
+                      : `· ${scheduleDates.length} dates`}
+                  </Text>
+                  <View style={sm.itemsCard}>
+                    {scheduleDates.length === 0 ? (
+                      <View style={{ padding: 14 }}>
+                        <Text style={{ fontSize: 12, color: "#8B6854" }}>
+                          No scheduled dates found.
+                        </Text>
+                      </View>
+                    ) : (
+                      scheduleDates.map((dateKey, i) => {
+                        const status = (
+                          orderStatusByDate[dateKey] || ""
+                        ).toLowerCase();
+                        const isDelivered = status === "delivered";
+                        const isCancelled =
+                          status === "cancelled" || status === "skipped";
+                        const today = getLocalDateKey();
+                        const isFuture = dateKey > today;
+
+                        const icon = isDelivered
+                          ? "checkmark-circle"
+                          : isCancelled
+                            ? "close-circle"
+                            : isFuture
+                              ? "ellipse-outline"
+                              : "time-outline";
+                        const iconColor = isDelivered
+                          ? "#16A34A"
+                          : isCancelled
+                            ? "#FF5C5C"
+                            : isFuture
+                              ? "#C9A882"
+                              : "#FFBF55";
+                        const label = isDelivered
+                          ? "Delivered"
+                          : isCancelled
+                            ? status === "skipped"
+                              ? "Skipped"
+                              : "Cancelled"
+                            : isFuture
+                              ? "Upcoming"
+                              : "Pending";
+
+                        return (
+                          <View
+                            key={dateKey}
+                            style={[sm.itemRow, i > 0 && sm.itemRowBorder]}
+                          >
+                            <Ionicons
+                              name={icon as any}
+                              size={16}
+                              color={iconColor}
+                              style={{ marginRight: 10 }}
+                            />
+                            <View style={{ flex: 1 }}>
+                              <Text style={sm.itemName}>{dateKey}</Text>
+                            </View>
+                            <Text
+                              style={{
+                                fontSize: 11,
+                                fontWeight: "700",
+                                color: iconColor,
+                              }}
+                            >
+                              {label}
+                            </Text>
+                          </View>
+                        );
+                      })
+                    )}
+                  </View>
+                </View>
+
                 {/* Status */}
                 <View
                   style={[
                     sm.statusBanner,
                     {
-                      backgroundColor: subscription.is_active
+                      backgroundColor: isSubscriptionActive(subscription)
                         ? "#F0FFF4"
                         : "#FFF0F0",
                     },
@@ -958,15 +1114,21 @@ function SubscriptionDetailModal({
                         : "close-circle"
                     }
                     size={16}
-                    color={subscription.is_active ? "#22C55E" : "#FF5C5C"}
+                    color={
+                      isSubscriptionActive(subscription) ? "#22C55E" : "#FF5C5C"
+                    }
                   />
                   <Text
                     style={[
                       sm.statusText,
-                      { color: subscription.is_active ? "#16A34A" : "#FF5C5C" },
+                      {
+                        color: isSubscriptionActive(subscription)
+                          ? "#16A34A"
+                          : "#FF5C5C",
+                      },
                     ]}
                   >
-                    {subscription.is_active
+                    {isSubscriptionActive(subscription)
                       ? "Active Subscription"
                       : "Inactive"}
                   </Text>
@@ -980,7 +1142,7 @@ function SubscriptionDetailModal({
   );
 }
 
-// ─── Subscription Row ─────────────────────────────────────────────────────────
+// ─── Subscription Row
 
 interface SubRowProps {
   item: Subscription;
@@ -1007,10 +1169,14 @@ function SubscriptionRow({
   products,
   bulkLoading,
 }: SubRowProps) {
- const pc = PATTERN_CONFIG[item.pattern] ?? PATTERN_CONFIG.daily;
+  const pc = PATTERN_CONFIG[item.pattern] ?? PATTERN_CONFIG.daily;
   const onVacation = !!item.on_vacation_today;
   const itemCount = item.items?.length ?? 0;
-  const productTitle = subscriptionProductTitle(item.items || [], productNames, products);
+  const productTitle = subscriptionProductTitle(
+    item.items || [],
+    productNames,
+    products,
+  );
   const address = buildAddressText(item.customer_address);
 
   // ← NEW: block "Mark Delivered" before the subscription's start date
@@ -1018,8 +1184,8 @@ function SubscriptionRow({
   const startKey = getOrderDateKey(item.start_date);
   const notStartedYet = !!startKey && todayKey < startKey;
 
- const canDeliver =
-    item.is_active !== false &&
+  const canDeliver =
+    isSubscriptionActive(item) &&
     !item.on_vacation_today &&
     !notStartedYet &&
     !["delivered", "cancelled", "skipped"].includes(
@@ -1045,7 +1211,7 @@ function SubscriptionRow({
     .concat(item.items?.length > 2 ? `  +${item.items.length - 2} more` : "");
 
   return (
-    <View style={[ss.card, !item.is_active && ss.cardInactive]}>
+    <View style={[ss.card, !isSubscriptionActive(item) && ss.cardInactive]}>
       <TouchableOpacity
         activeOpacity={0.75}
         onPress={onToggle}
@@ -1084,7 +1250,7 @@ function SubscriptionRow({
                   ss.subStatusPill,
                   onVacation
                     ? ss.subStatusVacation
-                    : item.is_active
+                    : isSubscriptionActive(item)
                       ? ss.subStatusActive
                       : ss.subStatusInactive,
                 ]}
@@ -1093,14 +1259,22 @@ function SubscriptionRow({
                   style={[
                     ss.subStatusText,
                     {
-                      color: onVacation ? "#B45309" : item.is_active ? "#16A34A" : "#FF5C5C",
+                      color: onVacation
+                        ? "#B45309"
+                        : isSubscriptionActive(item)
+                          ? "#16A34A"
+                          : "#FF5C5C",
                     },
                   ]}
                 >
-                  {onVacation ? "On Vacation" : item.is_active ? "Active" : "Inactive"}
+                  {onVacation
+                    ? "On Vacation"
+                    : isSubscriptionActive(item)
+                      ? "Active"
+                      : "Inactive"}
                 </Text>
               </View>
-             {onVacation && item.vacation_start_date && (
+              {onVacation && item.vacation_start_date && (
                 <Text style={ss.vacationDates}>
                   {item.vacation_start_date} → {item.vacation_end_date}
                 </Text>
@@ -1154,7 +1328,12 @@ function SubscriptionRow({
           )}
 
           <View style={ss.divider} />
-          <View style={[ss.patternPill, { alignSelf: "flex-start", backgroundColor: pc.bg }]}>
+          <View
+            style={[
+              ss.patternPill,
+              { alignSelf: "flex-start", backgroundColor: pc.bg },
+            ]}
+          >
             <Ionicons name={pc.icon} size={12} color={pc.color} />
             <Text style={[ss.patternText, { color: pc.color }]}>
               {pc.label}
@@ -1170,7 +1349,11 @@ function SubscriptionRow({
             )}
             {item.end_date && (
               <View style={ss.dateBit}>
-                <Ionicons name="calendar-number-outline" size={11} color="#FFBF55" />
+                <Ionicons
+                  name="calendar-number-outline"
+                  size={11}
+                  color="#FFBF55"
+                />
                 <Text style={ss.dateText}>End {item.end_date}</Text>
               </View>
             )}
@@ -1260,7 +1443,7 @@ function SubscriptionRow({
               <Text style={ss.itemsTotalVal}>₹{item.total_amount ?? 0}</Text>
             </View>
           </View>
-<View style={ss.divider} />
+          <View style={ss.divider} />
           {canDeliver ? (
             <>
               <TouchableOpacity
@@ -1269,7 +1452,11 @@ function SubscriptionRow({
                 activeOpacity={0.8}
                 disabled={bulkLoading}
               >
-                <Ionicons name="checkmark-circle-outline" size={16} color="#16A34A" />
+                <Ionicons
+                  name="checkmark-circle-outline"
+                  size={16}
+                  color="#16A34A"
+                />
                 <Text style={styles.deliveredExpandedText}>Mark Delivered</Text>
               </TouchableOpacity>
               <View style={styles.actionGap} />
@@ -1277,7 +1464,11 @@ function SubscriptionRow({
           ) : isDeliveredToday ? (
             <>
               <View style={styles.deliveredDoneBanner}>
-                <Ionicons name="checkmark-done-circle" size={18} color="#16A34A" />
+                <Ionicons
+                  name="checkmark-done-circle"
+                  size={18}
+                  color="#16A34A"
+                />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.deliveredDoneTitle}>Delivered Today</Text>
                   <Text style={styles.deliveredDoneSub}>
@@ -1312,14 +1503,14 @@ function SubscriptionRow({
   );
 }
 
-// ─── Main Screen ──────────────────────────────────────────────────────────────
+// ─── Main Screen
 
 export default function AdminOrdersScreen() {
   const isFocused = useIsFocused();
   const params = useLocalSearchParams<{ tab?: string }>();
 
   const [activeTab, setActiveTab] = useState<"orders" | "subscriptions">(
-    "orders"
+    "orders",
   );
   const tabAnim = useRef(new Animated.Value(0)).current;
 
@@ -1334,13 +1525,14 @@ export default function AdminOrdersScreen() {
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [ordersRefreshing, setOrdersRefreshing] = useState(false);
   const [expandedOrderIds, setExpandedOrderIds] = useState<Set<string>>(
-    new Set()
+    new Set(),
   );
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(
-    new Set()
+    new Set(),
   );
 
-  const [filter, setFilter] = useState<(typeof ORDER_FILTERS)[number]>("ACTIVE");
+  const [filter, setFilter] =
+    useState<(typeof ORDER_FILTERS)[number]>("ACTIVE");
   const [dateFilter, setDateFilter] =
     useState<(typeof DATE_FILTERS)[number]>("ALL");
   const [productFilter, setProductFilter] = useState("ALL");
@@ -1360,7 +1552,7 @@ export default function AdminOrdersScreen() {
   const [subsLoading, setSubsLoading] = useState(false);
   const [subsRefreshing, setSubsRefreshing] = useState(false);
   const [subFilter, setSubFilter] = useState<"ALL" | "ACTIVE" | "INACTIVE">(
-    "ACTIVE"
+    "ACTIVE",
   );
   const [expandedSubIds, setExpandedSubIds] = useState<Set<string>>(new Set());
   const [selectedSubIds, setSelectedSubIds] = useState<Set<string>>(new Set());
@@ -1442,12 +1634,12 @@ export default function AdminOrdersScreen() {
       } catch (e1: any) {
         console.warn(
           "[AdminOrders] getAdminSubscriptionsAll failed:",
-          e1?.message
+          e1?.message,
         );
         try {
           const all = await api.getSubscriptions();
           data = all.filter(
-            (s: Subscription) => s.admin_id === currentAdmin.id
+            (s: Subscription) => s.admin_id === currentAdmin.id,
           );
         } catch (e2: any) {
           console.warn("[AdminOrders] fallback failed:", e2?.message);
@@ -1462,12 +1654,7 @@ export default function AdminOrdersScreen() {
       const customers = await api.getAllUsers("customer").catch(() => []);
       const customerMap = new Map<string, any>();
       (Array.isArray(customers) ? customers : []).forEach((customer) => {
-        [
-          customer.id,
-          customer._id,
-          customer.phone,
-          customer.name,
-        ]
+        [customer.id, customer._id, customer.phone, customer.name]
           .filter(Boolean)
           .forEach((key) => customerMap.set(String(key), customer));
       });
@@ -1481,11 +1668,11 @@ export default function AdminOrdersScreen() {
         const address = pickUserAddress(customer);
         return address
           ? {
-            ...sub,
-            customer_address: address,
-            customer_name: sub.customer_name || customer?.name,
-            customer_phone: sub.customer_phone || customer?.phone,
-          }
+              ...sub,
+              customer_address: address,
+              customer_name: sub.customer_name || customer?.name,
+              customer_phone: sub.customer_phone || customer?.phone,
+            }
           : sub;
       });
 
@@ -1494,21 +1681,27 @@ export default function AdminOrdersScreen() {
       const withVacation = withAddress.map((sub) => {
         const userVacation = vacations.find((v: any) => {
           const vacUserId = String(v.user_id || v.customer_id || "");
-          if (!vacUserId || vacUserId !== String(sub.user_id || "")) return false;
+          if (!vacUserId || vacUserId !== String(sub.user_id || ""))
+            return false;
           const start = getOrderDateKey(v.start_date);
           const end = getOrderDateKey(v.end_date);
           return start && end && today >= start && today <= end;
         });
         return userVacation
           ? {
-            ...sub,
-            on_vacation_today: true,
-            vacation_start_date: userVacation.start_date,
-            vacation_end_date: userVacation.end_date,
-          }
+              ...sub,
+              on_vacation_today: true,
+              vacation_start_date: userVacation.start_date,
+              vacation_end_date: userVacation.end_date,
+            }
           : { ...sub, on_vacation_today: false };
       });
-      console.log("RAW SUB SAMPLE:", JSON.stringify(withAddress.find(s => s.customer_name) || withAddress[0]));
+      console.log(
+        "RAW SUB SAMPLE:",
+        JSON.stringify(
+          withAddress.find((s) => s.customer_name) || withAddress[0],
+        ),
+      );
 
       setAllSubscriptions(withAddress);
 
@@ -1516,7 +1709,7 @@ export default function AdminOrdersScreen() {
       const needsResolution = withAddress.flatMap((s) =>
         (s.items ?? [])
           .filter((item) => !item.product_name)
-          .map((item) => item.product_id)
+          .map((item) => item.product_id),
       );
 
       if (needsResolution.length > 0) {
@@ -1531,7 +1724,7 @@ export default function AdminOrdersScreen() {
     } catch (e: any) {
       console.error(
         "[AdminOrders] fetchSubscriptions FAILED:",
-        e?.message ?? e
+        e?.message ?? e,
       );
     } finally {
       setSubsLoading(false);
@@ -1614,8 +1807,8 @@ export default function AdminOrdersScreen() {
         prev.map((o) =>
           o.id === cancelTarget.id
             ? { ...o, status: "cancelled" as OrderStatus }
-            : o
-        )
+            : o,
+        ),
       );
       setCancelTarget(null);
     } catch (e) {
@@ -1634,7 +1827,7 @@ export default function AdminOrdersScreen() {
 
   const productTabs = useMemo(() => {
     const fromOrders = allOrders.flatMap((order) =>
-      (order.items || []).map((item) => getOrderItemName(item)).filter(Boolean)
+      (order.items || []).map((item) => getOrderItemName(item)).filter(Boolean),
     );
     return [
       "ALL",
@@ -1647,7 +1840,7 @@ export default function AdminOrdersScreen() {
     const names = source
       .map(
         (item) =>
-          item.customer_name || item.customer_phone || "Unknown Customer"
+          item.customer_name || item.customer_phone || "Unknown Customer",
       )
       .filter(Boolean);
     return ["ALL", ...Array.from(new Set(names))];
@@ -1686,19 +1879,19 @@ export default function AdminOrdersScreen() {
       const productMatch =
         productFilter === "ALL" ||
         order.items?.some((item) =>
-          itemMatchesProduct(item, productFilter, selectedProductMeta)
+          itemMatchesProduct(item, productFilter, selectedProductMeta),
         );
       const dateMatch =
         dateFilter === "ALL" ||
         (dateFilter === "CUSTOM"
           ? (!customStartDate ||
-            getOrderDateKey(order.delivery_date) >= customStartDate) &&
-          (!customEndDate ||
-            getOrderDateKey(order.delivery_date) <= customEndDate)
+              getOrderDateKey(order.delivery_date) >= customStartDate) &&
+            (!customEndDate ||
+              getOrderDateKey(order.delivery_date) <= customEndDate)
           : getOrderDateKey(order.delivery_date) ===
-          (dateFilter === "TODAY"
-            ? getLocalDateKey()
-            : getTomorrowDateKey()));
+            (dateFilter === "TODAY"
+              ? getLocalDateKey()
+              : getTomorrowDateKey()));
       return statusMatch && customerMatch && productMatch && dateMatch;
     });
   }, [
@@ -1715,7 +1908,9 @@ export default function AdminOrdersScreen() {
   const filteredSubs = allSubscriptions.filter((s) => {
     const statusMatch =
       subFilter === "ALL" ||
-      (subFilter === "ACTIVE" ? s.is_active === true : s.is_active === false);
+      (subFilter === "ACTIVE"
+        ? isSubscriptionActive(s)
+        : !isSubscriptionActive(s));
     const customerMatch =
       selectedCustomer === "ALL" ||
       s.customer_name === selectedCustomer ||
@@ -1725,16 +1920,22 @@ export default function AdminOrdersScreen() {
       (dateFilter === "CUSTOM"
         ? subscriptionOverlapsRange(s, customStartDate, customEndDate)
         : shouldSubscriptionDeliverOn(
-          s,
-          dateFilter === "TODAY" ? getLocalDateKey() : getTomorrowDateKey(),
-        ));
+            s,
+            dateFilter === "TODAY" ? getLocalDateKey() : getTomorrowDateKey(),
+          ));
     return statusMatch && customerMatch && dateMatch;
   });
 
   const subscriptionSummary = useMemo(() => {
     const productMap = new Map<
       string,
-      { subscriptions: number; quantity: number; unit: string; isMilk: boolean; isGhee: boolean }
+      {
+        subscriptions: number;
+        quantity: number;
+        unit: string;
+        isMilk: boolean;
+        isGhee: boolean;
+      }
     >();
     let milkSubscriptions = 0;
     let gheeSubscriptions = 0;
@@ -1768,7 +1969,9 @@ export default function AdminOrdersScreen() {
           subscriptions: current.subscriptions + (seenInSub.has(key) ? 0 : 1),
           quantity: current.quantity + Number(item.quantity || 1),
           unit: current.unit || unit,
-          isMilk: current.isMilk || isMilkSubscriptionItem(item, productNames, products),
+          isMilk:
+            current.isMilk ||
+            isMilkSubscriptionItem(item, productNames, products),
           isGhee: current.isGhee || isGheeText(name),
         });
         seenInSub.add(key);
@@ -1780,7 +1983,9 @@ export default function AdminOrdersScreen() {
         name:
           filteredSubs
             .flatMap((sub) => sub.items || [])
-            .map((item) => getSubscriptionItemName(item, productNames, products))
+            .map((item) =>
+              getSubscriptionItemName(item, productNames, products),
+            )
             .find((name) => normalizeName(name) === nameKey) || "Product",
         ...data,
       }))
@@ -1802,7 +2007,11 @@ export default function AdminOrdersScreen() {
     () =>
       filteredOrders.filter((order) => {
         const status = String(order.status || "").toLowerCase();
-        return status !== "delivered" && status !== "cancelled" && status !== "skipped";
+        return (
+          status !== "delivered" &&
+          status !== "cancelled" &&
+          status !== "skipped"
+        );
       }),
     [filteredOrders],
   );
@@ -1815,29 +2024,35 @@ export default function AdminOrdersScreen() {
     [selectableOrders],
   );
 
- const selectableSubs = useMemo(
+  const selectableSubs = useMemo(
     () =>
       filteredSubs.filter((sub) => {
-        const status = String(sub.delivery_status || sub.status || "").toLowerCase();
+        const status = String(
+          sub.delivery_status || sub.status || "",
+        ).toLowerCase();
         const startKey = getOrderDateKey(sub.start_date);
-        const notStartedYet = !!startKey && getLocalDateKey() < startKey; // ← NEW
+        const notStartedYet = !!startKey && getLocalDateKey() < startKey;
         return (
           status !== "delivered" &&
           status !== "cancelled" &&
           status !== "skipped" &&
-          sub.is_active !== false &&
-          !notStartedYet // ← NEW
+          isSubscriptionActive(sub) &&
+          !notStartedYet
         );
       }),
     [filteredSubs],
   );
 
   const selectableTodaySubs = useMemo(
-    () => selectableSubs.filter((sub) => shouldSubscriptionDeliverOn(sub, getLocalDateKey())),
+    () =>
+      selectableSubs.filter((sub) =>
+        shouldSubscriptionDeliverOn(sub, getLocalDateKey()),
+      ),
     [selectableSubs],
   );
 
-  const setSelectedOrders = (ids: string[]) => setSelectedOrderIds(new Set(ids));
+  const setSelectedOrders = (ids: string[]) =>
+    setSelectedOrderIds(new Set(ids));
   const setSelectedSubs = (ids: string[]) => setSelectedSubIds(new Set(ids));
 
   const handleSingleOrderDelivered = async (order: Order) => {
@@ -1851,7 +2066,10 @@ export default function AdminOrdersScreen() {
         return next;
       });
     } catch (e: any) {
-      Alert.alert("Could not mark delivered", e?.message || "Please try again.");
+      Alert.alert(
+        "Could not mark delivered",
+        e?.message || "Please try again.",
+      );
     } finally {
       setBulkLoading(false);
     }
@@ -1868,7 +2086,10 @@ export default function AdminOrdersScreen() {
         return next;
       });
     } catch (e: any) {
-      Alert.alert("Could not mark delivered", e?.message || "Please try again.");
+      Alert.alert(
+        "Could not mark delivered",
+        e?.message || "Please try again.",
+      );
     } finally {
       setBulkLoading(false);
     }
@@ -1878,7 +2099,10 @@ export default function AdminOrdersScreen() {
     const isOrders = activeTab === "orders";
     const ids = Array.from(isOrders ? selectedOrderIds : selectedSubIds);
     if (!ids.length) {
-      Alert.alert("Select items", `Select ${isOrders ? "orders" : "subscriptions"} first.`);
+      Alert.alert(
+        "Select items",
+        `Select ${isOrders ? "orders" : "subscriptions"} first.`,
+      );
       return;
     }
     Alert.alert(
@@ -1901,7 +2125,10 @@ export default function AdminOrdersScreen() {
                 await fetchSubscriptions();
               }
             } catch (e: any) {
-              Alert.alert("Bulk update failed", e?.message || "Please try again.");
+              Alert.alert(
+                "Bulk update failed",
+                e?.message || "Please try again.",
+              );
             } finally {
               setBulkLoading(false);
             }
@@ -1960,7 +2187,9 @@ export default function AdminOrdersScreen() {
   const visibleSelectableCount =
     activeTab === "orders" ? selectableOrders.length : selectableSubs.length;
   const todaySelectableCount =
-    activeTab === "orders" ? selectableTodayOrders.length : selectableTodaySubs.length;
+    activeTab === "orders"
+      ? selectableTodayOrders.length
+      : selectableTodaySubs.length;
 
   if (globalLoading) return <LoadingScreen />;
 
@@ -2251,8 +2480,14 @@ export default function AdminOrdersScreen() {
                   activeOpacity={0.8}
                   disabled={bulkLoading}
                 >
-                  <Ionicons name="checkmark-circle-outline" size={16} color="#16A34A" />
-                  <Text style={styles.deliveredExpandedText}>Mark Delivered</Text>
+                  <Ionicons
+                    name="checkmark-circle-outline"
+                    size={16}
+                    color="#16A34A"
+                  />
+                  <Text style={styles.deliveredExpandedText}>
+                    Mark Delivered
+                  </Text>
                 </TouchableOpacity>
                 <View style={styles.actionGap} />
                 <TouchableOpacity
@@ -2348,9 +2583,7 @@ export default function AdminOrdersScreen() {
             <Ionicons name="options-outline" size={19} color="#BB6B3F" />
             {activeFilterCount ? (
               <View style={styles.filterCountDot}>
-                <Text style={styles.filterCountText}>
-                  {activeFilterCount}
-                </Text>
+                <Text style={styles.filterCountText}>{activeFilterCount}</Text>
               </View>
             ) : null}
           </TouchableOpacity>
@@ -2433,9 +2666,7 @@ export default function AdminOrdersScreen() {
         </View>
         <View style={styles.bulkInfo}>
           <Ionicons name="checkmark-done-outline" size={15} color="#BB6B3F" />
-          <Text style={styles.bulkInfoText}>
-            {selectedCount} selected
-          </Text>
+          <Text style={styles.bulkInfoText}>{selectedCount} selected</Text>
         </View>
         <ScrollView
           horizontal
@@ -2446,12 +2677,16 @@ export default function AdminOrdersScreen() {
             style={styles.bulkChip}
             onPress={() =>
               activeTab === "orders"
-                ? setSelectedOrders(selectableTodayOrders.map((item) => item.id))
+                ? setSelectedOrders(
+                    selectableTodayOrders.map((item) => item.id),
+                  )
                 : setSelectedSubs(selectableTodaySubs.map((item) => item.id))
             }
             disabled={todaySelectableCount === 0 || bulkLoading}
           >
-            <Text style={styles.bulkChipText}>Select Today ({todaySelectableCount})</Text>
+            <Text style={styles.bulkChipText}>
+              Select Today ({todaySelectableCount})
+            </Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.bulkChip}
@@ -2462,7 +2697,9 @@ export default function AdminOrdersScreen() {
             }
             disabled={visibleSelectableCount === 0 || bulkLoading}
           >
-            <Text style={styles.bulkChipText}>Select Visible ({visibleSelectableCount})</Text>
+            <Text style={styles.bulkChipText}>
+              Select Visible ({visibleSelectableCount})
+            </Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.bulkChip}
@@ -2540,8 +2777,8 @@ export default function AdminOrdersScreen() {
                   <Text style={styles.emptyTitle}>No orders found</Text>
                   <Text style={styles.emptyDesc}>
                     {filter !== "ALL" ||
-                      dateFilter !== "ALL" ||
-                      selectedCustomer !== "ALL"
+                    dateFilter !== "ALL" ||
+                    selectedCustomer !== "ALL"
                       ? "Try changing customer, product or date filter."
                       : "One-time orders placed by your customers will appear here."}
                   </Text>
@@ -2582,19 +2819,25 @@ export default function AdminOrdersScreen() {
                       <Text style={styles.subscriptionSummaryValue}>
                         {subscriptionSummary.total}
                       </Text>
-                      <Text style={styles.subscriptionSummaryLabel}>Total Subs</Text>
+                      <Text style={styles.subscriptionSummaryLabel}>
+                        Total Subs
+                      </Text>
                     </View>
                     <View style={styles.subscriptionSummaryCard}>
                       <Text style={styles.subscriptionSummaryValue}>
                         {subscriptionSummary.milkSubscriptions}
                       </Text>
-                      <Text style={styles.subscriptionSummaryLabel}>Milk Subs</Text>
+                      <Text style={styles.subscriptionSummaryLabel}>
+                        Milk Subs
+                      </Text>
                     </View>
                     <View style={styles.subscriptionSummaryCard}>
                       <Text style={styles.subscriptionSummaryValue}>
                         {subscriptionSummary.gheeSubscriptions}
                       </Text>
-                      <Text style={styles.subscriptionSummaryLabel}>Ghee Subs</Text>
+                      <Text style={styles.subscriptionSummaryLabel}>
+                        Ghee Subs
+                      </Text>
                     </View>
                     <View style={styles.subscriptionSummaryCard}>
                       <Text style={styles.subscriptionSummaryValue}>
@@ -2612,24 +2855,30 @@ export default function AdminOrdersScreen() {
                       showsHorizontalScrollIndicator={false}
                       contentContainerStyle={styles.subscriptionProductChips}
                     >
-                      {subscriptionSummary.productsSummary.slice(0, 6).map((item) => (
-                        <View key={item.name} style={styles.subscriptionProductChip}>
-                          <Text
-                            style={styles.subscriptionProductName}
-                            numberOfLines={1}
+                      {subscriptionSummary.productsSummary
+                        .slice(0, 6)
+                        .map((item) => (
+                          <View
+                            key={item.name}
+                            style={styles.subscriptionProductChip}
                           >
-                            {item.name}
-                          </Text>
-                          <Text style={styles.subscriptionProductMeta}>
-                            {item.subscriptions} subs ·{" "}
-                            {formatBaseMetric(
-                              item.quantity *
-                              (parseUnitDescriptor(item.unit)?.packSize || 1),
-                              parseUnitDescriptor(item.unit)?.kind,
-                            )}
-                          </Text>
-                        </View>
-                      ))}
+                            <Text
+                              style={styles.subscriptionProductName}
+                              numberOfLines={1}
+                            >
+                              {item.name}
+                            </Text>
+                            <Text style={styles.subscriptionProductMeta}>
+                              {item.subscriptions} subs ·{" "}
+                              {formatBaseMetric(
+                                item.quantity *
+                                  (parseUnitDescriptor(item.unit)?.packSize ||
+                                    1),
+                                parseUnitDescriptor(item.unit)?.kind,
+                              )}
+                            </Text>
+                          </View>
+                        ))}
                     </ScrollView>
                   ) : null}
                 </View>
@@ -2642,8 +2891,8 @@ export default function AdminOrdersScreen() {
                   <Text style={styles.emptyTitle}>No subscriptions found</Text>
                   <Text style={styles.emptyDesc}>
                     {subFilter !== "ALL" ||
-                      dateFilter !== "ALL" ||
-                      selectedCustomer !== "ALL"
+                    dateFilter !== "ALL" ||
+                    selectedCustomer !== "ALL"
                       ? "Try changing customer, status or date filter."
                       : "Recurring subscriptions (daily, alternate, custom) appear here."}
                   </Text>
@@ -2667,7 +2916,9 @@ export default function AdminOrdersScreen() {
             <View style={styles.sheetHandle} />
             <View style={styles.sheetHeader}>
               <Text style={styles.sheetTitle}>
-                {activeTab === "orders" ? "Filter Orders" : "Filter Subscriptions"}
+                {activeTab === "orders"
+                  ? "Filter Orders"
+                  : "Filter Subscriptions"}
               </Text>
               <TouchableOpacity
                 style={styles.sheetCloseBtn}
@@ -2826,8 +3077,8 @@ export default function AdminOrdersScreen() {
                         datePickerTarget === "start"
                           ? customStartDate || getLocalDateKey()
                           : customEndDate ||
-                          customStartDate ||
-                          getLocalDateKey()
+                              customStartDate ||
+                              getLocalDateKey(),
                       )}
                       mode="date"
                       display={Platform.OS === "ios" ? "inline" : "default"}
@@ -2868,7 +3119,7 @@ export default function AdminOrdersScreen() {
   );
 }
 
-// ─── StyleSheets ──────────────────────────────────────────────────────────────
+// ─── StyleSheets
 
 const cm = StyleSheet.create({
   overlay: {
@@ -3203,7 +3454,12 @@ const ss = StyleSheet.create({
     fontWeight: "500",
     marginTop: 1,
   },
-  headerRight: { flexDirection: "row", alignItems: "center", gap: 6, maxWidth: "48%" },
+  headerRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    maxWidth: "48%",
+  },
   headerRightInfo: { alignItems: "flex-end", flexShrink: 1 },
   headerProductName: {
     marginTop: 4,
@@ -4126,5 +4382,4 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#92400e",
   },
-
 });

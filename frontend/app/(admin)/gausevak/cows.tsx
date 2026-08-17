@@ -4,6 +4,7 @@ import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import type { BusinessLocation } from "../../../src/services/api";
+import LeaseModal from "./leasing";
 import {
   View,
   Text,
@@ -82,6 +83,18 @@ interface Cow {
   farmLocationLabel?: string;
   transferLocationId?: string;
   transferLocationLabel?: string;
+  isLeased?: boolean;
+  activeLeaseId?: string;
+  leasedToAdminId?: string;
+  leasedToFarmName?: string;
+  leaseEndDate?: string;
+  isLeasedIn?: boolean;
+  leaseId?: string;
+  lessorAdminId?: string;
+  lessorFarmName?: string;
+  leasePrice?: number;
+  leaseStartDate?: string;
+  leaseReason?: string;
 }
 
 interface Insurance {
@@ -207,9 +220,23 @@ const STATUS = {
     border: "#e9d5ff",
     label: "Transferred",
   },
+  leased: {
+    color: "#7c3aed",
+    bg: "#f5f3ff",
+    border: "#ddd6fe",
+    label: "Leased",
+  },
+  leasedIn: {
+    color: "#0891b2",
+    bg: "#ecfeff",
+    border: "#a5f3fc",
+    label: "Leased In",
+  },
 } as const;
 
 function derivedStatus(cow: Cow): keyof typeof STATUS {
+  if (cow.isLeasedIn) return "leasedIn";
+  if (cow.isLeased) return "leased";
   if (cow.type === "bull") return "bull";
   if (cow.isTransferred) return "transferred";
   if (cow.isSold) return "sold";
@@ -789,11 +816,15 @@ function DateField({
   value,
   onChange,
   placeholder,
+  maximumDate,        // ADD
+  minimumDate,  
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
+  maximumDate?: Date;   
+  minimumDate?: Date;   
 }) {
   const [focused, setFocused] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
@@ -853,7 +884,8 @@ function DateField({
                 mode="date"
                 display="spinner"
                 onChange={handlePickerChange}
-                maximumDate={new Date()}
+                 maximumDate={maximumDate}
+    minimumDate={minimumDate}
               />
             </View>
           </View>
@@ -865,7 +897,8 @@ function DateField({
           mode="date"
           display="default"
           onChange={handlePickerChange}
-          maximumDate={new Date()}
+          maximumDate={maximumDate}
+    minimumDate={minimumDate}
         />
       )}
     </View>
@@ -1560,6 +1593,7 @@ function TransferSection({
             label="Transfer Date"
             value={form.transferDate}
             onChange={setF("transferDate")}
+            minimumDate={new Date()}
           />
         </View>
       )}
@@ -2449,6 +2483,14 @@ function EditCowModal({
   const originalIsActive = useRef<boolean>(false);
   const originalActiveSince = useRef<string | undefined>(undefined);
 
+  const [lease, setLease] = useState<any>(null);
+  const [leaseLoading, setLeaseLoading] = useState(false);
+  const [leasePrice, setLeasePrice] = useState("");
+  const [leaseEndDate, setLeaseEndDate] = useState("");
+  const [leaseReason, setLeaseReason] = useState("");
+  const [leaseSaving, setLeaseSaving] = useState(false);
+  const [leaseEnding, setLeaseEnding] = useState(false);
+
   useEffect(() => {
     if (cow) {
       originalIsActive.current = cow.isActive;
@@ -2495,6 +2537,79 @@ function EditCowModal({
       });
     }
   }, [cow]);
+
+  useEffect(() => {
+  if (cow && cow.isLeased && cow.activeLeaseId) {
+    setLeaseLoading(true);
+    api
+      .getLease(cow.activeLeaseId)
+      .then((l) => {
+        setLease(l);
+        setLeasePrice(String(l.price ?? ""));
+        setLeaseEndDate(l.end_date ?? "");
+        setLeaseReason(l.reason ?? "");
+      })
+      .catch(() => setLease(null))
+      .finally(() => setLeaseLoading(false));
+  } else {
+    setLease(null);
+  }
+}, [cow]);
+
+const saveLeaseChanges = async () => {
+  if (!lease) return;
+  setLeaseSaving(true);
+  try {
+    const updated = await api.updateLease(lease.id, {
+      price: leasePrice ? parseFloat(leasePrice) : undefined,
+      end_date: leaseEndDate || undefined,
+      reason: leaseReason || undefined,
+    });
+    setLease(updated);
+    onSaved({
+      ...cow!,
+      leasedToFarmName: updated.lessee_farm_name,
+      leaseEndDate: updated.end_date,
+    } as Cow);
+    showAlert({ title: "Lease Updated", message: "Lease terms saved.", type: "success" });
+  } catch (err: any) {
+    showAlert({ title: "Update Failed", message: err.message ?? "Failed to update lease.", type: "error" });
+  } finally {
+    setLeaseSaving(false);
+  }
+};
+
+const endLeaseNow = () => {
+  if (!lease) return;
+  showAlert({
+    title: "End Lease",
+    message: `End the lease for ${cow?.name} now? The cow will be marked as no longer leased.`,
+    type: "confirm",
+    confirmText: "End Lease",
+    cancelText: "Cancel",
+    onConfirm: async () => {
+      setLeaseEnding(true);
+      try {
+        await api.completeLease(lease.id);
+        setLease(null);
+        onSaved({
+          ...cow!,
+          isLeased: false,
+          activeLeaseId: undefined,
+          leasedToAdminId: undefined,
+          leasedToFarmName: undefined,
+          leaseEndDate: undefined,
+        } as Cow);
+        showAlert({ title: "Lease Ended", message: `Lease for ${cow?.name} has ended.`, type: "success" });
+        onClose();
+      } catch (err: any) {
+        showAlert({ title: "Failed", message: err.message ?? "Failed to end lease.", type: "error" });
+      } finally {
+        setLeaseEnding(false);
+      }
+    },
+  });
+};
 
   const setF = (k: keyof CowForm) => (v: any) =>
     setForm((p) => ({ ...p, [k]: v }));
@@ -2654,12 +2769,91 @@ function EditCowModal({
                   locations={locations}
                   onAddLocation={() => setQuickAddVisible(true)}
                 />
+
+                {cow?.isLeased && (
+  <View style={lm.wrap}>
+    <View style={lm.header}>
+      <Ionicons name="swap-horizontal" size={16} color="#7c3aed" />
+      <Text style={lm.title}>Lease Details</Text>
+    </View>
+    {leaseLoading ? (
+      <ActivityIndicator size="small" color="#7c3aed" style={{ marginVertical: 12 }} />
+    ) : lease ? (
+      <>
+        <Text style={lm.leaseTo}>Leased to: {lease.lessee_farm_name}</Text>
+
+        <Text style={f.label}>Lease Price (₹)</Text>
+        <View style={f.row}>
+          <Ionicons name="cash-outline" size={15} color="#C4A882" style={{ marginRight: 8 }} />
+          <TextInput
+            style={f.input}
+            value={leasePrice}
+            onChangeText={setLeasePrice}
+            keyboardType="numeric"
+            placeholder="e.g. 5000"
+            placeholderTextColor="#D4B8A8"
+          />
+        </View>
+
+        <DateField
+          label="End Date (edit to extend or shorten)"
+          value={leaseEndDate}
+          onChange={setLeaseEndDate}
+        />
+
+        <Field
+          label="Reason"
+          value={leaseReason}
+          onChange={setLeaseReason}
+          placeholder="e.g. Breeding, dairy supplement..."
+          icon="document-text-outline"
+          multiline
+        />
+
+        <View style={{ flexDirection: "row", gap: 8, marginTop: 4 }}>
+          <TouchableOpacity
+            style={[lm.saveBtn, leaseSaving && { opacity: 0.7 }]}
+            onPress={saveLeaseChanges}
+            disabled={leaseSaving}
+          >
+            {leaseSaving ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <>
+                <Ionicons name="save-outline" size={14} color="#fff" />
+                <Text style={lm.saveBtnText}>Save Lease Changes</Text>
+              </>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[lm.endBtn, leaseEnding && { opacity: 0.7 }]}
+            onPress={endLeaseNow}
+            disabled={leaseEnding}
+          >
+            {leaseEnding ? (
+              <ActivityIndicator color="#dc2626" size="small" />
+            ) : (
+              <>
+                <Ionicons name="close-circle-outline" size={14} color="#dc2626" />
+                <Text style={lm.endBtnText}>End Lease</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+      </>
+    ) : (
+      <Text style={{ fontSize: 12, color: "#C4A882" }}>Could not load lease details.</Text>
+    )}
+  </View>
+)}
               </ScrollView>
               <TouchableOpacity
                 onPress={submit}
                 style={[
                   m.submitBtn,
-                  isBull ? { backgroundColor: "#8B6854" } : m.submitBtnTerra,
+                  isBull
+                    ? { backgroundColor: "#8B6854" }
+                    : { backgroundColor: "#16a34a" },
                   submitting && { opacity: 0.7 },
                 ]}
                 disabled={submitting}
@@ -2993,6 +3187,7 @@ function CowCard({
   onEdit,
   onDelete,
   onUpdate,
+  onLease,
   showAlert,
 }: {
   item: Cow;
@@ -3001,6 +3196,7 @@ function CowCard({
   onDelete: (c: Cow) => void;
   onUpdate: (c: Cow) => void;
   showAlert: (c: AlertConfig) => void;
+  onLease: (c: Cow) => void; // ADD
 }) {
   const router = useRouter();
   const opacity = useRef(new Animated.Value(0)).current;
@@ -3013,6 +3209,9 @@ function CowCard({
   const [insuranceLoading, setInsuranceLoading] = useState(false);
   const insuranceFetched = useRef(false);
   const [promoting, setPromoting] = useState(false);
+
+  //leasing state
+  const [leaseCow, setLeaseCow] = useState<Cow | null>(null);
 
   const st = STATUS[derivedStatus(item)];
   const isBull = item.type === "bull";
@@ -3207,7 +3406,7 @@ function CowCard({
                     </Text>
                   </View>
                 )}
-                {item.type === "newborn" &&
+                {/* {item.type === "newborn" &&
                   item.isActive &&
                   !item.isSold &&
                   !item.isTransferred && (
@@ -3218,13 +3417,13 @@ function CowCard({
                           size={18}
                           color="#16a34a"
                         />
-                      </View>
-                      <View style={{ flex: 1, marginLeft: 10 }}>
-                        {/* <Text style={pr.title}>Fully grown?</Text> */}
-                        {/* <Text style={pr.sub}>
+                      </View> */}
+                {/* <View style={{ flex: 1, marginLeft: 10 }}> */}
+                {/* <Text style={pr.title}>Fully grown?</Text> */}
+                {/* <Text style={pr.sub}>
           Promote to a mature
         </Text> */}
-                        <TouchableOpacity
+                {/* <TouchableOpacity
                           style={[pr.btn, promoting && { opacity: 0.7 }]}
                           onPress={handlePromote}
                           disabled={promoting}
@@ -3245,7 +3444,7 @@ function CowCard({
                         </TouchableOpacity>
                       </View>
                     </View>
-                  )}
+                  )} */}
                 {item.isTransferred && (
                   <View
                     style={[
@@ -3371,6 +3570,64 @@ function CowCard({
       {expanded && (
         <>
           <View style={cv.divider} />
+
+          {item.type === "newborn" &&
+            item.isActive &&
+            !item.isSold &&
+            !item.isTransferred && (
+              <View style={pr.banner}>
+                <View style={pr.iconWrap}>
+                  <Ionicons
+                    name={
+                      item.gender === "male"
+                        ? "male-outline"
+                        : "trending-up-outline"
+                    }
+                    size={18}
+                    color="#16a34a"
+                  />
+                </View>
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={pr.title}>
+                    {item.gender ? "Fully grown?" : "Gender not set"}
+                  </Text>
+                  <Text style={pr.sub}>
+                    {item.gender === "male"
+                      ? "This calf will grow into a Bull."
+                      : item.gender === "female"
+                        ? "This calf will grow into a Mature Cow, eligible for milking."
+                        : "Edit this calf and set its gender to enable promotion."}
+                  </Text>
+                  <TouchableOpacity
+                    style={[
+                      pr.btn,
+                      (promoting || !item.gender) && { opacity: 0.6 },
+                    ]}
+                    onPress={handlePromote}
+                    disabled={promoting}
+                    activeOpacity={0.85}
+                  >
+                    {promoting ? (
+                      <ActivityIndicator color="#fff" size="small" />
+                    ) : (
+                      <>
+                        <Ionicons
+                          name="arrow-up-circle-outline"
+                          size={14}
+                          color="#fff"
+                        />
+                        <Text style={pr.btnText}>
+                          {item.gender === "male"
+                            ? "Promote to Bull"
+                            : "Promote to Mature"}
+                        </Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+          <View style={cv.divider} />
           {item.isTransferred && (
             <View
               style={[
@@ -3456,6 +3713,27 @@ function CowCard({
                     Date: {item.transferDate}
                   </Text>
                 ) : null}
+              </View>
+            </View>
+          )}
+          {item.isLeased && (
+            <View
+              style={[
+                cv.infoBanner,
+                { backgroundColor: "#f5f3ff", borderColor: "#ddd6fe" },
+              ]}
+            >
+              <Ionicons name="swap-horizontal" size={14} color="#7c3aed" />
+              <View style={{ flex: 1, marginLeft: 8 }}>
+                <Text style={[cv.infoBannerTitle, { color: "#7c3aed" }]}>
+                  On Lease
+                </Text>
+                <Text style={[cv.infoBannerSub, { color: "#7c3aed" }]}>
+                  To: {item.leasedToFarmName ?? "—"}
+                </Text>
+                <Text style={[cv.infoBannerSub, { color: "#7c3aed" }]}>
+                  Until: {item.leaseEndDate ?? "—"}
+                </Text>
               </View>
             </View>
           )}
@@ -3770,38 +4048,86 @@ function CowCard({
             </TouchableOpacity>
           )}
 
-          <View style={cv.actionRow}>
-            <TouchableOpacity
-              style={[cv.actionBtn, cv.editBtn]}
-              onPress={() => onEdit(item)}
-              activeOpacity={0.8}
+          {item.isLeasedIn ? (
+            <View
+              style={[
+                cv.infoBanner,
+                { backgroundColor: "#ecfeff", borderColor: "#a5f3fc" },
+              ]}
             >
-              <Ionicons name="create-outline" size={15} color="#2563eb" />
-              <Text style={[cv.actionText, { color: "#2563eb" }]}>Edit</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[cv.actionBtn, cv.qrBtn]}
-              onPress={() => setCodeVisible(true)}
-              activeOpacity={0.8}
-            >
-              <Ionicons
-                name={codeButtonIcon as any}
-                size={15}
-                color="#7c3aed"
-              />
-              <Text style={[cv.actionText, { color: "#7c3aed" }]}>
-                {codeButtonLabel}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[cv.actionBtn, cv.deleteBtn]}
-              onPress={() => onDelete(item)}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="trash-outline" size={15} color="#dc2626" />
-              <Text style={[cv.actionText, { color: "#dc2626" }]}>Delete</Text>
-            </TouchableOpacity>
-          </View>
+              <Ionicons name="business-outline" size={14} color="#0891b2" />
+              <View style={{ flex: 1, marginLeft: 8 }}>
+                <Text style={[cv.infoBannerTitle, { color: "#0891b2" }]}>
+                  Leased from {item.lessorFarmName ?? "another farm"}
+                </Text>
+                <Text style={[cv.infoBannerSub, { color: "#0891b2" }]}>
+                  {item.leaseStartDate} – {item.leaseEndDate}
+                  {item.leasePrice
+                    ? ` · ₹${item.leasePrice.toLocaleString("en-IN")}`
+                    : ""}
+                </Text>
+                {item.leaseReason ? (
+                  <Text style={[cv.infoBannerSub, { color: "#0891b2" }]}>
+                    Reason: {item.leaseReason}
+                  </Text>
+                ) : null}
+              </View>
+            </View>
+          ) : (
+            <View style={cv.actionRow}>
+              <TouchableOpacity
+                style={[cv.actionBtn, cv.editBtn]}
+                onPress={() => onEdit(item)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="create-outline" size={15} color="#2563eb" />
+                <Text style={[cv.actionText, { color: "#2563eb" }]}>Edit</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[cv.actionBtn, cv.qrBtn]}
+                onPress={() => setCodeVisible(true)}
+                activeOpacity={0.8}
+              >
+                <Ionicons
+                  name={codeButtonIcon as any}
+                  size={15}
+                  color="#7c3aed"
+                />
+                <Text style={[cv.actionText, { color: "#7c3aed" }]}>
+                  {codeButtonLabel}
+                </Text>
+              </TouchableOpacity>
+              {!item.isLeased && (
+                <TouchableOpacity
+                  style={[
+                    cv.actionBtn,
+                    { backgroundColor: "#f5f3ff", borderColor: "#ddd6fe" },
+                  ]}
+                  onPress={() => onLease(item)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons
+                    name="swap-horizontal-outline"
+                    size={15}
+                    color="#7c3aed"
+                  />
+                  <Text style={[cv.actionText, { color: "#7c3aed" }]}>
+                    Lease
+                  </Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                style={[cv.actionBtn, cv.deleteBtn]}
+                onPress={() => onDelete(item)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="trash-outline" size={15} color="#dc2626" />
+                <Text style={[cv.actionText, { color: "#dc2626" }]}>
+                  Delete
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </>
       )}
 
@@ -3830,9 +4156,9 @@ function ListHeader({
   sortVisible,
   setSortVisible,
   filteredCount,
-  locations,          // NEW
-  locationFilter,     // NEW
-  setLocationFilter,  // NEW
+  locations, // NEW
+  locationFilter, // NEW
+  setLocationFilter, // NEW
 }: {
   cows: Cow[];
   search: string;
@@ -3846,9 +4172,9 @@ function ListHeader({
   sortVisible: boolean;
   setSortVisible: (v: boolean) => void;
   filteredCount: number;
-  locations: BusinessLocation[];               // NEW
-  locationFilter: string;                      // NEW
-  setLocationFilter: (v: string) => void;       // NEW
+  locations: BusinessLocation[]; // NEW
+  locationFilter: string; // NEW
+  setLocationFilter: (v: string) => void; // NEW
 }) {
   const stats = {
     total: cows.length,
@@ -3936,7 +4262,7 @@ function ListHeader({
         animationType="fade"
         onRequestClose={() => setSortVisible(false)}
       >
-       <TouchableOpacity
+        <TouchableOpacity
           activeOpacity={1}
           style={lh.sortOverlay}
           onPress={() => setSortVisible(false)}
@@ -4027,11 +4353,7 @@ function ListHeader({
                   All Locations
                 </Text>
                 {locationFilter === "all" && (
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={18}
-                    color="#8B6854"
-                  />
+                  <Ionicons name="checkmark-circle" size={18} color="#8B6854" />
                 )}
               </TouchableOpacity>
               {locations.length === 0 ? (
@@ -4192,6 +4514,9 @@ export default function CowsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [promoting, setPromoting] = useState(false);
+
+  //lease state
+  const [leaseCow, setLeaseCow] = useState<Cow | null>(null); // ADD
 
   //Location Sttate
   const [locations, setLocations] = useState<BusinessLocation[]>([]);
@@ -4424,9 +4749,9 @@ export default function CowsScreen() {
               sortVisible={sortVisible}
               setSortVisible={setSortVisible}
               filteredCount={filteredCows.length}
-              locations={locations}                 
-              locationFilter={locationFilter}        
-              setLocationFilter={setLocationFilter}  // NEW
+              locations={locations}
+              locationFilter={locationFilter}
+              setLocationFilter={setLocationFilter} // NEW
             />
           }
           renderItem={({ item, index }) => (
@@ -4440,6 +4765,7 @@ export default function CowsScreen() {
                   prev.map((c) => (c.id === updated.id ? updated : c)),
                 )
               }
+              onLease={(cow) => setLeaseCow(cow)}
               showAlert={showAlert}
             />
           )}
@@ -4537,15 +4863,35 @@ export default function CowsScreen() {
         locations={locations}
         onLocationCreated={(loc) => setLocations((prev) => [...prev, loc])}
       />
+
+      <LeaseModal
+        visible={!!leaseCow}
+        cow={leaseCow}
+        onClose={() => setLeaseCow(null)}
+        onLeased={(cowId, lease) =>
+          setCows((prev) =>
+            prev.map((c) =>
+              c.id === cowId
+                ? {
+                    ...c,
+                    isLeased: true,
+                    activeLeaseId: lease.id,
+                    leasedToAdminId: lease.lessee_admin_id,
+                    leasedToFarmName: lease.lessee_farm_name,
+                    leaseEndDate: lease.end_date,
+                  }
+                : c,
+            ),
+          )
+        }
+        showAlert={showAlert}
+      />
       <ModernAlert config={alertConfig} onDismiss={dismissAlert} />
     </View>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Styles
-// ─────────────────────────────────────────────────────────────────────────────
-
 // ── Screen
 const sc = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#FAFAF8" },
@@ -6143,6 +6489,44 @@ const qa = StyleSheet.create({
   },
   linkBtnText: { fontSize: 15, fontWeight: "800", color: "#fff" },
 });
+const lm = StyleSheet.create({
+  wrap: {
+    backgroundColor: "#faf5ff",
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: "#e9d5ff",
+    padding: 14,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  header: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 },
+  title: { fontSize: 14, fontWeight: "800", color: "#7c3aed" },
+  leaseTo: { fontSize: 12, color: "#6d28d9", fontWeight: "600", marginBottom: 10 },
+  saveBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "#7c3aed",
+    borderRadius: 10,
+    paddingVertical: 11,
+  },
+  saveBtnText: { fontSize: 12, fontWeight: "700", color: "#fff" },
+  endBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "#fff1f2",
+    borderWidth: 1.5,
+    borderColor: "#fecdd3",
+    borderRadius: 10,
+    paddingVertical: 11,
+  },
+  endBtnText: { fontSize: 12, fontWeight: "700", color: "#dc2626" },
+});
 
 const pr = StyleSheet.create({
   banner: {
@@ -6186,4 +6570,5 @@ const pr = StyleSheet.create({
     paddingVertical: 8,
   },
   btnText: { fontSize: 12, fontWeight: "700", color: "#fff" },
+  
 });

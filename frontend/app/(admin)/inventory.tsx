@@ -392,6 +392,10 @@ export default function InventoryScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
 
+  // - add product other state
+  const [showCustomCat, setShowCustomCat] = useState(false);
+  const [customCatText, setCustomCatText] = useState("");
+
   // ── Snackbar State
   const [snackbar, setSnackbar] = useState<SnackbarState>({
     visible: false,
@@ -841,82 +845,93 @@ export default function InventoryScreen() {
           />
 
           <Text style={styles.fieldLabel}>Category</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.categoryRow}
-          >
-            {CATEGORIES.map((cat) => (
-              <TouchableOpacity
-                key={cat}
-                style={[
-                  styles.catChip,
-                  data.category === cat && styles.catChipActive,
-                ]}
-                onPress={() => update("category", cat)}
-              >
-                <Text
-                  style={[
-                    styles.catChipText,
-                    data.category === cat && styles.catChipTextActive,
-                  ]}
-                >
-                  {cat}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+<ScrollView
+  horizontal
+  showsHorizontalScrollIndicator={false}
+  style={styles.categoryRow}
+>
+  {CATEGORIES.map((cat) => (
+    <TouchableOpacity
+      key={cat}
+      style={[styles.catChip, data.category === cat && styles.catChipActive]}
+      onPress={() => {
+        setShowCustomCat(false);
+        update("category", cat);
+      }}
+    >
+      <Text
+        style={[
+          styles.catChipText,
+          data.category === cat && styles.catChipTextActive,
+        ]}
+      >
+        {cat}
+      </Text>
+    </TouchableOpacity>
+  ))}
 
-          <View style={styles.row}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.fieldLabel}>MRP (₹)</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="0.00"
-                placeholderTextColor={C.textLight}
-                keyboardType="numeric"
-                value={data.mrp}
-                onChangeText={(v) => update("mrp", v)}
-              />
-            </View>
-            <View style={{ width: 12 }} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.fieldLabel}>Selling Price (₹)</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="0.00"
-                placeholderTextColor={C.textLight}
-                keyboardType="numeric"
-                value={data.price}
-                onChangeText={(v) => update("price", v)}
-              />
-            </View>
-          </View>
+  {/* Show current custom category as its own selected chip if it's not a preset */}
+  {data.category && !CATEGORIES.includes(data.category) && (
+    <View style={[styles.catChip, styles.catChipActive]}>
+      <Text style={[styles.catChipText, styles.catChipTextActive]}>
+        {data.category}
+      </Text>
+    </View>
+  )}
 
-          {/* ── Unit: fixed dropdown/chip selection (ml, L, g, kg) — no free text ── */}
-          <Text style={styles.fieldLabel}>Unit</Text>
-          <View style={styles.unitGrid}>
-            {UNITS.map((u) => {
-              const isActive = data.unit === u;
-              return (
-                <TouchableOpacity
-                  key={u}
-                  style={[styles.unitChip, isActive && styles.unitChipActive]}
-                  onPress={() => update("unit", u)}
-                  activeOpacity={0.75}
-                >
-                  <Text
-                    style={[
-                      styles.unitChipText,
-                      isActive && styles.unitChipTextActive,
-                    ]}
-                  >
-                    {u}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+  <TouchableOpacity
+    style={[styles.catChip, showCustomCat && styles.catChipActive]}
+    onPress={() => {
+      setCustomCatText("");
+      setShowCustomCat(true);
+    }}
+  >
+    <Ionicons
+      name="add-circle-outline"
+      size={14}
+      color={showCustomCat ? C.dark : C.textMuted}
+      style={{ marginRight: 4 }}
+    />
+    <Text
+      style={[
+        styles.catChipText,
+        showCustomCat && styles.catChipTextActive,
+      ]}
+    >
+      Other
+    </Text>
+  </TouchableOpacity>
+</ScrollView>
+
+{showCustomCat && (
+  <View style={styles.customCatRow}>
+    <TextInput
+      style={[styles.input, { flex: 1, marginBottom: 0 }]}
+      placeholder="Type category name"
+      placeholderTextColor={C.textLight}
+      value={customCatText}
+      onChangeText={setCustomCatText}
+      autoFocus
+      onSubmitEditing={() => {
+        if (customCatText.trim()) {
+          update("category", customCatText.trim());
+          setShowCustomCat(false);
+        }
+      }}
+    />
+    <TouchableOpacity
+      style={styles.customCatSaveBtn}
+      onPress={() => {
+        if (customCatText.trim()) {
+          update("category", customCatText.trim());
+          setShowCustomCat(false);
+        }
+      }}
+    >
+      <Ionicons name="checkmark" size={18} color={C.white} />
+    </TouchableOpacity>
+  </View>
+)}
 
           <Text style={styles.fieldLabel}>Stock (optional)</Text>
           <TextInput
@@ -2131,6 +2146,20 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: "transparent",
   },
+  customCatRow: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 8,
+  marginBottom: 16,
+},
+customCatSaveBtn: {
+  width: 44,
+  height: 44,
+  borderRadius: 12,
+  backgroundColor: C.dark,
+  justifyContent: "center",
+  alignItems: "center",
+},
   catChipActive: { backgroundColor: C.primary + "25", borderColor: C.primary },
   catChipText: {
     fontSize: 13,
