@@ -19,7 +19,7 @@
       }
     },
     "android": {
-      "versionCode": 17,
+      "versionCode": 16,
       "googleServicesFile": "./android/app/google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",

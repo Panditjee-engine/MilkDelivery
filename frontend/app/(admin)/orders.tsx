@@ -25,7 +25,7 @@ import { useIsFocused } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { api } from "../../src/services/api";
 import LoadingScreen from "../../src/components/LoadingScreen";
 
@@ -398,7 +398,7 @@ const shouldSubscriptionDeliverOn = (sub: Subscription, dateKey: string) => {
   const status = String(sub.status || "").toLowerCase();
   if (
     sub.is_active === false ||
-    ["cancelled", "canceled", "inactive", "paused", "rejected"].includes(status)
+    ["cancelled", "canceled", "inactive", "paused", "rejected", "stopped", "expired"].includes(status)
   ) {
     return false;
   }
@@ -425,6 +425,23 @@ const shouldSubscriptionDeliverOn = (sub: Subscription, dateKey: string) => {
   if (pattern === "buy_once") return dateKey === startKey;
   return false;
 };
+
+const isSubscriptionExpired = (sub: Subscription, referenceKey = getLocalDateKey()) => {
+  const endKey = getOrderDateKey(sub.end_date);
+  return !!endKey && endKey < referenceKey;
+};
+
+const getSubscriptionLifecycle = (sub: Subscription) => {
+  const status = String(sub.status || "").toLowerCase();
+  if (["cancelled", "canceled", "rejected"].includes(status)) return "cancelled";
+  if (status === "expired" || isSubscriptionExpired(sub)) return "expired";
+  if (["paused", "stopped"].includes(status)) return "paused";
+  if (sub.is_active === false || status === "inactive") return "inactive";
+  return "active";
+};
+
+const isSubscriptionActiveNow = (sub: Subscription) =>
+  getSubscriptionLifecycle(sub) === "active";
 
 const subscriptionOverlapsRange = (
   sub: Subscription,
@@ -689,6 +706,18 @@ function SubscriptionDetailModal({
 }: SubModalProps) {
   const slideAnim = useRef(new Animated.Value(400)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
+  const lifecycle = subscription ? getSubscriptionLifecycle(subscription) : "inactive";
+  const detailActive = lifecycle === "active";
+  const detailStatusLabel =
+    lifecycle === "expired"
+      ? "Expired Subscription"
+      : lifecycle === "paused"
+        ? "Paused Subscription"
+        : lifecycle === "cancelled"
+          ? "Cancelled Subscription"
+          : detailActive
+            ? "Active Subscription"
+            : "Inactive";
 
   useEffect(() => {
     if (visible) {
@@ -945,7 +974,7 @@ function SubscriptionDetailModal({
                   style={[
                     sm.statusBanner,
                     {
-                      backgroundColor: subscription.is_active
+                      backgroundColor: detailActive
                         ? "#F0FFF4"
                         : "#FFF0F0",
                     },
@@ -953,22 +982,22 @@ function SubscriptionDetailModal({
                 >
                   <Ionicons
                     name={
-                      subscription.is_active
+                      detailActive
                         ? "checkmark-circle"
-                        : "close-circle"
+                        : lifecycle === "expired"
+                          ? "calendar-clear"
+                          : "close-circle"
                     }
                     size={16}
-                    color={subscription.is_active ? "#22C55E" : "#FF5C5C"}
+                    color={detailActive ? "#22C55E" : "#FF5C5C"}
                   />
                   <Text
                     style={[
                       sm.statusText,
-                      { color: subscription.is_active ? "#16A34A" : "#FF5C5C" },
+                      { color: detailActive ? "#16A34A" : "#FF5C5C" },
                     ]}
                   >
-                    {subscription.is_active
-                      ? "Active Subscription"
-                      : "Inactive"}
+                    {detailStatusLabel}
                   </Text>
                 </View>
               </View>
@@ -1012,6 +1041,20 @@ function SubscriptionRow({
   const itemCount = item.items?.length ?? 0;
   const productTitle = subscriptionProductTitle(item.items || [], productNames, products);
   const address = buildAddressText(item.customer_address);
+  const lifecycle = getSubscriptionLifecycle(item);
+  const activeNow = lifecycle === "active";
+  const expired = lifecycle === "expired";
+  const statusLabel = onVacation
+    ? "On Vacation"
+    : expired
+      ? "Expired"
+      : activeNow
+        ? "Active"
+        : lifecycle === "paused"
+          ? "Paused"
+          : lifecycle === "cancelled"
+            ? "Cancelled"
+            : "Inactive";
 
   // ← NEW: block "Mark Delivered" before the subscription's start date
   const todayKey = getLocalDateKey();
@@ -1019,7 +1062,7 @@ function SubscriptionRow({
   const notStartedYet = !!startKey && todayKey < startKey;
 
  const canDeliver =
-    item.is_active !== false &&
+    activeNow &&
     !item.on_vacation_today &&
     !notStartedYet &&
     !["delivered", "cancelled", "skipped"].includes(
@@ -1045,7 +1088,7 @@ function SubscriptionRow({
     .concat(item.items?.length > 2 ? `  +${item.items.length - 2} more` : "");
 
   return (
-    <View style={[ss.card, !item.is_active && ss.cardInactive]}>
+    <View style={[ss.card, !activeNow && ss.cardInactive]}>
       <TouchableOpacity
         activeOpacity={0.75}
         onPress={onToggle}
@@ -1084,7 +1127,7 @@ function SubscriptionRow({
                   ss.subStatusPill,
                   onVacation
                     ? ss.subStatusVacation
-                    : item.is_active
+                    : activeNow
                       ? ss.subStatusActive
                       : ss.subStatusInactive,
                 ]}
@@ -1093,11 +1136,11 @@ function SubscriptionRow({
                   style={[
                     ss.subStatusText,
                     {
-                      color: onVacation ? "#B45309" : item.is_active ? "#16A34A" : "#FF5C5C",
+                      color: onVacation ? "#B45309" : activeNow ? "#16A34A" : "#FF5C5C",
                     },
                   ]}
                 >
-                  {onVacation ? "On Vacation" : item.is_active ? "Active" : "Inactive"}
+                  {statusLabel}
                 </Text>
               </View>
              {onVacation && item.vacation_start_date && (
@@ -1297,6 +1340,16 @@ function SubscriptionRow({
               </View>
               <View style={styles.actionGap} />
             </>
+          ) : expired ? (
+            <>
+              <View style={styles.unassignedRow}>
+                <Ionicons name="calendar-clear-outline" size={13} color="#FF5C5C" />
+                <Text style={styles.unassignedText}>
+                  Ended on {item.end_date}
+                </Text>
+              </View>
+              <View style={styles.actionGap} />
+            </>
           ) : null}
           <TouchableOpacity
             style={ss.detailBtn}
@@ -1316,6 +1369,7 @@ function SubscriptionRow({
 
 export default function AdminOrdersScreen() {
   const isFocused = useIsFocused();
+  const router = useRouter();
   const params = useLocalSearchParams<{ tab?: string }>();
 
   const [activeTab, setActiveTab] = useState<"orders" | "subscriptions">(
@@ -1359,7 +1413,7 @@ export default function AdminOrdersScreen() {
   const [allSubscriptions, setAllSubscriptions] = useState<Subscription[]>([]);
   const [subsLoading, setSubsLoading] = useState(false);
   const [subsRefreshing, setSubsRefreshing] = useState(false);
-  const [subFilter, setSubFilter] = useState<"ALL" | "ACTIVE" | "INACTIVE">(
+  const [subFilter, setSubFilter] = useState<"ALL" | "ACTIVE" | "INACTIVE" | "EXPIRED">(
     "ACTIVE"
   );
   const [expandedSubIds, setExpandedSubIds] = useState<Set<string>>(new Set());
@@ -1499,21 +1553,24 @@ export default function AdminOrdersScreen() {
           const end = getOrderDateKey(v.end_date);
           return start && end && today >= start && today <= end;
         });
+        const normalizedSub = isSubscriptionExpired(sub, today)
+          ? { ...sub, is_active: false, status: "expired" }
+          : sub;
         return userVacation
           ? {
-            ...sub,
+            ...normalizedSub,
             on_vacation_today: true,
             vacation_start_date: userVacation.start_date,
             vacation_end_date: userVacation.end_date,
           }
-          : { ...sub, on_vacation_today: false };
+          : { ...normalizedSub, on_vacation_today: false };
       });
-      console.log("RAW SUB SAMPLE:", JSON.stringify(withAddress.find(s => s.customer_name) || withAddress[0]));
+      console.log("RAW SUB SAMPLE:", JSON.stringify(withVacation.find(s => s.customer_name) || withVacation[0]));
 
-      setAllSubscriptions(withAddress);
+      setAllSubscriptions(withVacation);
 
       // Only resolve names for items that DON'T have product_name stored
-      const needsResolution = withAddress.flatMap((s) =>
+      const needsResolution = withVacation.flatMap((s) =>
         (s.items ?? [])
           .filter((item) => !item.product_name)
           .map((item) => item.product_id)
@@ -1713,9 +1770,14 @@ export default function AdminOrdersScreen() {
   ]);
 
   const filteredSubs = allSubscriptions.filter((s) => {
+    const lifecycle = getSubscriptionLifecycle(s);
     const statusMatch =
       subFilter === "ALL" ||
-      (subFilter === "ACTIVE" ? s.is_active === true : s.is_active === false);
+      (subFilter === "ACTIVE"
+        ? lifecycle === "active"
+        : subFilter === "EXPIRED"
+          ? lifecycle === "expired"
+          : lifecycle !== "active" && lifecycle !== "expired");
     const customerMatch =
       selectedCustomer === "ALL" ||
       s.customer_name === selectedCustomer ||
@@ -1825,7 +1887,7 @@ export default function AdminOrdersScreen() {
           status !== "delivered" &&
           status !== "cancelled" &&
           status !== "skipped" &&
-          sub.is_active !== false &&
+          isSubscriptionActiveNow(sub) &&
           !notStartedYet // ← NEW
         );
       }),
@@ -2341,6 +2403,18 @@ export default function AdminOrdersScreen() {
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           <TouchableOpacity
+            style={styles.headerNotificationBtn}
+            onPress={() =>
+              router.push({
+                pathname: "/(admin)/notification",
+                params: { from: "orders", tab: activeTab },
+              } as any)
+            }
+            activeOpacity={0.82}
+          >
+            <Ionicons name="notifications-outline" size={19} color="#BB6B3F" />
+          </TouchableOpacity>
+          <TouchableOpacity
             style={styles.headerFilterBtn}
             onPress={() => setFilterSheetVisible(true)}
             activeOpacity={0.82}
@@ -2742,7 +2816,7 @@ export default function AdminOrdersScreen() {
             <View style={styles.filterRowSheet}>
               {(activeTab === "orders"
                 ? ORDER_FILTERS
-                : (["ACTIVE", "INACTIVE", "ALL"] as const)
+                : (["ACTIVE", "EXPIRED", "INACTIVE", "ALL"] as const)
               ).map((f) => {
                 const active =
                   activeTab === "orders" ? filter === f : subFilter === f;
@@ -3467,6 +3541,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     position: "relative",
+  },
+  headerNotificationBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: "#FFF3DC",
+    borderWidth: 1.5,
+    borderColor: "#FFE1CC",
+    alignItems: "center",
+    justifyContent: "center",
   },
   filterCountDot: {
     position: "absolute",
