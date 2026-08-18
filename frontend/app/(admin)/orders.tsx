@@ -25,7 +25,7 @@ import { useIsFocused } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { api } from "../../src/services/api";
 import LoadingScreen from "../../src/components/LoadingScreen";
 
@@ -1509,6 +1509,8 @@ export default function AdminOrdersScreen() {
   const isFocused = useIsFocused();
   const params = useLocalSearchParams<{ tab?: string }>();
 
+  const router = useRouter();
+
   const [activeTab, setActiveTab] = useState<"orders" | "subscriptions">(
     "orders",
   );
@@ -1596,33 +1598,28 @@ export default function AdminOrdersScreen() {
   }, [params.tab]);
 
   // ── Fetch orders
-  const fetchOrders = useCallback(async () => {
-    try {
-      const date =
-        dateFilter === "TODAY"
-          ? getLocalDateKey()
-          : dateFilter === "TOMORROW"
-            ? getTomorrowDateKey()
-            : undefined;
-      const [ordersData, productsData] = await Promise.all([
-        api.getAllOrders(undefined, date),
-        api.getProducts(),
-      ]);
+const fetchOrders = useCallback(async () => {
+  try {
+    const date =
+      dateFilter === "TODAY"
+        ? getLocalDateKey()
+        : dateFilter === "TOMORROW"
+          ? getTomorrowDateKey()
+          : undefined;
+    const [ordersData, productsData] = await Promise.all([
+      api.getAllOrders(undefined, date),
+      api.getProducts(),
+    ]);
 
-      const buyOnceOrders = ordersData.filter((o: Order) => {
-        const p = (o.pattern ?? "").toLowerCase();
-        return p === "buy_once" || p === "";
-      });
-
-      setAllOrders(buyOnceOrders.length > 0 ? buyOnceOrders : ordersData);
-      setProducts(productsData);
-    } catch (e: any) {
-      console.error("[AdminOrders] fetchOrders FAILED:", e?.message ?? e);
-    } finally {
-      setOrdersLoading(false);
-      setOrdersRefreshing(false);
-    }
-  }, [currentAdmin, dateFilter, customStartDate, customEndDate]);
+    setAllOrders(ordersData);       // backend already returns buy_once only
+    setProducts(productsData);
+  } catch (e: any) {
+    console.error("[AdminOrders] fetchOrders FAILED:", e?.message ?? e);
+  } finally {
+    setOrdersLoading(false);
+    setOrdersRefreshing(false);
+  }
+}, [currentAdmin, dateFilter, customStartDate, customEndDate]);
 
   // ── Fetch subscriptions
   const fetchSubscriptions = useCallback(async () => {
@@ -2575,11 +2572,23 @@ export default function AdminOrdersScreen() {
           )}
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          <TouchableOpacity
-            style={styles.headerFilterBtn}
-            onPress={() => setFilterSheetVisible(true)}
-            activeOpacity={0.82}
-          >
+  <TouchableOpacity
+    style={styles.headerNotificationBtn}
+    onPress={() =>
+      router.push({
+        pathname: "/(admin)/notification",
+        params: { from: "orders", tab: activeTab },
+      } as any)
+    }
+    activeOpacity={0.82}
+  >
+    <Ionicons name="notifications-outline" size={19} color="#BB6B3F" />
+  </TouchableOpacity>
+  <TouchableOpacity
+    style={styles.headerFilterBtn}
+    onPress={() => setFilterSheetVisible(true)}
+    activeOpacity={0.82}
+  >
             <Ionicons name="options-outline" size={19} color="#BB6B3F" />
             {activeFilterCount ? (
               <View style={styles.filterCountDot}>
@@ -3724,6 +3733,16 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     position: "relative",
   },
+  headerNotificationBtn: {
+  width: 44,
+  height: 44,
+  borderRadius: 14,
+  backgroundColor: "#FFF3DC",
+  borderWidth: 1.5,
+  borderColor: "#FFE1CC",
+  alignItems: "center",
+  justifyContent: "center",
+},
   filterCountDot: {
     position: "absolute",
     top: -5,
