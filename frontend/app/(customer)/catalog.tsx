@@ -97,7 +97,7 @@ type CatalogSlide = {
   image: any;
 };
 
-type PaymentMethod = "wallet" | "cash_on_delivery" | "online";
+type PaymentMethod = "wallet" | "online";
 
 function canUseRazorpayNativeModule(): boolean {
   return Boolean(
@@ -1642,7 +1642,7 @@ function SubscribeModal({
       return;
     }
     if (paymentMethod === "wallet" && !canAfford) {
-      alert("Insufficient wallet balance. Please choose online payment, cash on delivery, or recharge wallet.");
+      alert("Insufficient wallet balance. Please choose online payment or recharge wallet.");
       return;
     }
     if (paymentMethod === "online" && !canUseRazorpayNativeModule()) {
@@ -2196,7 +2196,7 @@ function SubscribeModal({
                   <View style={reviewS.warn}>
                     <Ionicons name="information-circle-outline" size={13} color={T.orange} />
                     <Text style={reviewS.warnTxt}>
-                      Balance is below order amount. Choose online/COD or recharge before confirming.
+                      Balance is below order amount. Choose online payment or recharge before confirming.
                     </Text>
                     <TouchableOpacity
                       style={reviewS.addMoneyBtn}
@@ -2613,12 +2613,13 @@ function PaymentMethodSelector({
         sub: "UPI, card, netbanking",
         icon: "card-outline",
       },
-      {
-        key: "cash_on_delivery",
-        title: "Cash on Delivery",
-        sub: "Pay at delivery",
-        icon: "cash-outline",
-      },
+      // Cash on Delivery is intentionally hidden from customers for now.
+      // {
+      //   key: "cash_on_delivery",
+      //   title: "Cash on Delivery",
+      //   sub: "Pay at delivery",
+      //   icon: "cash-outline",
+      // },
     ];
 
   return (
