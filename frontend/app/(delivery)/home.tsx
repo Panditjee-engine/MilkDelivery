@@ -1,15 +1,33 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
-  View, Text, StyleSheet, ScrollView,
-  RefreshControl, Alert, TouchableOpacity, Switch,
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  RefreshControl,
+  Alert,
+  TouchableOpacity,
+  Switch,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { api } from "../../src/services/api";
-import { Colors } from "../../src/constants/colors";
 import LoadingScreen from "../../src/components/LoadingScreen";
+
+const C = {
+  primary: "#FF9675",
+  accent: "#FD9E69",
+  light: "#FFD999",
+  dark: "#BB6B3F",
+  bg: "#FFF8EF",
+  card: "#FFFFFF",
+  text: "#3D1F0A",
+  textMuted: "#A07850",
+  textLight: "#C9A882",
+  border: "#F5E6D0",
+};
 
 export default function DeliveryHome() {
   const { user } = useAuth();
@@ -30,7 +48,8 @@ export default function DeliveryHome() {
         api.getMyOrders(),
       ]);
       if (status.status === "fulfilled") setCheckinStatus(status.value);
-      if (ordersData.status === "fulfilled") setMyOrders(ordersData.value || []);
+      if (ordersData.status === "fulfilled")
+        setMyOrders(ordersData.value || []);
     } catch (error) {
       console.error("Error fetching data:", error);
     } finally {
@@ -40,9 +59,14 @@ export default function DeliveryHome() {
     }
   };
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => {
+    fetchData();
+  }, []);
 
-  const onRefresh = useCallback(() => { setRefreshing(true); fetchData(); }, []);
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchData();
+  }, []);
 
   const handleToggleShift = async (value: boolean) => {
     setActionLoading(true);
@@ -66,41 +90,61 @@ export default function DeliveryHome() {
 
   const isOnDuty = checkinStatus?.checked_in && !checkinStatus?.checked_out;
   const totalDeliveries = myOrders.length;
-  const completedCount = myOrders.filter(d => d.status === "delivered").length;
-  const pendingCount = myOrders.filter(d => ["assigned", "picked_up", "out_for_delivery"].includes(d.status)).length;
-  const failedCount = myOrders.filter(d => d.status === "failed" || d.status === "cancelled").length;
+  const completedCount = myOrders.filter(
+    (d) => d.status === "delivered",
+  ).length;
+  const pendingCount = myOrders.filter((d) =>
+    ["assigned", "picked_up", "out_for_delivery"].includes(d.status),
+  ).length;
+  const failedCount = myOrders.filter(
+    (d) => d.status === "failed" || d.status === "cancelled",
+  ).length;
 
   // Get assigned deliveries to display (max 2)
-  const assignedDeliveries = myOrders.filter(d => 
-    ["assigned", "picked_up", "out_for_delivery"].includes(d.status)
-  ).slice(0, 2);
+  const assignedDeliveries = myOrders
+    .filter((d) =>
+      ["assigned", "picked_up", "out_for_delivery"].includes(d.status),
+    )
+    .slice(0, 2);
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <ScrollView
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={C.primary}
+          />
+        }
       >
         {/* Header with Profile */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
-            <View style={styles.profileImage}>
-              <Ionicons name="person" size={28} color="#666" />
-            </View>
+            <TouchableOpacity
+              style={styles.profileImage}
+              onPress={() => router.push("/(delivery)/profile")}
+              activeOpacity={0.75}
+            >
+              <Ionicons name="person" size={28} color={C.dark} />
+            </TouchableOpacity>
             <View>
               <Text style={styles.greeting}>Hi, {user?.name || "Raju"}</Text>
               <Text style={styles.subtitle}>
-                {isOnDuty ? "Ready to deliver ?" : "Start your shift to see orders"}
+                {isOnDuty
+                  ? "Ready to deliver ?"
+                  : "Start your shift to see orders"}
               </Text>
             </View>
           </View>
           <View style={styles.headerRight}>
             <TouchableOpacity style={styles.notificationBtn}>
-              <Ionicons name="notifications-outline" size={22} color="#1A1A1A" />
+              <Ionicons name="notifications-outline" size={22} color={C.text} />
               {pendingCount > 0 && <View style={styles.notificationDot} />}
             </TouchableOpacity>
             <TouchableOpacity style={styles.menuBtn}>
-              <Ionicons name="menu" size={24} color="#1A1A1A" />
+              <Ionicons name="menu" size={24} color={C.text} />
             </TouchableOpacity>
           </View>
         </View>
@@ -108,7 +152,12 @@ export default function DeliveryHome() {
         {/* Shift Toggle - Small Switch */}
         <View style={styles.shiftToggleContainer}>
           <View style={styles.shiftToggleLeft}>
-            <View style={[styles.shiftDot, { backgroundColor: isOnDuty ? '#22c55e' : '#999' }]} />
+            <View
+              style={[
+                styles.shiftDot,
+                { backgroundColor: isOnDuty ? C.primary : C.textLight },
+              ]}
+            />
             <Text style={styles.shiftToggleLabel}>
               {isOnDuty ? "On Shift" : "Off Shift"}
             </Text>
@@ -117,9 +166,9 @@ export default function DeliveryHome() {
             value={isOnDuty}
             onValueChange={handleToggleShift}
             disabled={actionLoading}
-            trackColor={{ false: '#E5E5E5', true: Colors.primary }}
-            thumbColor={isOnDuty ? '#fff' : '#f4f3f4'}
-            ios_backgroundColor="#E5E5E5"
+            trackColor={{ false: C.border, true: C.primary }}
+            thumbColor={isOnDuty ? "#fff" : "#f4f3f4"}
+            ios_backgroundColor={C.border}
           />
         </View>
 
@@ -129,7 +178,9 @@ export default function DeliveryHome() {
             {/* Delivery Performance */}
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Delivery Performance</Text>
-              <Text style={styles.sectionSubtitle}>Overview of today's performance</Text>
+              <Text style={styles.sectionSubtitle}>
+                Overview of today's performance
+              </Text>
 
               <View style={styles.statsGrid}>
                 <View style={styles.statCard}>
@@ -157,19 +208,29 @@ export default function DeliveryHome() {
             {/* Assigned Deliveries */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Assigned Deliveries</Text>
-                <TouchableOpacity onPress={() => router.push("/(delivery)/deliveries")}>
+                <Text style={styles.sectionTitle}>OTP Orders</Text>
+                <TouchableOpacity
+                  onPress={() => router.push("/(delivery)/deliveries")}
+                >
                   <Text style={styles.viewAllText}>View All</Text>
                 </TouchableOpacity>
               </View>
 
               {assignedDeliveries.length > 0 ? (
                 assignedDeliveries.map((order) => (
-                  <OrderCard key={order.id || order._id} order={order} router={router} />
+                  <OrderCard
+                    key={order.id || order._id}
+                    order={order}
+                    router={router}
+                  />
                 ))
               ) : (
                 <View style={styles.emptyState}>
-                  <Ionicons name="checkmark-circle-outline" size={48} color="#ddd" />
+                  <Ionicons
+                    name="checkmark-circle-outline"
+                    size={48}
+                    color={C.textLight}
+                  />
                   <Text style={styles.emptyText}>No pending deliveries</Text>
                 </View>
               )}
@@ -179,32 +240,46 @@ export default function DeliveryHome() {
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>📦 Subscriptions</Text>
-                <TouchableOpacity onPress={() => router.push("/(delivery)/subscriptions")}>
+                <TouchableOpacity
+                  onPress={() => router.push("/(delivery)/subscriptions")}
+                >
                   <Text style={styles.viewAllText}>View All</Text>
                 </TouchableOpacity>
               </View>
-              <Text style={styles.sectionSubtitle}>Scheduled deliveries today</Text>
+              <Text style={styles.sectionSubtitle}>
+                Scheduled deliveries today
+              </Text>
 
               <TouchableOpacity
                 style={styles.subscriptionCTA}
                 onPress={() => router.push("/(delivery)/subscriptions")}
               >
                 <View style={styles.subscriptionCTALeft}>
-                  <Ionicons name="cube-outline" size={20} color={Colors.primary} />
+                  <Ionicons name="cube-outline" size={20} color={C.primary} />
                   <View>
-                    <Text style={styles.subscriptionCTATitle}>View Today's Subscriptions</Text>
-                    <Text style={styles.subscriptionCTASubtitle}>Check scheduled deliveries</Text>
+                    <Text style={styles.subscriptionCTATitle}>
+                      View Today's Subscriptions
+                    </Text>
+                    <Text style={styles.subscriptionCTASubtitle}>
+                      Check scheduled deliveries
+                    </Text>
                   </View>
                 </View>
-                <Ionicons name="chevron-forward" size={20} color="#ddd" />
+                <Ionicons
+                  name="chevron-forward"
+                  size={20}
+                  color={C.textLight}
+                />
               </TouchableOpacity>
             </View>
           </>
         ) : (
           <View style={styles.emptyState}>
-            <Ionicons name="bicycle-outline" size={64} color="#ddd" />
+            <Ionicons name="bicycle-outline" size={64} color={C.textLight} />
             <Text style={styles.emptyTitle}>Start your shift</Text>
-            <Text style={styles.emptyText}>Toggle the switch above to begin</Text>
+            <Text style={styles.emptyText}>
+              Toggle the switch above to begin
+            </Text>
           </View>
         )}
 
@@ -218,15 +293,16 @@ export default function DeliveryHome() {
 function OrderCard({ order, router }: { order: any; router: any }) {
   const getStatusConfig = (status: string) => {
     const configs: any = {
-      assigned: { label: "Assigned", color: "#2563eb", bg: "#EFF6FF" },
-      picked_up: { label: "Picked Up", color: "#7c3aed", bg: "#F5F3FF" },
-      out_for_delivery: { label: "In Transit", color: "#0891b2", bg: "#ECFEFF" },
+      assigned: { label: "Assigned", color: C.primary, bg: C.light },
+      picked_up: { label: "Picked Up", color: C.dark, bg: C.light },
+      out_for_delivery: { label: "In Transit", color: C.accent, bg: C.light },
     };
-    return configs[status] || { label: "Partial", color: "#f59e0b", bg: "#FFFBEB" };
+    return configs[status] || { label: "Partial", color: C.dark, bg: C.light };
   };
 
   const statusConfig = getStatusConfig(order.status);
-  const orderNumber = (order.id || order._id)?.toString().slice(-6).toUpperCase() || "000000";
+  const orderNumber =
+    (order.id || order._id)?.toString().slice(-6).toUpperCase() || "000000";
   const orderTime = order.delivery_time || "2:30 PM";
 
   // Parse address safely
@@ -234,21 +310,23 @@ function OrderCard({ order, router }: { order: any; router: any }) {
   const addressText = `${deliveryAddress.tower || ""}${deliveryAddress.flat ? "/" + deliveryAddress.flat : ""}${deliveryAddress.street ? ", " + deliveryAddress.street : ""}`;
 
   return (
-    <TouchableOpacity 
+    <TouchableOpacity
       style={styles.orderCard}
       onPress={() => router.push("/(delivery)/deliveries")}
     >
       <View style={styles.orderHeader}>
         <View style={styles.orderLeft}>
           <View style={styles.orderIcon}>
-            <Ionicons name="cube" size={20} color={Colors.primary} />
+            <Ionicons name="cube" size={20} color={C.primary} />
           </View>
           <View>
             <Text style={styles.orderNumber}>Order : #{orderNumber}</Text>
             <Text style={styles.orderTime}>{orderTime}</Text>
           </View>
         </View>
-        <View style={[styles.statusBadge, { backgroundColor: statusConfig.bg }]}>
+        <View
+          style={[styles.statusBadge, { backgroundColor: statusConfig.bg }]}
+        >
           <Text style={[styles.statusText, { color: statusConfig.color }]}>
             {statusConfig.label}
           </Text>
@@ -257,25 +335,27 @@ function OrderCard({ order, router }: { order: any; router: any }) {
 
       <View style={styles.orderDivider} />
 
-      <Text style={styles.customerName}>{order.customer_name || "Customer"}</Text>
+      <Text style={styles.customerName}>
+        {order.customer_name || "Customer"}
+      </Text>
       {addressText && (
         <View style={styles.orderInfo}>
-          <Ionicons name="location-outline" size={13} color="#999" />
+          <Ionicons name="location-outline" size={13} color={C.textMuted} />
           <Text style={styles.orderAddress}>{addressText}</Text>
         </View>
       )}
       {order.customer_phone && (
         <View style={styles.orderInfo}>
-          <Ionicons name="call-outline" size={13} color="#999" />
+          <Ionicons name="call-outline" size={13} color={C.textMuted} />
           <Text style={styles.orderPhone}>{order.customer_phone}</Text>
         </View>
       )}
 
       <View style={styles.orderFooter}>
         <View style={styles.orderItems}>
-          <Ionicons name="cube-outline" size={14} color="#666" />
+          <Ionicons name="cube-outline" size={14} color={C.textMuted} />
           <Text style={styles.orderItemsText}>
-            {order.items?.length || 0} items  ₹{order.total_amount || 0}
+            {order.items?.length || 0} items ₹{order.total_amount || 0}
           </Text>
         </View>
         <View style={styles.actionButton}>
@@ -289,91 +369,93 @@ function OrderCard({ order, router }: { order: any; router: any }) {
 }
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: '#F8F9FA',
+  container: {
+    flex: 1,
+    backgroundColor: C.bg,
   },
 
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingHorizontal: 20,
     paddingTop: 12,
     paddingBottom: 16,
   },
   headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
   },
   profileImage: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#E8E8E8',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: C.light,
+    justifyContent: "center",
+    alignItems: "center",
   },
   greeting: {
     fontSize: 18,
-    fontWeight: '700',
-    color: '#1A1A1A',
+    fontWeight: "700",
+    color: C.text,
     marginBottom: 2,
   },
   subtitle: {
     fontSize: 12,
-    color: '#999',
-    fontWeight: '500',
+    color: C.textMuted,
+    fontWeight: "500",
   },
   headerRight: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 8,
   },
   notificationBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#FEF0F0',
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'relative',
+    backgroundColor: C.light,
+    justifyContent: "center",
+    alignItems: "center",
+    position: "relative",
   },
   notificationDot: {
-    position: 'absolute',
+    position: "absolute",
     top: 8,
     right: 8,
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#FF4444',
+    backgroundColor: C.dark,
   },
   menuBtn: {
     width: 40,
     height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
 
   shiftToggleContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#fff',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: C.card,
     marginHorizontal: 20,
     marginBottom: 20,
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 12,
-    shadowColor: '#000',
+    borderWidth: 1,
+    borderColor: C.border,
+    shadowColor: C.dark,
     shadowOpacity: 0.04,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,
   },
   shiftToggleLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
   },
   shiftDot: {
@@ -383,8 +465,8 @@ const styles = StyleSheet.create({
   },
   shiftToggleLabel: {
     fontSize: 15,
-    fontWeight: '600',
-    color: '#1A1A1A',
+    fontWeight: "600",
+    color: C.text,
   },
 
   section: {
@@ -392,90 +474,92 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 12,
   },
   sectionTitle: {
     fontSize: 16,
-    fontWeight: '700',
-    color: '#1A1A1A',
+    fontWeight: "700",
+    color: C.text,
   },
   sectionSubtitle: {
     fontSize: 12,
-    color: '#999',
+    color: C.textMuted,
     marginBottom: 16,
   },
   viewAllText: {
     fontSize: 13,
-    fontWeight: '600',
-    color: '#FFD700',
+    fontWeight: "600",
+    color: C.primary,
   },
 
   statsGrid: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 12,
     marginBottom: 12,
   },
   statCard: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: C.card,
     borderRadius: 12,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#F0F0F0',
+    borderColor: C.border,
   },
   statLabel: {
     fontSize: 12,
-    color: '#999',
+    color: C.textMuted,
     marginBottom: 8,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   statValue: {
     fontSize: 28,
-    fontWeight: '700',
-    color: '#1A1A1A',
+    fontWeight: "700",
+    color: C.text,
   },
 
   orderCard: {
-    backgroundColor: '#fff',
+    backgroundColor: C.card,
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
-    shadowColor: '#000',
+    borderWidth: 1,
+    borderColor: C.border,
+    shadowColor: C.dark,
     shadowOpacity: 0.06,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,
   },
   orderHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 12,
   },
   orderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
   },
   orderIcon: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#E8F5E8',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: C.light,
+    justifyContent: "center",
+    alignItems: "center",
   },
   orderNumber: {
     fontSize: 14,
-    fontWeight: '700',
-    color: '#1A1A1A',
+    fontWeight: "700",
+    color: C.text,
   },
   orderTime: {
     fontSize: 11,
-    color: '#999',
+    color: C.textMuted,
     marginTop: 2,
   },
   statusBadge: {
@@ -485,109 +569,109 @@ const styles = StyleSheet.create({
   },
   statusText: {
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: "700",
   },
 
   orderDivider: {
     height: 1,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: C.border,
     marginBottom: 12,
   },
 
   customerName: {
     fontSize: 15,
-    fontWeight: '700',
-    color: '#1A1A1A',
+    fontWeight: "700",
+    color: C.text,
     marginBottom: 8,
   },
   orderInfo: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    alignItems: "flex-start",
     gap: 6,
     marginBottom: 6,
   },
   orderAddress: {
     fontSize: 12,
-    color: '#666',
+    color: C.textMuted,
     flex: 1,
     lineHeight: 16,
   },
   orderPhone: {
     fontSize: 12,
-    color: '#666',
+    color: C.textMuted,
   },
 
   orderFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginTop: 12,
   },
   orderItems: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
   },
   orderItemsText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#666',
+    fontWeight: "600",
+    color: C.textMuted,
   },
   actionButton: {
-    backgroundColor: '#FFD700',
+    backgroundColor: C.primary,
     paddingHorizontal: 24,
     paddingVertical: 10,
     borderRadius: 8,
   },
   actionButtonText: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#1A1A1A',
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
 
   subscriptionCTA: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#FFF4E8',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: C.light,
     paddingHorizontal: 14,
     paddingVertical: 12,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#FFE8D6',
+    borderColor: C.border,
   },
   subscriptionCTALeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
     flex: 1,
   },
   subscriptionCTATitle: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#1A1A1A',
+    fontWeight: "700",
+    color: C.text,
   },
   subscriptionCTASubtitle: {
     fontSize: 11,
-    color: '#999',
+    color: C.textMuted,
     marginTop: 2,
   },
 
   emptyState: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingVertical: 60,
   },
   emptyTitle: {
     fontSize: 18,
-    fontWeight: '700',
-    color: '#1A1A1A',
+    fontWeight: "700",
+    color: C.text,
     marginTop: 16,
     marginBottom: 4,
   },
   emptyText: {
     fontSize: 14,
-    color: '#999',
-    textAlign: 'center',
+    color: C.textMuted,
+    textAlign: "center",
   },
 });

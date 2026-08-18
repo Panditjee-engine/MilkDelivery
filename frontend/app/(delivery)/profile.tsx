@@ -1,14 +1,29 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, RefreshControl, Modal, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, RefreshControl, Modal, TextInput, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAuth } from '../../src/contexts/AuthContext';
 import { api } from '../../src/services/api';
-import { Colors } from '../../src/constants/colors';
 import LoadingScreen from '../../src/components/LoadingScreen';
 import { formatDeliveryAddress } from '../../src/utils/address';
 import { APP_VERSION } from "../../src/services/useVersionCheck";
+
+const C = {
+  primary: "#FF9675",
+  accent: "#FD9E69",
+  light: "#FFD999",
+  dark: "#BB6B3F",
+  bg: "#FFF8EF",
+  card: "#FFFFFF",
+  text: "#3D1F0A",
+  textMuted: "#A07850",
+  textLight: "#C9A882",
+  border: "#F5E6D0",
+};
+
+const RIDER_TIPS_URL = 'https://gausatv.com/rider-tips';
+const FAQ_URL = 'https://gausatv.com/faq';
 
 export default function DeliveryProfileScreen() {
   const { user, logout } = useAuth();
@@ -17,7 +32,8 @@ export default function DeliveryProfileScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [profileData, setProfileData] = useState<any>(null);
   const [myOrders, setMyOrders] = useState<any[]>([]);
-  
+  const [adminDetails, setAdminDetails] = useState<any>(null);
+
   // Edit modal state
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
@@ -31,21 +47,28 @@ export default function DeliveryProfileScreen() {
     fetchAllData();
   }, []);
 
-  const fetchAllData = async () => {
+ const fetchAllData = async () => {
+  try {
+    const [profile, orders] = await Promise.all([
+      api.getMe(),
+      api.getMyOrders(),
+    ]);
+    setProfileData(profile);
+    setMyOrders(orders || []);
+
     try {
-      const [profile, orders] = await Promise.all([
-        api.getMe(),
-        api.getMyOrders(),
-      ]);
-      setProfileData(profile);
-      setMyOrders(orders || []);
-    } catch (error) {
-      console.error('Error fetching data:', error);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
+  const admin = await api.getAssignedAdmin();
+  setAdminDetails(admin);
+} catch (err: any) {
+  setAdminDetails(null);
+}
+  } catch (error) {
+    console.error('Error fetching data:', error);
+  } finally {
+    setLoading(false);
+    setRefreshing(false);
+  }
+};
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -95,11 +118,38 @@ export default function DeliveryProfileScreen() {
     ]);
   };
 
+  const openExternalLink = (url: string) => {
+    Linking.openURL(url).catch(() =>
+      Alert.alert('Error', 'Unable to open this link right now.'),
+    );
+  };
+
+  const handleContactAdmin = () => {
+    if (adminDetails?.phone) {
+      Linking.openURL(`tel:${adminDetails.phone}`).catch(() =>
+        Alert.alert('Error', 'Unable to place the call.'),
+      );
+    } else {
+      Alert.alert('Contact Support', 'Admin phone number is not available yet.');
+    }
+  };
+
+  const formatAdminAddress = (address: any): string => {
+    if (!address) return 'Not provided';
+    if (typeof address === 'string') return address;
+    const parts = [
+      address.line1,
+      address.line2,
+      address.city,
+      address.state,
+      address.pincode,
+    ].filter(Boolean);
+    return parts.length ? parts.join(', ') : 'Not provided';
+  };
+
   if (loading) return <LoadingScreen />;
 
   const displayUser = profileData || user;
-  const completedOrders = myOrders.filter((o) => o.status === 'delivered');
-  const totalCompleted = completedOrders.length;
   const savedAddresses = Array.isArray(displayUser?.addresses) ? displayUser.addresses : [];
   const defaultAddress =
     savedAddresses.find((address: any) => address?.is_default) ||
@@ -111,13 +161,13 @@ export default function DeliveryProfileScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.primary} />}
       >
         {/* Profile Header */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <View style={styles.profileImage}>
-              <Ionicons name="person" size={32} color="#666" />
+              <Ionicons name="person" size={32} color={C.dark} />
             </View>
             <View>
               <Text style={styles.userName}>{displayUser?.name || 'Delivery Partner'}</Text>
@@ -125,43 +175,31 @@ export default function DeliveryProfileScreen() {
             </View>
           </View>
           <TouchableOpacity style={styles.editButton} onPress={handleOpenEditModal}>
-            <Ionicons name="pencil-outline" size={20} color={Colors.primary} />
+            <Ionicons name="pencil-outline" size={20} color={C.primary} />
           </TouchableOpacity>
         </View>
 
-        {/* Profile Stats */}
-        <View style={styles.statsContainer}>
-          <View style={styles.statCard}>
-            <View style={styles.statIconBox}>
-              <Ionicons name="checkmark-circle-outline" size={24} color="#22c55e" />
+        {/* Assigned Zone */}
+        <View style={styles.zoneCardWrap}>
+          <View style={styles.zoneCard}>
+            <View style={styles.zoneIconBox}>
+              <Ionicons name="location-outline" size={24} color={C.primary} />
             </View>
-            <Text style={styles.statLabel}>Completed</Text>
-            <Text style={styles.statValue}>{totalCompleted}</Text>
-          </View>
-          <View style={styles.statCard}>
-            <View style={styles.statIconBox}>
-              <Ionicons name="star-outline" size={24} color="#FFD700" />
+            <View style={styles.zoneTextWrap}>
+              <Text style={styles.zoneLabel}>Assigned Zone</Text>
+              <Text style={styles.zoneValue}>{displayUser?.zone || 'Not assigned'}</Text>
             </View>
-            <Text style={styles.statLabel}>Rating</Text>
-            <Text style={styles.statValue}>4.8</Text>
-          </View>
-          <View style={styles.statCard}>
-            <View style={styles.statIconBox}>
-              <Ionicons name="location-outline" size={24} color="#2563eb" />
-            </View>
-            <Text style={styles.statLabel}>Zone</Text>
-            <Text style={styles.statValue}>{displayUser?.zone || '-'}</Text>
           </View>
         </View>
 
         {/* Contact Information */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Contact Information</Text>
-          
+
           <View style={styles.infoCard}>
             <View style={styles.infoRow}>
-              <View style={[styles.infoIcon, { backgroundColor: '#F0FDF4' }]}>
-                <Ionicons name="call-outline" size={18} color="#22c55e" />
+              <View style={styles.infoIcon}>
+                <Ionicons name="call-outline" size={18} color={C.primary} />
               </View>
               <View style={styles.infoContent}>
                 <Text style={styles.infoLabel}>Phone</Text>
@@ -172,8 +210,8 @@ export default function DeliveryProfileScreen() {
             <View style={styles.infoDivider} />
 
             <View style={styles.infoRow}>
-              <View style={[styles.infoIcon, { backgroundColor: '#FFF4E6' }]}>
-                <Ionicons name="mail-outline" size={18} color="#f59e0b" />
+              <View style={styles.infoIcon}>
+                <Ionicons name="mail-outline" size={18} color={C.primary} />
               </View>
               <View style={styles.infoContent}>
                 <Text style={styles.infoLabel}>Email</Text>
@@ -192,7 +230,7 @@ export default function DeliveryProfileScreen() {
             onPress={() => router.push('/address-book' as any)}
           >
             <View style={styles.addressButtonIcon}>
-              <Ionicons name="location" size={22} color={Colors.primary} />
+              <Ionicons name="location" size={22} color={C.primary} />
             </View>
             <View style={styles.addressButtonContent}>
               <View style={styles.addressButtonTop}>
@@ -209,77 +247,62 @@ export default function DeliveryProfileScreen() {
                   : 'Add, edit, update or delete your delivery address'}
               </Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color={Colors.primary} />
+            <Ionicons name="chevron-forward" size={20} color={C.primary} />
           </TouchableOpacity>
         </View>
 
-        {/* Recent Completed Orders */}
-        {completedOrders.length > 0 && (
-          <View style={styles.section}>
-            <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionTitle}>Recent Deliveries</Text>
-              <Text style={styles.sectionSubtext}>{completedOrders.length} completed</Text>
-            </View>
-
-            <View style={styles.ordersContainer}>
-              {completedOrders.slice(0, 3).map((order) => (
-                <View key={order.id || order._id} style={styles.orderItem}>
-                  <View style={styles.orderItemLeft}>
-                    <View style={styles.orderIcon}>
-                      <Ionicons name="checkmark-done" size={16} color="#22c55e" />
-                    </View>
-                    <View style={styles.orderInfo}>
-                      <Text style={styles.orderCustomer}>
-                        {order.customer_name || 'Customer'}
-                      </Text>
-                      <Text style={styles.orderTime}>
-                        ₹{order.total_amount || 0}
-                      </Text>
-                    </View>
-                  </View>
-                  <View style={styles.orderStatus}>
-                    <Ionicons name="checkmark-circle" size={18} color="#22c55e" />
-                  </View>
-                </View>
-              ))}
-            </View>
-
-            {completedOrders.length > 3 && (
-              <TouchableOpacity
-                style={styles.viewAllOrders}
-                onPress={() => router.push('/(delivery)/deliveries')}
-              >
-                <Text style={styles.viewAllOrdersText}>View All {completedOrders.length} Deliveries</Text>
-                <Ionicons name="arrow-forward" size={16} color={Colors.primary} />
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
-
-        {/* Additional Info */}
+        {/* Your Gaushala / Admin Details */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Additional Information</Text>
-          
+          <Text style={styles.sectionTitle}>Your Gaushala</Text>
+
           <View style={styles.infoCard}>
             <View style={styles.infoRow}>
-              <View style={[styles.infoIcon, { backgroundColor: '#EEF4FF' }]}>
-                <Ionicons name="bicycle-outline" size={18} color="#2563eb" />
+              <View style={styles.infoIcon}>
+                <MaterialCommunityIcons name="home-city-outline" size={18} color={C.primary} />
               </View>
               <View style={styles.infoContent}>
-                <Text style={styles.infoLabel}>Status</Text>
-                <Text style={styles.infoValue}>Active</Text>
+                <Text style={styles.infoLabel}>Gaushala / Admin Name</Text>
+                <Text style={styles.infoValue}>
+                  {adminDetails?.business_name || adminDetails?.name || 'Not available'}
+                </Text>
               </View>
             </View>
 
             <View style={styles.infoDivider} />
 
             <View style={styles.infoRow}>
-              <View style={[styles.infoIcon, { backgroundColor: '#F5F3FF' }]}>
-                <Ionicons name="calendar-outline" size={18} color="#7c3aed" />
+              <View style={styles.infoIcon}>
+                <Ionicons name="call-outline" size={18} color={C.primary} />
               </View>
               <View style={styles.infoContent}>
-                <Text style={styles.infoLabel}>Joined</Text>
-                <Text style={styles.infoValue}>January 2024</Text>
+                <Text style={styles.infoLabel}>Admin Phone</Text>
+                <Text style={styles.infoValue}>{adminDetails?.phone || 'Not provided'}</Text>
+              </View>
+            </View>
+
+            <View style={styles.infoDivider} />
+
+            <View style={styles.infoRow}>
+              <View style={styles.infoIcon}>
+                <Ionicons name="mail-outline" size={18} color={C.primary} />
+              </View>
+              <View style={styles.infoContent}>
+                <Text style={styles.infoLabel}>Admin Email</Text>
+                <Text style={styles.infoValue}>{adminDetails?.email || 'Not provided'}</Text>
+              </View>
+            </View>
+
+            <View style={styles.infoDivider} />
+
+            <View style={styles.infoRow}>
+              <View style={styles.infoIcon}>
+                <Ionicons name="location-outline" size={18} color={C.primary} />
+              </View>
+              <View style={styles.infoContent}>
+                <Text style={styles.infoLabel}>Admin Address</Text>
+                <Text style={styles.infoValue}>
+                  {formatAdminAddress(adminDetails?.address)}
+                </Text>
               </View>
             </View>
           </View>
@@ -288,58 +311,56 @@ export default function DeliveryProfileScreen() {
         {/* Help & Support */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Help & Support</Text>
-          
+
           <View style={styles.infoCard}>
-            <TouchableOpacity style={styles.infoRow}>
-              <View style={[styles.infoIcon, { backgroundColor: '#EEF4FF' }]}>
-                <Ionicons name="book-outline" size={18} color="#2563eb" />
+            <TouchableOpacity style={styles.infoRow} onPress={() => openExternalLink(RIDER_TIPS_URL)}>
+              <View style={styles.infoIcon}>
+                <Ionicons name="book-outline" size={18} color={C.primary} />
               </View>
               <View style={styles.infoContent}>
                 <Text style={styles.infoLabel}>Delivery Guidelines</Text>
                 <Text style={styles.infoValue}>Tips & best practices</Text>
               </View>
-              <Ionicons name="chevron-forward" size={18} color="#ddd" />
+              <Ionicons name="chevron-forward" size={18} color={C.textLight} />
             </TouchableOpacity>
 
             <View style={styles.infoDivider} />
 
-            <TouchableOpacity style={styles.infoRow}>
-              <View style={[styles.infoIcon, { backgroundColor: '#F0FDF4' }]}>
-                <Ionicons name="headset-outline" size={18} color="#22c55e" />
+            <TouchableOpacity style={styles.infoRow} onPress={handleContactAdmin}>
+              <View style={styles.infoIcon}>
+                <Ionicons name="headset-outline" size={18} color={C.primary} />
               </View>
               <View style={styles.infoContent}>
                 <Text style={styles.infoLabel}>Contact Support</Text>
                 <Text style={styles.infoValue}>Get help anytime</Text>
               </View>
-              <Ionicons name="chevron-forward" size={18} color="#ddd" />
+              <Ionicons name="chevron-forward" size={18} color={C.textLight} />
             </TouchableOpacity>
 
             <View style={styles.infoDivider} />
 
-            <TouchableOpacity style={styles.infoRow}>
-              <View style={[styles.infoIcon, { backgroundColor: '#FFF4E6' }]}>
-                <Ionicons name="help-circle-outline" size={18} color="#f59e0b" />
+            <TouchableOpacity style={styles.infoRow} onPress={() => openExternalLink(FAQ_URL)}>
+              <View style={styles.infoIcon}>
+                <Ionicons name="help-circle-outline" size={18} color={C.primary} />
               </View>
               <View style={styles.infoContent}>
                 <Text style={styles.infoLabel}>FAQs</Text>
                 <Text style={styles.infoValue}>Common questions</Text>
               </View>
-              <Ionicons name="chevron-forward" size={18} color="#ddd" />
+              <Ionicons name="chevron-forward" size={18} color={C.textLight} />
             </TouchableOpacity>
           </View>
         </View>
 
-          {/* ── Version ── */}
+        {/* Version */}
         <View style={styles.versionStrip}>
-          <MaterialCommunityIcons name="cow" size={14} color="#4CAF50" />
-          <Text style={[styles.versionTxt, { color: "#4CAF50" }]}>
-            GauSatva Version-{APP_VERSION}
-          </Text>
+          <MaterialCommunityIcons name="cow" size={14} color={C.dark} />
+          <Text style={styles.versionTxt}>GauSatva Version-{APP_VERSION}</Text>
         </View>
 
         {/* Logout Button */}
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Ionicons name="log-out-outline" size={20} color="#ef4444" />
+          <Ionicons name="log-out-outline" size={20} color="#B3261E" />
           <Text style={styles.logoutText}>Logout</Text>
         </TouchableOpacity>
 
@@ -361,7 +382,7 @@ export default function DeliveryProfileScreen() {
                 style={styles.modalClose}
                 onPress={() => setEditModalVisible(false)}
               >
-                <Ionicons name="close" size={24} color="#999" />
+                <Ionicons name="close" size={24} color={C.textMuted} />
               </TouchableOpacity>
             </View>
 
@@ -370,13 +391,13 @@ export default function DeliveryProfileScreen() {
               <View style={styles.formGroup}>
                 <Text style={styles.formLabel}>Full Name</Text>
                 <View style={styles.formInputContainer}>
-                  <Ionicons name="person-outline" size={18} color="#999" />
+                  <Ionicons name="person-outline" size={18} color={C.textMuted} />
                   <TextInput
                     style={styles.formInput}
                     placeholder="Enter your name"
                     value={editForm.name}
                     onChangeText={(text) => setEditForm({ ...editForm, name: text })}
-                    placeholderTextColor="#ccc"
+                    placeholderTextColor={C.textLight}
                   />
                 </View>
               </View>
@@ -385,13 +406,13 @@ export default function DeliveryProfileScreen() {
               <View style={styles.formGroup}>
                 <Text style={styles.formLabel}>Email Address</Text>
                 <View style={styles.formInputContainer}>
-                  <Ionicons name="mail-outline" size={18} color="#999" />
+                  <Ionicons name="mail-outline" size={18} color={C.textMuted} />
                   <TextInput
                     style={styles.formInput}
                     placeholder="Enter your email"
                     value={editForm.email}
                     onChangeText={(text) => setEditForm({ ...editForm, email: text })}
-                    placeholderTextColor="#ccc"
+                    placeholderTextColor={C.textLight}
                     editable={false}
                   />
                 </View>
@@ -401,13 +422,13 @@ export default function DeliveryProfileScreen() {
               <View style={styles.formGroup}>
                 <Text style={styles.formLabel}>Phone Number</Text>
                 <View style={styles.formInputContainer}>
-                  <Ionicons name="call-outline" size={18} color="#999" />
+                  <Ionicons name="call-outline" size={18} color={C.textMuted} />
                   <TextInput
                     style={styles.formInput}
                     placeholder="Enter your phone"
                     value={editForm.phone}
                     onChangeText={(text) => setEditForm({ ...editForm, phone: text })}
-                    placeholderTextColor="#ccc"
+                    placeholderTextColor={C.textLight}
                   />
                 </View>
               </View>
@@ -440,7 +461,7 @@ export default function DeliveryProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: C.bg,
   },
 
   header: {
@@ -449,9 +470,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 20,
-    backgroundColor: '#fff',
+    backgroundColor: C.card,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    borderBottomColor: C.border,
   },
   headerLeft: {
     flexDirection: 'row',
@@ -463,68 +484,71 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#E8E8E8',
+    backgroundColor: C.light,
     justifyContent: 'center',
     alignItems: 'center',
   },
   userName: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#1A1A1A',
+    color: C.text,
     marginBottom: 2,
   },
   userSubtitle: {
     fontSize: 12,
-    color: '#999',
+    color: C.textMuted,
     fontWeight: '500',
   },
   editButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#FFF4E8',
+    backgroundColor: C.light,
     justifyContent: 'center',
     alignItems: 'center',
   },
 
-  statsContainer: {
-    flexDirection: 'row',
+  zoneCardWrap: {
     paddingHorizontal: 20,
     marginTop: 20,
     marginBottom: 24,
-    gap: 12,
   },
-  statCard: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    padding: 14,
+  zoneCard: {
+    flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
+    gap: 14,
+    backgroundColor: C.card,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: C.border,
+    shadowColor: C.dark,
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
     elevation: 2,
   },
-  statIconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F8F9FA',
+  zoneIconBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: C.light,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 8,
   },
-  statLabel: {
-    fontSize: 11,
-    color: '#999',
+  zoneTextWrap: {
+    flex: 1,
+  },
+  zoneLabel: {
+    fontSize: 12,
+    color: C.textMuted,
     fontWeight: '500',
-    marginBottom: 4,
+    marginBottom: 2,
   },
-  statValue: {
-    fontSize: 16,
+  zoneValue: {
+    fontSize: 17,
     fontWeight: '700',
-    color: '#1A1A1A',
+    color: C.text,
   },
 
   section: {
@@ -534,7 +558,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#1A1A1A',
+    color: C.text,
     marginBottom: 12,
   },
   sectionHeaderRow: {
@@ -545,15 +569,17 @@ const styles = StyleSheet.create({
   },
   sectionSubtext: {
     fontSize: 12,
-    color: '#999',
+    color: C.textMuted,
     fontWeight: '500',
   },
 
   infoCard: {
-    backgroundColor: '#fff',
+    backgroundColor: C.card,
     borderRadius: 14,
     overflow: 'hidden',
-    shadowColor: '#000',
+    borderWidth: 1,
+    borderColor: C.border,
+    shadowColor: C.dark,
     shadowOpacity: 0.04,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 2 },
@@ -572,35 +598,36 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
+    backgroundColor: C.bg,
   },
   infoContent: {
     flex: 1,
   },
   infoLabel: {
     fontSize: 12,
-    color: '#999',
+    color: C.textMuted,
     fontWeight: '500',
     marginBottom: 2,
   },
   infoValue: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1A1A1A',
+    color: C.text,
   },
   infoDivider: {
     height: 1,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: C.border,
   },
   addressButtonCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: '#fff',
+    backgroundColor: C.card,
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#DDEFE3',
-    shadowColor: '#000',
+    borderColor: C.border,
+    shadowColor: C.dark,
     shadowOpacity: 0.05,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
@@ -610,7 +637,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 16,
-    backgroundColor: '#EEF8F1',
+    backgroundColor: C.light,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -628,88 +655,24 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     fontWeight: '800',
-    color: '#1A1A1A',
+    color: C.text,
   },
   addressButtonPill: {
     paddingHorizontal: 9,
     paddingVertical: 4,
     borderRadius: 999,
-    backgroundColor: '#ECFDF5',
+    backgroundColor: C.light,
   },
   addressButtonPillText: {
     fontSize: 10,
     fontWeight: '800',
-    color: Colors.primary,
+    color: C.dark,
   },
   addressButtonText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#6B7280',
+    color: C.textMuted,
     lineHeight: 17,
-  },
-
-  ordersContainer: {
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-  },
-  orderItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F5F5F5',
-  },
-  orderItemLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    flex: 1,
-  },
-  orderIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: '#ECFDF5',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  orderInfo: {
-    flex: 1,
-  },
-  orderCustomer: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#1A1A1A',
-    marginBottom: 2,
-  },
-  orderTime: {
-    fontSize: 12,
-    color: '#999',
-  },
-  orderStatus: {
-    marginLeft: 8,
-  },
-
-  viewAllOrders: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    marginTop: 12,
-    paddingVertical: 10,
-  },
-  viewAllOrdersText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.primary,
   },
 
   // Version
@@ -721,7 +684,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     marginBottom: 4,
   },
-  versionTxt: { fontSize: 12, fontWeight: "600" },
+  versionTxt: { fontSize: 12, fontWeight: "600", color: C.dark },
 
   logoutButton: {
     flexDirection: 'row',
@@ -730,7 +693,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     paddingVertical: 14,
     paddingHorizontal: 16,
-    backgroundColor: '#FEF2F2',
+    backgroundColor: '#FDEDEA',
     borderRadius: 12,
     gap: 10,
     marginTop: 8,
@@ -738,17 +701,17 @@ const styles = StyleSheet.create({
   logoutText: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#ef4444',
+    color: '#B3261E',
   },
 
   // Modal Styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(61, 31, 10, 0.45)',
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: '#fff',
+    backgroundColor: C.card,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingBottom: 20,
@@ -762,12 +725,12 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     paddingBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    borderBottomColor: C.border,
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#1A1A1A',
+    color: C.text,
   },
   modalClose: {
     width: 36,
@@ -787,24 +750,24 @@ const styles = StyleSheet.create({
   formLabel: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#1A1A1A',
+    color: C.text,
     marginBottom: 8,
   },
   formInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8F9FA',
+    backgroundColor: C.bg,
     borderRadius: 10,
     paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: '#E5E5E5',
+    borderColor: C.border,
   },
   formInput: {
     flex: 1,
     paddingVertical: 12,
     paddingHorizontal: 10,
     fontSize: 14,
-    color: '#1A1A1A',
+    color: C.text,
   },
 
   modalFooter: {
@@ -817,24 +780,26 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 12,
     borderRadius: 10,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: C.bg,
+    borderWidth: 1,
+    borderColor: C.border,
     alignItems: 'center',
   },
   cancelButtonText: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#666',
+    color: C.textMuted,
   },
   saveButton: {
     flex: 1,
     paddingVertical: 12,
     borderRadius: 10,
-    backgroundColor: '#FFD700',
+    backgroundColor: C.primary,
     alignItems: 'center',
   },
   saveButtonText: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#1A1A1A',
+    color: '#FFFFFF',
   },
 });

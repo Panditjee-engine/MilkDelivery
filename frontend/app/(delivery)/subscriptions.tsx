@@ -15,7 +15,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../../src/services/api";
-import { Colors } from "../../src/constants/colors";
 import LoadingScreen from "../../src/components/LoadingScreen";
 
 if (
@@ -25,9 +24,28 @@ if (
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
+// ── Color palette ─────────────────────────────────────────────────────────
+
+const C = {
+  primary: "#FF9675",
+  accent: "#FD9E69",
+  light: "#FFD999",
+  dark: "#BB6B3F",
+  bg: "#FFF8EF",
+  card: "#FFFFFF",
+  text: "#3D1F0A",
+  textMuted: "#A07850",
+  textLight: "#C9A882",
+  border: "#F5E6D0",
+  green: "#3D8B4C",
+  greenBg: "#E8F3E5",
+  red: "#E0553F",
+  redBg: "#FDECE8",
+};
+
 // ── Types ──────────────────────────────────────────────────────────────────
 
-type FilterType = "all" | "today" | "assigned" | "expired";
+type FilterType = "today" | "assigned" | "all" | "expired";
 
 interface SubItem {
   product_id: string;
@@ -55,13 +73,13 @@ interface Subscription {
   admin_name?: string;
   is_accepted?: boolean;
   accepted_by?: string;
+  status?: string;
   on_vacation_today?: boolean;
   vacation_start_date?: string;
   vacation_end_date?: string;
 }
 
-// ── Helpers ───
-// ─────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────
 
 const getPattern = (s: any): string =>
   String(s?.pattern ?? s?.subscription_type ?? s?.frequency ?? "")
@@ -73,6 +91,10 @@ const isRecurring = (s: any): boolean => {
   if (!p) return true;
   return p !== "buy_once" && p !== "one_time" && p !== "once";
 };
+
+const getStatus = (s: any): string => String(s?.status ?? "").toLowerCase().trim();
+const isCancelledStatus = (s: any): boolean => getStatus(s) === "cancelled";
+const isInactiveStatus = (s: any): boolean => getStatus(s) === "inactive";
 
 const todayStr = () => {
   const now = new Date();
@@ -113,12 +135,64 @@ const isExpired = (sub: any): boolean => {
   return !!end && end < todayStr();
 };
 
+const ADDRESS_SKIP_KEYS = new Set([
+  "lat",
+  "lng",
+  "latitude",
+  "longitude",
+  "id",
+  "_id",
+  "type",
+  "isPrimary",
+  "is_primary",
+  "isDefault",
+  "is_default",
+  "label",
+  "createdAt",
+  "created_at",
+  "updatedAt",
+  "updated_at",
+]);
+
 const formatAddress = (a: any): string => {
   if (!a) return "Address not available";
-  if (typeof a === "string") return a;
-  const parts = [a.line1, a.line2, a.landmark, a.city, a.pincode].filter(
-    Boolean,
-  );
+  if (typeof a === "string") return a.trim() || "Address not available";
+
+  const used = new Set<string>();
+  const take = (...keys: string[]): string | undefined => {
+    for (const k of keys) {
+      const v = a[k];
+      if (typeof v === "string" && v.trim()) {
+        used.add(k);
+        return v.trim();
+      }
+    }
+    return undefined;
+  };
+
+  const parts = [
+    take("full_address", "fullAddress"),
+    take("flat", "house", "house_no", "houseNo", "flatNo", "flat_no", "apartment", "doorNo", "door_no"),
+    take("line1", "addressLine1", "address_line1", "street"),
+    take("line2", "addressLine2", "address_line2"),
+    take("society", "area", "tower", "societyName", "locality", "block", "colony"),
+    take("landmark"),
+    take("city"),
+    take("state"),
+    take("pincode", "pin_code", "zip", "zipcode", "postal_code", "postalCode"),
+  ].filter(Boolean) as string[];
+
+  // Catch-all: pick up any other plain string fields on the address object
+  // that weren't already captured above, so nothing gets silently dropped
+  // regardless of exactly how the backend named its fields.
+  Object.keys(a).forEach((k) => {
+    if (used.has(k) || ADDRESS_SKIP_KEYS.has(k)) return;
+    const v = a[k];
+    if (typeof v === "string" && v.trim() && !parts.includes(v.trim())) {
+      parts.push(v.trim());
+    }
+  });
+
   return parts.length ? parts.join(", ") : "Address not available";
 };
 
@@ -252,24 +326,24 @@ const PATTERN_CONFIG: Record<
   string,
   { label: string; icon: any; color: string; bg: string }
 > = {
-  daily: { label: "Daily", icon: "calendar", color: "#2563eb", bg: "#EFF6FF" },
+  daily: { label: "Daily", icon: "calendar", color: C.primary, bg: C.light + "55" },
   alternate: {
     label: "Alternate Days",
     icon: "calendar-outline",
-    color: "#7c3aed",
-    bg: "#F5F3FF",
+    color: C.dark,
+    bg: "#F3E4D6",
   },
   custom: {
     label: "Custom Days",
     icon: "calendar-number",
-    color: "#0891b2",
-    bg: "#ECFEFF",
+    color: C.accent,
+    bg: "#FFEEDD",
   },
   weekly: {
     label: "Weekly",
     icon: "calendar-number",
-    color: "#0891b2",
-    bg: "#ECFEFF",
+    color: C.accent,
+    bg: "#FFEEDD",
   },
 };
 
@@ -284,7 +358,7 @@ export default function SubscriptionsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
-  const [filter, setFilter] = useState<FilterType>("all");
+  const [filter, setFilter] = useState<FilterType>("today");
   const [checkinStatus, setCheckinStatus] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [deliveredToday, setDeliveredToday] = useState<Set<string>>(new Set());
@@ -296,51 +370,50 @@ export default function SubscriptionsScreen() {
   }, []);
 
   const fetchData = async () => {
-  setError(null);
-  try {
-    const [subs, status, orders]: [any, any, any] = await Promise.all([
-      api.getAssignedSubscriptions(),
-      api.getCheckinStatus().catch(() => null),
-      api.getOrders().catch(() => []), // ← NEW
-    ]);
-    const list: any[] = Array.isArray(subs)
-      ? subs
-      : (subs?.subscriptions ?? subs?.data ?? []);
-    const recurring = list.filter(isRecurring);
-    setSubscriptions(recurring);
-    setCheckinStatus(status);
+    setError(null);
+    try {
+      const [subs, status, orders]: [any, any, any] = await Promise.all([
+        api.getAssignedSubscriptions(),
+        api.getCheckinStatus().catch(() => null),
+        api.getOrders().catch(() => []),
+      ]);
+      const list: any[] = Array.isArray(subs)
+        ? subs
+        : (subs?.subscriptions ?? subs?.data ?? []);
+      const recurring = list.filter(isRecurring);
+      setSubscriptions(recurring);
+      setCheckinStatus(status);
 
-    const accepted = new Set<string>(
-      recurring.filter((s: any) => s.is_accepted).map((s: any) => s.id),
-    );
-    setAcceptedIds(accepted);
+      const accepted = new Set<string>(
+        recurring.filter((s: any) => s.is_accepted).map((s: any) => s.id),
+      );
+      setAcceptedIds(accepted);
 
-    // ← NEW: rebuild "delivered today" from actual order status
-     const today = todayStr();
-    const deliveredKeys = new Set<string>(
-      (Array.isArray(orders) ? orders : [])
-        .filter(
-          (o: any) =>
-            o.subscription_id &&
-            o.delivery_date === today &&
-            o.status === "delivered",
-        )
-        .map((o: any) => `${o.subscription_id}:${today}`),
-    );
-    recurring.forEach((s: any) => {
-      if (String(s.delivery_status || "").toLowerCase() === "delivered") {
-        deliveredKeys.add(`${s.id}:${today}`);
-      }
-    });
+      const today = todayStr();
+      const deliveredKeys = new Set<string>(
+        (Array.isArray(orders) ? orders : [])
+          .filter(
+            (o: any) =>
+              o.subscription_id &&
+              o.delivery_date === today &&
+              o.status === "delivered",
+          )
+          .map((o: any) => `${o.subscription_id}:${today}`),
+      );
+      recurring.forEach((s: any) => {
+        if (String(s.delivery_status || "").toLowerCase() === "delivered") {
+          deliveredKeys.add(`${s.id}:${today}`);
+        }
+      });
 
-    setDeliveredToday(deliveredKeys);
-  } catch (err: any) {
-    setError(err?.message || "Failed to load subscriptions");
-  } finally {
-    setLoading(false);
-    setRefreshing(false);
-  }
-};
+      setDeliveredToday(deliveredKeys);
+    } catch (err: any) {
+      setError(err?.message || "Failed to load subscriptions");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -369,14 +442,7 @@ export default function SubscriptionsScreen() {
           onPress: async () => {
             try {
               await api.acceptSubscription(sub.id).catch(() => null);
-              animate();
-              setAcceptedIds((prev) => new Set([...prev, sub.id]));
-              setExpandedId(null);
-              Alert.alert(
-                "✅ Accepted!",
-                "You will see a delivery button each scheduled day.",
-              );
-            } catch {
+            } finally {
               animate();
               setAcceptedIds((prev) => new Set([...prev, sub.id]));
               setExpandedId(null);
@@ -387,7 +453,7 @@ export default function SubscriptionsScreen() {
     );
   }, []);
 
-const handleMarkDelivered = useCallback(async (sub: Subscription) => {
+  const handleMarkDelivered = useCallback(async (sub: Subscription) => {
     const key = `${sub.id}:${todayStr()}`;
     Alert.alert(
       "📦 Mark as Delivered",
@@ -398,10 +464,8 @@ const handleMarkDelivered = useCallback(async (sub: Subscription) => {
           text: "Confirm Delivered",
           onPress: async () => {
             try {
-              // Directly call the dedicated subscription delivery update endpoint
-              // This guarantees the backend upserts the order for today so it won't vanish on refresh
               await api.updateSubscriptionStatus(sub.id, "delivered");
-              
+
               setDeliveredToday((prev) => new Set([...prev, key]));
               Alert.alert(
                 "✅ Delivered!",
@@ -417,59 +481,87 @@ const handleMarkDelivered = useCallback(async (sub: Subscription) => {
   }, []);
 
   // ── Filters ──────────────────────────────────────────────────────────────
-const filtered = subscriptions.filter((sub) => {
-    const accepted = acceptedIds.has(sub.id);
-    const deliversToday = isDeliveryToday(sub) && !isOnVacation(sub); // ← added guard
-    const expired = isEffectivelyExpired(sub, accepted, deliversToday);
 
-    if (filter === "expired") return expired;
-    if (expired) return false;
+  const isExpiredTabMember = (sub: Subscription, accepted: boolean) =>
+    isEffectivelyExpired(sub, accepted, isDeliveryToday(sub)) ||
+    isInactiveStatus(sub) ||
+    isCancelledStatus(sub);
+
+  const filtered = subscriptions.filter((sub) => {
+    const accepted = acceptedIds.has(sub.id);
+    const deliversToday = isDeliveryToday(sub) && !isOnVacation(sub);
+    const expiredTab = isExpiredTabMember(sub, accepted);
+
+    if (filter === "expired") return expiredTab;
+    if (expiredTab) return false;
 
     if (filter === "all") return !accepted;
     if (filter === "today") return accepted && deliversToday;
     if (filter === "assigned") {
-      return accepted && !expired;
+      return accepted;
     }
     return true;
-});
+  });
 
+  // Split the Expired tab list into "Cancelled" vs "Expired" groups
+  const cancelledList = filtered.filter((s) => isCancelledStatus(s));
+  const expiredList = filtered.filter((s) => !isCancelledStatus(s));
 
   const pendingCount = subscriptions.filter((s) => {
     const accepted = acceptedIds.has(s.id);
-    return !accepted && !isEffectivelyExpired(s, accepted, isDeliveryToday(s));
+    return !accepted && !isExpiredTabMember(s, accepted);
   }).length;
 
   const todayCount = subscriptions.filter((s) => {
     const accepted = acceptedIds.has(s.id);
     const deliversToday = isDeliveryToday(s);
-    return (
-      accepted &&
-      deliversToday &&
-      !isEffectivelyExpired(s, accepted, deliversToday)
-    );
+    return accepted && deliversToday && !isExpiredTabMember(s, accepted);
   }).length;
 
   const assignedCount = subscriptions.filter((s) => {
     const accepted = acceptedIds.has(s.id);
-    const deliversToday = isDeliveryToday(s);
-    return accepted && !isEffectivelyExpired(s, accepted, deliversToday);
+    return accepted && !isExpiredTabMember(s, accepted);
   }).length;
 
   const expiredCount = subscriptions.filter((s) => {
     const accepted = acceptedIds.has(s.id);
-    return isEffectivelyExpired(s, accepted, isDeliveryToday(s));
+    return isExpiredTabMember(s, accepted);
   }).length;
 
   if (loading) return <LoadingScreen />;
 
   const isShiftOff = !checkinStatus?.checked_in || checkinStatus?.checked_out;
 
+  const renderSubCard = (sub: Subscription) => {
+    const key = `${sub.id}:${todayStr()}`;
+    const accepted = acceptedIds.has(sub.id);
+    const delivers = isDeliveryToday(sub) && !isOnVacation(sub);
+    return (
+      <SubCard
+        key={sub.id}
+        sub={sub}
+        context={filter}
+        isShiftOff={isShiftOff}
+        deliversToday={delivers}
+        isAccepted={accepted}
+        isOnVacation={isOnVacation(sub)}
+        isEffectivelyExpired={isEffectivelyExpired(sub, accepted, delivers)}
+        isCancelled={isCancelledStatus(sub)}
+        isDeliveredToday={deliveredToday.has(key)}
+        isExpanded={expandedId === sub.id}
+        onToggleExpand={() => toggleExpand(sub.id)}
+        onAccept={() => handleAccept(sub)}
+        onMarkDelivered={() => handleMarkDelivered(sub)}
+      />
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color="#1A1A1A" />
+          <Ionicons name="arrow-back" size={24} color={C.text} />
         </TouchableOpacity>
         <View>
           <Text style={styles.headerTitle}>My Subscriptions</Text>
@@ -483,7 +575,7 @@ const filtered = subscriptions.filter((sub) => {
       {/* Shift warning */}
       {isShiftOff && !error && (
         <View style={styles.warningBanner}>
-          <Ionicons name="alert-circle" size={15} color="#f59e0b" />
+          <Ionicons name="alert-circle" size={15} color={C.dark} />
           <Text style={styles.warningText}>
             Start your shift to unlock delivery actions
           </Text>
@@ -494,9 +586,9 @@ const filtered = subscriptions.filter((sub) => {
       <View style={styles.tabRow}>
         {(
           [
-            { key: "all", label: "All", count: pendingCount },
             { key: "today", label: "Today", count: todayCount },
             { key: "assigned", label: "Assigned", count: assignedCount },
+            { key: "all", label: "Action", count: pendingCount },
             { key: "expired", label: "Expired", count: expiredCount },
           ] as { key: FilterType; label: string; count: number }[]
         ).map(({ key, label, count }) => (
@@ -540,29 +632,37 @@ const filtered = subscriptions.filter((sub) => {
       >
         {error ? (
           <ErrorState error={error} onRetry={fetchData} />
+        ) : filter === "expired" ? (
+          expiredList.length > 0 || cancelledList.length > 0 ? (
+            <>
+              {expiredList.length > 0 && (
+                <>
+                  <View style={styles.groupHeaderRow}>
+                    <Ionicons name="close-circle" size={13} color={C.red} />
+                    <Text style={styles.groupHeaderText}>
+                      Expired ({expiredList.length})
+                    </Text>
+                  </View>
+                  {expiredList.map(renderSubCard)}
+                </>
+              )}
+              {cancelledList.length > 0 && (
+                <>
+                  <View style={[styles.groupHeaderRow, { marginTop: 6 }]}>
+                    <Ionicons name="ban" size={13} color={C.dark} />
+                    <Text style={styles.groupHeaderText}>
+                      Cancelled ({cancelledList.length})
+                    </Text>
+                  </View>
+                  {cancelledList.map(renderSubCard)}
+                </>
+              )}
+            </>
+          ) : (
+            <EmptyState filter={filter} />
+          )
         ) : filtered.length > 0 ? (
-          filtered.map((sub) => {
-  const key = `${sub.id}:${todayStr()}`;
-  const accepted = acceptedIds.has(sub.id);
-  const delivers = isDeliveryToday(sub) && !isOnVacation(sub); // ← guard here too
-  return (
-    <SubCard
-      key={sub.id}
-      sub={sub}
-      context={filter}
-      isShiftOff={isShiftOff}
-      deliversToday={delivers}
-      isAccepted={accepted}
-      isOnVacation={isOnVacation(sub)}   // ← new prop
-      isEffectivelyExpired={isEffectivelyExpired(sub, accepted, delivers)}
-      isDeliveredToday={deliveredToday.has(key)}
-      isExpanded={expandedId === sub.id}
-      onToggleExpand={() => toggleExpand(sub.id)}
-      onAccept={() => handleAccept(sub)}
-      onMarkDelivered={() => handleMarkDelivered(sub)}
-    />
-  );
-})
+          filtered.map(renderSubCard)
         ) : (
           <EmptyState filter={filter} />
         )}
@@ -581,8 +681,9 @@ function SubCard({
   deliversToday,
   isAccepted,
   isEffectivelyExpired,
+  isCancelled,
   isDeliveredToday,
-   isOnVacation,               //
+  isOnVacation,
   isExpanded,
   onToggleExpand,
   onAccept,
@@ -594,9 +695,10 @@ function SubCard({
   deliversToday: boolean;
   isAccepted: boolean;
   isEffectivelyExpired: boolean;
+  isCancelled: boolean;
   isDeliveredToday: boolean;
   isExpanded: boolean;
-   isOnVacation: boolean;
+  isOnVacation: boolean;
   onToggleExpand: () => void;
   onAccept: () => void;
   onMarkDelivered: () => void;
@@ -605,29 +707,32 @@ function SubCard({
   const pattern = PATTERN_CONFIG[patternKey] ?? {
     label: patternKey || "Regular",
     icon: "calendar",
-    color: "#666",
-    bg: "#F5F5F5",
+    color: C.textMuted,
+    bg: C.border,
   };
   const address = formatAddress(sub.customer_address || sub.address);
   const items = sub.items ?? [];
   const daysLeft = daysUntilEnd(sub.end_date);
   const withinSlot = isWithinSlot(sub.delivery_slot);
-  const expired = isEffectivelyExpired;
+  // In the Expired tab, a cancelled subscription is shown as "Cancelled", not "Expired"
+  const expired = context === "expired" ? true : isEffectivelyExpired;
   const trueExpired = isExpired(sub);
   const showStartMsg =
     isAccepted && deliversToday && !isDeliveredToday && !withinSlot && !expired;
-  
+
   // Horizontal calendar timeline for the Today tab when expanded
   const calendarTimeline =
     context === "today" && !expired ? buildCalendarTimeline(sub, patternKey) : [];
-  
+
   const dateLabel = getDeliveryDateLabel(sub, deliversToday);
   const canQuickDeliver =
     context === "today" && isAccepted && deliversToday && !expired && !isOnVacation;
 
-  const expiredMessage = trueExpired
-    ? `Expired on ${sub.end_date}`
-    : "No upcoming deliveries scheduled";
+  const expiredMessage = isCancelled
+    ? "Subscription Cancelled"
+    : trueExpired
+      ? `Expired on ${sub.end_date}`
+      : "No upcoming deliveries scheduled";
 
   const handleTickPress = () => {
     if (isDeliveredToday) return;
@@ -642,17 +747,30 @@ function SubCard({
           deliversToday &&
           !expired &&
           (isDeliveredToday ? styles.cardDone : styles.cardPending),
-        expired && styles.cardExpired,
+        expired && (isCancelled ? styles.cardCancelled : styles.cardExpired),
         isExpanded && styles.cardExpanded,
       ]}
     >
       <TouchableOpacity activeOpacity={0.75} onPress={onToggleExpand}>
         <View style={styles.badgeRow}>
           {expired ? (
-            <View style={styles.expiredBadge}>
-              <Ionicons name="close-circle" size={10} color="#fff" />
+            <View
+              style={[
+                styles.expiredBadge,
+                isCancelled && { backgroundColor: C.dark },
+              ]}
+            >
+              <Ionicons
+                name={isCancelled ? "ban" : "close-circle"}
+                size={10}
+                color="#fff"
+              />
               <Text style={styles.expiredBadgeText}>
-                {trueExpired ? "Subscription Expired" : "No Upcoming Delivery"}
+                {isCancelled
+                  ? "Cancelled"
+                  : trueExpired
+                    ? "Subscription Expired"
+                    : "No Upcoming Delivery"}
               </Text>
             </View>
           ) : (
@@ -672,7 +790,7 @@ function SubCard({
               )}
               {context === "today" && !isDeliveredToday && (
                 <View style={styles.pendingBadge}>
-                  <Ionicons name="time" size={10} color="#7a5200" />
+                  <Ionicons name="time" size={10} color={C.dark} />
                   <Text style={styles.pendingBadgeText}>To Be Delivered</Text>
                 </View>
               )}
@@ -700,28 +818,41 @@ function SubCard({
           <View
             style={[
               styles.productIconWrap,
-              isDeliveredToday && !expired && { backgroundColor: "#DCFCE7" },
+              isDeliveredToday && !expired && { backgroundColor: C.greenBg },
             ]}
           >
             <Ionicons
-              name={isDeliveredToday && !expired ? "checkmark" : "cube"}
+              name={isDeliveredToday && !expired ? "checkmark" : "location"}
               size={18}
-              color={isDeliveredToday && !expired ? "#16a34a" : Colors.primary}
+              color={isDeliveredToday && !expired ? C.green : C.primary}
             />
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.productName} numberOfLines={1}>
-              {items.length === 1
-                ? items[0].product_name || items[0].name || "Product"
-                : items.length > 1
-                  ? `${items[0].product_name || "Product"} +${items.length - 1} more`
-                  : "Product"}
-            </Text>
-            <Text style={styles.customerName} numberOfLines={1}>
-              {sub.customer_name || "Customer"} • ₹
-              {Number(sub.total_amount).toFixed(0)}/day
-            </Text>
-          </View>
+          {!isExpanded ? (
+            <View style={{ flex: 1 }}>
+              <Text style={styles.productName} numberOfLines={2}>
+                {address}
+              </Text>
+              <Text style={styles.customerName} numberOfLines={1}>
+                {sub.customer_name || "Customer"} • ₹
+                {Number(sub.total_amount).toFixed(0)}/day
+              </Text>
+            </View>
+          ) : (
+            <View style={{ flex: 1 }}>
+              <Text style={styles.productName} numberOfLines={1}>
+                {sub.customer_name || "Customer"}
+              </Text>
+              <Text style={styles.customerName} numberOfLines={1}>
+                {items.length === 1
+                  ? items[0].product_name || items[0].name || "Product"
+                  : items.length > 1
+                    ? `${items[0].product_name || "Product"} +${items.length - 1} more`
+                    : "Product"}
+                {" • ₹"}
+                {Number(sub.total_amount).toFixed(0)}/day
+              </Text>
+            </View>
+          )}
           <View style={[styles.patternPill, { backgroundColor: pattern.bg }]}>
             <Ionicons name={pattern.icon} size={10} color={pattern.color} />
             <Text style={[styles.patternPillText, { color: pattern.color }]}>
@@ -738,7 +869,7 @@ function SubCard({
               <Ionicons
                 name={isDeliveredToday ? "checkmark-done" : "checkmark"}
                 size={16}
-                color={isDeliveredToday ? "#16a34a" : "#fff"}
+                color={isDeliveredToday ? C.green : "#fff"}
               />
             </TouchableOpacity>
           )}
@@ -746,44 +877,56 @@ function SubCard({
           <Ionicons
             name={isExpanded ? "chevron-up" : "chevron-down"}
             size={18}
-            color="#bbb"
+            color={C.textLight}
             style={{ marginLeft: 2 }}
           />
         </View>
 
-{!isExpanded && (
-  <View style={styles.quickRow}>
-    {expired ? (
-      <>
-        <Ionicons name="close-circle-outline" size={12} color="#ef4444" />
-        <Text style={styles.quickRowExpiredText}>{expiredMessage}</Text>
-      </>) : isOnVacation ? (
-      <>
-        <Ionicons name="airplane-outline" size={12} color="#d97706" />
-        <Text style={[styles.quickRowText, { color: "#d97706" }]}>
-          Paused — resumes {sub.vacation_end_date || "soon"}
-        </Text>
-      </>
-    ) : context === "assigned" ? (
-      <>
-        <Ionicons name="calendar-outline" size={12} color="#999" />
-        <Text style={styles.quickRowText}>
-          {sub.start_date} → {sub.end_date || "Ongoing"}
-        </Text>
-      </>
-    ) : (
-      <>
-        <Ionicons name="calendar-outline" size={12} color="#999" />
-        <Text style={styles.quickRowText}>Delivery: {dateLabel}</Text>
-      </>
-    )}
-    <View style={{ flex: 1 }} />
-    <Ionicons name="location-outline" size={12} color="#999" />
-    <Text style={styles.quickRowAddr} numberOfLines={1}>
-      {address}
-    </Text>
-  </View>
-)}
+        {!isExpanded && (
+          <View style={styles.quickRow}>
+            {expired ? (
+              <>
+                <Ionicons
+                  name={isCancelled ? "ban-outline" : "close-circle-outline"}
+                  size={12}
+                  color={isCancelled ? C.dark : C.red}
+                />
+                <Text
+                  style={[
+                    styles.quickRowExpiredText,
+                    isCancelled && { color: C.dark },
+                  ]}
+                >
+                  {expiredMessage}
+                </Text>
+              </>
+            ) : isOnVacation ? (
+              <>
+                <Ionicons name="airplane-outline" size={12} color={C.dark} />
+                <Text style={[styles.quickRowText, { color: C.dark }]}>
+                  Paused — resumes {sub.vacation_end_date || "soon"}
+                </Text>
+              </>
+            ) : context === "assigned" ? (
+              <>
+                <Ionicons name="calendar-outline" size={12} color={C.textMuted} />
+                <Text style={styles.quickRowText}>
+                  {sub.start_date} → {sub.end_date || "Ongoing"}
+                </Text>
+              </>
+            ) : context === "today" ? (
+              <>
+                <Ionicons name="calendar-outline" size={12} color={C.textMuted} />
+                <Text style={styles.quickRowText}>Delivery: {dateLabel}</Text>
+              </>
+            ) : (
+              <>
+                <Ionicons name="calendar-outline" size={12} color={C.textMuted} />
+                <Text style={styles.quickRowText}>Delivery: {dateLabel}</Text>
+              </>
+            )}
+          </View>
+        )}
       </TouchableOpacity>
 
       {/* Expanded detail */}
@@ -827,17 +970,13 @@ function SubCard({
           </View>
 
           <View style={styles.addressRow}>
-            <Ionicons
-              name="location-outline"
-              size={13}
-              color={Colors.primary}
-            />
+            <Ionicons name="location-outline" size={13} color={C.primary} />
             <Text style={styles.addressText}>{address}</Text>
           </View>
 
           <View style={styles.metaRow}>
             <View style={styles.metaChip}>
-              <Ionicons name="time-outline" size={13} color="#2563eb" />
+              <Ionicons name="time-outline" size={13} color={C.dark} />
               <Text style={styles.metaChipText}>
                 {sub.delivery_slot || "Any time"}
               </Text>
@@ -846,40 +985,40 @@ function SubCard({
               <Ionicons
                 name={expired ? "close-circle" : "calendar-outline"}
                 size={13}
-                color={expired ? "#ef4444" : "#7c3aed"}
+                color={expired ? C.red : C.accent}
               />
               <Text
                 style={[
                   styles.metaChipText,
-                  expired && { color: "#ef4444", fontWeight: "700" },
+                  expired && { color: C.red, fontWeight: "700" },
                 ]}
               >
                 {expired ? expiredMessage : `Delivery: ${dateLabel}`}
               </Text>
             </View>
           </View>
-{context === "assigned" && !expired && (
-  <View style={styles.metaRow}>
-    <View style={styles.metaChip}>
-      <Ionicons name="play-outline" size={13} color="#16a34a" />
-      <Text style={styles.metaChipText}>Start: {sub.start_date}</Text>
-    </View>
-    <View style={styles.metaChip}>
-      <Ionicons name="flag-outline" size={13} color="#ef4444" />
-      <Text style={styles.metaChipText}>
-        End: {sub.end_date || "No end date (ongoing)"}
-      </Text>
-    </View>
-  </View>
-)}
-{isOnVacation && !expired && (
-  <View style={styles.vacationBadge}>
-    <Ionicons name="airplane" size={10} color="#fff" />
-    <Text style={styles.vacationBadgeText}>
-      On Vacation{sub.vacation_end_date ? ` till ${sub.vacation_end_date}` : ""}
-    </Text>
-  </View>
-)}
+          {context === "assigned" && !expired && (
+            <View style={styles.metaRow}>
+              <View style={styles.metaChip}>
+                <Ionicons name="play-outline" size={13} color={C.green} />
+                <Text style={styles.metaChipText}>Start: {sub.start_date}</Text>
+              </View>
+              <View style={styles.metaChip}>
+                <Ionicons name="flag-outline" size={13} color={C.red} />
+                <Text style={styles.metaChipText}>
+                  End: {sub.end_date || "No end date (ongoing)"}
+                </Text>
+              </View>
+            </View>
+          )}
+          {isOnVacation && !expired && (
+            <View style={styles.vacationBadge}>
+              <Ionicons name="airplane" size={10} color="#fff" />
+              <Text style={styles.vacationBadgeText}>
+                On Vacation{sub.vacation_end_date ? ` till ${sub.vacation_end_date}` : ""}
+              </Text>
+            </View>
+          )}
           {/* Horizontal Calendar Timeline view with Month & Date for Today Tab */}
           {context === "today" && calendarTimeline.length > 0 && (
             <View style={styles.calendarSection}>
@@ -950,7 +1089,7 @@ function SubCard({
 
           {showStartMsg && (
             <View style={styles.slotBanner}>
-              <Ionicons name="alarm-outline" size={16} color="#d97706" />
+              <Ionicons name="alarm-outline" size={16} color={C.dark} />
               <View style={{ flex: 1 }}>
                 <Text style={styles.slotBannerTitle}>Delivery Window</Text>
                 <Text style={styles.slotBannerText}>
@@ -962,17 +1101,33 @@ function SubCard({
 
           <View style={styles.actionRow}>
             {expired ? (
-              <View style={styles.expiredPill}>
-                <Ionicons name="close-circle" size={16} color="#ef4444" />
-                <Text style={styles.expiredPillText}>{expiredMessage}</Text>
+              <View
+                style={[
+                  styles.expiredPill,
+                  isCancelled && styles.cancelledPill,
+                ]}
+              >
+                <Ionicons
+                  name={isCancelled ? "ban" : "close-circle"}
+                  size={16}
+                  color={isCancelled ? C.dark : C.red}
+                />
+                <Text
+                  style={[
+                    styles.expiredPillText,
+                    isCancelled && { color: C.dark },
+                  ]}
+                >
+                  {expiredMessage}
+                </Text>
               </View>
-              ) : isOnVacation ? (
-  <View style={styles.vacationPill}>
-    <Ionicons name="airplane" size={14} color="#d97706" />
-    <Text style={styles.vacationPillText}>
-      Customer on vacation — no delivery until {sub.vacation_end_date || "further notice"}
-    </Text>
-  </View>
+            ) : isOnVacation ? (
+              <View style={styles.vacationPill}>
+                <Ionicons name="airplane" size={14} color={C.dark} />
+                <Text style={styles.vacationPillText}>
+                  Customer on vacation — no delivery until {sub.vacation_end_date || "further notice"}
+                </Text>
+              </View>
             ) : !isAccepted ? (
               <TouchableOpacity
                 style={[styles.acceptBtn, isShiftOff && styles.btnDisabled]}
@@ -982,12 +1137,12 @@ function SubCard({
                 <Ionicons
                   name="checkmark-circle"
                   size={16}
-                  color={isShiftOff ? "#ccc" : "#fff"}
+                  color={isShiftOff ? C.textLight : "#fff"}
                 />
                 <Text
                   style={[
                     styles.acceptBtnText,
-                    isShiftOff && { color: "#ccc" },
+                    isShiftOff && { color: C.textLight },
                   ]}
                 >
                   {isShiftOff ? "Start Shift First" : "Accept Subscription"}
@@ -995,7 +1150,7 @@ function SubCard({
               </TouchableOpacity>
             ) : isDeliveredToday ? (
               <View style={styles.doneBtn}>
-                <Ionicons name="checkmark-done" size={16} color="#16a34a" />
+                <Ionicons name="checkmark-done" size={16} color={C.green} />
                 <Text style={styles.doneBtnText}>Delivered Today ✓</Text>
               </View>
             ) : deliversToday ? (
@@ -1013,7 +1168,7 @@ function SubCard({
               </TouchableOpacity>
             ) : (
               <View style={styles.acceptedPill}>
-                <Ionicons name="checkmark-circle" size={14} color="#2563eb" />
+                <Ionicons name="checkmark-circle" size={14} color={C.dark} />
                 <Text style={styles.acceptedPillText}>
                   Accepted • Next: {dateLabel}
                 </Text>
@@ -1030,15 +1185,15 @@ function SubCard({
 
 function EmptyState({ filter }: { filter: FilterType }) {
   const msgs: Record<FilterType, string> = {
-    all: "No pending subscriptions.\nEverything assigned to you has been accepted.",
     today: "No accepted subscriptions have a delivery scheduled for today.",
     assigned: "You haven’t accepted any subscriptions yet",
-    expired: "Nothing expired — everything is still active",
+    all: "No pending subscriptions.\nEverything assigned to you has been accepted.",
+    expired: "Nothing expired or cancelled — everything is still active",
   };
   return (
     <View style={styles.empty}>
-      <Ionicons name="repeat-outline" size={56} color="#ddd" />
-      <Text style={styles.emptyTitle}>No Subscriptions</Text>
+      <Ionicons name="repeat-outline" size={56} color={C.border} />
+      <Text style={styles.emptyTitle}>All Accepted</Text>
       <Text style={styles.emptyText}>{msgs[filter]}</Text>
     </View>
   );
@@ -1053,7 +1208,7 @@ function ErrorState({
 }) {
   return (
     <View style={styles.empty}>
-      <Ionicons name="cloud-offline-outline" size={56} color="#fca5a5" />
+      <Ionicons name="cloud-offline-outline" size={56} color={C.red} />
       <Text style={styles.emptyTitle}>Couldn't Load</Text>
       <Text style={styles.emptyText}>{error}</Text>
       <TouchableOpacity style={styles.retryBtn} onPress={onRetry}>
@@ -1066,30 +1221,21 @@ function ErrorState({
 
 // ── Styles ─────────────────────────────────────────────────────────────────
 
-const C = {
-  primary: Colors.primary,
-  green: "#16a34a",
-  blue: "#2563eb",
-  amber: "#d97706",
-  red: "#ef4444",
-  purple: "#7c3aed",
-};
-
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F4F6FA" },
+  container: { flex: 1, backgroundColor: C.bg },
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 20,
     paddingVertical: 14,
-    backgroundColor: "#fff",
+    backgroundColor: C.card,
     borderBottomWidth: 1,
-    borderBottomColor: "#F0F0F0",
+    borderBottomColor: C.border,
   },
   backBtn: { width: 36, height: 36, justifyContent: "center" },
-  headerTitle: { fontSize: 16, fontWeight: "700", color: "#1A1A1A" },
-  headerSub: { fontSize: 11, color: "#999", marginTop: 1 },
+  headerTitle: { fontSize: 16, fontWeight: "700", color: C.text },
+  headerSub: { fontSize: 11, color: C.textMuted, marginTop: 1 },
   headerBadge: {
     backgroundColor: C.primary,
     borderRadius: 12,
@@ -1101,19 +1247,19 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    backgroundColor: "#FFFBEB",
+    backgroundColor: C.light + "40",
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#FEF08A",
+    borderBottomColor: C.light,
   },
-  warningText: { fontSize: 12, color: "#92400e", fontWeight: "500" },
+  warningText: { fontSize: 12, color: C.dark, fontWeight: "500" },
   tabRow: {
     flexDirection: "row",
-    backgroundColor: "#fff",
+    backgroundColor: C.card,
     paddingHorizontal: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#F0F0F0",
+    borderBottomColor: C.border,
   },
   tab: {
     flex: 1,
@@ -1126,36 +1272,56 @@ const styles = StyleSheet.create({
     borderBottomColor: "transparent",
   },
   tabActive: { borderBottomColor: C.primary },
-  tabText: { fontSize: 12, fontWeight: "600", color: "#999" },
-  tabTextActive: { color: "#1A1A1A" },
+  tabText: { fontSize: 12, fontWeight: "600", color: C.textMuted },
+  tabTextActive: { color: C.text },
   tabBubble: {
-    backgroundColor: "#F0F0F0",
+    backgroundColor: C.border,
     borderRadius: 8,
     paddingHorizontal: 6,
     paddingVertical: 1,
   },
   tabBubbleActive: { backgroundColor: C.primary + "22" },
-  tabBubbleText: { fontSize: 10, fontWeight: "700", color: "#999" },
+  tabBubbleText: { fontSize: 10, fontWeight: "700", color: C.textMuted },
   tabBubbleTextActive: { color: C.primary },
   list: { paddingTop: 14, paddingHorizontal: 14, paddingBottom: 20 },
+  groupHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 8,
+    marginLeft: 2,
+  },
+  groupHeaderText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: C.text,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
   card: {
-    backgroundColor: "#fff",
+    backgroundColor: C.card,
     borderRadius: 14,
     padding: 12,
     marginBottom: 10,
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
+    shadowColor: C.dark,
+    shadowOpacity: 0.06,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,
   },
-  cardPending: { borderWidth: 1.5, borderColor: "#fde68a" },
-  cardDone: { borderWidth: 1.5, borderColor: "#d1fae5" },
+  cardPending: { borderWidth: 1.5, borderColor: C.light },
+  cardDone: { borderWidth: 1.5, borderColor: C.greenBg },
   cardExpired: {
     borderWidth: 1.5,
-    borderColor: "#fecaca",
-    backgroundColor: "#FFFBFB",
-    opacity: 0.85,
+    borderColor: C.redBg,
+    backgroundColor: "#FFFCFA",
+    opacity: 0.9,
+  },
+  cardCancelled: {
+    borderWidth: 1.5,
+    borderColor: C.border,
+    backgroundColor: "#FBF5EE",
+    opacity: 0.9,
   },
   cardExpanded: { paddingBottom: 14 },
   badgeRow: { flexDirection: "row", gap: 6, marginBottom: 8, flexWrap: "wrap" },
@@ -1163,7 +1329,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 3,
-    backgroundColor: Colors.primary,
+    backgroundColor: C.primary,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
@@ -1183,17 +1349,17 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 3,
-    backgroundColor: "#facc15",
+    backgroundColor: C.light,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
   },
-  pendingBadgeText: { fontSize: 10, fontWeight: "700", color: "#7a5200" },
+  pendingBadgeText: { fontSize: 10, fontWeight: "700", color: C.dark },
   acceptedBadge: {
     flexDirection: "row",
     alignItems: "center",
     gap: 3,
-    backgroundColor: C.blue,
+    backgroundColor: C.dark,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
@@ -1213,7 +1379,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 3,
-    backgroundColor: "#dc2626",
+    backgroundColor: C.red,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
@@ -1224,12 +1390,12 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 11,
-    backgroundColor: "#FFF4E8",
+    backgroundColor: C.light + "40",
     justifyContent: "center",
     alignItems: "center",
   },
-  productName: { fontSize: 13.5, fontWeight: "700", color: "#1A1A1A" },
-  customerName: { fontSize: 11, color: "#999", marginTop: 2 },
+  productName: { fontSize: 13.5, fontWeight: "700", color: C.text },
+  customerName: { fontSize: 11, color: C.textMuted, marginTop: 2 },
   patternPill: {
     flexDirection: "row",
     alignItems: "center",
@@ -1247,7 +1413,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  tickBtnDone: { backgroundColor: "#DCFCE7" },
+  tickBtnDone: { backgroundColor: C.greenBg },
   quickRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -1255,19 +1421,18 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: "#F5F5F5",
+    borderTopColor: C.border,
   },
-  quickRowText: { fontSize: 11, color: "#666", fontWeight: "600" },
-  quickRowExpiredText: { fontSize: 11, color: "#ef4444", fontWeight: "700" },
-  quickRowAddr: { fontSize: 11, color: "#999", maxWidth: 130 },
+  quickRowText: { fontSize: 11, color: C.textMuted, fontWeight: "600" },
+  quickRowExpiredText: { fontSize: 11, color: C.red, fontWeight: "700" },
   expandedBody: {
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: "#F0F0F0",
+    borderTopColor: C.border,
   },
   itemsBox: {
-    backgroundColor: "#FAFAFA",
+    backgroundColor: C.bg,
     borderRadius: 10,
     padding: 10,
     marginBottom: 10,
@@ -1279,11 +1444,11 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   itemDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: C.primary },
-  itemName: { flex: 1, fontSize: 12, color: "#333", fontWeight: "500" },
-  itemQty: { fontSize: 12, color: "#888", fontWeight: "600" },
+  itemName: { flex: 1, fontSize: 12, color: C.text, fontWeight: "500" },
+  itemQty: { fontSize: 12, color: C.textMuted, fontWeight: "600" },
   itemAmt: {
     fontSize: 13,
-    color: "#1A1A1A",
+    color: C.text,
     fontWeight: "700",
     minWidth: 40,
     textAlign: "right",
@@ -1294,9 +1459,9 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: "#EBEBEB",
+    borderTopColor: C.border,
   },
-  itemTotalLabel: { fontSize: 11, color: "#888", fontWeight: "600" },
+  itemTotalLabel: { fontSize: 11, color: C.textMuted, fontWeight: "600" },
   itemTotal: { fontSize: 13, color: C.primary, fontWeight: "800" },
   customerBox: {
     flexDirection: "row",
@@ -1313,38 +1478,38 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   customerAvatarText: { fontSize: 15, fontWeight: "700", color: "#fff" },
-  modalCustomerName: { fontSize: 13.5, fontWeight: "700", color: "#1A1A1A" },
-  modalCustomerPhone: { fontSize: 11.5, color: "#888", marginTop: 2 },
+  modalCustomerName: { fontSize: 13.5, fontWeight: "700", color: C.text },
+  modalCustomerPhone: { fontSize: 11.5, color: C.textMuted, marginTop: 2 },
   metaRow: { flexDirection: "row", gap: 8, marginBottom: 10 },
   metaChip: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
-    backgroundColor: "#F4F6FA",
+    backgroundColor: C.bg,
     borderRadius: 8,
     paddingHorizontal: 8,
     paddingVertical: 6,
   },
-  metaChipExpired: { backgroundColor: "#FEF2F2" },
-  metaChipText: { fontSize: 11, color: "#444", fontWeight: "500", flex: 1 },
+  metaChipExpired: { backgroundColor: C.redBg },
+  metaChipText: { fontSize: 11, color: C.text, fontWeight: "500", flex: 1 },
   addressRow: {
     flexDirection: "row",
     alignItems: "flex-start",
     gap: 5,
-    backgroundColor: "#FAFAFA",
+    backgroundColor: C.bg,
     borderRadius: 8,
     padding: 8,
     marginBottom: 10,
   },
-  addressText: { fontSize: 11, color: "#666", lineHeight: 16, flex: 1 },
-  
+  addressText: { fontSize: 11, color: C.textMuted, lineHeight: 16, flex: 1 },
+
   // Horizontal Calendar Timeline Styles with Month
   calendarSection: { marginBottom: 12 },
   sectionLabel: {
     fontSize: 10,
     fontWeight: "700",
-    color: "#aaa",
+    color: C.textLight,
     letterSpacing: 1,
     marginBottom: 8,
   },
@@ -1353,30 +1518,30 @@ const styles = StyleSheet.create({
     width: 52,
     height: 72,
     borderRadius: 10,
-    backgroundColor: "#F4F6FA",
+    backgroundColor: C.bg,
     alignItems: "center",
     justifyContent: "space-between",
     paddingVertical: 6,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: C.border,
   },
   calendarCellToday: {
-    backgroundColor: C.primary + "15",
+    backgroundColor: C.light + "40",
     borderColor: C.primary,
   },
   calendarCellDelivered: {
-    backgroundColor: "#DCFCE7",
-    borderColor: "#16a34a",
+    backgroundColor: C.greenBg,
+    borderColor: C.green,
   },
-  calendarMonthName: { fontSize: 9, fontWeight: "700", color: "#888", textTransform: "uppercase" },
-  calendarDayName: { fontSize: 9, fontWeight: "600", color: "#888" },
-  calendarDayNum: { fontSize: 13, fontWeight: "700", color: "#333" },
+  calendarMonthName: { fontSize: 9, fontWeight: "700", color: C.textMuted, textTransform: "uppercase" },
+  calendarDayName: { fontSize: 9, fontWeight: "600", color: C.textMuted },
+  calendarDayNum: { fontSize: 13, fontWeight: "700", color: C.text },
   calendarTextActive: { color: C.primary },
   calendarTickBadge: {
     width: 14,
     height: 14,
     borderRadius: 7,
-    backgroundColor: "#16a34a",
+    backgroundColor: C.green,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1389,24 +1554,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 8,
-    backgroundColor: "#F0F0F0",
+    backgroundColor: C.border,
   },
   dayPillOn: { backgroundColor: C.primary },
-  dayPillText: { fontSize: 11, fontWeight: "700", color: "#999" },
+  dayPillText: { fontSize: 11, fontWeight: "700", color: C.textMuted },
   dayPillTextOn: { color: "#fff" },
   slotBanner: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    backgroundColor: "#FFFBEB",
+    backgroundColor: C.light + "40",
     borderRadius: 10,
     padding: 10,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: "#FDE68A",
+    borderColor: C.light,
   },
-  slotBannerTitle: { fontSize: 12, fontWeight: "700", color: "#92400e" },
-  slotBannerText: { fontSize: 11, color: "#b45309", marginTop: 1 },
+  slotBannerTitle: { fontSize: 12, fontWeight: "700", color: C.dark },
+  slotBannerText: { fontSize: 11, color: C.dark, marginTop: 1 },
   actionRow: { flexDirection: "row", gap: 8 },
   acceptBtn: {
     flex: 1,
@@ -1429,7 +1594,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: C.green,
   },
-  deliverBtnEarly: { backgroundColor: "#65a30d" },
+  deliverBtnEarly: { backgroundColor: C.accent },
   deliverBtnText: { fontSize: 12.5, fontWeight: "700", color: "#fff" },
   doneBtn: {
     flex: 1,
@@ -1439,7 +1604,7 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 11,
     borderRadius: 10,
-    backgroundColor: "#DCFCE7",
+    backgroundColor: C.greenBg,
   },
   doneBtnText: { fontSize: 12.5, fontWeight: "700", color: C.green },
   acceptedPill: {
@@ -1450,10 +1615,10 @@ const styles = StyleSheet.create({
     gap: 5,
     paddingVertical: 11,
     borderRadius: 10,
-    backgroundColor: "#EFF6FF",
+    backgroundColor: C.light + "40",
   },
-  acceptedPillText: { fontSize: 11.5, fontWeight: "600", color: C.blue },
-  btnDisabled: { backgroundColor: "#F0F0F0" },
+  acceptedPillText: { fontSize: 11.5, fontWeight: "600", color: C.dark },
+  btnDisabled: { backgroundColor: C.border },
   expiredPill: {
     flex: 1,
     flexDirection: "row",
@@ -1462,11 +1627,15 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 11,
     borderRadius: 10,
-    backgroundColor: "#FEF2F2",
+    backgroundColor: C.redBg,
     borderWidth: 1,
-    borderColor: "#fecaca",
+    borderColor: C.red + "40",
   },
-  expiredPillText: { fontSize: 12, fontWeight: "700", color: "#ef4444" },
+  cancelledPill: {
+    backgroundColor: C.border,
+    borderColor: C.dark + "40",
+  },
+  expiredPillText: { fontSize: 12, fontWeight: "700", color: C.red },
   empty: {
     alignItems: "center",
     justifyContent: "center",
@@ -1476,12 +1645,12 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 17,
     fontWeight: "700",
-    color: "#1A1A1A",
+    color: C.text,
     marginTop: 14,
   },
   emptyText: {
     fontSize: 13,
-    color: "#999",
+    color: C.textMuted,
     marginTop: 6,
     textAlign: "center",
     lineHeight: 20,
@@ -1490,7 +1659,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "#1A1A1A",
+    backgroundColor: C.text,
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 10,
@@ -1498,26 +1667,26 @@ const styles = StyleSheet.create({
   },
   retryBtnText: { fontSize: 13, fontWeight: "600", color: "#fff" },
   vacationBadge: {
-  flexDirection: "row",
-  alignItems: "center",
-  gap: 3,
-  backgroundColor: "#d97706",
-  paddingHorizontal: 8,
-  paddingVertical: 3,
-  borderRadius: 6,
-},
-vacationBadgeText: { fontSize: 10, fontWeight: "700", color: "#fff" },
-vacationPill: {
-  flex: 1,
-  flexDirection: "row",
-  alignItems: "center",
-  justifyContent: "center",
-  gap: 6,
-  paddingVertical: 11,
-  borderRadius: 10,
-  backgroundColor: "#FFFBEB",
-  borderWidth: 1,
-  borderColor: "#FDE68A",
-},
-vacationPillText: { fontSize: 11.5, fontWeight: "700", color: "#92400e", flex: 1, textAlign: "center" },
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: C.dark,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  vacationBadgeText: { fontSize: 10, fontWeight: "700", color: "#fff" },
+  vacationPill: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 11,
+    borderRadius: 10,
+    backgroundColor: C.light + "40",
+    borderWidth: 1,
+    borderColor: C.light,
+  },
+  vacationPillText: { fontSize: 11.5, fontWeight: "700", color: C.dark, flex: 1, textAlign: "center" },
 });

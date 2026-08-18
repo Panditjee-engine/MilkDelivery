@@ -1,14 +1,34 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  RefreshControl, Alert, Modal, TextInput, Animated,
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  RefreshControl,
+  Alert,
+  Modal,
+  TextInput,
+  Animated,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { api } from "../../src/services/api";
-import { Colors } from "../../src/constants/colors";
 import LoadingScreen from "../../src/components/LoadingScreen";
+
+const C = {
+  primary: "#FF9675",
+  accent: "#FD9E69",
+  light: "#FFD999",
+  dark: "#BB6B3F",
+  bg: "#FFF8EF",
+  card: "#FFFFFF",
+  text: "#3D1F0A",
+  textMuted: "#A07850",
+  textLight: "#C9A882",
+  border: "#F5E6D0",
+};
 
 type TabType = "active" | "completed";
 
@@ -57,7 +77,9 @@ export default function DeliveriesScreen() {
     }
   };
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => {
+    fetchData();
+  }, []);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -68,9 +90,17 @@ export default function DeliveriesScreen() {
     setSuccessMessage(message);
     setShowSuccessToast(true);
     Animated.sequence([
-      Animated.timing(toastOpacity, { toValue: 1, duration: 300, useNativeDriver: true }),
+      Animated.timing(toastOpacity, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }),
       Animated.delay(2000),
-      Animated.timing(toastOpacity, { toValue: 0, duration: 300, useNativeDriver: true }),
+      Animated.timing(toastOpacity, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }),
     ]).start(() => setShowSuccessToast(false));
   };
 
@@ -119,7 +149,7 @@ export default function DeliveriesScreen() {
   };
 
   // ── FIXED: reads OTP directly from order object, no backend verify call ──
-const handleVerifyOtp = async () => {
+  const handleVerifyOtp = async () => {
     const otpString = otp.join("");
     if (otpString.length !== 4) {
       setOtpError("Please enter complete OTP");
@@ -130,9 +160,10 @@ const handleVerifyOtp = async () => {
     setOtpError("");
 
     try {
-      const expectedOtp = otpType === "pickup"
-        ? String(currentOrder?.admin_otp ?? "")
-        : String(currentOrder?.delivery_otp ?? "");
+      const expectedOtp =
+        otpType === "pickup"
+          ? String(currentOrder?.admin_otp ?? "")
+          : String(currentOrder?.delivery_otp ?? "");
 
       if (!expectedOtp) {
         setOtpError("OTP not found on this order. Contact support.");
@@ -154,23 +185,26 @@ const handleVerifyOtp = async () => {
         await api.updateOrderStatus(orderId, "picked_up");
         setOtpModalVisible(false);
         // Update local state immediately so UI reflects change
-        setMyOrders(prev => prev.map(o =>
-          (o.id || o._id) === orderId ? { ...o, status: "picked_up" } : o
-        ));
+        setMyOrders((prev) =>
+          prev.map((o) =>
+            (o.id || o._id) === orderId ? { ...o, status: "picked_up" } : o,
+          ),
+        );
         showSuccessToastMessage("✓ Order Picked Up Successfully!");
       } else {
         await api.updateOrderStatus(orderId, "delivered");
         setOtpModalVisible(false);
         // Update local state immediately
-        setMyOrders(prev => prev.map(o =>
-          (o.id || o._id) === orderId ? { ...o, status: "delivered" } : o
-        ));
+        setMyOrders((prev) =>
+          prev.map((o) =>
+            (o.id || o._id) === orderId ? { ...o, status: "delivered" } : o,
+          ),
+        );
         showSuccessToastMessage("✓ Order Delivered Successfully!");
       }
 
       // Background sync after short delay
       setTimeout(() => fetchData(), 1000);
-
     } catch (error: any) {
       setOtpError(error.message || "Failed to update order. Try again.");
     } finally {
@@ -179,32 +213,28 @@ const handleVerifyOtp = async () => {
   };
 
   const handleCancelOrder = async (order: any) => {
-    Alert.alert(
-      "Cancel Order",
-      "Are you sure you want to cancel this order?",
-      [
-        { text: "No", style: "cancel" },
-        {
-          text: "Yes, Cancel",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await api.cancelOrder(order.id || order._id);
-              Alert.alert("✓ Order Cancelled");
-              await fetchData();
-            } catch (error: any) {
-              Alert.alert("Error", error.message || "Failed to cancel order");
-            }
-          },
+    Alert.alert("Cancel Order", "Are you sure you want to cancel this order?", [
+      { text: "No", style: "cancel" },
+      {
+        text: "Yes, Cancel",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await api.cancelOrder(order.id || order._id);
+            Alert.alert("✓ Order Cancelled");
+            await fetchData();
+          } catch (error: any) {
+            Alert.alert("Error", error.message || "Failed to cancel order");
+          }
         },
-      ]
-    );
+      },
+    ]);
   };
 
   if (loading) return <LoadingScreen />;
 
   const activeOrders = myOrders.filter((o) =>
-    ["assigned", "picked_up", "out_for_delivery"].includes(o.status)
+    ["assigned", "picked_up", "out_for_delivery"].includes(o.status),
   );
   const completedOrders = myOrders.filter((o) => o.status === "delivered");
 
@@ -212,8 +242,11 @@ const handleVerifyOtp = async () => {
     <SafeAreaView style={styles.container} edges={["top"]}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#1A1A1A" />
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.backButton}
+        >
+          <Ionicons name="arrow-back" size={24} color={C.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Deliveries</Text>
         <View style={{ width: 40 }} />
@@ -225,7 +258,12 @@ const handleVerifyOtp = async () => {
           style={[styles.tab, activeTab === "active" && styles.tabActive]}
           onPress={() => setActiveTab("active")}
         >
-          <Text style={[styles.tabText, activeTab === "active" && styles.tabTextActive]}>
+          <Text
+            style={[
+              styles.tabText,
+              activeTab === "active" && styles.tabTextActive,
+            ]}
+          >
             Active ({availableOrders.length + activeOrders.length})
           </Text>
         </TouchableOpacity>
@@ -233,7 +271,12 @@ const handleVerifyOtp = async () => {
           style={[styles.tab, activeTab === "completed" && styles.tabActive]}
           onPress={() => setActiveTab("completed")}
         >
-          <Text style={[styles.tabText, activeTab === "completed" && styles.tabTextActive]}>
+          <Text
+            style={[
+              styles.tabText,
+              activeTab === "completed" && styles.tabTextActive,
+            ]}
+          >
             Completed ({completedOrders.length})
           </Text>
         </TouchableOpacity>
@@ -241,14 +284,22 @@ const handleVerifyOtp = async () => {
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={C.primary}
+          />
+        }
         contentContainerStyle={styles.scrollContent}
       >
         {!checkinStatus?.checked_in || checkinStatus?.checked_out ? (
           <View style={styles.emptyState}>
-            <Ionicons name="bicycle-outline" size={64} color="#ddd" />
+            <Ionicons name="bicycle-outline" size={64} color={C.textLight} />
             <Text style={styles.emptyTitle}>Shift is Offline</Text>
-            <Text style={styles.emptyText}>Start your shift from Home to see orders</Text>
+            <Text style={styles.emptyText}>
+              Start your shift from Home to see orders
+            </Text>
             <TouchableOpacity
               style={styles.goToHomeButton}
               onPress={() => router.push("/(delivery)/home")}
@@ -302,9 +353,15 @@ const handleVerifyOtp = async () => {
 
                 {availableOrders.length === 0 && activeOrders.length === 0 && (
                   <View style={styles.emptyState}>
-                    <Ionicons name="checkmark-circle-outline" size={64} color="#ddd" />
+                    <Ionicons
+                      name="checkmark-circle-outline"
+                      size={64}
+                      color={C.textLight}
+                    />
                     <Text style={styles.emptyTitle}>No Active Deliveries</Text>
-                    <Text style={styles.emptyText}>New orders will appear here</Text>
+                    <Text style={styles.emptyText}>
+                      New orders will appear here
+                    </Text>
                   </View>
                 )}
               </>
@@ -319,14 +376,25 @@ const handleVerifyOtp = async () => {
                       count={completedOrders.length}
                     />
                     {completedOrders.map((order) => (
-                      <CompletedOrderCard key={order.id || order._id} order={order} />
+                      <CompletedOrderCard
+                        key={order.id || order._id}
+                        order={order}
+                      />
                     ))}
                   </View>
                 ) : (
                   <View style={styles.emptyState}>
-                    <Ionicons name="archive-outline" size={64} color="#ddd" />
-                    <Text style={styles.emptyTitle}>No Completed Deliveries</Text>
-                    <Text style={styles.emptyText}>Delivered orders will appear here</Text>
+                    <Ionicons
+                      name="archive-outline"
+                      size={64}
+                      color={C.textLight}
+                    />
+                    <Text style={styles.emptyTitle}>
+                      No Completed Deliveries
+                    </Text>
+                    <Text style={styles.emptyText}>
+                      Delivered orders will appear here
+                    </Text>
                   </View>
                 )}
               </>
@@ -345,20 +413,25 @@ const handleVerifyOtp = async () => {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <TouchableOpacity style={styles.modalClose} onPress={() => setOtpModalVisible(false)}>
-              <Ionicons name="close" size={24} color="#999" />
+            <TouchableOpacity
+              style={styles.modalClose}
+              onPress={() => setOtpModalVisible(false)}
+            >
+              <Ionicons name="close" size={24} color={C.textMuted} />
             </TouchableOpacity>
 
             <View style={styles.modalIcon}>
               <Ionicons
                 name={otpType === "pickup" ? "cube" : "checkmark-circle"}
                 size={32}
-                color={Colors.primary}
+                color={C.primary}
               />
             </View>
 
             <Text style={styles.modalTitle}>
-              {otpType === "pickup" ? "Verify Pickup OTP" : "Verify Delivery OTP"}
+              {otpType === "pickup"
+                ? "Verify Pickup OTP"
+                : "Verify Delivery OTP"}
             </Text>
             <Text style={styles.modalSubtitle}>
               {otpType === "pickup"
@@ -373,7 +446,10 @@ const handleVerifyOtp = async () => {
                   ref={(ref) => {
                     otpInputRefs.current[index] = ref;
                   }}
-                  style={[styles.otpInput, otpError ? styles.otpInputError : null]}
+                  style={[
+                    styles.otpInput,
+                    otpError ? styles.otpInputError : null,
+                  ]}
                   value={digit}
                   onChangeText={(value) => handleOtpChange(value, index)}
                   onKeyPress={(e) => handleOtpKeyPress(e, index)}
@@ -386,7 +462,7 @@ const handleVerifyOtp = async () => {
 
             {otpError ? (
               <View style={styles.errorContainer}>
-                <Ionicons name="alert-circle" size={16} color="#FF4444" />
+                <Ionicons name="alert-circle" size={16} color="#D64545" />
                 <Text style={styles.errorText}>{otpError}</Text>
               </View>
             ) : null}
@@ -416,15 +492,21 @@ const handleVerifyOtp = async () => {
 }
 
 function SectionHeader({
-  icon, title, subtitle, count,
+  icon,
+  title,
+  subtitle,
+  count,
 }: {
-  icon: any; title: string; subtitle: string; count: number;
+  icon: any;
+  title: string;
+  subtitle: string;
+  count: number;
 }) {
   return (
     <View style={styles.sectionHeader}>
       <View style={styles.sectionHeaderLeft}>
         <View style={styles.sectionIcon}>
-          <Ionicons name={icon} size={20} color={Colors.primary} />
+          <Ionicons name={icon} size={20} color={C.primary} />
         </View>
         <View>
           <Text style={styles.sectionTitle}>{title}</Text>
@@ -439,7 +521,12 @@ function SectionHeader({
 }
 
 function OrderCard({
-  order, onAccept, onPickup, onDeliver, onCancel, isAvailable,
+  order,
+  onAccept,
+  onPickup,
+  onDeliver,
+  onCancel,
+  isAvailable,
 }: {
   order: any;
   onAccept?: () => void;
@@ -451,12 +538,17 @@ function OrderCard({
   return (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
-        <Text style={styles.customerName}>{order.customer_name || "Customer"}</Text>
+        <Text style={styles.customerName}>
+          {order.customer_name || "Customer"}
+        </Text>
         <Text style={styles.amount}>₹{order.total_amount || 0}</Text>
       </View>
-      <Text style={styles.phone}>📞 {order.customer_phone || "N/A"}</Text>
+      <Text style={styles.phone}> {order.customer_phone || "N/A"}</Text>
       <Text style={styles.address}>
-        📍 {order.address?.line1 || order.delivery_address?.line1 || "No Address Provided"}
+        {" "}
+        {order.address?.line1 ||
+          order.delivery_address?.line1 ||
+          "No Address Provided"}
       </Text>
 
       <View style={styles.cardFooter}>
@@ -471,7 +563,10 @@ function OrderCard({
                 <Text style={styles.pickupButtonText}>Verify Pickup</Text>
               </TouchableOpacity>
             ) : (
-              <TouchableOpacity style={styles.deliverButton} onPress={onDeliver}>
+              <TouchableOpacity
+                style={styles.deliverButton}
+                onPress={onDeliver}
+              >
                 <Text style={styles.deliverButtonText}>Complete Delivery</Text>
               </TouchableOpacity>
             )}
@@ -487,9 +582,11 @@ function OrderCard({
 
 function CompletedOrderCard({ order }: { order: any }) {
   return (
-    <View style={[styles.card, { opacity: 0.8 }]}>
+    <View style={[styles.card, { opacity: 0.85 }]}>
       <View style={styles.cardHeader}>
-        <Text style={styles.customerName}>{order.customer_name || "Customer"}</Text>
+        <Text style={styles.customerName}>
+          {order.customer_name || "Customer"}
+        </Text>
         <Text style={styles.completedBadge}>Delivered</Text>
       </View>
       <Text style={styles.address}>
@@ -500,123 +597,219 @@ function CompletedOrderCard({ order }: { order: any }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F4F6F9" },
+  container: { flex: 1, backgroundColor: C.bg },
   header: {
-    flexDirection: "row", justifyContent: "space-between",
-    alignItems: "center", padding: 16, backgroundColor: "#FFF",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 16,
+    backgroundColor: C.card,
+    borderBottomWidth: 1,
+    borderBottomColor: C.border,
   },
   backButton: { padding: 4 },
-  headerTitle: { fontSize: 20, fontWeight: "700", color: "#1A1A1A" },
+  headerTitle: { fontSize: 20, fontWeight: "700", color: C.text },
   tabContainer: {
-    flexDirection: "row", backgroundColor: "#FFF",
-    paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: "#EAEAEA",
+    flexDirection: "row",
+    backgroundColor: C.card,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: C.border,
   },
   tab: { flex: 1, paddingVertical: 14, alignItems: "center" },
-  tabActive: { borderBottomWidth: 3, borderBottomColor: Colors.primary },
-  tabText: { fontSize: 14, fontWeight: "600", color: "#666" },
-  tabTextActive: { color: Colors.primary, fontWeight: "700" },
+  tabActive: { borderBottomWidth: 3, borderBottomColor: C.primary },
+  tabText: { fontSize: 14, fontWeight: "600", color: C.textMuted },
+  tabTextActive: { color: C.primary, fontWeight: "700" },
   scrollContent: { padding: 16 },
   section: { marginBottom: 24 },
   sectionHeader: {
-    flexDirection: "row", justifyContent: "space-between",
-    alignItems: "center", marginBottom: 12,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
   },
   sectionHeaderLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
   sectionIcon: {
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: "#FFF7CC", justifyContent: "center", alignItems: "center",
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: C.light,
+    justifyContent: "center",
+    alignItems: "center",
   },
-  sectionTitle: { fontSize: 16, fontWeight: "700", color: "#1A1A1A" },
-  sectionSubtitle: { fontSize: 12, color: "#666" },
-  countBadge: { backgroundColor: "#EAEAEA", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
-  countText: { fontSize: 12, fontWeight: "600", color: "#1A1A1A" },
+  sectionTitle: { fontSize: 16, fontWeight: "700", color: C.text },
+  sectionSubtitle: { fontSize: 12, color: C.textMuted },
+  countBadge: {
+    backgroundColor: C.light,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  countText: { fontSize: 12, fontWeight: "600", color: C.dark },
   card: {
-    backgroundColor: "#FFF", borderRadius: 12, padding: 16, marginBottom: 12,
-    elevation: 2, shadowColor: "#000", shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1, shadowRadius: 2,
+    backgroundColor: C.card,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: C.border,
+    elevation: 2,
+    shadowColor: C.dark,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
   },
   cardHeader: {
-    flexDirection: "row", justifyContent: "space-between",
-    alignItems: "center", marginBottom: 8,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
   },
-  customerName: { fontSize: 16, fontWeight: "700", color: "#1A1A1A" },
-  amount: { fontSize: 16, fontWeight: "700", color: Colors.primary },
-  phone: { fontSize: 14, color: "#444", marginBottom: 4 },
-  address: { fontSize: 13, color: "#666", marginBottom: 12 },
+  customerName: { fontSize: 16, fontWeight: "700", color: C.text },
+  amount: { fontSize: 16, fontWeight: "700", color: C.primary },
+  phone: { fontSize: 14, color: C.textMuted, marginBottom: 4 },
+  address: { fontSize: 13, color: C.textMuted, marginBottom: 12 },
   cardFooter: { marginTop: 4 },
   actionButton: {
-    backgroundColor: Colors.primary, paddingVertical: 12,
-    borderRadius: 8, alignItems: "center",
+    backgroundColor: C.primary,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: "center",
   },
-  actionButtonText: { color: "#1A1A1A", fontWeight: "700", fontSize: 14 },
+  actionButtonText: { color: "#FFFFFF", fontWeight: "700", fontSize: 14 },
   buttonGroup: { flexDirection: "row", gap: 8 },
   pickupButton: {
-    flex: 2, backgroundColor: Colors.primary,
-    paddingVertical: 12, borderRadius: 8, alignItems: "center",
+    flex: 2,
+    backgroundColor: C.primary,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: "center",
   },
-  pickupButtonText: { color: "#1A1A1A", fontWeight: "700" },
+  pickupButtonText: { color: "#FFFFFF", fontWeight: "700" },
   deliverButton: {
-    flex: 2, backgroundColor: "#4CAF50",
-    paddingVertical: 12, borderRadius: 8, alignItems: "center",
+    flex: 2,
+    backgroundColor: C.accent,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: "center",
   },
-  deliverButtonText: { color: "#FFF", fontWeight: "700" },
+  deliverButtonText: { color: "#FFFFFF", fontWeight: "700" },
   cancelButton: {
-    flex: 1, backgroundColor: "#F5F5F5", paddingVertical: 12,
-    borderRadius: 8, alignItems: "center", borderWidth: 1, borderColor: "#DDD",
+    flex: 1,
+    backgroundColor: C.bg,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: C.border,
   },
-  cancelButtonText: { color: "#666", fontWeight: "600" },
+  cancelButtonText: { color: C.textMuted, fontWeight: "600" },
   completedBadge: {
-    backgroundColor: "#E8F5E9", color: "#4CAF50",
-    paddingHorizontal: 8, paddingVertical: 4,
-    borderRadius: 6, fontSize: 12, fontWeight: "600",
+    backgroundColor: C.light,
+    color: C.dark,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    fontSize: 12,
+    fontWeight: "600",
   },
   emptyState: {
-    alignItems: "center", justifyContent: "center",
-    paddingVertical: 60, gap: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 60,
+    gap: 8,
   },
-  emptyTitle: { fontSize: 18, fontWeight: "700", color: "#444" },
-  emptyText: { fontSize: 14, color: "#888", textAlign: "center" },
+  emptyTitle: { fontSize: 18, fontWeight: "700", color: C.text },
+  emptyText: { fontSize: 14, color: C.textMuted, textAlign: "center" },
   goToHomeButton: {
-    flexDirection: "row", gap: 8, backgroundColor: "#1A1A1A",
-    paddingHorizontal: 20, paddingVertical: 12, borderRadius: 24, marginTop: 12,
+    flexDirection: "row",
+    gap: 8,
+    backgroundColor: C.dark,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 24,
+    marginTop: 12,
   },
-  goToHomeButtonText: { color: "#FFF", fontWeight: "600" },
+  goToHomeButtonText: { color: "#FFFFFF", fontWeight: "600" },
   modalOverlay: {
-    flex: 1, backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "center", padding: 24,
+    flex: 1,
+    backgroundColor: "rgba(61, 31, 10, 0.45)",
+    justifyContent: "center",
+    padding: 24,
   },
   modalContent: {
-    backgroundColor: "#FFF", borderRadius: 16,
-    padding: 24, alignItems: "center",
+    backgroundColor: C.card,
+    borderRadius: 16,
+    padding: 24,
+    alignItems: "center",
   },
   modalClose: { position: "absolute", right: 16, top: 16 },
   modalIcon: {
-    width: 64, height: 64, borderRadius: 32,
-    backgroundColor: "#FFF7CC", justifyContent: "center",
-    alignItems: "center", marginBottom: 16,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: C.light,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
   },
-  modalTitle: { fontSize: 20, fontWeight: "700", color: "#1A1A1A", marginBottom: 4 },
-  modalSubtitle: { fontSize: 14, color: "#666", textAlign: "center", marginBottom: 24 },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: C.text,
+    marginBottom: 4,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: C.textMuted,
+    textAlign: "center",
+    marginBottom: 24,
+  },
   otpContainer: { flexDirection: "row", gap: 12, marginBottom: 20 },
   otpInput: {
-    width: 56, height: 56, borderRadius: 12, borderWidth: 2,
-    borderColor: "#E5E5E5", backgroundColor: "#F8F9FA",
-    fontSize: 24, fontWeight: "700", textAlign: "center", color: "#1A1A1A",
+    width: 56,
+    height: 56,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: C.border,
+    backgroundColor: C.bg,
+    fontSize: 24,
+    fontWeight: "700",
+    textAlign: "center",
+    color: C.text,
   },
-  otpInputError: { borderColor: "#FF4444" },
-  errorContainer: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 16 },
-  errorText: { fontSize: 13, color: "#FF4444", fontWeight: "500" },
+  otpInputError: { borderColor: "#D64545" },
+  errorContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 16,
+  },
+  errorText: { fontSize: 13, color: "#D64545", fontWeight: "500" },
   verifyButton: {
-    backgroundColor: Colors.primary, width: "100%",
-    paddingVertical: 16, borderRadius: 12, alignItems: "center",
+    backgroundColor: C.primary,
+    width: "100%",
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: "center",
   },
-  verifyButtonText: { fontSize: 16, fontWeight: "700", color: "#1A1A1A" },
+  verifyButtonText: { fontSize: 16, fontWeight: "700", color: "#FFFFFF" },
   successToast: {
-    position: "absolute", bottom: 40, left: 24, right: 24,
-    backgroundColor: "#1A1A1A", flexDirection: "row", alignItems: "center",
-    gap: 10, padding: 16, borderRadius: 12,
-    shadowColor: "#000", shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2, shadowRadius: 4, elevation: 5,
+    position: "absolute",
+    bottom: 40,
+    left: 24,
+    right: 24,
+    backgroundColor: C.dark,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    padding: 16,
+    borderRadius: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 5,
   },
-  successToastText: { color: "#FFF", fontWeight: "600", fontSize: 14 },
+  successToastText: { color: "#FFFFFF", fontWeight: "600", fontSize: 14 },
 });
