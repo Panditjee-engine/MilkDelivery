@@ -666,6 +666,18 @@ class ApiService {
     return JSON.parse(text);
   }
 
+  //for fetch admin response for rider by golu
+  async getAssignedAdmin() {
+  return this.request<{
+    admin_id: string;
+    name: string;
+    business_name?: string;
+    email?: string;
+    phone?: string;
+    address?: any;
+  }>("/auth/assigned-admin");
+}
+
   // New API to get admin details by referral code (for registration flow)
   async getAdminByReferral(referralCode: string) {
     return this.request<{

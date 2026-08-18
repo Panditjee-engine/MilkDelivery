@@ -398,7 +398,7 @@ const subscriptionProductTitle = (
   return items.length > 1 ? `${first} +${items.length - 1} more` : first;
 };
 
-// ─── Date Helpers ─────────────────────────────────────────────────────────────
+// ─── Date Helpers 
 
 const getLocalDateKey = (date = new Date()) => {
   const y = date.getFullYear();
