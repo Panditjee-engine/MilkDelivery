@@ -37,18 +37,18 @@ export default function DeliveryLayout() {
       <Tabs.Screen
         name="deliveries"
         options={{
-          title: 'Deliveries',
+          title: 'OTP Order',
           tabBarIcon: ({ color, size }) => <Ionicons name="bicycle" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
         name="subscriptions"
         options={{
-          title: 'Subscriptions',
+          title: 'Deliveries',
           tabBarIcon: ({ color, size }) => <Ionicons name="cube" size={size} color={color} />,
         }}
       />
-      <Tabs.Screen
+      {/* <Tabs.Screen
         name="wallet"
         options={{
           title: "Wallet",
@@ -56,7 +56,7 @@ export default function DeliveryLayout() {
             <Ionicons name="wallet" size={size} color={color} />
           ),
         }}
-      />
+      /> */}
       <Tabs.Screen
         name="profile"
         options={{

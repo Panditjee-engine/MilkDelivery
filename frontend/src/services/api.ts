@@ -109,7 +109,13 @@ export interface AdminNotificationItem {
   id: string;
   admin_id?: string;
   event?: string;
-  category: "order" | "subscription" | "wallet" | "vacation" | "general" | string;
+  category:
+    | "order"
+    | "subscription"
+    | "wallet"
+    | "vacation"
+    | "general"
+    | string;
   title: string;
   body: string;
   data?: Record<string, any>;
@@ -425,6 +431,70 @@ export interface BusinessLocation extends BusinessLocationCreate {
   updated_at?: string;
 }
 
+export interface LeaseCreate {
+  cow_id: string;
+  lessee_admin_id: string;
+  lessee_farm_name?: string;
+  lessee_email?: string;
+  lessee_phone?: string;
+  price: number;
+  start_date: string; // DD/MM/YYYY
+  end_date: string; // DD/MM/YYYY
+  reason?: string;
+  location_id?: string;
+  location_label?: string;
+  location_address?: string;
+}
+
+export interface Lease {
+  id: string;
+  cow_id: string;
+  cow_name: string;
+  cow_tag: string;
+  lessor_admin_id: string;
+  lessor_farm_name?: string;
+  lessee_admin_id: string;
+  lessee_farm_name?: string;
+  lessee_email?: string;
+  lessee_phone?: string;
+  price: number;
+  start_date: string;
+  end_date: string;
+  original_end_date: string;
+  reason?: string;
+  location_id?: string;
+  location_label?: string;
+  location_address?: string;
+  status: "active" | "completed" | "cancelled";
+  extension_count: number;
+  extension_history: Array<{
+    previous_end_date: string;
+    new_end_date: string;
+    note?: string;
+    extended_at: string;
+  }>;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface FarmSearchResult {
+  admin_id: string;
+  farm_name?: string;
+  email?: string;
+  phone?: string;
+  location_id?: string;
+  location_label?: string;
+  location_address?: string;
+}
+
+export interface LeaseUpdate {
+  price?: number;
+  end_date?: string;
+  reason?: string;
+  location_id?: string;
+  location_label?: string;
+  location_address?: string;
+}
 
 class ApiService {
   private token: string | null = null;
@@ -473,7 +543,9 @@ class ApiService {
       });
     } catch (error: any) {
       if (error?.name === "AbortError") {
-        throw new Error("Request timed out. Please check your connection and try again.");
+        throw new Error(
+          "Request timed out. Please check your connection and try again.",
+        );
       }
       throw error;
     } finally {
@@ -513,7 +585,8 @@ class ApiService {
         throw new Error("UNAUTHORIZED");
       }
       const error = new Error(message);
-      (error as Error & { status?: number; url?: string }).status = response.status;
+      (error as Error & { status?: number; url?: string }).status =
+        response.status;
       (error as Error & { status?: number; url?: string }).url = url;
       throw error;
     }
@@ -523,12 +596,12 @@ class ApiService {
   async login(
     identifier: string,
     password: string,
-    method: 'email' | 'phone' = 'email',
+    method: "email" | "phone" = "email",
     extraData: Record<string, any> = {},
   ) {
     const body = {
-      email: method === 'email' ? identifier : "",
-      phone: method === 'phone' ? identifier : "",
+      email: method === "email" ? identifier : "",
+      phone: method === "phone" ? identifier : "",
       password,
       platform: extraData.platform || "fcm",
       device_token: extraData.device_token || "",
@@ -593,6 +666,18 @@ class ApiService {
     return JSON.parse(text);
   }
 
+  //for fetch admin response for rider by golu
+  async getAssignedAdmin() {
+  return this.request<{
+    admin_id: string;
+    name: string;
+    business_name?: string;
+    email?: string;
+    phone?: string;
+    address?: any;
+  }>("/auth/assigned-admin");
+}
+
   // New API to get admin details by referral code (for registration flow)
   async getAdminByReferral(referralCode: string) {
     return this.request<{
@@ -626,10 +711,13 @@ class ApiService {
   }
 
   async requestAuthOtp(data: { phone: string }) {
-    return this.request<{ message: string; dev_code?: string }>("/auth/send-register-otp", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
+    return this.request<{ message: string; dev_code?: string }>(
+      "/auth/send-register-otp",
+      {
+        method: "POST",
+        body: JSON.stringify(data),
+      },
+    );
   }
 
   async verifyAuthOtp(data: { phone: string; otp: string }) {
@@ -783,6 +871,10 @@ class ApiService {
     return this.request<any[]>("/subscriptions");
   }
 
+async getSubscriptionHistory() {
+    return this.request<any[]>("/subscriptions/history");
+  }
+
   async createSubscription(data: {
     items: Array<{
       product_id: string;
@@ -811,7 +903,9 @@ class ApiService {
     });
   }
 
-  async createSubscriptionRazorpayOrder(data: Parameters<ApiService["createSubscription"]>[0]) {
+  async createSubscriptionRazorpayOrder(
+    data: Parameters<ApiService["createSubscription"]>[0],
+  ) {
     return this.request<{
       key_id: string;
       order_id: string;
@@ -920,7 +1014,15 @@ class ApiService {
     return this.request<any[]>(`/subscriptions/admin/vacations`);
   }
 
-  //----
+  // Per-date order status for a subscription — used to render the
+  // delivery calendar (checkmark on delivered dates) in the admin app. by goluu
+  async getAdminSubscriptionOrders(
+    subscriptionId: string,
+  ): Promise<{ delivery_date: string; status: string }[]> {
+    return this.request<{ delivery_date: string; status: string }[]>(
+      `/admin/orders/subscription/${subscriptionId}`,
+    );
+  }
 
   async getVacations() {
     return this.request<any[]>("/subscriptions/vacations");
@@ -973,13 +1075,14 @@ class ApiService {
     razorpay_payment_id: string;
     razorpay_signature: string;
   }) {
-    return this.request<{ message: string; new_balance: number; status: string }>(
-      "/wallet/razorpay/verify-recharge",
-      {
-        method: "POST",
-        body: JSON.stringify(data),
-      },
-    );
+    return this.request<{
+      message: string;
+      new_balance: number;
+      status: string;
+    }>("/wallet/razorpay/verify-recharge", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
   }
 
   async getRazorpayLinkedAccount() {
@@ -1236,10 +1339,15 @@ class ApiService {
     });
   }
 
-  async bulkUpdateAdminSubscriptionStatus(subscriptionIds: string[], status: string) {
+  async bulkUpdateAdminSubscriptionStatus(
+    subscriptionIds: string[],
+    status: string,
+  ) {
     const results: any[] = [];
     for (const subscriptionId of subscriptionIds) {
-      results.push(await this.updateAdminSubscriptionStatus(subscriptionId, status));
+      results.push(
+        await this.updateAdminSubscriptionStatus(subscriptionId, status),
+      );
     }
     return { updated: results.length, failed: 0, results };
   }
@@ -2031,12 +2139,12 @@ class ApiService {
         const trimmed = text.trim();
         const data = trimmed
           ? (() => {
-            try {
-              return JSON.parse(trimmed);
-            } catch {
-              return null;
-            }
-          })()
+              try {
+                return JSON.parse(trimmed);
+              } catch {
+                return null;
+              }
+            })()
           : null;
 
         if (response.ok && data) return data;
@@ -2048,9 +2156,9 @@ class ApiService {
 
         throw new Error(
           (data &&
-            typeof data === "object" &&
-            "detail" in data &&
-            typeof data.detail === "string"
+          typeof data === "object" &&
+          "detail" in data &&
+          typeof data.detail === "string"
             ? data.detail
             : trimmed) || "Failed to fetch worker points",
         );
@@ -2314,16 +2422,19 @@ class ApiService {
 
   //worker id delete by anurag
   async deleteWorker(id: string) {
-    return this.request<{ success: boolean; id: string }>(`/admin/workers/${id}`, {
-      method: "DELETE",
-    });
+    return this.request<{ success: boolean; id: string }>(
+      `/admin/workers/${id}`,
+      {
+        method: "DELETE",
+      },
+    );
   }
 
   //vet id delete pass eidt by anurag
   async deleteVeterinarian(id: string) {
     return this.request<{ success: boolean; id: string }>(
       `/admin/veterinarians/${id}`,
-      { method: "DELETE" }
+      { method: "DELETE" },
     );
   }
 
@@ -2333,7 +2444,7 @@ class ApiService {
       {
         method: "PATCH",
         body: JSON.stringify({ new_password }),
-      }
+      },
     );
   }
 
@@ -2626,8 +2737,8 @@ class ApiService {
     phone?: string;
     specialization?: string;
     license_number?: string;
-    farm_location_ids?: string[];        // ← was farm_location_id: string
-    farm_location_labels?: string[];     // ← was farm_location_label: string
+    farm_location_ids?: string[]; // ← was farm_location_id: string
+    farm_location_labels?: string[]; // ← was farm_location_label: string
   }) {
     return this.request<any>("/admin/veterinarians", {
       method: "POST",
@@ -2643,8 +2754,8 @@ class ApiService {
       specialization: string;
       license_number: string;
       is_active: boolean;
-      farm_location_ids: string[];       // ← was farm_location_id: string
-      farm_location_labels: string[];    // ← was farm_location_label: string
+      farm_location_ids: string[]; // ← was farm_location_id: string
+      farm_location_labels: string[]; // ← was farm_location_label: string
     }>,
   ) {
     return this.request<any>(`/admin/veterinarians/${id}`, {
@@ -2785,12 +2896,9 @@ class ApiService {
 
   async getAnimalHealthRecords(animalId: string) {
     const token = await AsyncStorage.getItem("vet_token");
-    const response = await fetch(
-      `${API_BASE}/api/vet/cow/${animalId}/health`,
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      },
-    );
+    const response = await fetch(`${API_BASE}/api/vet/cow/${animalId}/health`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
     const data = await response.json();
     if (!response.ok)
       throw new Error(data.detail || "Failed to fetch health records");
@@ -2799,12 +2907,9 @@ class ApiService {
 
   async getAnimalMilkRecords(animalId: string) {
     const token = await AsyncStorage.getItem("vet_token");
-    const response = await fetch(
-      `${API_BASE}/api/vet/cow/${animalId}/milk`,
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      },
-    );
+    const response = await fetch(`${API_BASE}/api/vet/cow/${animalId}/milk`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
     const data = await response.json();
     if (!response.ok)
       throw new Error(data.detail || "Failed to fetch milk records");
@@ -2813,12 +2918,9 @@ class ApiService {
 
   async getAnimalFeedRecords(animalId: string) {
     const token = await AsyncStorage.getItem("vet_token");
-    const response = await fetch(
-      `${API_BASE}/api/vet/cow/${animalId}/feed`,
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      },
-    );
+    const response = await fetch(`${API_BASE}/api/vet/cow/${animalId}/feed`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
     const data = await response.json();
     if (!response.ok)
       throw new Error(data.detail || "Failed to fetch feed records");
@@ -3165,7 +3267,6 @@ class ApiService {
     });
   }
 
-
   //vet milk reocrd and fee dreocrd by anurag
   async vetAddMilk(data: {
     cow_id: string;
@@ -3321,13 +3422,10 @@ class ApiService {
     deleted_entry: FarmSale;
   }> {
     const token = await AsyncStorage.getItem("worker_token");
-    const response = await fetch(
-      `${API_BASE}/api/worker/farm-sale/${saleId}`,
-      {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      },
-    );
+    const response = await fetch(`${API_BASE}/api/worker/farm-sale/${saleId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
     const result = await response.json();
     if (!response.ok)
       throw new Error(result.detail || "Failed to delete farm sale entry");
@@ -3383,10 +3481,15 @@ class ApiService {
     });
   }
 
-  async adminDeleteFarmSale(saleId: string): Promise<{ success: boolean; id: string }> {
-    return this.request<{ success: boolean; id: string }>(`/admin/farm-sales/${saleId}`, {
-      method: "DELETE",
-    });
+  async adminDeleteFarmSale(
+    saleId: string,
+  ): Promise<{ success: boolean; id: string }> {
+    return this.request<{ success: boolean; id: string }>(
+      `/admin/farm-sales/${saleId}`,
+      {
+        method: "DELETE",
+      },
+    );
   }
 
   //Farm/business multiple Adresses
@@ -3394,21 +3497,28 @@ class ApiService {
     return this.request<BusinessLocation[]>("/admin/locations");
   }
 
-  async createBusinessLocation(data: BusinessLocationCreate): Promise<BusinessLocation> {
+  async createBusinessLocation(
+    data: BusinessLocationCreate,
+  ): Promise<BusinessLocation> {
     return this.request<BusinessLocation>("/admin/locations", {
       method: "POST",
       body: JSON.stringify(data),
     });
   }
 
-  async updateBusinessLocation(id: string, data: BusinessLocationCreate): Promise<BusinessLocation> {
+  async updateBusinessLocation(
+    id: string,
+    data: BusinessLocationCreate,
+  ): Promise<BusinessLocation> {
     return this.request<BusinessLocation>(`/admin/locations/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
     });
   }
 
-  async deleteBusinessLocation(id: string): Promise<{ success: boolean; id: string }> {
+  async deleteBusinessLocation(
+    id: string,
+  ): Promise<{ success: boolean; id: string }> {
     return this.request(`/admin/locations/${id}`, { method: "DELETE" });
   }
 
@@ -3465,10 +3575,13 @@ class ApiService {
   }
 
   async getAdminNotificationSummary() {
-    return this.request<AdminNotificationSummary>("/notifications/admin/summary", {
-      timeoutMs: 20_000,
-      silentErrorLog: true,
-    });
+    return this.request<AdminNotificationSummary>(
+      "/notifications/admin/summary",
+      {
+        timeoutMs: 20_000,
+        silentErrorLog: true,
+      },
+    );
   }
 
   async markAdminNotificationRead(notificationId: string) {
@@ -3493,6 +3606,72 @@ class ApiService {
         order_id: subscriptionId,
         status: status,
       }),
+    });
+  }
+
+  // ── Cow Leasing
+
+  async searchFarms(query: string): Promise<FarmSearchResult[]> {
+    return this.request<FarmSearchResult[]>(
+      `/gausevak/farms/search?query=${encodeURIComponent(query)}`,
+    );
+  }
+
+  async getFarmLocations(
+    adminId: string,
+  ): Promise<{ locations: BusinessLocation[] }> {
+    return this.request<{ locations: BusinessLocation[] }>(
+      `/gausevak/farms/${adminId}/locations`,
+    );
+  }
+
+  async leaseCow(cowId: string, data: LeaseCreate): Promise<Lease> {
+    return this.request<Lease>(`/gausevak/cows/${cowId}/lease`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getLeases(
+    direction: "out" | "in" = "out",
+    status?: "active" | "completed" | "cancelled",
+  ): Promise<Lease[]> {
+    const p = new URLSearchParams({ direction });
+    if (status) p.append("status", status);
+    return this.request<Lease[]>(`/gausevak/leases?${p.toString()}`);
+  }
+
+  async getLease(leaseId: string): Promise<Lease> {
+    return this.request<Lease>(`/gausevak/leases/${leaseId}`);
+  }
+
+  async extendLease(
+    leaseId: string,
+    newEndDate: string,
+    note?: string,
+  ): Promise<Lease> {
+    return this.request<Lease>(`/gausevak/leases/${leaseId}/extend`, {
+      method: "PUT",
+      body: JSON.stringify({ new_end_date: newEndDate, note }),
+    });
+  }
+
+  async completeLease(leaseId: string): Promise<Lease> {
+    return this.request<Lease>(`/gausevak/leases/${leaseId}/complete`, {
+      method: "POST",
+    });
+  }
+
+  async cancelLease(leaseId: string): Promise<Lease> {
+    return this.request<Lease>(`/gausevak/leases/${leaseId}/cancel`, {
+      method: "POST",
+    });
+  }
+
+  async updateLease(leaseId: string, data: LeaseUpdate): Promise<Lease> {
+    return this.request<Lease>(`/gausevak/leases/${leaseId}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
     });
   }
 

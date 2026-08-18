@@ -3623,6 +3623,8 @@ export default function CatalogScreen() {
   const [selectedBannerSlide, setSelectedBannerSlide] = useState<CatalogSlide | null>(null);
   const [bannerModalVisible, setBannerModalVisible] = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const newSlidesScrollRef = useRef<ScrollView>(null);
+  const activeNewSlideRef = useRef(0);
   const isFocused = useIsFocused();
   const { addToCartProduct, addToCartQty } = useLocalSearchParams<{
     addToCartProduct?: string;
@@ -4096,9 +4098,29 @@ export default function CatalogScreen() {
       });
   }, [products, selectedCategory, categories]);
 
-  if (loading) return <LoadingScreen />;
+  const newSlides = useMemo(
+    () => (catalogSlides.length > 0 ? catalogSlides : NEWLY_ADDED_SLIDES),
+    [catalogSlides],
+  );
 
-  const newSlides = catalogSlides.length > 0 ? catalogSlides : NEWLY_ADDED_SLIDES;
+  useEffect(() => {
+    activeNewSlideRef.current = activeNewSlide;
+  }, [activeNewSlide]);
+
+  useEffect(() => {
+    if (newSlides.length <= 1) return;
+    const iv = setInterval(() => {
+      const next = (activeNewSlideRef.current + 1) % newSlides.length;
+      newSlidesScrollRef.current?.scrollTo({
+        x: next * NEW_BANNER_WIDTH,
+        animated: true,
+      });
+      setActiveNewSlide(next);
+    }, 3000);
+    return () => clearInterval(iv);
+  }, [newSlides.length]);
+
+  if (loading) return <LoadingScreen />;
 
   const ListHeader = (
     <>
@@ -4147,6 +4169,7 @@ export default function CatalogScreen() {
 
       <View style={mainS.newSection}>
         <ScrollView
+          ref={newSlidesScrollRef}
           horizontal
           pagingEnabled
           showsHorizontalScrollIndicator={false}
