@@ -1766,6 +1766,37 @@ export default function AdminSettingsScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* ── Notifications */}
+        <View style={s.contentCard}>
+          <View style={s.contentCardHeader}>
+            <View style={s.contentIconWrap}>
+              <Ionicons name="notifications-outline" size={18} color={C.dark} />
+            </View>
+            <View style={s.contentCardBody}>
+              <Text style={s.contentCardTitle}>Notifications</Text>
+              <Text style={s.contentCardSubtitle}>
+                View order, subscription, wallet and vacation alerts.
+              </Text>
+            </View>
+            <View style={s.contentCountPill}>
+              <Ionicons name="notifications" size={16} color={C.dark} />
+            </View>
+          </View>
+          <TouchableOpacity
+            style={s.contentManageBtn}
+            activeOpacity={0.85}
+            onPress={() =>
+              router.push({
+                pathname: "/(admin)/notification",
+                params: { from: "settings" },
+              } as any)
+            }
+          >
+            <Ionicons name="open-outline" size={15} color="#fff" />
+            <Text style={s.contentManageText}>Open Notifications</Text>
+          </TouchableOpacity>
+        </View>
+
         {/* ── System Configuration */}
         <View style={s.section}>
           <SectionHeader title="System Configuration" />

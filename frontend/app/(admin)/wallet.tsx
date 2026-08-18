@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import { api } from "../../src/services/api";
 import LoadingScreen from "../../src/components/LoadingScreen";
 
@@ -485,6 +486,7 @@ function WithdrawModal({
 
 // ── Main Screen 
 export default function AdminWalletScreen() {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [balance, setBalance] = useState(0);
@@ -742,6 +744,18 @@ export default function AdminWalletScreen() {
       >
         <View style={s.header}>
           <Text style={s.title}>Wallet</Text>
+          <TouchableOpacity
+            style={s.notificationBtn}
+            activeOpacity={0.82}
+            onPress={() =>
+              router.push({
+                pathname: "/(admin)/notification",
+                params: { from: "wallet" },
+              } as any)
+            }
+          >
+            <Ionicons name="notifications-outline" size={20} color={C.dark} />
+          </TouchableOpacity>
         </View>
 
         {/* ── Hero Card ── */}
@@ -1317,12 +1331,34 @@ const wS = StyleSheet.create({
 // ── Screen Styles 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
-  header: { paddingHorizontal: 20, paddingTop: 14, paddingBottom: 8 },
+  header: {
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingBottom: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
   title: {
     fontSize: 26,
     fontWeight: "800",
     color: C.text,
     letterSpacing: -0.5,
+  },
+  notificationBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: "#fff",
+    borderWidth: 1.5,
+    borderColor: C.deepPeach,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: C.dark,
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
   },
 
   heroCard: {
