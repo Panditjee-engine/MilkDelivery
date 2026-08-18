@@ -239,10 +239,30 @@ function HomeBannerSlider({
 }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const slides = banners.length > 0 ? banners : homeBanners;
+  const scrollRef = useRef<ScrollView>(null);
+  const activeIndexRef = useRef(0);
+
+  useEffect(() => {
+    activeIndexRef.current = activeIndex;
+  }, [activeIndex]);
+
+  useEffect(() => {
+    if (slides.length <= 1) return;
+    const iv = setInterval(() => {
+      const next = (activeIndexRef.current + 1) % slides.length;
+      scrollRef.current?.scrollTo({
+        x: next * HOME_BANNER_WIDTH,
+        animated: true,
+      });
+      setActiveIndex(next);
+    }, 3000);
+    return () => clearInterval(iv);
+  }, [slides.length]);
 
   return (
     <View style={s.bannerWrap}>
       <ScrollView
+        ref={scrollRef}
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
