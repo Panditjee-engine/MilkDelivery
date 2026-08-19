@@ -17,7 +17,6 @@ import {
   Platform,
   Keyboard,
   NativeModules,
-  AppState,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -562,9 +561,15 @@ export default function WalletScreen() {
   useEffect(() => {
     if (!rechargeModal) return;
     syncManualQrAccess();
-    const interval = setInterval(syncManualQrAccess, 2000);
-    return () => clearInterval(interval);
   }, [rechargeModal, syncManualQrAccess]);
+
+  useEffect(() => {
+    if (!rechargeModal || !manualQrEnabled) return;
+    api
+      .getPaymentQr()
+      .then(setPaymentQr)
+      .catch(() => setPaymentQr(null));
+  }, [rechargeModal, manualQrEnabled]);
 
   const triggerShake = () => {
     shakeAnim.setValue(0);
@@ -627,22 +632,25 @@ export default function WalletScreen() {
     else setToast(null);
   };
 
+   const updateUserRef = useRef(updateUser);
+  useEffect(() => {
+    updateUserRef.current = updateUser;
+  }, [updateUser]);
+
   const fetchData = useCallback(async () => {
     if (fetchingRef.current) return;
     fetchingRef.current = true;
     try {
-      const [walletData, txData, requestData, qrData, meData] = await Promise.all([
+      const [walletData, txData, requestData, meData] = await Promise.all([
         api.getWallet(),
         api.getWalletTransactions(),
         api.getRechargeRequests().catch(() => []),
-        api.getPaymentQr().catch(() => null),
         api.getMe().catch(() => null),
       ]);
       setBalance(Number(walletData.balance || 0));
       setTransactions(txData);
       setRechargeRequests(Array.isArray(requestData) ? requestData : []);
-      setPaymentQr(qrData);
-      if (meData) updateUser(meData);
+      if (meData) updateUserRef.current(meData);
     } catch (error) {
       console.error("Error fetching wallet:", error);
     } finally {
@@ -650,23 +658,15 @@ export default function WalletScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [updateUser]);
-
+  }, []);
+  
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  useFocusEffect(
+   useFocusEffect(
     useCallback(() => {
       fetchData();
-      const interval = setInterval(fetchData, 2500);
-      const appStateSub = AppState.addEventListener("change", (state) => {
-        if (state === "active") fetchData();
-      });
-      return () => {
-        clearInterval(interval);
-        appStateSub.remove();
-      };
     }, [fetchData]),
   );
 

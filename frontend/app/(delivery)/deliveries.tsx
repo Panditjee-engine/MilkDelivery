@@ -17,6 +17,29 @@ import { useRouter } from "expo-router";
 import { api } from "../../src/services/api";
 import LoadingScreen from "../../src/components/LoadingScreen";
 
+//helper for adresss
+  function formatOrderAddress(address?: any): string {
+  if (!address) return "Address not available";
+  const isOnlineShape = !address.line1 && (address.tower || address.flat || address.area);
+  if (isOnlineShape) {
+    const firstLine = [address.flat, address.tower].filter(Boolean).join(", ");
+    const lines = [
+      firstLine,
+      address.area,
+      address.landmark ? `Near ${address.landmark}` : "",
+      [address.city, address.state].filter(Boolean).join(", "),
+      address.pincode,
+    ].filter(Boolean);
+    return lines.length ? lines.join(", ") : "Address not available";
+  }
+  const lines = [
+    [address.line1, address.line2, address.landmark].filter(Boolean).join(", "),
+    [address.city, address.state].filter(Boolean).join(", "),
+    address.pincode,
+  ].filter(Boolean);
+  return lines.length ? lines.join(", ") : "Address not available";
+}
+
 const C = {
   primary: "#FF9675",
   accent: "#FD9E69",
@@ -104,6 +127,8 @@ export default function DeliveriesScreen() {
     ]).start(() => setShowSuccessToast(false));
   };
 
+
+  
   const handleAcceptOrder = async (order: any) => {
     try {
       const orderId = order.id || order._id;
@@ -232,6 +257,8 @@ export default function DeliveriesScreen() {
   };
 
   if (loading) return <LoadingScreen />;
+
+  
 
   const activeOrders = myOrders.filter((o) =>
     ["assigned", "picked_up", "out_for_delivery"].includes(o.status),
@@ -535,21 +562,49 @@ function OrderCard({
   onCancel?: () => void;
   isAvailable?: boolean;
 }) {
+  const isPrePickup = isAvailable || order.status === "assigned";
+  const contactName = order.display_name || (isPrePickup ? "Admin" : order.customer_name || "Customer");
+  const contactPhone = order.display_phone || order.customer_phone || "N/A";
+  const addressText = formatOrderAddress(order.display_address || order.address);
+  const items: any[] = order.items || [];
+
   return (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
-        <Text style={styles.customerName}>
-          {order.customer_name || "Customer"}
-        </Text>
+        <View style={{ flex: 1 }}>
+          <View style={styles.stageTag}>
+            <Ionicons
+              name={isPrePickup ? "storefront-outline" : "home-outline"}
+              size={11}
+              color={C.dark}
+            />
+            <Text style={styles.stageTagText}>
+              {isPrePickup ? "Pickup from Admin" : "Deliver to Customer"}
+            </Text>
+          </View>
+          <Text style={styles.customerName}>{contactName}</Text>
+        </View>
         <Text style={styles.amount}>₹{order.total_amount || 0}</Text>
       </View>
-      <Text style={styles.phone}> {order.customer_phone || "N/A"}</Text>
-      <Text style={styles.address}>
-        {" "}
-        {order.address?.line1 ||
-          order.delivery_address?.line1 ||
-          "No Address Provided"}
-      </Text>
+
+      <Text style={styles.phone}> {contactPhone}</Text>
+      <Text style={styles.address}> {addressText}</Text>
+
+      {items.length > 0 && (
+        <View style={styles.itemsBox}>
+          <Text style={styles.itemsBoxTitle}>Order Items</Text>
+          {items.map((item, idx) => (
+            <View key={idx} style={styles.itemRow}>
+              <Text style={styles.itemName} numberOfLines={1}>
+                {item.product_name || "Product"} × {item.quantity}
+              </Text>
+              <Text style={styles.itemAmount}>
+                ₹{item.amount ?? (item.price || 0) * (item.quantity || 0)}
+              </Text>
+            </View>
+          ))}
+        </View>
+      )}
 
       <View style={styles.cardFooter}>
         {isAvailable ? (
@@ -585,12 +640,12 @@ function CompletedOrderCard({ order }: { order: any }) {
     <View style={[styles.card, { opacity: 0.85 }]}>
       <View style={styles.cardHeader}>
         <Text style={styles.customerName}>
-          {order.customer_name || "Customer"}
+          {order.display_name || order.customer_name || "Customer"}
         </Text>
         <Text style={styles.completedBadge}>Delivered</Text>
       </View>
       <Text style={styles.address}>
-        📍 {order.address?.line1 || order.delivery_address?.line1 || ""}
+        📍 {formatOrderAddress(order.display_address || order.address)}
       </Text>
     </View>
   );
@@ -812,4 +867,38 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   successToastText: { color: "#FFFFFF", fontWeight: "600", fontSize: 14 },
+  stageTag: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 4,
+  alignSelf: "flex-start",
+  backgroundColor: C.light,
+  paddingHorizontal: 8,
+  paddingVertical: 3,
+  borderRadius: 8,
+  marginBottom: 4,
+},
+stageTagText: { fontSize: 10, fontWeight: "700", color: C.dark },
+itemsBox: {
+  backgroundColor: C.bg,
+  borderRadius: 10,
+  padding: 10,
+  marginBottom: 12,
+  borderWidth: 1,
+  borderColor: C.border,
+},
+itemsBoxTitle: {
+  fontSize: 11,
+  fontWeight: "700",
+  color: C.textMuted,
+  textTransform: "uppercase",
+  marginBottom: 6,
+},
+itemRow: {
+  flexDirection: "row",
+  justifyContent: "space-between",
+  paddingVertical: 3,
+},
+itemName: { flex: 1, fontSize: 13, color: C.text, fontWeight: "500" },
+itemAmount: { fontSize: 13, color: C.dark, fontWeight: "700" },
 });

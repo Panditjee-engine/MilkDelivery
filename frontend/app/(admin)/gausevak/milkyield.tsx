@@ -421,7 +421,9 @@ function InlineMilkEntry({
     liters: number,
   ) => void;
 }) {
-  const shift = getCurrentShift();
+  // Admin picks the shift manually — no longer locked to the device's
+  // real-world clock, so past-shift / back-dated entries work anytime.
+  const [shift, setShift] = useState<"morning" | "evening">(getCurrentShift());
   const isMorning = shift === "morning";
   const currentVal = isMorning ? item.morningLiters : item.eveningLiters;
 
@@ -429,15 +431,13 @@ function InlineMilkEntry({
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  // Sync when parent row updates (e.g. auto-refresh), but don't override if user is editing
-  const lastRemoteVal = useRef(currentVal);
+  // Re-sync the input whenever the selected shift OR the row's remote data changes
   useEffect(() => {
-    const remote = isMorning ? item.morningLiters : item.eveningLiters;
-    if (remote !== lastRemoteVal.current) {
-      lastRemoteVal.current = remote;
-      setVal(remote.toFixed(1));
-    }
-  }, [item.morningLiters, item.eveningLiters]);
+    const remote =
+      shift === "morning" ? item.morningLiters : item.eveningLiters;
+    setVal(remote.toFixed(1));
+    setSaved(false);
+  }, [shift, item.morningLiters, item.eveningLiters]);
 
   const numVal = parseFloat(val) || 0;
   const isDirty = Math.abs(numVal - currentVal) > 0.001;
@@ -461,7 +461,6 @@ function InlineMilkEntry({
         date: selectedDate,
       });
       onSaved(item.id, shift, liters);
-      lastRemoteVal.current = liters;
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (e) {
@@ -474,23 +473,59 @@ function InlineMilkEntry({
   const color = isMorning ? "#d97706" : "#6366f1";
   const bg = isMorning ? "#fffbeb" : "#eef2ff";
   const border = isMorning ? "#fcd34d" : "#c7d2fe";
-  const icon: any = isMorning ? "sunny-outline" : "moon-outline";
 
   return (
     <View style={[ie.wrap, { backgroundColor: bg, borderColor: border }]}>
-      {/* Shift label + auto tag */}
+      {/* Manual shift toggle */}
       <View style={ie.topRow}>
-        <Ionicons name={icon} size={12} color={color} />
-        <Text style={[ie.shiftLabel, { color }]}>
-          {isMorning ? "Morning" : "Evening"}
-        </Text>
-        <View style={ie.autoTag}>
-          <Ionicons name="flash-outline" size={9} color="#9ca3af" />
-          <Text style={ie.autoText}>auto</Text>
-        </View>
+        <TouchableOpacity
+          style={[
+            ie.shiftToggleBtn,
+            isMorning && { backgroundColor: "#fef3c7", borderColor: "#fcd34d" },
+          ]}
+          onPress={() => setShift("morning")}
+        >
+          <Ionicons
+            name="sunny-outline"
+            size={12}
+            color={isMorning ? "#d97706" : "#9ca3af"}
+          />
+          <Text
+            style={[
+              ie.shiftToggleText,
+              { color: isMorning ? "#d97706" : "#9ca3af" },
+            ]}
+          >
+            Morning
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            ie.shiftToggleBtn,
+            !isMorning && {
+              backgroundColor: "#e0e7ff",
+              borderColor: "#c7d2fe",
+            },
+          ]}
+          onPress={() => setShift("evening")}
+        >
+          <Ionicons
+            name="moon-outline"
+            size={12}
+            color={!isMorning ? "#6366f1" : "#9ca3af"}
+          />
+          <Text
+            style={[
+              ie.shiftToggleText,
+              { color: !isMorning ? "#6366f1" : "#9ca3af" },
+            ]}
+          >
+            Evening
+          </Text>
+        </TouchableOpacity>
       </View>
 
-      {/* Controls */}
+      {/* Controls (unchanged) */}
       <View style={ie.controlRow}>
         <TouchableOpacity
           style={[ie.adjBtn, { borderColor: border }]}
@@ -754,43 +789,6 @@ function SummaryBar({ summary }: { summary: Summary }) {
   );
 }
 
-// ─── Auto-refresh dot
-function AutoRefreshDot({ active }: { active: boolean }) {
-  const pulse = useRef(new Animated.Value(1)).current;
-  useEffect(() => {
-    if (!active) return;
-    const anim = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, {
-          toValue: 0.4,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulse, {
-          toValue: 1,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-      ]),
-    );
-    anim.start();
-    return () => anim.stop();
-  }, [active]);
-  return (
-    <View style={ar.wrap}>
-      <Animated.View
-        style={[
-          ar.dot,
-          { opacity: pulse, backgroundColor: active ? "#16a34a" : "#d1d5db" },
-        ]}
-      />
-      <Text style={[ar.label, { color: active ? "#16a34a" : "#9ca3af" }]}>
-        {active ? "Live" : "Paused"}
-      </Text>
-    </View>
-  );
-}
-
 // ─── ListHeader — everything that used to sit fixed above the FlatList now
 // scrolls together WITH the list, since it's rendered as ListHeaderComponent.
 function ListHeader({
@@ -881,8 +879,7 @@ export default function MilkYieldScreen() {
   const [modalCow, setModalCow] = useState<MilkRow | null>(null);
   const [selectedDate, setSelectedDate] = useState(dateStr(0));
   const [showRedirect, setShowRedirect] = useState(false);
-  const [autoRefreshActive, setAutoRefreshActive] = useState(true);
-  const autoRefreshRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const isMountedRef = useRef(true);
   const silentRef = useRef(false);
 
@@ -928,18 +925,11 @@ export default function MilkYieldScreen() {
 
   useEffect(() => {
     isMountedRef.current = true;
-    if (autoRefreshActive) {
-      autoRefreshRef.current = setInterval(() => fetchAll(true), 2000);
-    }
-    return () => {
-      if (autoRefreshRef.current) clearInterval(autoRefreshRef.current);
-    };
-  }, [autoRefreshActive, fetchAll]);
+  }, []);
 
   useEffect(() => {
     return () => {
       isMountedRef.current = false;
-      if (autoRefreshRef.current) clearInterval(autoRefreshRef.current);
     };
   }, []);
 
@@ -1028,18 +1018,15 @@ export default function MilkYieldScreen() {
           <Text style={s.headerTitle}>Milk Yield</Text>
           <Text style={s.headerSub}>{formatFullDateLabel(selectedDate)}</Text>
         </View>
-        <TouchableOpacity
-          onPress={() => setAutoRefreshActive((a) => !a)}
-          style={s.refreshBtn}
-        >
-          <AutoRefreshDot active={autoRefreshActive} />
+        {/* <TouchableOpacity style={s.refreshBtn} onPress={onRefresh}>
+          <Ionicons name="refresh-outline" size={18} color="#6b7280" />
         </TouchableOpacity>
         <TouchableOpacity
           style={[s.refreshBtn, { marginLeft: 8 }]}
           onPress={onRefresh}
         >
           <Ionicons name="refresh-outline" size={18} color="#6b7280" />
-        </TouchableOpacity>
+        </TouchableOpacity> */}
       </View>
 
       {/* Everything below (date filter, stats, search, sort) now lives
@@ -1507,12 +1494,6 @@ const md = StyleSheet.create({
   saveText: { fontSize: 14, fontWeight: "700", color: "#fff" },
 });
 
-const ar = StyleSheet.create({
-  wrap: { flexDirection: "row", alignItems: "center", gap: 4 },
-  dot: { width: 8, height: 8, borderRadius: 4 },
-  label: { fontSize: 10, fontWeight: "700" },
-});
-
 const df = StyleSheet.create({
   wrap: {
     flexDirection: "row",
@@ -1700,4 +1681,16 @@ const ie = StyleSheet.create({
     minWidth: 54,
   },
   saveTxt: { fontSize: 12, fontWeight: "700" },
+  shiftToggleBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    backgroundColor: "#fff",
+  },
+  shiftToggleText: { fontSize: 11, fontWeight: "700" },
 });

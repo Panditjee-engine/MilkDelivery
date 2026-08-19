@@ -20,7 +20,10 @@ import {
   Easing,
   Dimensions,
 } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
@@ -33,24 +36,24 @@ const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 // ── Warm Color Palette
 const C = {
-  primary:    "#FF9675",
-  secondary:  "#FF9675",
-  accent:     "#8B6854",
-  light:      "#8B6854",
-  dark:       "#BB6B3F",
-  deep:       "#8B6854",
-  bg:         "#FFF8EF",
-  card:       "#FFE8D6",
-  text:       "#3D1F0A",
-  textMuted:  "#A07850",
-  textLight:  "#C9A882",
-  success:    "#22C55E",
-  successBg:  "#F0FDF4",
-  white:      "#FFFFFF",
-  border:     "#FFE8C8",
-  inputBg:    "#FFF8EF",
-  chipBg:     "#FFF3DC",
-  overlay:    "rgba(61,31,10,0.45)",
+  primary: "#FF9675",
+  secondary: "#FF9675",
+  accent: "#8B6854",
+  light: "#8B6854",
+  dark: "#BB6B3F",
+  deep: "#8B6854",
+  bg: "#FFF8EF",
+  card: "#FFE8D6",
+  text: "#3D1F0A",
+  textMuted: "#A07850",
+  textLight: "#C9A882",
+  success: "#22C55E",
+  successBg: "#F0FDF4",
+  white: "#FFFFFF",
+  border: "#FFE8C8",
+  inputBg: "#FFF8EF",
+  chipBg: "#FFF3DC",
+  overlay: "rgba(61,31,10,0.45)",
 };
 
 // ── Custom Alert Types
@@ -192,10 +195,7 @@ function Snackbar({ visible, message, type }: SnackbarState) {
         color={isSuccess ? "#166534" : "#b91c1c"}
       />
       <Text
-        style={[
-          snackStyles.text,
-          { color: isSuccess ? "#166534" : "#b91c1c" },
-        ]}
+        style={[snackStyles.text, { color: isSuccess ? "#166534" : "#b91c1c" }]}
       >
         {message}
       </Text>
@@ -392,6 +392,10 @@ export default function InventoryScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
 
+  // -- for search
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showSearch, setShowSearch] = useState(false);
+
   // - add product other state
   const [showCustomCat, setShowCustomCat] = useState(false);
   const [customCatText, setCustomCatText] = useState("");
@@ -403,9 +407,12 @@ export default function InventoryScreen() {
     type: "success",
   });
 
-  const showSnackbar = useCallback((message: string, type: "success" | "error") => {
-    setSnackbar({ visible: true, message, type });
-  }, []);
+  const showSnackbar = useCallback(
+    (message: string, type: "success" | "error") => {
+      setSnackbar({ visible: true, message, type });
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!snackbar.visible) return;
@@ -445,7 +452,9 @@ export default function InventoryScreen() {
     }
   };
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => {
+    fetchData();
+  }, []);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -513,7 +522,9 @@ export default function InventoryScreen() {
 
       await api.createProduct({
         name: formData.name,
-        category: formData.category ? formData.category.toLowerCase() : undefined,
+        category: formData.category
+          ? formData.category.toLowerCase()
+          : undefined,
         unit: formData.unit || undefined,
         price: Number(formData.price),
         mrp: formData.mrp ? Number(formData.mrp) : Number(formData.price),
@@ -580,7 +591,8 @@ export default function InventoryScreen() {
     const currentProduct = selectedProduct;
     const productId = getProductId(currentProduct);
     if (!productId || stockUpdating) {
-      if (!productId) showSnackbar("Product id missing. Please refresh inventory.", "error");
+      if (!productId)
+        showSnackbar("Product id missing. Please refresh inventory.", "error");
       return;
     }
     const newStock = Math.max(0, currentProduct!.stock + delta);
@@ -592,7 +604,9 @@ export default function InventoryScreen() {
       );
       setProducts((prev) =>
         prev.map((item) =>
-          getProductId(item) === productId ? { ...item, stock: newStock } : item,
+          getProductId(item) === productId
+            ? { ...item, stock: newStock }
+            : item,
         ),
       );
       setEditForm((prev) => ({ ...prev, stock: String(newStock) }));
@@ -621,7 +635,9 @@ export default function InventoryScreen() {
 
       await api.updateProduct(productId, {
         name: editForm.name,
-        category: editForm.category ? editForm.category.toLowerCase() : undefined,
+        category: editForm.category
+          ? editForm.category.toLowerCase()
+          : undefined,
         unit: editForm.unit || undefined,
         price: Number(editForm.price),
         mrp: editForm.mrp ? Number(editForm.mrp) : Number(editForm.price),
@@ -712,7 +728,10 @@ export default function InventoryScreen() {
   const toggleAvailability = async (product: Product) => {
     const productId = getProductId(product);
     if (!productId) {
-      Alert.alert("Product Not Ready", "Product id missing. Please refresh inventory.");
+      Alert.alert(
+        "Product Not Ready",
+        "Product id missing. Please refresh inventory.",
+      );
       showSnackbar("Product id missing. Please refresh inventory.", "error");
       return;
     }
@@ -727,7 +746,8 @@ export default function InventoryScreen() {
         {
           text: nextState ? "Make Available" : "Make Unavailable",
           style: nextState ? "default" : "destructive",
-          onPress: () => performAvailabilityUpdate(product, productId, nextState),
+          onPress: () =>
+            performAvailabilityUpdate(product, productId, nextState),
         },
       ],
     );
@@ -736,7 +756,10 @@ export default function InventoryScreen() {
   // ── Delete Product
   const deleteProduct = (id?: string) => {
     if (!id) {
-      Alert.alert("Product Not Ready", "Product id missing. Please refresh inventory.");
+      Alert.alert(
+        "Product Not Ready",
+        "Product id missing. Please refresh inventory.",
+      );
       showSnackbar("Product id missing. Please refresh inventory.", "error");
       return;
     }
@@ -768,6 +791,17 @@ export default function InventoryScreen() {
     setEditTab(0);
   };
 
+  const filteredProducts = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return products;
+    return products.filter((p) => {
+      const name = (p.name || "").toLowerCase();
+      const category = (p.category || "").toLowerCase();
+      const unit = (p.unit || "").toLowerCase();
+      return name.includes(q) || category.includes(q) || unit.includes(q);
+    });
+  }, [products, searchQuery]);
+
   if (loading) return <LoadingScreen />;
 
   const available = products.filter((p) => p.is_available).length;
@@ -788,7 +822,10 @@ export default function InventoryScreen() {
             onPress={() => pickImage((uri) => update("image", uri))}
           >
             {data.image ? (
-              <Image source={{ uri: data.image }} style={styles.thumbnailImage} />
+              <Image
+                source={{ uri: data.image }}
+                style={styles.thumbnailImage}
+              />
             ) : (
               <View style={styles.thumbnailEmpty}>
                 <View style={styles.thumbnailIconCircle}>
@@ -811,10 +848,17 @@ export default function InventoryScreen() {
               onPress={() => pickImage((uri) => update("image2", uri))}
             >
               {data.image2 ? (
-                <Image source={{ uri: data.image2 }} style={styles.additionalImage} />
+                <Image
+                  source={{ uri: data.image2 }}
+                  style={styles.additionalImage}
+                />
               ) : (
                 <View style={styles.additionalImageEmpty}>
-                  <Ionicons name="add-circle-outline" size={22} color={C.textLight} />
+                  <Ionicons
+                    name="add-circle-outline"
+                    size={22}
+                    color={C.textLight}
+                  />
                   <Text style={styles.additionalImageText}>Image 2</Text>
                 </View>
               )}
@@ -825,10 +869,17 @@ export default function InventoryScreen() {
               onPress={() => pickImage((uri) => update("image3", uri))}
             >
               {data.image3 ? (
-                <Image source={{ uri: data.image3 }} style={styles.additionalImage} />
+                <Image
+                  source={{ uri: data.image3 }}
+                  style={styles.additionalImage}
+                />
               ) : (
                 <View style={styles.additionalImageEmpty}>
-                  <Ionicons name="add-circle-outline" size={22} color={C.textLight} />
+                  <Ionicons
+                    name="add-circle-outline"
+                    size={22}
+                    color={C.textLight}
+                  />
                   <Text style={styles.additionalImageText}>Image 3</Text>
                 </View>
               )}
@@ -844,94 +895,123 @@ export default function InventoryScreen() {
             onChangeText={(v) => update("name", v)}
           />
 
+          <View style={styles.row}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.fieldLabel}>Price (₹)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="e.g. 60"
+                placeholderTextColor={C.textLight}
+                keyboardType="numeric"
+                value={data.price}
+                onChangeText={(v) => update("price", v)}
+              />
+            </View>
+            <View style={{ width: 12 }} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.fieldLabel}>MRP (optional)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="e.g. 70"
+                placeholderTextColor={C.textLight}
+                keyboardType="numeric"
+                value={data.mrp}
+                onChangeText={(v) => update("mrp", v)}
+              />
+            </View>
+          </View>
+
           <Text style={styles.fieldLabel}>Category</Text>
-<ScrollView
-  horizontal
-  showsHorizontalScrollIndicator={false}
-  style={styles.categoryRow}
->
-  {CATEGORIES.map((cat) => (
-    <TouchableOpacity
-      key={cat}
-      style={[styles.catChip, data.category === cat && styles.catChipActive]}
-      onPress={() => {
-        setShowCustomCat(false);
-        update("category", cat);
-      }}
-    >
-      <Text
-        style={[
-          styles.catChipText,
-          data.category === cat && styles.catChipTextActive,
-        ]}
-      >
-        {cat}
-      </Text>
-    </TouchableOpacity>
-  ))}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.categoryRow}
+          >
+            {CATEGORIES.map((cat) => (
+              <TouchableOpacity
+                key={cat}
+                style={[
+                  styles.catChip,
+                  data.category === cat && styles.catChipActive,
+                ]}
+                onPress={() => {
+                  setShowCustomCat(false);
+                  update("category", cat);
+                }}
+              >
+                <Text
+                  style={[
+                    styles.catChipText,
+                    data.category === cat && styles.catChipTextActive,
+                  ]}
+                >
+                  {cat}
+                </Text>
+              </TouchableOpacity>
+            ))}
 
-  {/* Show current custom category as its own selected chip if it's not a preset */}
-  {data.category && !CATEGORIES.includes(data.category) && (
-    <View style={[styles.catChip, styles.catChipActive]}>
-      <Text style={[styles.catChipText, styles.catChipTextActive]}>
-        {data.category}
-      </Text>
-    </View>
-  )}
+            {/* Show current custom category as its own selected chip if it's not a preset */}
+            {data.category && !CATEGORIES.includes(data.category) && (
+              <View style={[styles.catChip, styles.catChipActive]}>
+                <Text style={[styles.catChipText, styles.catChipTextActive]}>
+                  {data.category}
+                </Text>
+              </View>
+            )}
 
-  <TouchableOpacity
-    style={[styles.catChip, showCustomCat && styles.catChipActive]}
-    onPress={() => {
-      setCustomCatText("");
-      setShowCustomCat(true);
-    }}
-  >
-    <Ionicons
-      name="add-circle-outline"
-      size={14}
-      color={showCustomCat ? C.dark : C.textMuted}
-      style={{ marginRight: 4 }}
-    />
-    <Text
-      style={[
-        styles.catChipText,
-        showCustomCat && styles.catChipTextActive,
-      ]}
-    >
-      Other
-    </Text>
-  </TouchableOpacity>
-</ScrollView>
+            <TouchableOpacity
+              style={[styles.catChip, showCustomCat && styles.catChipActive]}
+              onPress={() => {
+                setCustomCatText("");
+                setShowCustomCat(true);
+              }}
+            >
+              <Ionicons
+                name="add-circle-outline"
+                size={14}
+                color={showCustomCat ? C.dark : C.textMuted}
+                style={{ marginRight: 4 }}
+              />
+              <Text
+                style={[
+                  styles.catChipText,
+                  showCustomCat && styles.catChipTextActive,
+                ]}
+              >
+                Other
+              </Text>
+            </TouchableOpacity>
+          </ScrollView>
 
-{showCustomCat && (
-  <View style={styles.customCatRow}>
-    <TextInput
-      style={[styles.input, { flex: 1, marginBottom: 0 }]}
-      placeholder="Type category name"
-      placeholderTextColor={C.textLight}
-      value={customCatText}
-      onChangeText={setCustomCatText}
-      autoFocus
-      onSubmitEditing={() => {
-        if (customCatText.trim()) {
-          update("category", customCatText.trim());
-          setShowCustomCat(false);
-        }
-      }}
-    />
-    <TouchableOpacity
-      style={styles.customCatSaveBtn}
-      onPress={() => {
-        if (customCatText.trim()) {
-          update("category", customCatText.trim());
-          setShowCustomCat(false);
-        }
-      }}
-    >
-      <Ionicons name="checkmark" size={18} color={C.white} />
-    </TouchableOpacity>
-  </View>
-)}
+          {showCustomCat && (
+            <View style={styles.customCatRow}>
+              <TextInput
+                style={[styles.input, { flex: 1, marginBottom: 0 }]}
+                placeholder="Type category name"
+                placeholderTextColor={C.textLight}
+                value={customCatText}
+                onChangeText={setCustomCatText}
+                autoFocus
+                onSubmitEditing={() => {
+                  if (customCatText.trim()) {
+                    update("category", customCatText.trim());
+                    setShowCustomCat(false);
+                  }
+                }}
+              />
+              <TouchableOpacity
+                style={styles.customCatSaveBtn}
+                onPress={() => {
+                  if (customCatText.trim()) {
+                    update("category", customCatText.trim());
+                    setShowCustomCat(false);
+                  }
+                }}
+              >
+                <Ionicons name="checkmark" size={18} color={C.white} />
+              </TouchableOpacity>
+            </View>
+          )}
 
           <Text style={styles.fieldLabel}>Stock (optional)</Text>
           <TextInput
@@ -1111,8 +1191,11 @@ export default function InventoryScreen() {
       productAction?.id === selectedProductId &&
       productAction.type === "availability";
     const deleteBusy =
-      productAction?.id === selectedProductId && productAction.type === "delete";
-    const allImages = [p.image, ...(p.images || [])].filter(Boolean) as string[];
+      productAction?.id === selectedProductId &&
+      productAction.type === "delete";
+    const allImages = [p.image, ...(p.images || [])].filter(
+      Boolean,
+    ) as string[];
     const hasMrp = p.mrp && p.mrp > p.price;
 
     return (
@@ -1231,7 +1314,8 @@ export default function InventoryScreen() {
         {(p.product_type || p.dietary_preference) && (
           <View style={styles.detailSection}>
             <Text style={styles.detailSectionTitle}>
-              <Ionicons name="star-outline" size={14} color={C.dark} /> Highlights
+              <Ionicons name="star-outline" size={14} color={C.dark} />{" "}
+              Highlights
             </Text>
             {p.product_type ? (
               <View style={styles.infoRow}>
@@ -1260,7 +1344,12 @@ export default function InventoryScreen() {
           p.shelf_life) && (
           <View style={styles.detailSection}>
             <Text style={styles.detailSectionTitle}>
-              <Ionicons name="information-circle-outline" size={14} color={C.dark} /> Information
+              <Ionicons
+                name="information-circle-outline"
+                size={14}
+                color={C.dark}
+              />{" "}
+              Information
             </Text>
             {p.description ? (
               <View style={styles.infoBlock}>
@@ -1283,7 +1372,9 @@ export default function InventoryScreen() {
             {p.seller_address ? (
               <View style={styles.infoBlock}>
                 <Text style={styles.infoLabel}>Seller Address</Text>
-                <Text style={styles.infoValueMultiline}>{p.seller_address}</Text>
+                <Text style={styles.infoValueMultiline}>
+                  {p.seller_address}
+                </Text>
               </View>
             ) : null}
             {p.customer_care ? (
@@ -1388,23 +1479,58 @@ export default function InventoryScreen() {
         <Snackbar {...snackbar} />
       </View>
 
-      {/* ── Header ── */}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>Inventory</Text>
-          <Text style={styles.subtitle}>
-            {products.length} products · {available} available
-          </Text>
-        </View>
-        {isAdmin && (
-          <TouchableOpacity
-            style={styles.addBtn}
-            onPress={() => setAddModal(true)}
-          >
-            <Ionicons name="add" size={22} color={C.white} />
-          </TouchableOpacity>
-        )}
-      </View>
+{/* ── Header ── */}
+<View style={styles.header}>
+  {showSearch ? (
+    <View style={styles.headerSearchWrap}>
+      <Ionicons name="search-outline" size={18} color={C.textMuted} />
+      <TextInput
+        style={styles.headerSearchInput}
+        placeholder="Search products..."
+        placeholderTextColor={C.textLight}
+        value={searchQuery}
+        onChangeText={setSearchQuery}
+        autoFocus
+      />
+      {searchQuery.length > 0 && (
+        <TouchableOpacity onPress={() => setSearchQuery("")}>
+          <Ionicons name="close-circle" size={17} color={C.textLight} />
+        </TouchableOpacity>
+      )}
+    </View>
+  ) : (
+    <View>
+      <Text style={styles.title}>Inventory</Text>
+      <Text style={styles.subtitle}>
+        {products.length} products · {available} available
+      </Text>
+    </View>
+  )}
+
+  <View style={{ flexDirection: "row", gap: 8 }}>
+    <TouchableOpacity
+      style={[styles.iconBtn, showSearch && styles.iconBtnActive]}
+      onPress={() => {
+        if (showSearch) setSearchQuery("");
+        setShowSearch((v) => !v);
+      }}
+    >
+      <Ionicons
+        name={showSearch ? "close" : "search-outline"}
+        size={20}
+        color={showSearch ? C.white : C.dark}
+      />
+    </TouchableOpacity>
+    {isAdmin && !showSearch && (
+      <TouchableOpacity
+        style={styles.addBtn}
+        onPress={() => setAddModal(true)}
+      >
+        <Ionicons name="add" size={22} color={C.white} />
+      </TouchableOpacity>
+    )}
+  </View>
+</View>
 
       {/* ── Summary Strip ── */}
       <View style={styles.summaryStrip}>
@@ -1468,16 +1594,26 @@ export default function InventoryScreen() {
         }
         contentContainerStyle={styles.listContent}
       >
-        {products.length === 0 ? (
+        {filteredProducts.length === 0 ? (
           <View style={styles.emptyState}>
             <View style={styles.emptyIconWrap}>
-              <Ionicons name="cube-outline" size={48} color={C.textLight} />
+              <Ionicons
+                name={searchQuery ? "search-outline" : "cube-outline"}
+                size={48}
+                color={C.textLight}
+              />
             </View>
-            <Text style={styles.emptyTitle}>No products yet</Text>
-            <Text style={styles.emptyDesc}>Tap + to add your first product</Text>
+            <Text style={styles.emptyTitle}>
+              {searchQuery ? "No matching products" : "No products yet"}
+            </Text>
+            <Text style={styles.emptyDesc}>
+              {searchQuery
+                ? "Try a different search term"
+                : "Tap + to add your first product"}
+            </Text>
           </View>
         ) : (
-          products.map((product) => (
+          filteredProducts.map((product) => (
             <TouchableOpacity
               key={product.id}
               style={styles.productCard}
@@ -1507,7 +1643,9 @@ export default function InventoryScreen() {
                 </View>
                 <Text style={styles.productMeta}>
                   {product.unit || product.category
-                    ? [product.unit, product.category].filter(Boolean).join(" · ")
+                    ? [product.unit, product.category]
+                        .filter(Boolean)
+                        .join(" · ")
                     : "Details pending"}
                 </Text>
                 <View
@@ -1600,9 +1738,14 @@ export default function InventoryScreen() {
 
               {isFormValid && missingFieldsHint.length > 0 && (
                 <View style={styles.hintBanner}>
-                  <Ionicons name="information-circle-outline" size={16} color={C.dark} />
+                  <Ionicons
+                    name="information-circle-outline"
+                    size={16}
+                    color={C.dark}
+                  />
                   <Text style={styles.hintBannerText}>
-                    You can add {missingFieldsHint.join(", ")} later by editing this product.
+                    You can add {missingFieldsHint.join(", ")} later by editing
+                    this product.
                   </Text>
                 </View>
               )}
@@ -2147,19 +2290,19 @@ const styles = StyleSheet.create({
     borderColor: "transparent",
   },
   customCatRow: {
-  flexDirection: "row",
-  alignItems: "center",
-  gap: 8,
-  marginBottom: 16,
-},
-customCatSaveBtn: {
-  width: 44,
-  height: 44,
-  borderRadius: 12,
-  backgroundColor: C.dark,
-  justifyContent: "center",
-  alignItems: "center",
-},
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 16,
+  },
+  customCatSaveBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: C.dark,
+    justifyContent: "center",
+    alignItems: "center",
+  },
   catChipActive: { backgroundColor: C.primary + "25", borderColor: C.primary },
   catChipText: {
     fontSize: 13,
@@ -2426,4 +2569,36 @@ customCatSaveBtn: {
   },
   actionDisabled: { opacity: 0.55 },
   detailSmallBtnText: { fontSize: 13, fontWeight: "600" },
+  headerSearchWrap: {
+  flex: 1,
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 8,
+  backgroundColor: C.card,
+  borderRadius: 14,
+  borderWidth: 1,
+  borderColor: C.border,
+  paddingHorizontal: 14,
+  paddingVertical: 10,
+  marginRight: 10,
+},
+headerSearchInput: {
+  flex: 1,
+  fontSize: 14,
+  color: C.text,
+},
+iconBtn: {
+  width: 44,
+  height: 44,
+  borderRadius: 14,
+  backgroundColor: C.card,
+  justifyContent: "center",
+  alignItems: "center",
+  borderWidth: 1,
+  borderColor: C.border,
+},
+iconBtnActive: {
+  backgroundColor: C.dark,
+  borderColor: C.dark,
+},
 });

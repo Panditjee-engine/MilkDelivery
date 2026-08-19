@@ -48,15 +48,6 @@ export default function DeliveryLayout() {
           tabBarIcon: ({ color, size }) => <Ionicons name="cube" size={size} color={color} />,
         }}
       />
-      {/* <Tabs.Screen
-        name="wallet"
-        options={{
-          title: "Wallet",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="wallet" size={size} color={color} />
-          ),
-        }}
-      /> */}
       <Tabs.Screen
         name="profile"
         options={{
