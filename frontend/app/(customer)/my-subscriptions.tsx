@@ -19,7 +19,7 @@ import { api } from "../../src/services/api";
 import { Colors } from "../../src/constants/colors";
 import LoadingScreen from "../../src/components/LoadingScreen";
 
-// ─── Types 
+// ─── Types
 
 interface SubscriptionItem {
   product_id: string;
@@ -102,11 +102,21 @@ async function saveAndShareInvoice(payload: {
   }
 }
 
-// ─── Helpers 
+// ─── Helpers
 
 const MONTH_NAMES = [
-  "Jan","Feb","Mar","Apr","May","Jun",
-  "Jul","Aug","Sep","Oct","Nov","Dec",
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
 ];
 
 function formatDate(s: string): string {
@@ -177,12 +187,22 @@ const SLOT_LABELS: Record<string, string> = {
   evening: "Evening (5–8 PM)",
 };
 
-// ─── Mini Calendar 
+// ─── Mini Calendar
 
 const DAY_NAMES = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 const FULL_MONTH_NAMES = [
-  "January","February","March","April","May","June",
-  "July","August","September","October","November","December",
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
 ];
 
 function MiniCalendar({
@@ -229,7 +249,9 @@ function MiniCalendar({
       </View>
       <View style={calS.names}>
         {DAY_NAMES.map((d) => (
-          <Text key={d} style={calS.dayName}>{d}</Text>
+          <Text key={d} style={calS.dayName}>
+            {d}
+          </Text>
         ))}
       </View>
       <View style={calS.grid}>
@@ -254,13 +276,16 @@ function MiniCalendar({
                 style={[
                   calS.dayNum,
                   isSel && { color: "#fff", fontWeight: "800" },
-                  isToday && !isSel && { color: accentColor, fontWeight: "700" },
+                  isToday &&
+                    !isSel && { color: accentColor, fontWeight: "700" },
                 ]}
               >
                 {day}
               </Text>
               {isToday && !isSel && (
-                <View style={[calS.todayDot, { backgroundColor: accentColor }]} />
+                <View
+                  style={[calS.todayDot, { backgroundColor: accentColor }]}
+                />
               )}
             </TouchableOpacity>
           );
@@ -312,7 +337,7 @@ const calS = StyleSheet.create({
   },
 });
 
-// ─── Main Screen 
+// ─── Main Screen
 
 export default function MySubscriptionsScreen() {
   const router = useRouter();
@@ -324,7 +349,9 @@ export default function MySubscriptionsScreen() {
   const [editingSub, setEditingSub] = useState<Subscription | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editQty, setEditQty] = useState(1);
-  const [editPattern, setEditPattern] = useState<"daily" | "alternate" | "custom">("daily");
+  const [editPattern, setEditPattern] = useState<
+    "daily" | "alternate" | "custom"
+  >("daily");
   const [editEndDate, setEditEndDate] = useState<string | null>(null);
   const [showCalendar, setShowCalendar] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
@@ -374,7 +401,7 @@ export default function MySubscriptionsScreen() {
     setEditingSub(sub);
     setEditQty(getTotalQty(sub));
     setEditPattern(
-      (sub.pattern as any) === "buy_once" ? "daily" : (sub.pattern as any)
+      (sub.pattern as any) === "buy_once" ? "daily" : (sub.pattern as any),
     );
     setEditEndDate(sub.end_date ?? null);
     setShowCalendar(false);
@@ -441,7 +468,7 @@ export default function MySubscriptionsScreen() {
             }
           },
         },
-      ]
+      ],
     );
   };
 
@@ -571,7 +598,7 @@ export default function MySubscriptionsScreen() {
   );
 }
 
-// ─── Subscription Card 
+// ─── Subscription Card
 
 function SubscriptionCard({
   sub,
@@ -627,14 +654,14 @@ function SubscriptionCard({
 
         <View style={C.info}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-            <Text style={C.name} numberOfLines={1}>{name}</Text>
+            <Text style={C.name} numberOfLines={1}>
+              {name}
+            </Text>
             {statusBadge && (
               <View
                 style={[C.statusBadge, { backgroundColor: statusBadge.bg }]}
               >
-                <Text
-                  style={[C.statusBadgeTxt, { color: statusBadge.color }]}
-                >
+                <Text style={[C.statusBadgeTxt, { color: statusBadge.color }]}>
                   {statusBadge.label}
                 </Text>
               </View>
@@ -647,10 +674,14 @@ function SubscriptionCard({
           </View>
 
           <View style={C.priceRow}>
-            <Text style={C.qtyTxt}>{qty}× {unit}</Text>
+            <Text style={C.qtyTxt}>
+              {qty}× {unit}
+            </Text>
             <View style={C.priceStack}>
               {price > 0 && (
-                <Text style={C.unitPrice}>₹{price.toFixed(2)}/{unit}</Text>
+                <Text style={C.unitPrice}>
+                  ₹{price.toFixed(2)}/{unit}
+                </Text>
               )}
               <View style={C.totalBadge}>
                 <Text style={C.totalTxt}>₹{total.toFixed(2)}</Text>
@@ -675,8 +706,16 @@ function SubscriptionCard({
               value={sub.end_date ? formatDate(sub.end_date) : "Open-ended"}
               highlight={!sub.end_date}
             />
-            <DetailCell label="Price / Unit" value={`₹${price.toFixed(2)}`} accent />
-            <DetailCell label="Per Delivery" value={`₹${total.toFixed(2)}`} bold />
+            <DetailCell
+              label="Price / Unit"
+              value={`₹${price.toFixed(2)}`}
+              accent
+            />
+            <DetailCell
+              label="Per Delivery"
+              value={`₹${total.toFixed(2)}`}
+              bold
+            />
             {sub.delivery_slot && (
               <DetailCell
                 label="Slot"
@@ -691,11 +730,13 @@ function SubscriptionCard({
             {sub.items && sub.items.length > 1 && (
               <View style={{ width: "100%", marginTop: 4 }}>
                 <Text style={C.cellLabel}>All Items</Text>
-               {sub.items.map((item, idx) => (
-  <View key={idx} style={C.itemRow}>
-    <Text style={C.itemRowTxt}>
-      {item.product_name ?? item.product?.name ?? item.product_id}
-    </Text>
+                {sub.items.map((item, idx) => (
+                  <View key={idx} style={C.itemRow}>
+                    <Text style={C.itemRowTxt}>
+                      {item.product_name ??
+                        item.product?.name ??
+                        item.product_id}
+                    </Text>
                     <Text style={C.itemRowAmt}>
                       {item.quantity}× ₹{item.amount.toFixed(2)}
                     </Text>
@@ -712,7 +753,9 @@ function SubscriptionCard({
             activeOpacity={0.85}
           >
             <Ionicons
-              name={downloadingInvoice ? "hourglass-outline" : "download-outline"}
+              name={
+                downloadingInvoice ? "hourglass-outline" : "download-outline"
+              }
               size={15}
               color={Colors.primary}
             />
@@ -724,11 +767,22 @@ function SubscriptionCard({
           {isActive && !isDimmed && (
             <View style={C.actions}>
               <TouchableOpacity style={C.editBtn} onPress={() => onEdit(sub)}>
-                <Ionicons name="create-outline" size={15} color={Colors.primary} />
+                <Ionicons
+                  name="create-outline"
+                  size={15}
+                  color={Colors.primary}
+                />
                 <Text style={C.editTxt}>Edit</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={C.cancelBtn} onPress={() => onCancel(sub)}>
-                <Ionicons name="close-circle-outline" size={15} color="#ef4444" />
+              <TouchableOpacity
+                style={C.cancelBtn}
+                onPress={() => onCancel(sub)}
+              >
+                <Ionicons
+                  name="close-circle-outline"
+                  size={15}
+                  color="#ef4444"
+                />
                 <Text style={C.cancelTxt}>Cancel</Text>
               </TouchableOpacity>
             </View>
@@ -901,7 +955,7 @@ const C = StyleSheet.create({
   cancelTxt: { fontSize: 13, fontWeight: "700", color: "#ef4444" },
 });
 
-// ─── Edit Modal 
+// ─── Edit Modal
 
 function EditModal({
   visible,
@@ -959,15 +1013,31 @@ function EditModal({
     hint: string;
   }> = [
     { key: "daily", label: "Daily", icon: "sunny-outline", hint: "Every day" },
-    { key: "alternate", label: "Alternate", icon: "git-compare-outline", hint: "Every other day" },
-    { key: "custom", label: "Custom", icon: "calendar-outline", hint: "Specific days" },
+    {
+      key: "alternate",
+      label: "Alternate",
+      icon: "git-compare-outline",
+      hint: "Every other day",
+    },
+    {
+      key: "custom",
+      label: "Custom",
+      icon: "calendar-outline",
+      hint: "Specific days",
+    },
   ];
 
   return (
     <Modal visible={visible} transparent animationType="none">
       <View style={M.overlay}>
-        <TouchableOpacity style={{ flex: 1 }} onPress={onClose} activeOpacity={1} />
-        <Animated.View style={[M.sheet, { transform: [{ translateY: slide }] }]}>
+        <TouchableOpacity
+          style={{ flex: 1 }}
+          onPress={onClose}
+          activeOpacity={1}
+        />
+        <Animated.View
+          style={[M.sheet, { transform: [{ translateY: slide }] }]}
+        >
           <View style={M.handle} />
           <View style={M.header}>
             <View>
@@ -988,7 +1058,11 @@ function EditModal({
                   style={M.qtyBtn}
                   onPress={() => qty > 1 && onQtyChange(qty - 1)}
                 >
-                  <Ionicons name="remove" size={18} color={qty <= 1 ? "#ccc" : "#111"} />
+                  <Ionicons
+                    name="remove"
+                    size={18}
+                    color={qty <= 1 ? "#ccc" : "#111"}
+                  />
                 </TouchableOpacity>
                 <View style={M.qtyCenter}>
                   <Text style={M.qtyNum}>{qty}</Text>
@@ -1006,7 +1080,9 @@ function EditModal({
                 <View style={M.pricePreview}>
                   <View style={M.pricePreviewRow}>
                     <Text style={M.pricePreviewLabel}>Price per unit</Text>
-                    <Text style={M.pricePreviewVal}>₹{unitPrice.toFixed(2)}</Text>
+                    <Text style={M.pricePreviewVal}>
+                      ₹{unitPrice.toFixed(2)}
+                    </Text>
                   </View>
                   <View style={M.pricePreviewDivider} />
                   <View style={M.pricePreviewRow}>
@@ -1014,7 +1090,11 @@ function EditModal({
                     <Text
                       style={[
                         M.pricePreviewVal,
-                        { color: Colors.primary, fontSize: 16, fontWeight: "800" },
+                        {
+                          color: Colors.primary,
+                          fontSize: 16,
+                          fontWeight: "800",
+                        },
                       ]}
                     >
                       ₹{previewTotal.toFixed(2)}
@@ -1041,7 +1121,12 @@ function EditModal({
                         size={18}
                         color={active ? "#fff" : Colors.primary}
                       />
-                      <Text style={[M.patternCardLabel, active && { color: "#fff" }]}>
+                      <Text
+                        style={[
+                          M.patternCardLabel,
+                          active && { color: "#fff" },
+                        ]}
+                      >
                         {p.label}
                       </Text>
                       <Text
@@ -1070,8 +1155,15 @@ function EditModal({
                 )}
               </View>
 
-              <TouchableOpacity style={M.datePickerRow} onPress={onToggleCalendar}>
-                <Ionicons name="calendar-outline" size={16} color={Colors.primary} />
+              <TouchableOpacity
+                style={M.datePickerRow}
+                onPress={onToggleCalendar}
+              >
+                <Ionicons
+                  name="calendar-outline"
+                  size={16}
+                  color={Colors.primary}
+                />
                 <Text
                   style={[
                     M.datePickerTxt,
@@ -1298,7 +1390,7 @@ const M = StyleSheet.create({
   footerSaveTxt: { fontSize: 14, fontWeight: "800", color: "#fff" },
 });
 
-// ─── Main screen styles 
+// ─── Main screen styles
 
 const S = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F8F9FA" },
