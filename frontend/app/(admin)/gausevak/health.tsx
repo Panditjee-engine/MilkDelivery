@@ -32,6 +32,9 @@ interface CowRow {
   date: string;
   checkupDone: boolean;
   markedHealthy: boolean;
+  isLeasedIn: boolean;
+  isLeasedOut: boolean;
+  lessorFarmName?: string;
 }
 
 interface Summary {
@@ -102,6 +105,9 @@ function mapRow(r: any): CowRow {
     date: r.date ?? "",
     checkupDone: false,
     markedHealthy: false,
+    isLeasedIn: !!r.is_leased_in,
+    isLeasedOut: !!r.is_leased_out,
+    lessorFarmName: r.lessor_farm_name,
   };
 }
 
@@ -180,6 +186,26 @@ function CowCard({
         </View>
       </View>
 
+      {/* ── Lease status row — own line, doesn't compete with status badge ── */}
+      {(item.isLeasedIn || item.isLeasedOut) && (
+        <View style={cc.leaseRow}>
+          {item.isLeasedIn && (
+            <View style={cc.leaseBadgeIn}>
+              <Ionicons name="log-in-outline" size={10} color="#7c3aed" />
+              <Text style={cc.leaseBadgeInTxt}>
+                Leased In{item.lessorFarmName ? ` · from ${item.lessorFarmName}` : ""}
+              </Text>
+            </View>
+          )}
+          {item.isLeasedOut && (
+            <View style={cc.leaseBadgeOut}>
+              <Ionicons name="log-out-outline" size={10} color="#dc2626" />
+              <Text style={cc.leaseBadgeOutTxt}>Leased Out</Text>
+            </View>
+          )}
+        </View>
+      )}
+
       {item.worker_name ? (
         <View style={cc.workerRow}>
           <Ionicons name="person-outline" size={10} color="#9ca3af" />
@@ -194,44 +220,54 @@ function CowCard({
         </View>
       )}
 
-      <View style={cc.actions}>
-        {unhealthy && (
+      {/* ── Leased out: locked, no actions available from this farm ── */}
+      {item.isLeasedOut ? (
+        <View style={cc.lockedNotice}>
+          <Ionicons name="lock-closed-outline" size={12} color="#9ca3af" />
+          <Text style={cc.lockedNoticeTxt}>
+            On lease — health reporting managed by receiving farm
+          </Text>
+        </View>
+      ) : (
+        <View style={cc.actions}>
+          {unhealthy && (
+            <TouchableOpacity
+              style={[
+                cc.actionBtn,
+                item.checkupDone ? cc.checkupActive : cc.checkupIdle,
+              ]}
+              onPress={() => onCheckup(item.cow_id)}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name={item.checkupDone ? "checkmark-circle" : "ellipse-outline"}
+                size={13}
+                color="#7c3aed"
+              />
+              <Text style={[cc.actionText, { color: "#7c3aed" }]}>
+                {item.checkupDone ? "Checkup Done" : "Mark Checkup"}
+              </Text>
+            </TouchableOpacity>
+          )}
+
           <TouchableOpacity
-            style={[
-              cc.actionBtn,
-              item.checkupDone ? cc.checkupActive : cc.checkupIdle,
-            ]}
-            onPress={() => onCheckup(item.cow_id)}
+            style={[cc.actionBtn, healthy ? cc.markSickBtn : cc.markHealthyBtn]}
+            onPress={() => onToggleHealth(item.cow_id)}
             activeOpacity={0.8}
           >
             <Ionicons
-              name={item.checkupDone ? "checkmark-circle" : "ellipse-outline"}
+              name={healthy ? "alert-circle-outline" : "heart-outline"}
               size={13}
-              color="#7c3aed"
+              color={healthy ? "#dc2626" : "#16a34a"}
             />
-            <Text style={[cc.actionText, { color: "#7c3aed" }]}>
-              {item.checkupDone ? "Checkup Done" : "Mark Checkup"}
+            <Text
+              style={[cc.actionText, { color: healthy ? "#dc2626" : "#16a34a" }]}
+            >
+              {healthy ? "Mark Unhealthy" : "Mark Healthy"}
             </Text>
           </TouchableOpacity>
-        )}
-
-        <TouchableOpacity
-          style={[cc.actionBtn, healthy ? cc.markSickBtn : cc.markHealthyBtn]}
-          onPress={() => onToggleHealth(item.cow_id)}
-          activeOpacity={0.8}
-        >
-          <Ionicons
-            name={healthy ? "alert-circle-outline" : "heart-outline"}
-            size={13}
-            color={healthy ? "#dc2626" : "#16a34a"}
-          />
-          <Text
-            style={[cc.actionText, { color: healthy ? "#dc2626" : "#16a34a" }]}
-          >
-            {healthy ? "Mark Unhealthy" : "Mark Healthy"}
-          </Text>
-        </TouchableOpacity>
-      </View>
+        </View>
+      )}
     </Animated.View>
   );
 }
@@ -314,19 +350,35 @@ export default function CowHealthScreen() {
       ),
     );
 
-  const handleToggleHealth = (cowId: string) =>
-    setRows((prev) =>
-      prev.map((r) => {
-        if (r.cow_id !== cowId) return r;
-        const goingHealthy = !isHealthy(r.status);
-        return {
-          ...r,
-          status: goingHealthy ? "healthy" : "sick",
-          markedHealthy: goingHealthy,
-          checkupDone: goingHealthy ? true : r.checkupDone,
-        };
-      }),
-    );
+const handleToggleHealth = async (cowId: string) => {
+  const row = rows.find((r) => r.cow_id === cowId);
+  if (!row) return;
+  const goingHealthy = !isHealthy(row.status);
+  const newStatus = goingHealthy ? "healthy" : "sick";
+
+  setRows((prev) =>
+    prev.map((r) =>
+      r.cow_id === cowId
+        ? {
+            ...r,
+            status: newStatus,
+            markedHealthy: goingHealthy,
+            checkupDone: goingHealthy ? true : r.checkupDone,
+            reported: true,
+            worker_name: "Admin",
+          }
+        : r,
+    ),
+  );
+
+  try {
+    await api.adminSetHealth(cowId, newStatus, row.cow_name, row.cow_tag);
+  } catch (e: any) {
+    console.log("admin health save error:", e.message);
+    Alert.alert("Error", e.message || "Failed to save health status");
+    setRows((prev) => prev.map((r) => (r.cow_id === cowId ? row : r)));
+  }
+};
 
   const groupedRows = rows.reduce<CowRow[]>((groups, row) => {
     const existing = groups.find((item) => item.cow_id === row.cow_id);
@@ -838,4 +890,50 @@ const cc = StyleSheet.create({
   markHealthyBtn: { backgroundColor: "#f0fdf4", borderColor: "#bbf7d0" },
   markSickBtn: { backgroundColor: "#fef2f2", borderColor: "#fecaca" },
   actionText: { fontSize: 11, fontWeight: "700" },
+  leaseRow: {
+  flexDirection: "row",
+  flexWrap: "wrap",
+  gap: 6,
+  marginTop: 8,
+},
+leaseBadgeIn: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 4,
+  backgroundColor: "#f5f3ff",
+  borderWidth: 1,
+  borderColor: "#ddd6fe",
+  borderRadius: 8,
+  paddingHorizontal: 8,
+  paddingVertical: 4,
+  alignSelf: "flex-start",
+},
+leaseBadgeInTxt: { fontSize: 10, fontWeight: "800", color: "#7c3aed" },
+leaseBadgeOut: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 4,
+  backgroundColor: "#fff1f2",
+  borderWidth: 1,
+  borderColor: "#fecdd3",
+  borderRadius: 8,
+  paddingHorizontal: 8,
+  paddingVertical: 4,
+  alignSelf: "flex-start",
+},
+leaseBadgeOutTxt: { fontSize: 10, fontWeight: "800", color: "#dc2626" },
+lockedNotice: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 6,
+  marginTop: 10,
+  paddingVertical: 8,
+  paddingHorizontal: 10,
+  backgroundColor: "#f9fafb",
+  borderRadius: 9,
+  borderWidth: 1,
+  borderColor: "#e5e7eb",
+  borderStyle: "dashed",
+},
+lockedNoticeTxt: { fontSize: 11, color: "#9ca3af", fontWeight: "600" },
 });

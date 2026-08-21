@@ -39,6 +39,7 @@ interface Cow {
   isSold?: boolean;
   milkActive?: boolean;
   farmLocationId?: string;
+  isLeasedIn?: boolean;
 }
 
 interface ShiftStatus {
@@ -701,13 +702,16 @@ function MilkScreenInner({
         api.workerGetShiftStatus(),
         api.workerGetTodayMilk(),
       ]);
-
+      
       const activeCows = cowsData.filter(
         (c: Cow) =>
           c.isActive !== false &&
           !c.isSold &&
           c.milkActive === true &&
-          (!myLocationId || c.farmLocationId === myLocationId),
+          // Leased-in cows are already branch-filtered server-side (by
+          // the lease's location_id) — only re-check farmLocationId for
+          // the worker's own farm cows.
+          (c.isLeasedIn || !myLocationId || c.farmLocationId === myLocationId),
       );
 
       setCows(activeCows);
@@ -1065,6 +1069,13 @@ function MilkScreenInner({
                   </Text>
                 </View>
 
+                 {cow.isLeasedIn && (
+    <View style={s.leaseBadge}>
+      <Ionicons name="swap-horizontal" size={12} color="#7c3aed" />
+      <Text style={s.leaseBadgeText}>Leased In</Text>
+    </View>
+  )}
+
                 {/* Tag badge during search */}
                 {searchQuery.trim().length > 0 && (
                   <View style={[s.tagBadge, { backgroundColor: accentColor + "14", borderColor: accentColor + "30" }]}>
@@ -1383,4 +1394,17 @@ const s = StyleSheet.create({
     minWidth: 72,
   },
   saveBtnText: { fontSize: 14, fontWeight: "800" },
+  leaseBadge: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 4,
+  backgroundColor: "#f5f3ff",
+  borderWidth: 1,
+  borderColor: "#c4b5fd",
+  borderRadius: 20,
+  paddingHorizontal: 9,
+  paddingVertical: 4,
+  marginRight: 4,
+},
+leaseBadgeText: { fontSize: 11, fontWeight: "800", color: "#7c3aed" },
 });

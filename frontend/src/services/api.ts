@@ -1638,6 +1638,18 @@ async getSubscriptionHistory() {
     });
   }
 
+  async adminSetHealth(
+  cowId: string,
+  status: string,
+  cowName?: string,
+  cowTag?: string,
+) {
+  return this.request<any>(`/admin/health/${cowId}`, {
+    method: "PUT",
+    body: JSON.stringify({ status, cow_name: cowName, cow_tag: cowTag }),
+  });
+}
+
   async getFeedLogs(date: string, shift: "morning" | "evening") {
     return this.request<any[]>(`/worker/feed?date=${date}&shift=${shift}`);
   }

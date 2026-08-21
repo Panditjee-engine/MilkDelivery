@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { api } from "../../../src/services/api";
+import type { BusinessLocation } from "../../../src/services/api";
 
 interface FarmResult {
   admin_id: string;
@@ -49,16 +50,26 @@ function dateToStr(date: Date): string {
   return `${String(date.getDate()).padStart(2, "0")}/${String(date.getMonth() + 1).padStart(2, "0")}/${date.getFullYear()}`;
 }
 
+// NEW: add N days to a DD/MM/YYYY string (or to today if blank)
+function addDaysToStr(baseStr: string | undefined, days: number): string {
+  const base = baseStr ? strToDate(baseStr) : new Date();
+  const d = new Date(base);
+  d.setDate(d.getDate() + days);
+  return dateToStr(d);
+}
+
 function DateField({
   label,
   value,
   onChange,
   minimumDate,
+  quickAction,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   minimumDate?: Date;
+  quickAction?: { label: string; onPress: () => void };
 }) {
   const [showPicker, setShowPicker] = useState(false);
   const currentDate = value ? strToDate(value) : new Date();
@@ -71,17 +82,31 @@ function DateField({
   return (
     <View>
       <Text style={s.label}>{label}</Text>
-      <TouchableOpacity
-        style={s.dateRow}
-        onPress={() => setShowPicker(true)}
-        activeOpacity={0.8}
-      >
-        <Ionicons name="calendar-outline" size={15} color="#7c3aed" />
-        <Text style={[s.dateText, !value && { color: "#D4B8A8" }]}>
-          {value || "Select date"}
-        </Text>
-        <Ionicons name="chevron-down" size={14} color="#C4A882" />
-      </TouchableOpacity>
+      <View style={s.dateRow}>
+        <TouchableOpacity
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            flex: 1,
+            gap: 8,
+          }}
+          onPress={() => setShowPicker(true)}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="calendar-outline" size={15} color="#7c3aed" />
+          <Text style={[s.dateText, !value && { color: "#D4B8A8" }]}>
+            {value || "Select date"}
+          </Text>
+        </TouchableOpacity>
+        {quickAction && (
+          <TouchableOpacity onPress={quickAction.onPress} style={s.quickBtn}>
+            <Text style={s.quickBtnText}>{quickAction.label}</Text>
+          </TouchableOpacity>
+        )}
+        <TouchableOpacity onPress={() => setShowPicker(true)}>
+          <Ionicons name="chevron-down" size={14} color="#C4A882" />
+        </TouchableOpacity>
+      </View>
 
       {showPicker && Platform.OS === "ios" && (
         <Modal transparent animationType="slide" visible={showPicker}>
@@ -146,6 +171,12 @@ export default function LeaseModal({
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  // NEW: farm locations
+  const [farmLocations, setFarmLocations] = useState<BusinessLocation[]>([]);
+  const [locationsLoading, setLocationsLoading] = useState(false);
+  const [selectedLocation, setSelectedLocation] =
+    useState<BusinessLocation | null>(null);
+
   const reset = () => {
     setStep("search");
     setQuery("");
@@ -155,6 +186,8 @@ export default function LeaseModal({
     setStartDate("");
     setEndDate("");
     setReason("");
+    setFarmLocations([]);
+    setSelectedLocation(null);
     onClose();
   };
 
@@ -178,9 +211,32 @@ export default function LeaseModal({
     }, 400);
   };
 
-  const pickFarm = (farm: FarmResult) => {
+  // NEW: fetch this farm's saved locations once picked
+  const pickFarm = async (farm: FarmResult) => {
     setSelectedFarm(farm);
     setStep("form");
+    setSelectedLocation(null);
+    setFarmLocations([]);
+    setLocationsLoading(true);
+    try {
+      const res = await api.getFarmLocations(farm.admin_id);
+      const locs = res?.locations ?? [];
+      setFarmLocations(locs);
+      // preselect the one returned by search, if it matches
+      const preselect = locs.find((l) => l.id === farm.location_id);
+      if (preselect) setSelectedLocation(preselect);
+    } catch {
+      setFarmLocations([]);
+    } finally {
+      setLocationsLoading(false);
+    }
+  };
+
+  const toggleNegative = () => {
+    setPrice((prev) => {
+      if (!prev) return "-";
+      return prev.startsWith("-") ? prev.slice(1) : "-" + prev;
+    });
   };
 
   const submit = async () => {
@@ -196,7 +252,7 @@ export default function LeaseModal({
     setSubmitting(true);
     try {
       const lease = await api.leaseCow(cow.id, {
-        cow_id: cow.id, 
+        cow_id: cow.id,
         lessee_admin_id: selectedFarm.admin_id,
         lessee_farm_name: selectedFarm.farm_name,
         lessee_email: selectedFarm.email,
@@ -205,9 +261,11 @@ export default function LeaseModal({
         start_date: startDate,
         end_date: endDate,
         reason: reason || undefined,
-        location_id: selectedFarm.location_id,
-        location_label: selectedFarm.location_label,
-        location_address: selectedFarm.location_address,
+        location_id: selectedLocation?.id ?? selectedFarm.location_id,
+        location_label: selectedLocation?.label ?? selectedFarm.location_label,
+        location_address: selectedLocation
+          ? `${selectedLocation.address_line}, ${selectedLocation.city}, ${selectedLocation.state} - ${selectedLocation.pincode}`
+          : selectedFarm.location_address,
       });
       onLeased(cow.id, lease);
       reset();
@@ -334,29 +392,51 @@ export default function LeaseModal({
                   </View>
                 </View>
 
-                <Text style={s.label}>Lease Price (₹)</Text>
-                <TextInput
-                  style={s.input}
-                  value={price}
-                  onChangeText={setPrice}
-                  keyboardType="numeric"
-                  placeholder="e.g. 5000"
-                  placeholderTextColor="#D4B8A8"
-                />
+                                <Text style={s.label}>Lease Price (₹)</Text>
+                <View style={s.priceRow}>
+                  <TouchableOpacity
+                    onPress={toggleNegative}
+                    style={[
+                      s.signBtn,
+                      price.startsWith("-") && s.signBtnActive,
+                    ]}
+                    activeOpacity={0.8}
+                  >
+                    <Text
+                      style={[
+                        s.signBtnText,
+                        price.startsWith("-") && s.signBtnTextActive,
+                      ]}
+                    >
+                      {price.startsWith("-") ? "−" : "+"}
+                    </Text>
+                  </TouchableOpacity>
+                  <TextInput
+                    style={s.priceInput}
+                    value={price}
+                    onChangeText={setPrice}
+                    keyboardType="numbers-and-punctuation"
+                    placeholder="e.g. 5000"
+                    placeholderTextColor="#D4B8A8"
+                  />
+                </View>
 
                 <DateField
                   label="Start Date"
                   value={startDate}
                   onChange={(v) => {
                     setStartDate(v);
-                    // if end date is now before the new start date, clear it so user re-picks
                     if (endDate) {
-                      const s = strToDate(v);
+                      const st = strToDate(v);
                       const e = strToDate(endDate);
-                      if (e < s) setEndDate("");
+                      if (e < st) setEndDate("");
                     }
                   }}
                   minimumDate={new Date()}
+                  quickAction={{
+                    label: "Today",
+                    onPress: () => setStartDate(getTodayStr()),
+                  }}
                 />
 
                 <DateField
@@ -364,6 +444,11 @@ export default function LeaseModal({
                   value={endDate}
                   onChange={setEndDate}
                   minimumDate={startDate ? strToDate(startDate) : new Date()}
+                  quickAction={{
+                    label: "+283 days",
+                    onPress: () =>
+                      setEndDate(addDaysToStr(startDate || getTodayStr(), 283)),
+                  }}
                 />
                 <Text style={s.label}>Reason</Text>
                 <TextInput
@@ -376,14 +461,68 @@ export default function LeaseModal({
                 />
 
                 <Text style={s.label}>Location</Text>
-                <View style={s.locationBox}>
-                  <Ionicons name="location-outline" size={15} color="#8B6854" />
-                  <Text style={s.locationText}>
-                    {selectedFarm.location_address ||
-                      selectedFarm.location_label ||
-                      "No saved location for this farm"}
+                {locationsLoading ? (
+                  <View style={s.locationBox}>
+                    <ActivityIndicator size="small" color="#7c3aed" />
+                    <Text style={s.locationText}>Loading locations...</Text>
+                  </View>
+                ) : farmLocations.length > 0 ? (
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={{ marginTop: 4 }}
+                  >
+                    {farmLocations.map((loc) => (
+                      <TouchableOpacity
+                        key={loc.id}
+                        onPress={() => setSelectedLocation(loc)}
+                        style={[
+                          s.locationChip,
+                          selectedLocation?.id === loc.id &&
+                            s.locationChipActive,
+                        ]}
+                        activeOpacity={0.85}
+                      >
+                        <Ionicons
+                          name="business-outline"
+                          size={13}
+                          color={
+                            selectedLocation?.id === loc.id
+                              ? "#16a34a"
+                              : "#8B6854"
+                          }
+                        />
+                        <Text
+                          style={[
+                            s.locationChipText,
+                            selectedLocation?.id === loc.id && {
+                              color: "#16a34a",
+                            },
+                          ]}
+                        >
+                          {loc.label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                ) : (
+                  <View style={s.locationBox}>
+                    <Ionicons
+                      name="location-outline"
+                      size={15}
+                      color="#8B6854"
+                    />
+                    <Text style={s.locationText}>
+                      No saved location for this farm
+                    </Text>
+                  </View>
+                )}
+                {selectedLocation && (
+                  <Text style={s.selectedLocationAddress}>
+                    {selectedLocation.address_line}, {selectedLocation.city},{" "}
+                    {selectedLocation.state} - {selectedLocation.pincode}
                   </Text>
-                </View>
+                )}
 
                 <TouchableOpacity
                   style={[s.submitBtn, submitting && { opacity: 0.7 }]}
@@ -399,7 +538,7 @@ export default function LeaseModal({
                         size={18}
                         color="#fff"
                       />
-                      <Text style={s.submitText}>Confirm Lease</Text>
+                      <Text style={s.submitText}>Confirm Lease Out</Text>
                     </>
                   )}
                 </TouchableOpacity>
@@ -535,6 +674,27 @@ const s = StyleSheet.create({
     padding: 12,
   },
   locationText: { flex: 1, fontSize: 13, color: "#8B6854", fontWeight: "500" },
+  // NEW: location chips
+  locationChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: "#FFF8F0",
+    borderWidth: 1,
+    borderColor: "#F5EDE5",
+    marginRight: 6,
+  },
+  locationChipActive: { backgroundColor: "#f0fdf4", borderColor: "#86efac" },
+  locationChipText: { fontSize: 12, color: "#6b7280", fontWeight: "600" },
+  selectedLocationAddress: {
+    fontSize: 11,
+    color: "#9ca3af",
+    fontWeight: "500",
+    marginTop: 6,
+  },
   submitBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -558,6 +718,16 @@ const s = StyleSheet.create({
     paddingVertical: 11,
   },
   dateText: { flex: 1, color: "#8B6854", fontSize: 14, fontWeight: "500" },
+  // NEW: quick action button (Today / +283 days)
+  quickBtn: {
+    backgroundColor: "#f5f3ff",
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderWidth: 1,
+    borderColor: "#7c3aed",
+  },
+  quickBtnText: { fontSize: 11, fontWeight: "700", color: "#7c3aed" },
   pickerOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.4)",
@@ -587,4 +757,40 @@ const s = StyleSheet.create({
     paddingVertical: 7,
   },
   pickerDoneText: { fontSize: 13, fontWeight: "800", color: "#fff" },
+    priceRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFF8F0",
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: "#F5EDE5",
+    overflow: "hidden",
+  },
+  signBtn: {
+    width: 44,
+    paddingVertical: 11,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F5EDE5",
+    borderRightWidth: 1.5,
+    borderRightColor: "#F5EDE5",
+  },
+  signBtnActive: {
+    backgroundColor: "#fef2f2",
+  },
+  signBtnText: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#8B6854",
+  },
+  signBtnTextActive: {
+    color: "#dc2626",
+  },
+  priceInput: {
+    flex: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    color: "#8B6854",
+    fontSize: 14,
+  },
 });

@@ -32,6 +32,7 @@ interface Cow {
   isActive?: boolean;
   isSold?: boolean;
   farmLocationId?: string;
+  isLeasedIn?: boolean;
 }
 
 interface FeedItem {
@@ -369,12 +370,14 @@ export default function FeedScreen({
         api.workerGetCows(),
         api.workerGetFeedStatus(todayStr(), shift),
       ]);
-
       const activeCows: Cow[] = cowsData.filter(
         (c: Cow) =>
           c.isActive !== false &&
           !c.isSold &&
-          (!myLocationId || c.farmLocationId === myLocationId),
+          // Leased-in cows are already branch-filtered server-side (by
+          // the lease's location_id) — only re-check farmLocationId for
+          // the worker's own farm cows.
+          (c.isLeasedIn || !myLocationId || c.farmLocationId === myLocationId),
       );
       setCows(activeCows);
 
@@ -861,42 +864,35 @@ export default function FeedScreen({
                       </LinearGradient>
 
                       <View style={s.cowInfo}>
-                        <Text style={s.cowName} numberOfLines={1}>
-                          {cow.name}
-                        </Text>
-                        <View style={s.tagRow}>
-                          <MaterialCommunityIcons
-                            name="tag-outline"
-                            size={11}
-                            color="#666"
-                          />
-                          <Text style={s.tagText}>
-                            {cow.tag_id ?? cow.tag ?? t("noTag") ?? "No tag"}
-                          </Text>
-                        </View>
-                        <View
-                          style={[
-                            s.statusBadge,
-                            d.done ? s.badgeDone : s.badgePending,
-                          ]}
-                        >
-                          <Ionicons
-                            name={d.done ? "checkmark-circle" : "time-outline"}
-                            size={11}
-                            color={d.done ? "#22d3a0" : "#fb923c"}
-                          />
-                          <Text
-                            style={[
-                              s.statusText,
-                              { color: d.done ? "#22d3a0" : "#fb923c" },
-                            ]}
-                          >
-                            {d.done
-                              ? (t("fedCheck") ?? "Fed ✓")
-                              : (t("pendingFeed") ?? "Pending")}
-                          </Text>
-                        </View>
-                      </View>
+  <Text style={s.cowName} numberOfLines={1}>
+    {cow.name}
+  </Text>
+  <View style={s.tagRow}>
+    <MaterialCommunityIcons name="tag-outline" size={11} color="#666" />
+    <Text style={s.tagText}>
+      {cow.tag_id ?? cow.tag ?? t("noTag") ?? "No tag"}
+    </Text>
+  </View>
+  <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
+    <View style={[s.statusBadge, d.done ? s.badgeDone : s.badgePending]}>
+      <Ionicons
+        name={d.done ? "checkmark-circle" : "time-outline"}
+        size={11}
+        color={d.done ? "#22d3a0" : "#fb923c"}
+      />
+      <Text style={[s.statusText, { color: d.done ? "#22d3a0" : "#fb923c" }]}>
+        {d.done ? (t("fedCheck") ?? "Fed ✓") : (t("pendingFeed") ?? "Pending")}
+      </Text>
+    </View>
+
+    {cow.isLeasedIn && (
+      <View style={s.leaseBadge}>
+        <Ionicons name="swap-horizontal" size={11} color="#a78bfa" />
+        <Text style={s.leaseBadgeText}>Leased In</Text>
+      </View>
+    )}
+  </View>
+</View>
 
                       {!selectMode && (
                         <TouchableOpacity
@@ -1425,4 +1421,18 @@ const s = StyleSheet.create({
     borderRadius: 14,
   },
   confirmText: { fontSize: 15, fontWeight: "900" },
+  leaseBadge: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 4,
+  alignSelf: "flex-start",
+  backgroundColor: "rgba(167,139,250,0.12)",
+  borderColor: "rgba(167,139,250,0.35)",
+  borderWidth: 1,
+  borderRadius: 6,
+  paddingHorizontal: 8,
+  paddingVertical: 3,
+  marginTop: 2,
+},
+leaseBadgeText: { fontSize: 11, fontWeight: "800", color: "#a78bfa" },
 });

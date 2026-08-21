@@ -46,7 +46,7 @@ const getAnimalImage = (type?: string) => {
   return cowImg;
 };
 
-// ─── Types  
+// ─── Types
 type ActiveTab = "stock" | "logs";
 type FeedStatus = "fed" | "pending";
 type Shift = "morning" | "evening";
@@ -130,6 +130,9 @@ interface CowFeedRow {
   eveningNote: string;
   morningFeeds: FeedItem[];
   eveningFeeds: FeedItem[];
+  isLeasedIn: boolean;
+  isLeasedOut: boolean;
+  lessorFarmName?: string;
 }
 
 interface LogSummary {
@@ -140,7 +143,7 @@ interface LogSummary {
   not_fed_at_all: number;
 }
 
-// ─── Modern Alert 
+// ─── Modern Alert
 
 interface AlertButton {
   text: string;
@@ -338,7 +341,7 @@ const CustomAlert = {
   },
 };
 
-// ─── Calendar Date Picker 
+// ─── Calendar Date Picker
 
 interface CalendarPickerProps {
   visible: boolean;
@@ -570,7 +573,7 @@ const cal = StyleSheet.create({
   todayTxt: { fontSize: 13, fontWeight: "700", color: "#BB6B3F" },
 });
 
-// ─── Date Input with Calendar 
+// ─── Date Input with Calendar
 
 function DateInput({
   label,
@@ -614,7 +617,7 @@ function DateInput({
   );
 }
 
-// ─── Constants 
+// ─── Constants
 
 const STOCK_CATEGORIES: FeedStockCategory[] = [
   "Dry Fodder",
@@ -782,11 +785,14 @@ function mapToCowRows(
       eveningNote: c.evening_worker ? `By ${c.evening_worker}` : "—",
       morningFeeds: parseFeeds(c.morning_feeds),
       eveningFeeds: parseFeeds(c.evening_feeds),
+      isLeasedIn: !!c.is_leased_in,
+      isLeasedOut: !!c.is_leased_out,
+      lessorFarmName: c.lessor_farm_name,
     };
   });
 }
 
-// ─── AutoRefreshDot 
+// ─── AutoRefreshDot
 
 function AutoRefreshDot({ active }: { active: boolean }) {
   const pulse = useRef(new Animated.Value(1)).current;
@@ -1569,7 +1575,7 @@ function AddEditStockModal({
   );
 }
 
-// ─── Restock / Use Stock Modals 
+// ─── Restock / Use Stock Modals
 
 function QuickStockModal({
   visible,
@@ -1809,7 +1815,7 @@ const qm = StyleSheet.create({
   chipTxt: { fontSize: 12, fontWeight: "600", color: "#8B6854" },
 });
 
-// ─── Transaction History Modal 
+// ─── Transaction History Modal
 
 function StockHistoryModal({
   visible,
@@ -2051,7 +2057,7 @@ const sht = StyleSheet.create({
   txtA: { color: "#fff" },
 });
 
-// ─── Feed Detail Modal 
+// ─── Feed Detail Modal
 
 function FeedDetailModal({
   visible,
@@ -2397,7 +2403,7 @@ const fdm = StyleSheet.create({
   defSub: { fontSize: 11, color: "#FD9E69", marginTop: 2 },
 });
 
-// ─── Feed Card 
+// ─── Feed Card
 
 function FeedCard({
   item,
@@ -2418,7 +2424,7 @@ function FeedCard({
   const translateY = useRef(new Animated.Value(14)).current;
   const scale = useRef(new Animated.Value(1)).current;
   const [expanded, setExpanded] = useState(false);
-  const [marking, setMarking] = useState(false);
+  const [markingShift, setMarkingShift] = useState<Shift | null>(null);
 
   useEffect(() => {
     Animated.parallel([
@@ -2455,14 +2461,13 @@ function FeedCard({
   const oBg = shiftStat === "fed" ? "#f0fdf4" : "#FFF5EA";
   const oBr = shiftStat === "fed" ? "#86efac" : "#FFCFAA";
 
-  const currentShiftFed =
-    currentShift === "morning"
-      ? item.morning === "fed"
-      : item.evening === "fed";
-
-  const handleMarkFed = async () => {
-    if (currentShiftFed || marking) return;
-    setMarking(true);
+  // ── Admin can mark ANY shift fed, anytime — but never on a leased-out cow ──
+  const handleMarkFed = async (shift: Shift) => {
+    if (item.isLeasedOut) return;
+    const alreadyFed =
+      shift === "morning" ? item.morning === "fed" : item.evening === "fed";
+    if (alreadyFed || markingShift) return;
+    setMarkingShift(shift);
     Animated.sequence([
       Animated.timing(scale, {
         toValue: 0.94,
@@ -2482,9 +2487,9 @@ function FeedCard({
         cow_name: item.name,
         cow_tag: item.srNo,
         date: todayStr(),
-        shift: currentShift,
+        shift,
       });
-      onMarkedFed(item.id, currentShift);
+      onMarkedFed(item.id, shift);
     } catch (e: any) {
       CustomAlert.alert(
         "Error",
@@ -2493,9 +2498,12 @@ function FeedCard({
         "❌",
       );
     } finally {
-      setMarking(false);
+      setMarkingShift(null);
     }
   };
+
+  const showMorningBtn = item.morning !== "fed" && !item.isLeasedOut;
+  const showEveningBtn = item.evening !== "fed" && !item.isLeasedOut;
 
   return (
     <Animated.View
@@ -2514,12 +2522,29 @@ function FeedCard({
           />
         </View>
         <View style={{ flex: 1, marginLeft: 10 }}>
-          <Text style={lc.name} numberOfLines={1}>
-            {item.name}
-          </Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <Text style={lc.name} numberOfLines={1}>
+              {item.name}
+            </Text>
+            {item.isLeasedIn && (
+              <View style={lc.leaseBadgeIn}>
+                <Ionicons name="log-in-outline" size={10} color="#7c3aed" />
+                <Text style={lc.leaseBadgeInTxt}>Leased In</Text>
+              </View>
+            )}
+            {item.isLeasedOut && (
+              <View style={lc.leaseBadgeOut}>
+                <Ionicons name="log-out-outline" size={10} color="#dc2626" />
+                <Text style={lc.leaseBadgeOutTxt}>Leased Out</Text>
+              </View>
+            )}
+          </View>
           <Text style={lc.sr}>
             {item.srNo}
             {item.breed ? ` · ${item.breed}` : ""}
+            {item.isLeasedIn && item.lessorFarmName
+              ? ` · from ${item.lessorFarmName}`
+              : ""}
           </Text>
         </View>
         <View style={{ flexDirection: "row", gap: 4 }}>
@@ -2577,24 +2602,52 @@ function FeedCard({
         />
       </TouchableOpacity>
 
-      {!currentShiftFed && (
-        <TouchableOpacity
-          style={lc.markBtn}
-          onPress={handleMarkFed}
-          disabled={marking}
-        >
-          {marking ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <>
-              <Ionicons name="add-circle-outline" size={14} color="#fff" />
-              <Text style={lc.markBtnTxt}>
-                Mark {currentShift === "morning" ? "☀️ Morning" : "🌙 Evening"}{" "}
-                Fed
-              </Text>
-            </>
+      {/* ── Leased-out: locked, no marking possible from this farm ── */}
+      {item.isLeasedOut && (
+        <View style={lc.lockedNotice}>
+          <Ionicons name="lock-closed-outline" size={13} color="#9ca3af" />
+          <Text style={lc.lockedNoticeTxt}>
+            On lease — feeding managed by receiving farm
+          </Text>
+        </View>
+      )}
+
+      {/* ── Mark Fed row: both shifts available, any time — hidden if leased out ── */}
+      {!item.isLeasedOut && (showMorningBtn || showEveningBtn) && (
+        <View style={lc.markRow}>
+          {showMorningBtn && (
+            <TouchableOpacity
+              style={[lc.markBtnHalf, { backgroundColor: "#d97706" }]}
+              onPress={() => handleMarkFed("morning")}
+              disabled={!!markingShift}
+            >
+              {markingShift === "morning" ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="sunny" size={13} color="#fff" />
+                  <Text style={lc.markBtnTxt}>Mark Morning</Text>
+                </>
+              )}
+            </TouchableOpacity>
           )}
-        </TouchableOpacity>
+          {showEveningBtn && (
+            <TouchableOpacity
+              style={[lc.markBtnHalf, { backgroundColor: "#4f46e5" }]}
+              onPress={() => handleMarkFed("evening")}
+              disabled={!!markingShift}
+            >
+              {markingShift === "evening" ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="moon" size={13} color="#fff" />
+                  <Text style={lc.markBtnTxt}>Mark Evening</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          )}
+        </View>
       )}
 
       {expanded && (
@@ -2679,17 +2732,55 @@ const lc = StyleSheet.create({
   },
   dot: { width: 5, height: 5, borderRadius: 3 },
   badgeTxt: { fontSize: 9, fontWeight: "700" },
-  markBtn: {
-    marginTop: 10,
+  markRow: { flexDirection: "row", gap: 8, marginTop: 10 },
+  markBtnHalf: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
-    backgroundColor: "#BB6B3F",
     borderRadius: 10,
     paddingVertical: 9,
   },
   markBtnTxt: { fontSize: 13, fontWeight: "700", color: "#fff" },
+  leaseBadgeIn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: "#f5f3ff",
+    borderWidth: 1,
+    borderColor: "#ddd6fe",
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  leaseBadgeInTxt: { fontSize: 5, fontWeight: "800", color: "#7c3aed" },
+  leaseBadgeOut: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: "#fff1f2",
+    borderWidth: 1,
+    borderColor: "#fecdd3",
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  leaseBadgeOutTxt: { fontSize: 5, fontWeight: "800", color: "#dc2626" },
+  lockedNotice: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 10,
+    paddingVertical: 5,
+    paddingHorizontal: 5,
+    backgroundColor: "#f9fafb",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    borderStyle: "dashed",
+  },
+  lockedNoticeTxt: { fontSize: 11, color: "#9ca3af", fontWeight: "600" },
   divider: { height: 1, backgroundColor: "#FFF0DC", marginVertical: 12 },
 });
 
@@ -2833,7 +2924,7 @@ const fsc = StyleSheet.create({
   note: { fontSize: 10, color: "#FD9E69", fontWeight: "500", marginTop: 4 },
 });
 
-// ─── Shared Modal Styles 
+// ─── Shared Modal Styles
 
 const mdl = StyleSheet.create({
   overlay: {
@@ -2988,7 +3079,8 @@ export default function AdminFeedHubScreen() {
   const [activeShift, setActiveShift] = useState<Shift | "both">("both");
   const [logSearch, setLogSearch] = useState("");
   const [logFilter, setLogFilter] = useState<LogFilter>("All");
-  const [autoRefresh, setAutoRefresh] = useState(true);  const [sortBy, setSortBy] = useState<SortOption>("name_asc");
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [sortBy, setSortBy] = useState<SortOption>("name_asc");
   const [sortVisible, setSortVisible] = useState(false);
 
   const [feedDetailVisible, setFeedDetailVisible] = useState(false);
@@ -3187,8 +3279,7 @@ export default function AdminFeedHubScreen() {
   };
 
   // Filtered lists
-  const filteredStocks = stocks
-    .filter((it) => {
+  const filteredStocks = stocks.filter((it) => {
     const ms =
       it.name.toLowerCase().includes(stockSearch.toLowerCase()) ||
       it.category.toLowerCase().includes(stockSearch.toLowerCase()) ||
@@ -3226,7 +3317,6 @@ export default function AdminFeedHubScreen() {
     inputRange: [0, 1],
     outputRange: ["2%", "52%"],
   });
-
 
   const logsListHeader = useCallback(
     () => (
@@ -3314,25 +3404,29 @@ export default function AdminFeedHubScreen() {
           </TouchableOpacity>
           <Text style={root.count}>{filteredLogs.length} cows</Text>
         </View>
-      <Modal
-        visible={sortVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setSortVisible(false)}
-      >
-        <TouchableOpacity
-          activeOpacity={1}
-          style={root.sortOverlay}
-          onPress={() => setSortVisible(false)}
+        <Modal
+          visible={sortVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setSortVisible(false)}
         >
-          <View style={root.sortSheet}>
-            <Text style={root.sortSheetTitle}>Sort Feed Data</Text>
-            <Text style={root.sortSheetSub}>Choose data ordering</Text>
-            {(["name_asc", "name_desc", "fed_first", "pending_first"] as const).map(
-              (option) => (
+          <TouchableOpacity
+            activeOpacity={1}
+            style={root.sortOverlay}
+            onPress={() => setSortVisible(false)}
+          >
+            <View style={root.sortSheet}>
+              <Text style={root.sortSheetTitle}>Sort Feed Data</Text>
+              <Text style={root.sortSheetSub}>Choose data ordering</Text>
+              {(
+                ["name_asc", "name_desc", "fed_first", "pending_first"] as const
+              ).map((option) => (
                 <TouchableOpacity
                   key={option}
-                  style={[root.sortOption, sortBy === option && root.sortOptionActive]}
+                  style={[
+                    root.sortOption,
+                    sortBy === option && root.sortOptionActive,
+                  ]}
                   onPress={() => {
                     setSortBy(option);
                     setSortVisible(false);
@@ -3352,11 +3446,10 @@ export default function AdminFeedHubScreen() {
                     {sortMeta[option].label}
                   </Text>
                 </TouchableOpacity>
-              ),
-            )}
-          </View>
-        </TouchableOpacity>
-      </Modal>
+              ))}
+            </View>
+          </TouchableOpacity>
+        </Modal>
 
         {filteredLogs.length > 0 && (
           <Text
@@ -3697,7 +3790,7 @@ export default function AdminFeedHubScreen() {
   );
 }
 
-// ─── Root Styles 
+// ─── Root Styles
 
 const root = StyleSheet.create({
   addBtn: {

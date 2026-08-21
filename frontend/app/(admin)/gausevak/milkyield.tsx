@@ -34,6 +34,9 @@ interface MilkRow {
   peak: { date: string; total: number } | null;
   cowType: string;
   milkActive: boolean;
+  isLeasedIn: boolean;
+  isLeasedOut: boolean;
+  lessorFarmName?: string;
 }
 
 interface Summary {
@@ -648,7 +651,9 @@ function MilkCard({
           <Text style={s.cowName} numberOfLines={1}>
             {item.name}
           </Text>
-          <Text style={s.cowSr}>{item.srNo}</Text>
+          <Text style={s.cowSr} numberOfLines={1}>
+            {item.srNo}
+          </Text>
         </View>
         <View style={s.miniShifts}>
           <View
@@ -697,30 +702,61 @@ function MilkCard({
         />
       </TouchableOpacity>
 
+      {/* ── Lease status row — own line, never competes with shift pills ── */}
+      {(item.isLeasedIn || item.isLeasedOut) && (
+        <View style={s.leaseRow}>
+          {item.isLeasedIn && (
+            <View style={s.leaseBadgeIn}>
+              <Ionicons name="log-in-outline" size={10} color="#7c3aed" />
+              <Text style={s.leaseBadgeInTxt}>
+                Leased In{item.lessorFarmName ? ` · from ${item.lessorFarmName}` : ""}
+              </Text>
+            </View>
+          )}
+          {item.isLeasedOut && (
+            <View style={s.leaseBadgeOut}>
+              <Ionicons name="log-out-outline" size={10} color="#dc2626" />
+              <Text style={s.leaseBadgeOutTxt}>Leased Out</Text>
+            </View>
+          )}
+        </View>
+      )}
+
       {expanded && (
         <>
           <View style={s.divider} />
 
-          {/* Inline +/- entry */}
-          <InlineMilkEntry
-            item={item}
-            selectedDate={selectedDate}
-            onSaved={onMilkSaved}
-          />
+          {/* ── Leased out: recording locked, entry hidden entirely ── */}
+          {item.isLeasedOut ? (
+            <View style={s.lockedNotice}>
+              <Ionicons name="lock-closed-outline" size={13} color="#9ca3af" />
+              <Text style={s.lockedNoticeTxt}>
+                On lease — milk recording managed by receiving farm
+              </Text>
+            </View>
+          ) : (
+            <InlineMilkEntry
+              item={item}
+              selectedDate={selectedDate}
+              onSaved={onMilkSaved}
+            />
+          )}
 
           <View style={s.divider} />
 
-          <TouchableOpacity
-            style={s.capacityBtn}
-            onPress={() => onSetCapacity(item)}
-          >
-            <Ionicons name="settings-outline" size={11} color="#6b7280" />
-            <Text style={s.capacityBtnText}>
-              {capacity > 0
-                ? `${capacity.toFixed(0)}L daily cap`
-                : "Set daily capacity"}
-            </Text>
-          </TouchableOpacity>
+          {!item.isLeasedOut && (
+            <TouchableOpacity
+              style={s.capacityBtn}
+              onPress={() => onSetCapacity(item)}
+            >
+              <Ionicons name="settings-outline" size={11} color="#6b7280" />
+              <Text style={s.capacityBtnText}>
+                {capacity > 0
+                  ? `${capacity.toFixed(0)}L daily cap`
+                  : "Set daily capacity"}
+              </Text>
+            </TouchableOpacity>
+          )}
 
           {capacity > 0 && <CapacityBar total={total} capacity={capacity} />}
           {item.peak && <PeakBadge peak={item.peak} />}
@@ -908,6 +944,9 @@ export default function MilkYieldScreen() {
             peak: c.peak ?? null,
             cowType: c.cow_type ?? "mature",
             milkActive: c.milk_active ?? true,
+             isLeasedIn: !!c.is_leased_in,
+    isLeasedOut: !!c.is_leased_out,
+    lessorFarmName: c.lessor_farm_name,
           })),
         );
       } catch (e) {
@@ -1375,6 +1414,53 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  leaseRow: {
+  flexDirection: "row",
+  flexWrap: "wrap",
+  gap: 6,
+  marginTop: 8,
+  marginLeft: 42, // aligns roughly under the name, past the avatar
+},
+leaseBadgeIn: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 4,
+  backgroundColor: "#f5f3ff",
+  borderWidth: 1,
+  borderColor: "#ddd6fe",
+  borderRadius: 8,
+  paddingHorizontal: 8,
+  paddingVertical: 4,
+  alignSelf: "flex-start",
+},
+leaseBadgeInTxt: { fontSize: 10, fontWeight: "800", color: "#7c3aed" },
+leaseBadgeOut: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 4,
+  backgroundColor: "#fff1f2",
+  borderWidth: 1,
+  borderColor: "#fecdd3",
+  borderRadius: 8,
+  paddingHorizontal: 8,
+  paddingVertical: 4,
+  alignSelf: "flex-start",
+},
+leaseBadgeOutTxt: { fontSize: 10, fontWeight: "800", color: "#dc2626" },
+lockedNotice: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 6,
+  paddingVertical: 10,
+  paddingHorizontal: 12,
+  backgroundColor: "#f9fafb",
+  borderRadius: 12,
+  borderWidth: 1,
+  borderColor: "#e5e7eb",
+  borderStyle: "dashed",
+  marginBottom: 4,
+},
+lockedNoticeTxt: { fontSize: 12, color: "#9ca3af", fontWeight: "600" },
 });
 
 const sh = StyleSheet.create({
@@ -1693,4 +1779,5 @@ const ie = StyleSheet.create({
     backgroundColor: "#fff",
   },
   shiftToggleText: { fontSize: 11, fontWeight: "700" },
+  
 });

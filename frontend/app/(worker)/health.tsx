@@ -39,6 +39,7 @@ interface Cow {
   isActive?: boolean;
   isSold?: boolean;
   farmLocationId?: string;
+  isLeasedIn?: boolean;
 }
 
 interface HealthLog {
@@ -54,11 +55,51 @@ interface HealthLog {
 function useHealthOptions() {
   const { t } = useLang();
   return [
-    { key: "healthy",       label: t("healthy"),      icon: "heart-pulse",      lib: "MCI", color: "#16a34a", bg: "#f0fdf4", border: "#bbf7d0" },
-    { key: "fever",         label: t("fever"),         icon: "thermometer-high", lib: "MCI", color: "#dc2626", bg: "#fff1f2", border: "#fecdd3" },
-    { key: "upset_stomach", label: t("upsetStomach"), icon: "stomach",          lib: "MCI", color: "#ea580c", bg: "#fff7ed", border: "#fed7aa" },
-    { key: "injury",        label: t("injury"),        icon: "bandage",          lib: "MCI", color: "#ca8a04", bg: "#fefce8", border: "#fde68a" },
-    { key: "other",         label: t("other"),         icon: "help-circle",      lib: "I",   color: "#7c3aed", bg: "#f5f3ff", border: "#ddd6fe" },
+    {
+      key: "healthy",
+      label: t("healthy"),
+      icon: "heart-pulse",
+      lib: "MCI",
+      color: "#16a34a",
+      bg: "#f0fdf4",
+      border: "#bbf7d0",
+    },
+    {
+      key: "fever",
+      label: t("fever"),
+      icon: "thermometer-high",
+      lib: "MCI",
+      color: "#dc2626",
+      bg: "#fff1f2",
+      border: "#fecdd3",
+    },
+    {
+      key: "upset_stomach",
+      label: t("upsetStomach"),
+      icon: "stomach",
+      lib: "MCI",
+      color: "#ea580c",
+      bg: "#fff7ed",
+      border: "#fed7aa",
+    },
+    {
+      key: "injury",
+      label: t("injury"),
+      icon: "bandage",
+      lib: "MCI",
+      color: "#ca8a04",
+      bg: "#fefce8",
+      border: "#fde68a",
+    },
+    {
+      key: "other",
+      label: t("other"),
+      icon: "help-circle",
+      lib: "I",
+      color: "#7c3aed",
+      bg: "#f5f3ff",
+      border: "#ddd6fe",
+    },
   ] as const;
 }
 
@@ -130,11 +171,14 @@ export default function HealthScreen() {
         api.workerGetCows(),
         api.workerGetTodayHealthLogs(),
       ]);
-      const active = (cowsData ?? []).filter(
+          const active = (cowsData ?? []).filter(
         (c) =>
           c.isActive !== false &&
           !c.isSold &&
-          (!myLocationId || c.farmLocationId === myLocationId)
+          // Leased-in cows are already branch-filtered server-side (by
+          // the lease's location_id) — only re-check farmLocationId for
+          // the worker's own farm cows.
+          (c.isLeasedIn || !myLocationId || c.farmLocationId === myLocationId),
       );
       setCows(active);
 
@@ -146,7 +190,11 @@ export default function HealthScreen() {
       setCowHealth(() => {
         const next: Record<
           string,
-          { status: HealthKey | null; saving: HealthKey | null; expanded: boolean }
+          {
+            status: HealthKey | null;
+            saving: HealthKey | null;
+            expanded: boolean;
+          }
         > = {};
         active.forEach((c) => {
           next[c.id] = {
@@ -200,10 +248,12 @@ export default function HealthScreen() {
     }
   };
 
-  const healthyCount = cows.filter((c) => get(c.id).status === "healthy").length;
+  const healthyCount = cows.filter(
+    (c) => get(c.id).status === "healthy",
+  ).length;
   const checkedCount = cows.filter((c) => get(c.id).status !== null).length;
   const issueCount = cows.filter(
-    (c) => get(c.id).status !== null && get(c.id).status !== "healthy"
+    (c) => get(c.id).status !== null && get(c.id).status !== "healthy",
   ).length;
 
   if (loading) {
@@ -235,7 +285,11 @@ export default function HealthScreen() {
       <LinearGradient colors={["#f0fdf4", "#dcfce7"]} style={s.banner}>
         <View style={s.bannerLeft}>
           <View style={s.bannerIconBox}>
-            <MaterialCommunityIcons name="stethoscope" size={24} color="#16a34a" />
+            <MaterialCommunityIcons
+              name="stethoscope"
+              size={24}
+              color="#16a34a"
+            />
           </View>
           <View>
             <Text style={s.bannerTitle}>{t("healthBannerTitle")}</Text>
@@ -244,7 +298,9 @@ export default function HealthScreen() {
         </View>
         <View style={s.statsRow}>
           <View style={s.statPill}>
-            <Text style={[s.statNum, { color: "#16a34a" }]}>{healthyCount}</Text>
+            <Text style={[s.statNum, { color: "#16a34a" }]}>
+              {healthyCount}
+            </Text>
             <Text style={s.statLbl}>{t("healthyCount")}</Text>
           </View>
           <View
@@ -253,7 +309,12 @@ export default function HealthScreen() {
               { backgroundColor: issueCount > 0 ? "#fff1f2" : "#f9fafb" },
             ]}
           >
-            <Text style={[s.statNum, { color: issueCount > 0 ? "#dc2626" : "#9ca3af" }]}>
+            <Text
+              style={[
+                s.statNum,
+                { color: issueCount > 0 ? "#dc2626" : "#9ca3af" },
+              ]}
+            >
               {issueCount}
             </Text>
             <Text style={s.statLbl}>{t("issuesCount")}</Text>
@@ -273,7 +334,8 @@ export default function HealthScreen() {
           {checkedCount} {t("of")} {cows.length} {t("cowsChecked")}
         </Text>
         <Text style={s.progressPct}>
-          {cows.length > 0 ? Math.round((checkedCount / cows.length) * 100) : 0}%
+          {cows.length > 0 ? Math.round((checkedCount / cows.length) * 100) : 0}
+          %
         </Text>
       </View>
       <View style={s.progressBg}>
@@ -281,7 +343,8 @@ export default function HealthScreen() {
           style={[
             s.progressFill,
             {
-              width: `${cows.length > 0 ? (checkedCount / cows.length) * 100 : 0}%` as any,
+              width:
+                `${cows.length > 0 ? (checkedCount / cows.length) * 100 : 0}%` as any,
             },
           ]}
         />
@@ -299,8 +362,14 @@ export default function HealthScreen() {
             key={cow.id}
             style={[
               s.card,
-              isHealthy && { borderColor: "#bbf7d0", backgroundColor: "#f0fdf4" },
-              hasIssue && { borderColor: "#fecdd3", backgroundColor: "#fff1f2" },
+              isHealthy && {
+                borderColor: "#bbf7d0",
+                backgroundColor: "#f0fdf4",
+              },
+              hasIssue && {
+                borderColor: "#fecdd3",
+                backgroundColor: "#fff1f2",
+              },
             ]}
           >
             <TouchableOpacity
@@ -321,20 +390,31 @@ export default function HealthScreen() {
                 />
               </View>
 
-              <View style={{ flex: 1 }}>
-                <Text style={s.cowName}>{cow.name}</Text>
-                <Text style={s.cowTag}>
-                  #{cow.tag ?? cow.tag_id ?? "—"}
-                  {cow.breed ? ` · ${cow.breed}` : ""}
-                </Text>
-              </View>
+             <View style={{ flex: 1 }}>
+  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+    <Text style={s.cowName}>{cow.name}</Text>
+    {cow.isLeasedIn && (
+      <View style={s.leaseBadge}>
+        <Ionicons name="swap-horizontal" size={10} color="#7c3aed" />
+        <Text style={s.leaseBadgeText}>Leased In</Text>
+      </View>
+    )}
+  </View>
+  <Text style={s.cowTag}>
+    #{cow.tag ?? cow.tag_id ?? "—"}
+    {cow.breed ? ` · ${cow.breed}` : ""}
+  </Text>
+</View>
 
               {selectedOpt ? (
                 <View style={s.badgeChevronRow}>
                   <View
                     style={[
                       s.statusBadge,
-                      { backgroundColor: selectedOpt.bg, borderColor: selectedOpt.border },
+                      {
+                        backgroundColor: selectedOpt.bg,
+                        borderColor: selectedOpt.border,
+                      },
                     ]}
                   >
                     <HealthIcon
@@ -343,7 +423,9 @@ export default function HealthScreen() {
                       color={selectedOpt.color}
                       size={13}
                     />
-                    <Text style={[s.statusBadgeTxt, { color: selectedOpt.color }]}>
+                    <Text
+                      style={[s.statusBadgeTxt, { color: selectedOpt.color }]}
+                    >
                       {selectedOpt.label}
                     </Text>
                   </View>
@@ -366,7 +448,11 @@ export default function HealthScreen() {
               <View style={s.optPanel}>
                 {d.status && (
                   <View style={s.updateHintRow}>
-                    <MaterialCommunityIcons name="pencil-outline" size={13} color="#9ca3af" />
+                    <MaterialCommunityIcons
+                      name="pencil-outline"
+                      size={13}
+                      color="#9ca3af"
+                    />
                     <Text style={s.updateHintTxt}>{t("tapToUpdate")}</Text>
                   </View>
                 )}
@@ -396,11 +482,20 @@ export default function HealthScreen() {
                             size={17}
                           />
                         )}
-                        <Text style={[s.optLabel, { color: isSelected ? opt.color : "#6b7280" }]}>
+                        <Text
+                          style={[
+                            s.optLabel,
+                            { color: isSelected ? opt.color : "#6b7280" },
+                          ]}
+                        >
                           {opt.label}
                         </Text>
                         {isSelected && (
-                          <Ionicons name="checkmark-circle" size={15} color={opt.color} />
+                          <Ionicons
+                            name="checkmark-circle"
+                            size={15}
+                            color={opt.color}
+                          />
                         )}
                       </TouchableOpacity>
                     );
@@ -420,61 +515,135 @@ export default function HealthScreen() {
 const s = StyleSheet.create({
   scroll: { flex: 1, backgroundColor: "#ffffff" },
   content: { padding: 16 },
-  centered: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10 },
+  centered: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+  },
   loadingText: { color: "#6b7280", fontSize: 14 },
   banner: {
-    borderRadius: 18, padding: 16, marginBottom: 16,
-    borderWidth: 1, borderColor: "#bbf7d0",
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#bbf7d0",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   bannerLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
   bannerIconBox: {
-    width: 48, height: 48, borderRadius: 14,
-    backgroundColor: "#dcfce7", alignItems: "center", justifyContent: "center",
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: "#dcfce7",
+    alignItems: "center",
+    justifyContent: "center",
   },
   bannerTitle: { fontSize: 17, fontWeight: "900", color: "#14532d" },
   bannerDate: { fontSize: 12, color: "#16a34a", marginTop: 2 },
   statsRow: { flexDirection: "row", gap: 8 },
   statPill: {
-    alignItems: "center", backgroundColor: "#fff", borderRadius: 10,
-    paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: "#e5e7eb",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
   },
   statNum: { fontSize: 16, fontWeight: "900" },
   statLbl: { fontSize: 10, color: "#9ca3af", fontWeight: "600", marginTop: 1 },
-  progressRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 6 },
+  progressRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 6,
+  },
   progressTxt: { fontSize: 12, color: "#6b7280", fontWeight: "600" },
   progressPct: { fontSize: 12, fontWeight: "800", color: "#374151" },
-  progressBg: { height: 6, backgroundColor: "#f3f4f6", borderRadius: 4, marginBottom: 16 },
+  progressBg: {
+    height: 6,
+    backgroundColor: "#f3f4f6",
+    borderRadius: 4,
+    marginBottom: 16,
+  },
   progressFill: { height: 6, borderRadius: 4, backgroundColor: "#16a34a" },
   card: {
-    backgroundColor: "#fff", borderRadius: 18, borderWidth: 1.5,
-    borderColor: "#f3f4f6", padding: 16, marginBottom: 14,
-    shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 6, elevation: 1,
+    backgroundColor: "#fff",
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderColor: "#f3f4f6",
+    padding: 16,
+    marginBottom: 14,
+    shadowColor: "#000",
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
   },
   cardTop: { flexDirection: "row", alignItems: "center", gap: 12 },
-  cowAvatar: { width: 46, height: 46, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  cowAvatar: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   cowName: { fontSize: 16, fontWeight: "800", color: "#111827" },
   cowTag: { fontSize: 12, color: "#9ca3af", marginTop: 2 },
   badgeChevronRow: { flexDirection: "row", alignItems: "center" },
   statusBadge: {
-    flexDirection: "row", alignItems: "center", gap: 5,
-    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, borderWidth: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+    borderWidth: 1,
   },
   statusBadgeTxt: { fontSize: 12, fontWeight: "700" },
   selectPrompt: {
-    flexDirection: "row", alignItems: "center", gap: 4,
-    paddingHorizontal: 10, paddingVertical: 6,
-    backgroundColor: "#f9fafb", borderRadius: 10, borderWidth: 1, borderColor: "#e5e7eb",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: "#f9fafb",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
   },
   selectPromptTxt: { fontSize: 12, color: "#9ca3af", fontWeight: "600" },
   optPanel: { marginTop: 14 },
-  updateHintRow: { flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 10 },
+  updateHintRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginBottom: 10,
+  },
   updateHintTxt: { fontSize: 12, color: "#9ca3af", fontWeight: "600" },
   optGrid: { gap: 8 },
   optBtn: {
-    flexDirection: "row", alignItems: "center", gap: 10,
-    paddingVertical: 11, paddingHorizontal: 14,
-    borderRadius: 12, borderWidth: 1.5, backgroundColor: "#fafafa",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 11,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    backgroundColor: "#fafafa",
   },
   optLabel: { fontSize: 14, fontWeight: "600", flex: 1 },
+  leaseBadge: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 3,
+  backgroundColor: "#f5f3ff",
+  borderWidth: 1,
+  borderColor: "#ddd6fe",
+  borderRadius: 8,
+  paddingHorizontal: 5,
+  paddingVertical: 2,
+},
+leaseBadgeText: { fontSize: 5, fontWeight: "800", color: "#7c3aed" },
 });
