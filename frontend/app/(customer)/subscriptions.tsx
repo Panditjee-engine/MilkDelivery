@@ -37,6 +37,7 @@ if (
 interface OrderItem {
   product_id: string;
   name?: string;
+  product_name?: string;
   quantity: number;
   price: number;
   amount: number;
@@ -154,10 +155,11 @@ function getProductName(order: Order, productMap: ProductMap): string {
   if (order.product?.name) return order.product.name;
   if (order.items?.length > 0) {
     const first = order.items[0];
-    if (first.name) {
+    const firstName = first.product_name || first.name;
+    if (firstName) {
       return order.items.length === 1
-        ? first.name
-        : `${first.name} +${order.items.length - 1} more`;
+        ? firstName
+        : `${firstName} +${order.items.length - 1} more`;
     }
     if (productMap[first.product_id]?.name) {
       return order.items.length === 1
@@ -848,7 +850,8 @@ function OrderCard({
                   <View key={idx} style={cd.itemRow}>
                     <Text style={cd.itemQty}>{item.quantity}×</Text>
                     <Text style={cd.itemName} numberOfLines={1}>
-                      {item.name ||
+                      {item.product_name ||
+                        item.name ||
                         productMap[item.product_id]?.name ||
                         `Item ${idx + 1}`}
                     </Text>
@@ -888,7 +891,9 @@ function OrderCard({
                 <Text style={cd.riderLabel}>Delivery partner</Text>
                 <Text style={cd.riderName}>{order.delivery_partner_name}</Text>
                 {order.delivery_partner_phone && (
-                  <Text style={cd.riderPhone}>{order.delivery_partner_phone}</Text>
+                  <Text style={cd.riderPhone}>
+                    {order.delivery_partner_phone}
+                  </Text>
                 )}
               </View>
               <View style={cd.riderBadge}>
@@ -908,7 +913,9 @@ function OrderCard({
             disabled={downloadingInvoice}
           >
             <Ionicons
-              name={downloadingInvoice ? "hourglass-outline" : "download-outline"}
+              name={
+                downloadingInvoice ? "hourglass-outline" : "download-outline"
+              }
               size={14}
               color={Colors.primary}
             />
@@ -1094,8 +1101,18 @@ const cd = StyleSheet.create({
     textTransform: "uppercase",
     letterSpacing: 0.4,
   },
-  riderName: { fontSize: 14, fontWeight: "800", color: "#111827", marginTop: 1 },
-  riderPhone: { fontSize: 11, fontWeight: "700", color: "#4B5563", marginTop: 1 },
+  riderName: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#111827",
+    marginTop: 1,
+  },
+  riderPhone: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#4B5563",
+    marginTop: 1,
+  },
   riderBadge: {
     backgroundColor: "#DBEAFE",
     borderRadius: 999,

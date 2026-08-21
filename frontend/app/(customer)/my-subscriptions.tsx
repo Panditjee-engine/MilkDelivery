@@ -23,6 +23,7 @@ import LoadingScreen from "../../src/components/LoadingScreen";
 
 interface SubscriptionItem {
   product_id: string;
+  product_name?: string;
   quantity: number;
   price: number;
   amount: number;
@@ -119,7 +120,12 @@ function dateToString(d: Date): string {
 }
 
 function getProductName(sub: Subscription): string {
-  return sub.items?.[0]?.product?.name ?? sub.product?.name ?? "Product";
+  return (
+    sub.items?.[0]?.product_name ??
+    sub.items?.[0]?.product?.name ??
+    sub.product?.name ??
+    "Product"
+  );
 }
 function getProductUnit(sub: Subscription): string {
   return sub.items?.[0]?.product?.unit ?? sub.product?.unit ?? "unit";
@@ -685,11 +691,11 @@ function SubscriptionCard({
             {sub.items && sub.items.length > 1 && (
               <View style={{ width: "100%", marginTop: 4 }}>
                 <Text style={C.cellLabel}>All Items</Text>
-                {sub.items.map((item, idx) => (
-                  <View key={idx} style={C.itemRow}>
-                    <Text style={C.itemRowTxt}>
-                      {item.product?.name ?? item.product_id}
-                    </Text>
+               {sub.items.map((item, idx) => (
+  <View key={idx} style={C.itemRow}>
+    <Text style={C.itemRowTxt}>
+      {item.product_name ?? item.product?.name ?? item.product_id}
+    </Text>
                     <Text style={C.itemRowAmt}>
                       {item.quantity}× ₹{item.amount.toFixed(2)}
                     </Text>
