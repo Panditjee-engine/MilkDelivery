@@ -28,6 +28,16 @@ import SwipeToConfirm from "../../src/components/SwipeToConfirm";
 import { api } from "../../src/services/api";
 import LoadingScreen from "../../src/components/LoadingScreen";
 import { useAuth } from "../../src/contexts/AuthContext";
+import {
+  getOrderCutoffBadgeText,
+  getOrderCutoffForProduct,
+  isOrderCutoffPassed,
+  type OrderCutoffRule,
+} from "../../src/utils/orderCutoff";
+import {
+  getDeliveryWindowBadgeText,
+  getDeliveryWindowForProduct,
+} from "../../src/utils/deliveryWindow";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -433,12 +443,17 @@ export default function InventoryScreen() {
     type: "availability" | "delete";
   } | null>(null);
   const [showEditSuccessTick, setShowEditSuccessTick] = useState(false);
+  const [orderCutoffs, setOrderCutoffs] = useState<OrderCutoffRule[]>([]);
 
   // ── Fetch Data
   const fetchData = async () => {
     try {
-      const data = await api.getProducts();
+      const [data, cutoffs] = await Promise.all([
+        api.getProducts(),
+        api.getAdminOrderCutoffs().catch(() => []),
+      ]);
       setProducts(data);
+      setOrderCutoffs(cutoffs || []);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -1107,6 +1122,12 @@ export default function InventoryScreen() {
     if (!selectedProduct) return null;
     const p = selectedProduct;
     const selectedProductId = getProductId(p);
+    const detailCutoffRule = getOrderCutoffForProduct(p, orderCutoffs);
+    const detailCutoffText = getOrderCutoffBadgeText(detailCutoffRule);
+    const detailCutoffPassed = isOrderCutoffPassed(detailCutoffRule);
+    const detailDeliveryText = getDeliveryWindowBadgeText(
+      getDeliveryWindowForProduct(p),
+    );
     const availabilityBusy =
       productAction?.id === selectedProductId &&
       productAction.type === "availability";
@@ -1196,6 +1217,34 @@ export default function InventoryScreen() {
               </Text>
             </View>
           </View>
+          {detailCutoffText ? (
+            <View
+              style={[
+                styles.cutoffNotice,
+                detailCutoffPassed && styles.cutoffNoticeBlocked,
+              ]}
+            >
+              <Ionicons
+                name={detailCutoffPassed ? "alert-circle-outline" : "time-outline"}
+                size={14}
+                color={detailCutoffPassed ? "#DC2626" : "#B45309"}
+              />
+              <Text
+                style={[
+                  styles.cutoffNoticeText,
+                  detailCutoffPassed && styles.cutoffNoticeTextBlocked,
+                ]}
+              >
+                {detailCutoffText}
+              </Text>
+            </View>
+          ) : null}
+          {detailDeliveryText ? (
+            <View style={styles.deliveryNotice}>
+              <Ionicons name="bicycle-outline" size={14} color="#16A34A" />
+              <Text style={styles.deliveryNoticeText}>{detailDeliveryText}</Text>
+            </View>
+          ) : null}
         </View>
 
         <View style={styles.stockControlCard}>
@@ -1477,7 +1526,14 @@ export default function InventoryScreen() {
             <Text style={styles.emptyDesc}>Tap + to add your first product</Text>
           </View>
         ) : (
-          products.map((product) => (
+          products.map((product) => {
+            const cutoffRule = getOrderCutoffForProduct(product, orderCutoffs);
+            const cutoffText = getOrderCutoffBadgeText(cutoffRule);
+            const cutoffPassed = isOrderCutoffPassed(cutoffRule);
+            const deliveryText = getDeliveryWindowBadgeText(
+              getDeliveryWindowForProduct(product),
+            );
+            return (
             <TouchableOpacity
               key={product.id}
               style={styles.productCard}
@@ -1510,6 +1566,37 @@ export default function InventoryScreen() {
                     ? [product.unit, product.category].filter(Boolean).join(" · ")
                     : "Details pending"}
                 </Text>
+                {cutoffText ? (
+                  <View
+                    style={[
+                      styles.cutoffMiniBadge,
+                      cutoffPassed && styles.cutoffMiniBadgeBlocked,
+                    ]}
+                  >
+                    <Ionicons
+                      name={cutoffPassed ? "alert-circle-outline" : "time-outline"}
+                      size={10}
+                      color={cutoffPassed ? "#DC2626" : "#B45309"}
+                    />
+                    <Text
+                      style={[
+                        styles.cutoffMiniText,
+                        cutoffPassed && styles.cutoffMiniTextBlocked,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {cutoffText}
+                    </Text>
+                  </View>
+                ) : null}
+                {deliveryText ? (
+                  <View style={styles.deliveryMiniBadge}>
+                    <Ionicons name="bicycle-outline" size={10} color="#16A34A" />
+                    <Text style={styles.deliveryMiniText} numberOfLines={1}>
+                      {deliveryText}
+                    </Text>
+                  </View>
+                ) : null}
                 <View
                   style={[
                     styles.statusPill,
@@ -1569,7 +1656,8 @@ export default function InventoryScreen() {
                 style={{ marginLeft: 4 }}
               />
             </TouchableOpacity>
-          ))
+            );
+          })
         )}
         <View style={{ height: 20 }} />
       </ScrollView>
@@ -1946,6 +2034,51 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     textTransform: "capitalize",
   },
+  cutoffMiniBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    alignSelf: "flex-start",
+    maxWidth: "100%",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 20,
+    backgroundColor: "#FFFBEB",
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+    marginTop: 3,
+  },
+  cutoffMiniBadgeBlocked: {
+    backgroundColor: "#FEF2F2",
+    borderColor: "#FECACA",
+  },
+  cutoffMiniText: {
+    flexShrink: 1,
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#B45309",
+  },
+  cutoffMiniTextBlocked: { color: "#DC2626" },
+  deliveryMiniBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    alignSelf: "flex-start",
+    maxWidth: "100%",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 20,
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+    marginTop: 3,
+  },
+  deliveryMiniText: {
+    flexShrink: 1,
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#16A34A",
+  },
   statusPill: {
     flexDirection: "row",
     alignItems: "center",
@@ -2315,6 +2448,47 @@ customCatSaveBtn: {
   discountText: { fontSize: 11, fontWeight: "800", color: "#D97706" },
 
   detailMetaRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  cutoffNotice: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    backgroundColor: "#FFFBEB",
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    marginTop: 10,
+  },
+  cutoffNoticeBlocked: {
+    backgroundColor: "#FEF2F2",
+    borderColor: "#FECACA",
+  },
+  cutoffNoticeText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#B45309",
+  },
+  cutoffNoticeTextBlocked: { color: "#DC2626" },
+  deliveryNotice: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    marginTop: 10,
+  },
+  deliveryNoticeText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#16A34A",
+  },
   metaChip: {
     flexDirection: "row",
     alignItems: "center",

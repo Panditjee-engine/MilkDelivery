@@ -72,6 +72,43 @@ interface ProductMap {
   [productId: string]: { name: string; unit: string };
 }
 
+async function saveAndShareInvoice(payload: {
+  filename?: string;
+  mime_type?: string;
+  base64: string;
+}) {
+  const FileSystem = require("expo-file-system");
+  const Sharing = require("expo-sharing");
+  const filename = payload.filename || `invoice-${Date.now()}.pdf`;
+  let fileUri = "";
+  if (typeof FileSystem.File === "function" && FileSystem.Paths?.cache) {
+    const file = new FileSystem.File(FileSystem.Paths.cache, filename);
+    file.write(payload.base64, { encoding: "base64" });
+    fileUri = file.uri;
+  } else if (typeof FileSystem.writeAsStringAsync === "function") {
+    const cacheDir =
+      FileSystem.cacheDirectory ??
+      FileSystem.documentDirectory ??
+      FileSystem.Dirs?.Cache ??
+      FileSystem.Dirs?.Document ??
+      "";
+    fileUri = `${cacheDir}${filename}`;
+    await FileSystem.writeAsStringAsync(fileUri, payload.base64, {
+      encoding: FileSystem.EncodingType?.Base64 ?? "base64",
+    });
+  } else {
+    throw new Error("File download is not supported on this device.");
+  }
+  if (await Sharing.isAvailableAsync()) {
+    await Sharing.shareAsync(fileUri, {
+      mimeType: payload.mime_type || "application/pdf",
+      UTI: "com.adobe.pdf",
+    });
+  } else {
+    Alert.alert("Invoice Ready", "Invoice PDF has been saved on this device.");
+  }
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const MONTH_SHORT = [
@@ -606,11 +643,15 @@ function OrderCard({
   index,
   productMap,
   onCancelPress,
+  onDownloadInvoice,
+  downloadingInvoice,
 }: {
   order: Order;
   index: number;
   productMap: ProductMap;
   onCancelPress: (order: Order) => void;
+  onDownloadInvoice: (order: Order) => void;
+  downloadingInvoice?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [badge, setBadge] = useState<DeliveryBadge | null>(() =>
@@ -860,6 +901,22 @@ function OrderCard({
             <OTPBlock otp={order.delivery_otp} />
           )}
 
+          <TouchableOpacity
+            style={cd.invoiceBtn}
+            onPress={() => onDownloadInvoice(order)}
+            activeOpacity={0.85}
+            disabled={downloadingInvoice}
+          >
+            <Ionicons
+              name={downloadingInvoice ? "hourglass-outline" : "download-outline"}
+              size={14}
+              color={Colors.primary}
+            />
+            <Text style={cd.invoiceBtnTxt}>
+              {downloadingInvoice ? "Preparing Invoice..." : "Download Invoice"}
+            </Text>
+          </TouchableOpacity>
+
           {isActive && (
             <TouchableOpacity
               style={cd.cancelBtn}
@@ -1059,6 +1116,19 @@ const cd = StyleSheet.create({
     marginTop: 8,
   },
   cancelBtnTxt: { fontSize: 13, fontWeight: "700", color: "#EF4444" },
+  invoiceBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "#FFF7ED",
+    paddingVertical: 11,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#FED7AA",
+    marginTop: 8,
+  },
+  invoiceBtnTxt: { fontSize: 13, fontWeight: "800", color: Colors.primary },
 });
 
 // ─── Cancel Modal ─────────────────────────────────────────────────────────────
@@ -1239,6 +1309,7 @@ export default function OrdersScreen() {
   const [cancelOrder, setCancelOrder] = useState<Order | null>(null);
   const [cancelModal, setCancelModal] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [invoiceLoadingId, setInvoiceLoadingId] = useState<string | null>(null);
   const fetchingOrdersRef = useRef(false);
 
   const headerY = useRef(new Animated.Value(-20)).current;
@@ -1309,6 +1380,22 @@ export default function OrdersScreen() {
     setCancelOrder(order);
     setCancelModal(true);
     Vibration.vibrate(40);
+  };
+
+  const handleDownloadInvoice = async (order: Order) => {
+    if (invoiceLoadingId) return;
+    setInvoiceLoadingId(order.id);
+    try {
+      const payload = await api.downloadOrderInvoice(order.id);
+      await saveAndShareInvoice(payload);
+    } catch (err: any) {
+      Alert.alert(
+        "Invoice Not Available",
+        err?.message || "Could not prepare this invoice right now.",
+      );
+    } finally {
+      setInvoiceLoadingId(null);
+    }
   };
 
   // ── FIX: Always cancel by order ID via DELETE /orders/{id} ─────────────────
@@ -1446,6 +1533,8 @@ export default function OrdersScreen() {
                 index={item.sectionIndex}
                 productMap={productMap}
                 onCancelPress={handleCancelPress}
+                onDownloadInvoice={handleDownloadInvoice}
+                downloadingInvoice={invoiceLoadingId === item.order.id}
               />
             );
           }}

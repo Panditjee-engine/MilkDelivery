@@ -22,6 +22,7 @@ import {
   Dimensions,
   Alert,
   NativeModules,
+  AppState,
 } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
 import { useRouter, useLocalSearchParams } from "expo-router";
@@ -38,6 +39,18 @@ import {
   formatDeliveryAddress,
   hasCompleteDeliveryAddress,
 } from "../../src/utils/address";
+import {
+  getOrderCutoffBadgeText,
+  getOrderCutoffBlockedMessage,
+  getOrderCutoffForProduct,
+  isOrderCutoffPassed,
+  type OrderCutoffRule,
+} from "../../src/utils/orderCutoff";
+import {
+  getDeliveryWindowBadgeText,
+  getDeliveryWindowForProduct,
+  type DeliveryWindowRule,
+} from "../../src/utils/deliveryWindow";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const GRID_PADDING = 20;
@@ -97,7 +110,34 @@ type CatalogSlide = {
   image: any;
 };
 
-type PaymentMethod = "wallet" | "online";
+type PaymentMethod = "wallet" | "online" | "cash_on_delivery";
+
+type PaymentMethodSettings = {
+  wallet: boolean;
+  online: boolean;
+  cash_on_delivery: boolean;
+};
+
+const DEFAULT_PAYMENT_METHODS: PaymentMethodSettings = {
+  wallet: true,
+  online: true,
+  cash_on_delivery: false,
+};
+
+function getFirstEnabledPaymentMethod(
+  settings: PaymentMethodSettings,
+): PaymentMethod {
+  if (settings.wallet) return "wallet";
+  if (settings.online) return "online";
+  return "cash_on_delivery";
+}
+
+function normalizePaymentMethods(settings: any): PaymentMethodSettings {
+  return {
+    ...DEFAULT_PAYMENT_METHODS,
+    ...(settings?.payment_methods || settings || {}),
+  };
+}
 
 function canUseRazorpayNativeModule(): boolean {
   return Boolean(
@@ -126,6 +166,12 @@ function isAddressRequiredError(error: any) {
   return String(error?.message || error?.detail || "")
     .toLowerCase()
     .includes("delivery address");
+}
+
+function isCutoffError(error: any) {
+  return String(error?.message || error?.detail || "")
+    .toLowerCase()
+    .includes("cut-off");
 }
 
 const SLIDE_GRADIENTS = [
@@ -159,6 +205,48 @@ function mapContentToSlides(content: any[]): CatalogSlide[] {
       }));
     })
     .filter((slide) => Boolean(slide.image));
+}
+
+async function fetchCutoffsForProducts(
+  products: any[],
+  fallbackAdminId?: string | null,
+): Promise<OrderCutoffRule[]> {
+  const adminIds = Array.from(
+    new Set(
+      [
+        fallbackAdminId,
+        ...(products || []).map((product) => product?.admin_id),
+      ]
+        .filter(Boolean)
+        .map(String),
+    ),
+  );
+  if (!adminIds.length) return [];
+  const results = await Promise.all(
+    adminIds.map((adminId) => api.getCatalogOrderCutoffs(adminId).catch(() => [])),
+  );
+  return results.flat();
+}
+
+async function fetchDeliveryWindowsForProducts(
+  products: any[],
+  fallbackAdminId?: string | null,
+): Promise<DeliveryWindowRule[]> {
+  const adminIds = Array.from(
+    new Set(
+      [
+        fallbackAdminId,
+        ...(products || []).map((product) => product?.admin_id),
+      ]
+        .filter(Boolean)
+        .map(String),
+    ),
+  );
+  if (!adminIds.length) return [];
+  const results = await Promise.all(
+    adminIds.map((adminId) => api.getCatalogDeliveryWindows(adminId).catch(() => [])),
+  );
+  return results.flat();
 }
 
 // ─── Design tokens ─────────────────────────────────────────────────────────
@@ -1063,6 +1151,8 @@ function ProductCard({
   onSubscribe,
   onAddToCart,
   cartQty,
+  cutoffRule,
+  deliveryWindow,
 }: {
   product: any;
   onOpenDetails: () => void;
@@ -1070,14 +1160,23 @@ function ProductCard({
   onSubscribe: () => void;
   onAddToCart: () => void;
   cartQty: number;
+  cutoffRule?: OrderCutoffRule | null;
+  deliveryWindow?: DeliveryWindowRule | null;
 }) {
   const theme = getCategoryTheme(product.category);
   const isDairy = isDairyProduct(product);
   const noStock = !product.is_available || (product.stock ?? 0) === 0;
+  const cutoffText = getOrderCutoffBadgeText(cutoffRule);
+  const cutoffPassed = isOrderCutoffPassed(cutoffRule);
+  const deliveryText = getDeliveryWindowBadgeText(deliveryWindow);
 
   return (
     <TouchableOpacity
-      style={cardS.card}
+      style={[
+        cardS.card,
+        cutoffText && cardS.cutoffCard,
+        cutoffPassed && cardS.cutoffCardBlocked,
+      ]}
       activeOpacity={0.88}
       onPress={onOpenDetails}
     >
@@ -1100,6 +1199,26 @@ function ProductCard({
             <Text style={cardS.oosTxt}>Out of stock</Text>
           </View>
         )}
+        {cutoffText ? (
+          <View style={[cardS.cutoffRibbon, cutoffPassed && cardS.cutoffRibbonBlocked]}>
+            <Ionicons
+              name={cutoffPassed ? "alert-circle" : "time"}
+              size={10}
+              color="#fff"
+            />
+            <Text style={cardS.cutoffRibbonText} numberOfLines={1}>
+              {cutoffText}
+            </Text>
+          </View>
+        ) : null}
+        {deliveryText && !cutoffText ? (
+          <View style={cardS.deliveryRibbon}>
+            <Ionicons name="bicycle" size={10} color="#fff" />
+            <Text style={cardS.deliveryRibbonText} numberOfLines={1}>
+              {deliveryText}
+            </Text>
+          </View>
+        ) : null}
         {isDairy && !noStock && (
           <View style={cardS.subBadge}>
             <Ionicons name="repeat-outline" size={8} color="#fff" />
@@ -1123,6 +1242,29 @@ function ProductCard({
             {formatUnit(product.unit)}
           </Text>
         </View>
+        {cutoffText ? (
+          <View style={[cardS.cutoffBadge, cutoffPassed && cardS.cutoffBadgeBlocked]}>
+            <Ionicons
+              name={cutoffPassed ? "alert-circle-outline" : "time-outline"}
+              size={9}
+              color={cutoffPassed ? T.red : T.amber}
+            />
+            <Text
+              style={[cardS.cutoffText, cutoffPassed && cardS.cutoffTextBlocked]}
+              numberOfLines={1}
+            >
+              {cutoffText}
+            </Text>
+          </View>
+        ) : null}
+        {deliveryText ? (
+          <View style={cardS.deliveryBadge}>
+            <Ionicons name="bicycle-outline" size={10} color={T.green} />
+            <Text style={cardS.deliveryText} numberOfLines={1}>
+              {deliveryText}
+            </Text>
+          </View>
+        ) : null}
       </View>
       {noStock ? (
         <View style={cardS.actionRow}>
@@ -1188,10 +1330,21 @@ const cardS = StyleSheet.create({
     backgroundColor: T.surface,
     borderRadius: T.radius.md,
     overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "transparent",
     shadowColor: "#000",
     shadowOpacity: 0.04,
     shadowRadius: 8,
     elevation: 2,
+  },
+  cutoffCard: {
+    borderColor: T.amberBorder,
+    shadowColor: T.amber,
+    shadowOpacity: 0.16,
+  },
+  cutoffCardBlocked: {
+    borderColor: "#FECACA",
+    shadowColor: T.red,
   },
   imgBox: { height: 112, justifyContent: "center", alignItems: "center" },
   img: { width: "100%", height: "100%" },
@@ -1212,6 +1365,53 @@ const cardS = StyleSheet.create({
     borderRadius: 5,
   },
   oosTxt: { color: "#fff", fontSize: 8, fontWeight: "700" },
+  cutoffRibbon: {
+    position: "absolute",
+    top: 6,
+    left: 6,
+    right: 24,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: T.amber,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    borderRadius: 8,
+    shadowColor: "#000",
+    shadowOpacity: 0.18,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+  cutoffRibbonBlocked: { backgroundColor: T.red },
+  cutoffRibbonText: {
+    flex: 1,
+    color: "#fff",
+    fontSize: 8.5,
+    fontWeight: "900",
+  },
+  deliveryRibbon: {
+    position: "absolute",
+    top: 6,
+    left: 6,
+    right: 24,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: T.green,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    borderRadius: 8,
+    shadowColor: "#000",
+    shadowOpacity: 0.18,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+  deliveryRibbonText: {
+    flex: 1,
+    color: "#fff",
+    fontSize: 8.5,
+    fontWeight: "900",
+  },
   subBadge: {
     position: "absolute",
     top: 5,
@@ -1250,6 +1450,51 @@ const cardS = StyleSheet.create({
   },
   price: { fontSize: 14, fontWeight: "800" },
   unit: { fontSize: 9, fontWeight: "600" },
+  cutoffBadge: {
+    marginTop: 6,
+    alignSelf: "flex-start",
+    maxWidth: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: T.radius.full,
+    backgroundColor: T.amberLight,
+    borderWidth: 1,
+    borderColor: T.amberBorder,
+  },
+  cutoffBadgeBlocked: {
+    backgroundColor: T.redLight,
+    borderColor: "#FECACA",
+  },
+  cutoffText: {
+    flexShrink: 1,
+    fontSize: 8.5,
+    fontWeight: "900",
+    color: T.amber,
+  },
+  cutoffTextBlocked: { color: T.red },
+  deliveryBadge: {
+    marginTop: 6,
+    alignSelf: "flex-start",
+    maxWidth: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: T.radius.full,
+    backgroundColor: T.greenLight,
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+  },
+  deliveryText: {
+    flexShrink: 1,
+    fontSize: 8.5,
+    fontWeight: "900",
+    color: T.green,
+  },
   actionRow: {
     flexDirection: "row",
     gap: 5,
@@ -1309,6 +1554,8 @@ function CategorySection({
   onAddToCart,
   onOpenDetails,
   cart,
+  cutoffRules,
+  deliveryWindows,
 }: {
   value: string;
   label: string;
@@ -1318,6 +1565,8 @@ function CategorySection({
   onAddToCart: (i: any) => void;
   onOpenDetails: (i: any) => void;
   cart: CartItem[];
+  cutoffRules: OrderCutoffRule[];
+  deliveryWindows: DeliveryWindowRule[];
 }) {
   const theme = getCategoryTheme(value);
   const isDairyCat = DAIRY_CATEGORIES.includes(value.toLowerCase());
@@ -1350,6 +1599,8 @@ function CategorySection({
               onBuyOnce={() => onBuyOnce(item)}
               onSubscribe={() => onSubscribe(item)}
               onAddToCart={() => onAddToCart(item)}
+              cutoffRule={getOrderCutoffForProduct(item, cutoffRules)}
+              deliveryWindow={getDeliveryWindowForProduct(item, deliveryWindows)}
             />
           );
         })}
@@ -1552,6 +1803,8 @@ function SubscribeModal({
   visible,
   product,
   walletBalance,
+  paymentMethods,
+  cutoffRules,
   tomorrow,
   onClose,
   onSuccess,
@@ -1560,6 +1813,8 @@ function SubscribeModal({
   visible: boolean;
   product: any;
   walletBalance: number;
+  paymentMethods: PaymentMethodSettings;
+  cutoffRules: OrderCutoffRule[];
   tomorrow: string;
   onClose: () => void;
   onSuccess: (refresh: () => void) => void;
@@ -1598,9 +1853,9 @@ function SubscribeModal({
       setSlot("morning");
       setStartDate(tomorrow);
       setEndDate(null);
-      setPaymentMethod("wallet");
+      setPaymentMethod(getFirstEnabledPaymentMethod(paymentMethods));
     }
-  }, [visible, tomorrow]);
+  }, [visible, tomorrow, paymentMethods]);
 
   const toggleDay = (d: number) =>
     setCustomDays((p) =>
@@ -1624,6 +1879,22 @@ function SubscribeModal({
 
   const confirm = async () => {
     if (!product) return;
+    const cutoffRule = getOrderCutoffForProduct(product, cutoffRules);
+    if (cutoffRule && isOrderCutoffPassed(cutoffRule)) {
+      Alert.alert(
+        "Order cut-off time passed",
+        getOrderCutoffBlockedMessage(product, cutoffRule),
+        [{ text: "Got it" }],
+      );
+      return;
+    }
+    if (!paymentMethods[paymentMethod]) {
+      Alert.alert(
+        "Payment method unavailable",
+        "Please choose another payment method for this farm.",
+      );
+      return;
+    }
     if (!hasCompleteDeliveryAddress(user?.address)) {
       Alert.alert(
         "Delivery address required",
@@ -1642,7 +1913,11 @@ function SubscribeModal({
       return;
     }
     if (paymentMethod === "wallet" && !canAfford) {
-      alert("Insufficient wallet balance. Please choose online payment or recharge wallet.");
+      alert(
+        paymentMethods.online
+          ? "Insufficient wallet balance. Please choose online payment or recharge wallet."
+          : "Insufficient wallet balance. Please recharge wallet.",
+      );
       return;
     }
     if (paymentMethod === "online" && !canUseRazorpayNativeModule()) {
@@ -1718,6 +1993,14 @@ function SubscribeModal({
         },
       } as any);
     } catch (e: any) {
+      if (isCutoffError(e)) {
+        Alert.alert(
+          "Order cut-off time passed",
+          e?.message || "Please place this order before the product cut-off time.",
+          [{ text: "Got it" }],
+        );
+        return;
+      }
       if (isAddressRequiredError(e)) {
         Alert.alert(
           "Delivery address required",
@@ -2135,6 +2418,7 @@ function SubscribeModal({
                   onChange={setPaymentMethod}
                   walletBalance={walletBalance}
                   total={total}
+                  enabledMethods={paymentMethods}
                 />
 
                 <View
@@ -2589,13 +2873,15 @@ function PaymentMethodSelector({
   onChange,
   walletBalance,
   total,
+  enabledMethods,
 }: {
   value: PaymentMethod;
   onChange: (method: PaymentMethod) => void;
   walletBalance: number;
   total: number;
+  enabledMethods: PaymentMethodSettings;
 }) {
-  const options: Array<{
+  const allOptions: Array<{
     key: PaymentMethod;
     title: string;
     sub: string;
@@ -2613,14 +2899,14 @@ function PaymentMethodSelector({
         sub: "UPI, card, netbanking",
         icon: "card-outline",
       },
-      // Cash on Delivery is intentionally hidden from customers for now.
-      // {
-      //   key: "cash_on_delivery",
-      //   title: "Cash on Delivery",
-      //   sub: "Pay at delivery",
-      //   icon: "cash-outline",
-      // },
+      {
+        key: "cash_on_delivery",
+        title: "Cash on Delivery",
+        sub: "Pay at delivery",
+        icon: "cash-outline",
+      },
     ];
+  const options = allOptions.filter((option) => enabledMethods[option.key]);
 
   return (
     <View style={payS.wrap}>
@@ -2711,6 +2997,7 @@ function CartSheet({
   visible,
   cart,
   walletBalance,
+  paymentMethods,
   selectedAddress,
   addresses,
   onSelectAddress,
@@ -2724,6 +3011,7 @@ function CartSheet({
   visible: boolean;
   cart: CartItem[];
   walletBalance: number;
+  paymentMethods: PaymentMethodSettings;
   selectedAddress: any;
   addresses: any[];
   onSelectAddress: (address: any) => void;
@@ -2742,6 +3030,11 @@ function CartSheet({
 
   useEffect(() => {
     if (visible) {
+      setPaymentMethod((current) =>
+        paymentMethods[current]
+          ? current
+          : getFirstEnabledPaymentMethod(paymentMethods),
+      );
       Animated.parallel([
         Animated.spring(slide, {
           toValue: 0,
@@ -2769,7 +3062,7 @@ function CartSheet({
         }),
       ]).start();
     }
-  }, [visible]);
+  }, [visible, paymentMethods]);
 
   const cartTotal = cart.reduce((s, i) => s + i.product.price * i.quantity, 0);
   const canAfford = walletBalance >= cartTotal;
@@ -2936,12 +3229,13 @@ function CartSheet({
                   ₹{cartTotal.toFixed(2)}
                 </Text>
               </View>
-              <PaymentMethodSelector
-                value={paymentMethod}
-                onChange={setPaymentMethod}
-                walletBalance={walletBalance}
-                total={cartTotal}
-              />
+                <PaymentMethodSelector
+                  value={paymentMethod}
+                  onChange={setPaymentMethod}
+                  walletBalance={walletBalance}
+                  total={cartTotal}
+                  enabledMethods={paymentMethods}
+                />
               {paymentMethod === "wallet" && !canAfford && (
                 <View style={cartS.lowBal}>
                   <Ionicons name="warning-outline" size={11} color={T.orange} />
@@ -3614,6 +3908,10 @@ export default function CatalogScreen() {
   const [successItemCount, setSuccessItemCount] = useState(1);
   const [walletErrorVisible, setWalletErrorVisible] = useState(false);
   const [walletBalance, setWalletBalance] = useState(0);
+  const [paymentMethods, setPaymentMethods] =
+    useState<PaymentMethodSettings>(DEFAULT_PAYMENT_METHODS);
+  const [orderCutoffs, setOrderCutoffs] = useState<OrderCutoffRule[]>([]);
+  const [deliveryWindows, setDeliveryWindows] = useState<DeliveryWindowRule[]>([]);
   const [toastVisible, setToastVisible] = useState(false);
   const [toastProduct, setToastProduct] = useState("");
   const [toastIsSub, setToastIsSub] = useState(false);
@@ -3697,6 +3995,24 @@ export default function CatalogScreen() {
     } catch { }
   }, []);
 
+  const fetchPaymentMethods = useCallback(async () => {
+    try {
+      const appSettings = await api.getCustomerAppSettings();
+      setPaymentMethods(normalizePaymentMethods(appSettings));
+    } catch {
+      // Keep the last known settings so checkout does not jump on flaky network.
+    }
+  }, []);
+
+  const fetchDeliveryWindows = useCallback(async () => {
+    try {
+      const windows = await fetchDeliveryWindowsForProducts(products, linkedAdminId);
+      setDeliveryWindows(windows || []);
+    } catch {
+      // Keep the current promise while the network settles.
+    }
+  }, [products, linkedAdminId]);
+
   useEffect(() => {
     const id = (user as any)?.admin_id ?? (user as any)?.referral_admin_id;
     setLinkedAdminId(id ?? null);
@@ -3704,7 +4020,7 @@ export default function CatalogScreen() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [prods, cats, wallet, content] = await Promise.all([
+      const [prods, cats, wallet, content, appSettings] = await Promise.all([
         api.getCatalogProducts(
           linkedAdminId ?? undefined,
           selectedCategory || undefined,
@@ -3712,11 +4028,19 @@ export default function CatalogScreen() {
         api.getCategories(),
         api.getWallet(),
         api.getCatalogContent().catch(() => null),
+        api.getCustomerAppSettings().catch(() => ({
+          payment_methods: DEFAULT_PAYMENT_METHODS,
+        })),
       ]);
+      const cutoffs = await fetchCutoffsForProducts(prods || [], linkedAdminId);
+      const windows = await fetchDeliveryWindowsForProducts(prods || [], linkedAdminId);
       setProducts(prods);
       setCategories(cats);
       setWalletBalance(wallet.balance ?? 0);
       setCatalogSlides(mapContentToSlides(content?.data || []));
+      setPaymentMethods(normalizePaymentMethods(appSettings));
+      setOrderCutoffs(cutoffs || []);
+      setDeliveryWindows(windows || []);
       await fetchSubs();
     } catch {
     } finally {
@@ -3727,7 +4051,7 @@ export default function CatalogScreen() {
 
   useEffect(() => {
     if (!isFocused) return;
-    fetchData();
+    void fetchData().catch(() => undefined);
     const iv = setInterval(() => {
       if (
         !quickAddVisible &&
@@ -3735,7 +4059,7 @@ export default function CatalogScreen() {
         !cartVisible &&
         !subSheetVisible
       )
-        fetchData();
+        void fetchData().catch(() => undefined);
     }, 2000);
     return () => clearInterval(iv);
   }, [
@@ -3746,6 +4070,36 @@ export default function CatalogScreen() {
     cartVisible,
     subSheetVisible,
   ]);
+
+  useEffect(() => {
+    if (!isFocused) return;
+    void fetchPaymentMethods().catch(() => undefined);
+    const iv = setInterval(() => {
+      void fetchPaymentMethods().catch(() => undefined);
+    }, 3000);
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") void fetchPaymentMethods().catch(() => undefined);
+    });
+    return () => {
+      clearInterval(iv);
+      sub.remove();
+    };
+  }, [isFocused, fetchPaymentMethods]);
+
+  useEffect(() => {
+    if (!isFocused) return;
+    void fetchDeliveryWindows().catch(() => undefined);
+    const iv = setInterval(() => {
+      void fetchDeliveryWindows().catch(() => undefined);
+    }, 3000);
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") void fetchDeliveryWindows().catch(() => undefined);
+    });
+    return () => {
+      clearInterval(iv);
+      sub.remove();
+    };
+  }, [isFocused, fetchDeliveryWindows]);
 
   useEffect(() => {
     if (!addToCartProduct) return;
@@ -3778,7 +4132,9 @@ export default function CatalogScreen() {
 
   const onRefresh = () => {
     setRefreshing(true);
-    fetchData();
+    void fetchData().catch(() => {
+      setRefreshing(false);
+    });
   };
 
   const showToast = (name: string, sub: boolean) => {
@@ -3789,7 +4145,22 @@ export default function CatalogScreen() {
     toastTimer.current = setTimeout(() => setToastVisible(false), 2800);
   };
 
+  const showCutoffPopupIfBlocked = useCallback(
+    (product: any) => {
+      const rule = getOrderCutoffForProduct(product, orderCutoffs);
+      if (!rule || !isOrderCutoffPassed(rule)) return false;
+      Alert.alert(
+        "Order cut-off time passed",
+        getOrderCutoffBlockedMessage(product, rule),
+        [{ text: "Got it" }],
+      );
+      return true;
+    },
+    [orderCutoffs],
+  );
+
   const handleAddToCart = (p: any) => {
+    if (showCutoffPopupIfBlocked(p)) return;
     if ((p.stock ?? 0) === 0) {
       alert("Out of stock");
       return;
@@ -3840,6 +4211,7 @@ export default function CatalogScreen() {
   };
 
   const handleDairyBuyOnce = (p: any) => {
+    if (showCutoffPopupIfBlocked(p)) return;
     if ((p.stock ?? 0) === 0) {
       alert("Out of stock");
       return;
@@ -3848,6 +4220,7 @@ export default function CatalogScreen() {
     setQuickAddVisible(true);
   };
   const handleSubscribe = (p: any) => {
+    if (showCutoffPopupIfBlocked(p)) return;
     if ((p.stock ?? 0) === 0) {
       alert("Out of stock");
       return;
@@ -3858,6 +4231,7 @@ export default function CatalogScreen() {
 
   const handleQuickAddConfirm = async (qty: number) => {
     if (!quickAddProduct) return;
+    if (showCutoffPopupIfBlocked(quickAddProduct)) return;
     const avail = quickAddProduct.stock ?? 0;
     if (qty > avail) {
       alert(`Only ${avail} available`);
@@ -3922,6 +4296,26 @@ export default function CatalogScreen() {
 
   // ── FIXED: All cart items go as ONE buy_once subscription
   const handlePlaceOrder = async (paymentMethod: PaymentMethod) => {
+    const blockedItem = cart.find((item) => {
+      const rule = getOrderCutoffForProduct(item.product, orderCutoffs);
+      return Boolean(rule && isOrderCutoffPassed(rule));
+    });
+    if (blockedItem) {
+      const rule = getOrderCutoffForProduct(blockedItem.product, orderCutoffs);
+      Alert.alert(
+        "Order cut-off time passed",
+        getOrderCutoffBlockedMessage(blockedItem.product, rule!),
+        [{ text: "Got it" }],
+      );
+      return;
+    }
+    if (!paymentMethods[paymentMethod]) {
+      Alert.alert(
+        "Payment method unavailable",
+        "Please choose another payment method for this farm.",
+      );
+      return;
+    }
     if (!hasCompleteDeliveryAddress(selectedAddress)) {
       Alert.alert(
         "Delivery address required",
@@ -4021,6 +4415,14 @@ export default function CatalogScreen() {
         },
       } as any);
     } catch (e: any) {
+      if (isCutoffError(e)) {
+        Alert.alert(
+          "Order cut-off time passed",
+          e?.message || "Please place this order before the product cut-off time.",
+          [{ text: "Got it" }],
+        );
+        return;
+      }
       if (isAddressRequiredError(e)) {
         Alert.alert(
           "Delivery address required",
@@ -4291,6 +4693,8 @@ export default function CatalogScreen() {
             onSubscribe={handleSubscribe}
             onAddToCart={handleAddToCart}
             onOpenDetails={openProductDetails}
+            cutoffRules={orderCutoffs}
+            deliveryWindows={deliveryWindows}
           />
         )}
       />
@@ -4310,6 +4714,8 @@ export default function CatalogScreen() {
         visible={subscribeVisible}
         product={subscribeProduct}
         walletBalance={walletBalance}
+        paymentMethods={paymentMethods}
+        cutoffRules={orderCutoffs}
         tomorrow={tomorrow}
         onClose={() => setSubscribeVisible(false)}
         onSuccess={async () => {
@@ -4324,6 +4730,7 @@ export default function CatalogScreen() {
         visible={cartVisible}
         cart={cart}
         walletBalance={walletBalance}
+        paymentMethods={paymentMethods}
         selectedAddress={selectedAddress}
         addresses={addressBook}
         onSelectAddress={handleSelectDeliveryAddress}

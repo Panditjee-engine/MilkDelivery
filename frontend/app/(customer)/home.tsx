@@ -13,6 +13,8 @@ import {
   Modal,
   TouchableWithoutFeedback,
   StatusBar,
+  Alert,
+  AppState,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -32,6 +34,19 @@ import { useAuth } from "../../src/contexts/AuthContext";
 import { api } from "../../src/services/api";
 import { Colors } from "../../src/constants/colors";
 import LoadingScreen from "../../src/components/LoadingScreen";
+import {
+  getOrderCutoffBadgeText,
+  getOrderCutoffBlockedMessage,
+  getOrderCutoffForProduct,
+  isOrderCutoffPassed,
+  type OrderCutoffRule,
+} from "../../src/utils/orderCutoff";
+import {
+  getDeliveryWindowBadgeText,
+  getDeliveryWindowDetailText,
+  getDeliveryWindowForProduct,
+  type DeliveryWindowRule,
+} from "../../src/utils/deliveryWindow";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 
@@ -89,6 +104,48 @@ function mapContentToSlides(content: any[]): BannerSlide[] {
       }));
     })
     .filter((slide) => Boolean(slide.image));
+}
+
+async function fetchCutoffsForProducts(
+  products: any[],
+  fallbackAdminId?: string | null,
+): Promise<OrderCutoffRule[]> {
+  const adminIds = Array.from(
+    new Set(
+      [
+        fallbackAdminId,
+        ...(products || []).map((product) => product?.admin_id),
+      ]
+        .filter(Boolean)
+        .map(String),
+    ),
+  );
+  if (!adminIds.length) return [];
+  const results = await Promise.all(
+    adminIds.map((adminId) => api.getCatalogOrderCutoffs(adminId).catch(() => [])),
+  );
+  return results.flat();
+}
+
+async function fetchDeliveryWindowsForProducts(
+  products: any[],
+  fallbackAdminId?: string | null,
+): Promise<DeliveryWindowRule[]> {
+  const adminIds = Array.from(
+    new Set(
+      [
+        fallbackAdminId,
+        ...(products || []).map((product) => product?.admin_id),
+      ]
+        .filter(Boolean)
+        .map(String),
+    ),
+  );
+  if (!adminIds.length) return [];
+  const results = await Promise.all(
+    adminIds.map((adminId) => api.getCatalogDeliveryWindows(adminId).catch(() => [])),
+  );
+  return results.flat();
 }
 
 // ─── Status helpers
@@ -360,12 +417,16 @@ const POPULAR_CARD_WIDTH = (SCREEN_WIDTH - 40 - POPULAR_GRID_GAP) / 2;
 function ProductDetailsModal({
   product,
   adminName,
+  cutoffRule,
+  deliveryWindow,
   visible,
   onClose,
   onBuyNow,
 }: {
   product: any;
   adminName?: string;
+  cutoffRule?: OrderCutoffRule | null;
+  deliveryWindow?: DeliveryWindowRule | null;
   visible: boolean;
   onClose: () => void;
   onBuyNow: () => void;
@@ -408,6 +469,9 @@ function ProductDetailsModal({
   if (!product) return null;
 
   const theme = getCategoryTheme(product.category);
+  const cutoffText = getOrderCutoffBadgeText(cutoffRule);
+  const cutoffPassed = isOrderCutoffPassed(cutoffRule);
+  const deliveryText = getDeliveryWindowBadgeText(deliveryWindow);
 
   return (
     <Modal
@@ -492,6 +556,36 @@ function ProductDetailsModal({
               <Text style={modalStyles.unitText}>{product.unit}</Text>
             </View>
           </View>
+          {cutoffText ? (
+            <View
+              style={[
+                modalStyles.cutoffNotice,
+                cutoffPassed && modalStyles.cutoffNoticeBlocked,
+              ]}
+            >
+              <Ionicons
+                name={cutoffPassed ? "alert-circle-outline" : "time-outline"}
+                size={15}
+                color={cutoffPassed ? "#dc2626" : "#d97706"}
+              />
+              <Text
+                style={[
+                  modalStyles.cutoffNoticeText,
+                  cutoffPassed && modalStyles.cutoffNoticeTextBlocked,
+                ]}
+              >
+                {cutoffText}
+              </Text>
+            </View>
+          ) : null}
+          {deliveryText ? (
+            <View style={modalStyles.deliveryNotice}>
+              <Ionicons name="bicycle-outline" size={15} color="#16a34a" />
+              <Text style={modalStyles.deliveryNoticeText}>
+                {getDeliveryWindowDetailText(deliveryWindow)}
+              </Text>
+            </View>
+          ) : null}
 
           {/* Description */}
           {product.description ? (
@@ -699,6 +793,47 @@ const modalStyles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
     color: "#555",
+  },
+  cutoffNotice: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    backgroundColor: "#FFFBEB",
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+    borderRadius: 13,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    marginBottom: 14,
+  },
+  cutoffNoticeBlocked: {
+    backgroundColor: "#FEF2F2",
+    borderColor: "#FECACA",
+  },
+  cutoffNoticeText: {
+    flex: 1,
+    fontSize: 12.5,
+    fontWeight: "800",
+    color: "#d97706",
+  },
+  cutoffNoticeTextBlocked: { color: "#dc2626" },
+  deliveryNotice: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+    borderRadius: 13,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    marginBottom: 14,
+  },
+  deliveryNoticeText: {
+    flex: 1,
+    fontSize: 12.5,
+    fontWeight: "800",
+    color: "#16a34a",
   },
   descBox: {
     backgroundColor: "#F9FAFB",
@@ -919,13 +1054,20 @@ function ProductGridCard({
   index,
   onOpenDetails,
   adminName,
+  cutoffRule,
+  deliveryWindow,
 }: {
   product: any;
   index: number;
   onOpenDetails: () => void;
   adminName?: string;
+  cutoffRule?: OrderCutoffRule | null;
+  deliveryWindow?: DeliveryWindowRule | null;
 }) {
   const theme = getCategoryTheme(product.category);
+  const cutoffText = getOrderCutoffBadgeText(cutoffRule);
+  const cutoffPassed = isOrderCutoffPassed(cutoffRule);
+  const deliveryText = getDeliveryWindowBadgeText(deliveryWindow);
   const slideAnim = useRef(new Animated.Value(40)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
 
@@ -952,7 +1094,11 @@ function ProductGridCard({
       style={{ opacity: opacityAnim, transform: [{ translateY: slideAnim }] }}
     >
       <TouchableOpacity
-        style={productGridStyles.card}
+        style={[
+          productGridStyles.card,
+          cutoffText && productGridStyles.cutoffCard,
+          cutoffPassed && productGridStyles.cutoffCardBlocked,
+        ]}
         onPress={onOpenDetails}
         activeOpacity={0.86}
       >
@@ -965,6 +1111,31 @@ function ProductGridCard({
           ) : (
             <Ionicons name={theme.icon as any} size={26} color={theme.accent} />
           )}
+          {cutoffText ? (
+            <View
+              style={[
+                productGridStyles.cutoffRibbon,
+                cutoffPassed && productGridStyles.cutoffRibbonBlocked,
+              ]}
+            >
+              <Ionicons
+                name={cutoffPassed ? "alert-circle" : "time"}
+                size={10}
+                color="#fff"
+              />
+              <Text style={productGridStyles.cutoffRibbonText} numberOfLines={1}>
+                {cutoffText}
+              </Text>
+            </View>
+          ) : null}
+          {deliveryText && !cutoffText ? (
+            <View style={productGridStyles.deliveryRibbon}>
+              <Ionicons name="bicycle" size={10} color="#fff" />
+              <Text style={productGridStyles.deliveryRibbonText} numberOfLines={1}>
+                {deliveryText}
+              </Text>
+            </View>
+          ) : null}
           <View style={productGridStyles.addBtn}>
             <Ionicons name="arrow-forward" size={14} color={Colors.primary} />
           </View>
@@ -987,6 +1158,37 @@ function ProductGridCard({
               {product.unit}
             </Text>
           </View>
+          {cutoffText ? (
+            <View
+              style={[
+                productGridStyles.cutoffBadge,
+                cutoffPassed && productGridStyles.cutoffBadgeBlocked,
+              ]}
+            >
+              <Ionicons
+                name={cutoffPassed ? "alert-circle-outline" : "time-outline"}
+                size={9}
+                color={cutoffPassed ? "#dc2626" : "#d97706"}
+              />
+              <Text
+                style={[
+                  productGridStyles.cutoffText,
+                  cutoffPassed && productGridStyles.cutoffTextBlocked,
+                ]}
+                numberOfLines={1}
+              >
+                {cutoffText}
+              </Text>
+            </View>
+          ) : null}
+          {deliveryText ? (
+            <View style={productGridStyles.deliveryBadge}>
+              <Ionicons name="bicycle-outline" size={9} color="#16a34a" />
+              <Text style={productGridStyles.deliveryText} numberOfLines={1}>
+                {deliveryText}
+              </Text>
+            </View>
+          ) : null}
           <View
             style={[
               productGridStyles.buyNowBtn,
@@ -1029,11 +1231,22 @@ const productGridStyles = StyleSheet.create({
     backgroundColor: "#fff",
     borderRadius: 18,
     overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "transparent",
     shadowColor: "#000",
     shadowOpacity: 0.05,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 4 },
     elevation: 2,
+  },
+  cutoffCard: {
+    borderColor: "#FDE68A",
+    shadowColor: "#d97706",
+    shadowOpacity: 0.16,
+  },
+  cutoffCardBlocked: {
+    borderColor: "#FECACA",
+    shadowColor: "#dc2626",
   },
   imgBox: {
     height: 105,
@@ -1064,6 +1277,98 @@ const productGridStyles = StyleSheet.create({
   },
   unit: { fontSize: 10.5, color: "#aaa", fontWeight: "700", maxWidth: 58 },
   price: { fontSize: 15, fontWeight: "900", color: Colors.primary },
+  cutoffRibbon: {
+    position: "absolute",
+    top: 7,
+    left: 7,
+    right: 42,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#d97706",
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    borderRadius: 9,
+    shadowColor: "#000",
+    shadowOpacity: 0.18,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+  cutoffRibbonBlocked: { backgroundColor: "#dc2626" },
+  cutoffRibbonText: {
+    flex: 1,
+    color: "#fff",
+    fontSize: 8.5,
+    fontWeight: "900",
+  },
+  deliveryRibbon: {
+    position: "absolute",
+    top: 7,
+    left: 7,
+    right: 42,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#16a34a",
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    borderRadius: 9,
+    shadowColor: "#000",
+    shadowOpacity: 0.18,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+  deliveryRibbonText: {
+    flex: 1,
+    color: "#fff",
+    fontSize: 8.5,
+    fontWeight: "900",
+  },
+  cutoffBadge: {
+    marginTop: 7,
+    alignSelf: "flex-start",
+    maxWidth: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: "#FFFBEB",
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+  },
+  cutoffBadgeBlocked: {
+    backgroundColor: "#FEF2F2",
+    borderColor: "#FECACA",
+  },
+  cutoffText: {
+    flexShrink: 1,
+    fontSize: 9,
+    fontWeight: "900",
+    color: "#d97706",
+  },
+  cutoffTextBlocked: { color: "#dc2626" },
+  deliveryBadge: {
+    marginTop: 7,
+    alignSelf: "flex-start",
+    maxWidth: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+  },
+  deliveryText: {
+    flexShrink: 1,
+    fontSize: 9,
+    fontWeight: "900",
+    color: "#16a34a",
+  },
   buyNowBtn: {
     marginTop: 9,
     borderRadius: 12,
@@ -1124,6 +1429,8 @@ export default function CustomerHome() {
   const [featuredProducts, setFeaturedProducts] = useState<any[]>([]);
   const [adminsList, setAdminsList] = useState<any[]>([]);
   const [contentSlides, setContentSlides] = useState<BannerSlide[]>([]);
+  const [orderCutoffs, setOrderCutoffs] = useState<OrderCutoffRule[]>([]);
+  const [deliveryWindows, setDeliveryWindows] = useState<DeliveryWindowRule[]>([]);
 
   // ─── Product details modal state
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
@@ -1150,12 +1457,13 @@ export default function CustomerHome() {
 
   const fetchData = async (isInitial = false) => {
     try {
+      const linkedAdminId = (user as any)?.admin_id ?? undefined;
       const [walletData, ordersData, productsData, adminsData, contentData] =
         await Promise.allSettled([
           api.getWallet(),
           api.getOrders(),
           api.getCatalogProducts(
-            (user as any)?.admin_id ?? undefined,
+            linkedAdminId,
             undefined,
           ),
           api.getAdmins(),
@@ -1167,7 +1475,12 @@ export default function CustomerHome() {
       }
       if (walletData.status === "fulfilled") setWalletBalance(walletData.value.balance);
       if (ordersData.status === "fulfilled") setRecentOrder(ordersData.value?.[0] || null);
-      if (productsData.status === "fulfilled") setFeaturedProducts((productsData.value || []).slice(0, 3));
+      if (productsData.status === "fulfilled") {
+        const productList = productsData.value || [];
+        setFeaturedProducts(productList.slice(0, 3));
+        setOrderCutoffs(await fetchCutoffsForProducts(productList, linkedAdminId));
+        setDeliveryWindows(await fetchDeliveryWindowsForProducts(productList, linkedAdminId));
+      }
       if (contentData.status === "fulfilled") setContentSlides(mapContentToSlides(contentData.value?.data || []));
 
       if (isInitial) {
@@ -1196,15 +1509,44 @@ export default function CustomerHome() {
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    fetchData();
+    void fetchData().catch(() => {
+      setRefreshing(false);
+    });
   }, []);
+
+  const fetchDeliveryWindows = useCallback(async () => {
+    try {
+      const linkedAdminId = (user as any)?.admin_id ?? undefined;
+      const windows = await fetchDeliveryWindowsForProducts(featuredProducts, linkedAdminId);
+      setDeliveryWindows(windows || []);
+    } catch {
+      // Keep the current customer-facing promise on temporary network errors.
+    }
+  }, [featuredProducts, user]);
 
   useEffect(() => {
     if (!isFocused) return;
-    fetchData(true);
-    const interval = setInterval(() => fetchData(false), 2000);
+    void fetchData(true).catch(() => undefined);
+    const interval = setInterval(() => {
+      void fetchData(false).catch(() => undefined);
+    }, 2000);
     return () => clearInterval(interval);
   }, [isFocused]);
+
+  useEffect(() => {
+    if (!isFocused) return;
+    void fetchDeliveryWindows().catch(() => undefined);
+    const interval = setInterval(() => {
+      void fetchDeliveryWindows().catch(() => undefined);
+    }, 3000);
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") void fetchDeliveryWindows().catch(() => undefined);
+    });
+    return () => {
+      clearInterval(interval);
+      sub.remove();
+    };
+  }, [isFocused, fetchDeliveryWindows]);
 
   const goToCatalog = () => router.push("/(customer)/catalog");
 
@@ -1229,6 +1571,15 @@ export default function CustomerHome() {
 
   // ─── Buy Now: close modal and navigate to catalog
   const handleBuyNow = () => {
+    const cutoffRule = getOrderCutoffForProduct(selectedProduct, orderCutoffs);
+    if (cutoffRule && isOrderCutoffPassed(cutoffRule)) {
+      Alert.alert(
+        "Order cut-off time passed",
+        getOrderCutoffBlockedMessage(selectedProduct, cutoffRule),
+        [{ text: "Got it" }],
+      );
+      return;
+    }
     setModalVisible(false);
     setTimeout(() => {
       setSelectedProduct(null);
@@ -1436,6 +1787,8 @@ export default function CustomerHome() {
                     product={product}
                     index={i}
                     adminName={adminName}
+                    cutoffRule={getOrderCutoffForProduct(product, orderCutoffs)}
+                    deliveryWindow={getDeliveryWindowForProduct(product, deliveryWindows)}
                     onOpenDetails={() => openProductDetails(product)}
                   />
                 );
@@ -1453,6 +1806,8 @@ export default function CustomerHome() {
       <ProductDetailsModal
         product={selectedProduct}
         adminName={selectedAdminName}
+        cutoffRule={getOrderCutoffForProduct(selectedProduct, orderCutoffs)}
+        deliveryWindow={getDeliveryWindowForProduct(selectedProduct, deliveryWindows)}
         visible={modalVisible}
         onClose={closeModal}
         onBuyNow={handleBuyNow}

@@ -8,6 +8,46 @@ export function getApiBaseUrl() {
 
 export type PaymentMethod = "cash" | "upi";
 
+export interface CustomerAppSettings {
+  admin_id?: string | null;
+  payment_methods: {
+    wallet: boolean;
+    online: boolean;
+    cash_on_delivery: boolean;
+  };
+}
+
+export interface InvoiceTemplateSettings {
+  business_name: string;
+  tagline?: string;
+  address?: string;
+  phone?: string;
+  email?: string;
+  gstin?: string;
+  footer_note?: string;
+  terms?: string;
+  primary_color?: string;
+  show_payment_details?: boolean;
+  show_terms?: boolean;
+}
+
+export interface OrderCutoffRule {
+  id?: string;
+  admin_id?: string;
+  product_id?: string | null;
+  product_name?: string | null;
+  cutoff_time: string;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface InvoiceDownloadPayload {
+  filename: string;
+  mime_type: string;
+  base64: string;
+}
+
 type ApiRequestOptions = RequestInit & {
   silentErrorLog?: boolean;
   timeoutMs?: number;
@@ -775,6 +815,129 @@ class ApiService {
     return this.request<any[]>(`/products${query}`);
   }
 
+  async getCustomerAppSettings() {
+    return this.request<CustomerAppSettings>("/app-settings/catalog");
+  }
+
+  async getAdminAppSettings() {
+    return this.request<CustomerAppSettings>("/app-settings/admin");
+  }
+
+  async saveAdminAppSettings(data: CustomerAppSettings) {
+    return this.request<CustomerAppSettings>("/app-settings/admin", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getInvoiceTemplate() {
+    return this.request<InvoiceTemplateSettings>("/invoices/admin/template");
+  }
+
+  async saveInvoiceTemplate(data: InvoiceTemplateSettings) {
+    return this.request<InvoiceTemplateSettings>("/invoices/admin/template", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getCatalogOrderCutoffs(adminId?: string) {
+    const query = adminId ? `?admin_id=${encodeURIComponent(adminId)}` : "";
+    return this.request<OrderCutoffRule[]>(`/order-cutoffs/catalog${query}`, {
+      silentErrorLog: true,
+    });
+  }
+
+  async getAdminOrderCutoffs() {
+    return this.request<any[]>("/order-cutoffs/admin");
+  }
+
+  async createAdminOrderCutoff(data: {
+    product_id?: string | null;
+    cutoff_time?: string;
+    start_time?: string;
+    end_time?: string;
+    schedule_type?: string;
+    days?: number[];
+    is_active: boolean;
+  }) {
+    return this.request<any>("/order-cutoffs/admin", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateAdminOrderCutoff(
+    cutoffId: string,
+    data: {
+      product_id?: string | null;
+      cutoff_time?: string;
+      start_time?: string;
+      end_time?: string;
+      schedule_type?: string;
+      days?: number[];
+      is_active: boolean;
+    },
+  ) {
+    return this.request<any>(`/order-cutoffs/admin/${cutoffId}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteAdminOrderCutoff(cutoffId: string) {
+    return this.request<any>(`/order-cutoffs/admin/${cutoffId}`, {
+      method: "DELETE",
+    });
+  }
+
+  async getAdminDeliveryWindows() {
+    return this.request<any[]>("/delivery-windows/admin");
+  }
+
+  async getCatalogDeliveryWindows(adminId?: string) {
+    const query = adminId
+      ? `?${new URLSearchParams({ admin_id: adminId }).toString()}`
+      : "";
+    return this.request<any[]>(`/delivery-windows/catalog${query}`, {
+      silentErrorLog: true,
+      timeoutMs: 8_000,
+    });
+  }
+
+  async createAdminDeliveryWindow(data: {
+    product_id?: string | null;
+    start_time: string;
+    end_time: string;
+    is_active: boolean;
+  }) {
+    return this.request<any>("/delivery-windows/admin", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateAdminDeliveryWindow(
+    windowId: string,
+    data: {
+      product_id?: string | null;
+      start_time: string;
+      end_time: string;
+      is_active: boolean;
+    },
+  ) {
+    return this.request<any>(`/delivery-windows/admin/${windowId}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteAdminDeliveryWindow(windowId: string) {
+    return this.request<any>(`/delivery-windows/admin/${windowId}`, {
+      method: "DELETE",
+    });
+  }
+
   async getProduct(id: string) {
     return this.request<any>(`/products/${id}`);
   }
@@ -873,6 +1036,18 @@ class ApiService {
 
 async getSubscriptionHistory() {
     return this.request<any[]>("/subscriptions/history");
+  }
+
+  async downloadOrderInvoice(orderId: string) {
+    return this.request<InvoiceDownloadPayload>(
+      `/invoices/order/${orderId}/download`,
+    );
+  }
+
+  async downloadSubscriptionInvoice(subscriptionId: string) {
+    return this.request<InvoiceDownloadPayload>(
+      `/invoices/subscription/${subscriptionId}/download`,
+    );
   }
 
   async createSubscription(data: {

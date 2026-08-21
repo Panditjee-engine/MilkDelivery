@@ -450,7 +450,7 @@ function ShareModal({
                   />
                   <Text style={qrS.infoBannerText}>
                     The customer who uses your referral code will only see your
-                    Gaushala's products.
+                    {" "}Gaushala{"'"}s products.
                   </Text>
                 </View>
                 <ViewShot
@@ -1733,7 +1733,12 @@ export default function AdminSettingsScreen() {
           <TouchableOpacity
             style={s.contentManageBtn}
             activeOpacity={0.85}
-            onPress={openContentModal}
+            onPress={() =>
+              router.push({
+                pathname: "/(admin)/content",
+                params: { from: "settings" },
+              } as any)
+            }
           >
             <Ionicons name="create-outline" size={15} color="#fff" />
             <Text style={s.contentManageText}>Manage Content</Text>
@@ -1759,10 +1764,77 @@ export default function AdminSettingsScreen() {
           <TouchableOpacity
             style={s.contentManageBtn}
             activeOpacity={0.85}
-            onPress={() => router.push("/(admin)/wallet-payment" as any)}
+            onPress={() =>
+              router.push({
+                pathname: "/(admin)/wallet-payment",
+                params: { from: "settings" },
+              } as any)
+            }
           >
             <Ionicons name="card-outline" size={15} color="#fff" />
             <Text style={s.contentManageText}>Manage Wallet Payment</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* ── App Settings */}
+        <View style={s.contentCard}>
+          <View style={s.contentCardHeader}>
+            <View style={s.contentIconWrap}>
+              <Ionicons name="phone-portrait-outline" size={18} color={C.dark} />
+            </View>
+            <View style={s.contentCardBody}>
+              <Text style={s.contentCardTitle}>App Settings</Text>
+              <Text style={s.contentCardSubtitle}>
+                Manage customer payment methods like Wallet, Online and COD.
+              </Text>
+            </View>
+            <View style={s.contentCountPill}>
+              <Ionicons name="options-outline" size={16} color={C.dark} />
+            </View>
+          </View>
+          <TouchableOpacity
+            style={s.contentManageBtn}
+            activeOpacity={0.85}
+            onPress={() =>
+              router.push({
+                pathname: "/(admin)/app-settings",
+                params: { from: "settings" },
+              } as any)
+            }
+          >
+            <Ionicons name="settings-outline" size={15} color="#fff" />
+            <Text style={s.contentManageText}>Manage App Settings</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* ── Invoice Template */}
+        <View style={s.contentCard}>
+          <View style={s.contentCardHeader}>
+            <View style={s.contentIconWrap}>
+              <Ionicons name="receipt-outline" size={18} color={C.dark} />
+            </View>
+            <View style={s.contentCardBody}>
+              <Text style={s.contentCardTitle}>Invoice Template</Text>
+              <Text style={s.contentCardSubtitle}>
+                Customize PDF invoice header, color, terms and footer.
+              </Text>
+            </View>
+            <View style={s.contentCountPill}>
+              <Ionicons name="document-text-outline" size={16} color={C.dark} />
+            </View>
+          </View>
+          <TouchableOpacity
+            style={s.contentManageBtn}
+            activeOpacity={0.85}
+            onPress={() =>
+              router.push({
+                pathname: "/(admin)/invoice-template",
+                params: { from: "settings" },
+              } as any)
+            }
+          >
+            <Ionicons name="create-outline" size={15} color="#fff" />
+            <Text style={s.contentManageText}>Manage Invoice Template</Text>
           </TouchableOpacity>
         </View>
 
@@ -1806,8 +1878,8 @@ export default function AdminSettingsScreen() {
               iconBg="#FFF8E8"
               iconColor={C.amber}
               label="Order Cut-off Time"
-              value={cutoffDisplay}
-              onPress={() => openModal("cutoff")}
+              value="Manage rules"
+              onPress={() => router.push("/(admin)/order-cutoff" as any)}
             />
             <View style={s.divider} />
             <SettingRow
@@ -1815,8 +1887,8 @@ export default function AdminSettingsScreen() {
               iconBg={C.peach}
               iconColor={C.primary}
               label="Delivery Window"
-              value={deliveryDisplay}
-              onPress={() => openModal("delivery")}
+              value="Manage windows"
+              onPress={() => router.push("/(admin)/delivery-window" as any)}
             />
             <View style={s.divider} />
             <SettingRow

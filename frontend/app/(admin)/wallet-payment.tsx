@@ -1,10 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  BackHandler,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -18,6 +19,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useFocusEffect } from "@react-navigation/native";
 import { api } from "../../src/services/api";
 
 const C = {
@@ -56,6 +58,7 @@ function statusColor(status?: string) {
 
 export default function WalletPaymentScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ from?: string }>();
   const [qr, setQr] = useState<any>(null);
   const [label, setLabel] = useState("");
   const [pickedFile, setPickedFile] = useState<any>(null);
@@ -88,6 +91,24 @@ export default function WalletPaymentScreen() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  const goBack = useCallback(() => {
+    if (params.from === "settings") {
+      router.replace("/(admin)/settings" as any);
+      return;
+    }
+    router.back();
+  }, [params.from, router]);
+
+  useFocusEffect(
+    useCallback(() => {
+      const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+        goBack();
+        return true;
+      });
+      return () => sub.remove();
+    }, [goBack]),
+  );
 
   const pickQrImage = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -174,7 +195,7 @@ export default function WalletPaymentScreen() {
     <SafeAreaView style={s.screen} edges={["top"]}>
       <StatusBar barStyle="dark-content" backgroundColor={C.bg} />
       <View style={s.header}>
-        <TouchableOpacity style={s.backBtn} onPress={() => router.back()}>
+        <TouchableOpacity style={s.backBtn} onPress={goBack}>
           <Ionicons name="arrow-back" size={20} color={C.dark} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>

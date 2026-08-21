@@ -64,6 +64,43 @@ interface Subscription {
   admin_name?: string;
 }
 
+async function saveAndShareInvoice(payload: {
+  filename?: string;
+  mime_type?: string;
+  base64: string;
+}) {
+  const FileSystem = require("expo-file-system");
+  const Sharing = require("expo-sharing");
+  const filename = payload.filename || `invoice-${Date.now()}.pdf`;
+  let fileUri = "";
+  if (typeof FileSystem.File === "function" && FileSystem.Paths?.cache) {
+    const file = new FileSystem.File(FileSystem.Paths.cache, filename);
+    file.write(payload.base64, { encoding: "base64" });
+    fileUri = file.uri;
+  } else if (typeof FileSystem.writeAsStringAsync === "function") {
+    const cacheDir =
+      FileSystem.cacheDirectory ??
+      FileSystem.documentDirectory ??
+      FileSystem.Dirs?.Cache ??
+      FileSystem.Dirs?.Document ??
+      "";
+    fileUri = `${cacheDir}${filename}`;
+    await FileSystem.writeAsStringAsync(fileUri, payload.base64, {
+      encoding: FileSystem.EncodingType?.Base64 ?? "base64",
+    });
+  } else {
+    throw new Error("File download is not supported on this device.");
+  }
+  if (await Sharing.isAvailableAsync()) {
+    await Sharing.shareAsync(fileUri, {
+      mimeType: payload.mime_type || "application/pdf",
+      UTI: "com.adobe.pdf",
+    });
+  } else {
+    Alert.alert("Invoice Ready", "Invoice PDF has been saved on this device.");
+  }
+}
+
 // ─── Helpers 
 
 const MONTH_NAMES = [
@@ -285,6 +322,7 @@ export default function MySubscriptionsScreen() {
   const [editEndDate, setEditEndDate] = useState<string | null>(null);
   const [showCalendar, setShowCalendar] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [invoiceLoadingId, setInvoiceLoadingId] = useState<string | null>(null);
   const hasLoadedOnce = useRef(false);
   const fetchInFlight = useRef(false);
 
@@ -401,6 +439,22 @@ export default function MySubscriptionsScreen() {
     );
   };
 
+  const handleDownloadInvoice = async (sub: Subscription) => {
+    if (invoiceLoadingId) return;
+    setInvoiceLoadingId(sub.id);
+    try {
+      const payload = await api.downloadSubscriptionInvoice(sub.id);
+      await saveAndShareInvoice(payload);
+    } catch (e: any) {
+      Alert.alert(
+        "Invoice Not Available",
+        e?.message || "Could not prepare this subscription invoice right now.",
+      );
+    } finally {
+      setInvoiceLoadingId(null);
+    }
+  };
+
   if (loading) return <LoadingScreen />;
 
   const tomorrow = (() => {
@@ -478,6 +532,8 @@ export default function MySubscriptionsScreen() {
               isActive={activeTab === "active"}
               onEdit={openEdit}
               onCancel={confirmCancel}
+              onDownloadInvoice={handleDownloadInvoice}
+              downloadingInvoice={invoiceLoadingId === sub.id}
             />
           ))
         )}
@@ -516,11 +572,15 @@ function SubscriptionCard({
   isActive,
   onEdit,
   onCancel,
+  onDownloadInvoice,
+  downloadingInvoice,
 }: {
   sub: Subscription;
   isActive: boolean;
   onEdit: (s: Subscription) => void;
   onCancel: (s: Subscription) => void;
+  onDownloadInvoice: (s: Subscription) => void;
+  downloadingInvoice?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const rot = useRef(new Animated.Value(0)).current;
@@ -638,6 +698,22 @@ function SubscriptionCard({
               </View>
             )}
           </View>
+
+          <TouchableOpacity
+            style={C.invoiceBtn}
+            onPress={() => onDownloadInvoice(sub)}
+            disabled={downloadingInvoice}
+            activeOpacity={0.85}
+          >
+            <Ionicons
+              name={downloadingInvoice ? "hourglass-outline" : "download-outline"}
+              size={15}
+              color={Colors.primary}
+            />
+            <Text style={C.invoiceTxt}>
+              {downloadingInvoice ? "Preparing Invoice..." : "Download Invoice"}
+            </Text>
+          </TouchableOpacity>
 
           {isActive && !isDimmed && (
             <View style={C.actions}>
@@ -778,6 +854,19 @@ const C = StyleSheet.create({
   itemRowTxt: { fontSize: 12, color: "#333", fontWeight: "600" },
   itemRowAmt: { fontSize: 12, color: "#555", fontWeight: "700" },
   actions: { flexDirection: "row", gap: 10 },
+  invoiceBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "#FFF7ED",
+    paddingVertical: 10,
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: "#FED7AA",
+    marginBottom: 10,
+  },
+  invoiceTxt: { fontSize: 13, fontWeight: "800", color: Colors.primary },
   editBtn: {
     flex: 1,
     flexDirection: "row",
