@@ -17,6 +17,13 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { api } from "../../src/services/api";
 import { Colors } from "../../src/constants/colors";
 import { hasCompleteDeliveryAddress } from "../../src/utils/address";
+import {
+  getOrderCutoffBadgeText,
+  getOrderCutoffBlockedMessage,
+  getOrderCutoffForProduct,
+  isOrderCutoffPassed,
+  type OrderCutoffRule,
+} from "../../src/utils/orderCutoff";
 
 const CATEGORY_THEMES: Record<string, { bg: string; accent: string; icon: string }> = {
   milk: { bg: "#EAF4FF", accent: "#3B82F6", icon: "water" },
@@ -50,6 +57,12 @@ const subscriptionPatterns = [
 const isDairyProduct = (product: any) =>
   DAIRY_CATEGORIES.includes(product?.category?.toLowerCase?.());
 
+function isCutoffError(error: any) {
+  return String(error?.message || error?.detail || "")
+    .toLowerCase()
+    .includes("cut-off");
+}
+
 function formatUnit(unit?: string) {
   if (!unit) return "";
   const lower = unit.toLowerCase().trim();
@@ -80,7 +93,11 @@ export default function ProductDetailsScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState("");
   const [feedbackType, setFeedbackType] = useState<"address" | "balance" | null>(null);
+  const [orderCutoffs, setOrderCutoffs] = useState<OrderCutoffRule[]>([]);
   const productId = params.id?.toString() || product?.id || product?._id;
+  const cutoffRule = getOrderCutoffForProduct(product, orderCutoffs);
+  const cutoffText = getOrderCutoffBadgeText(cutoffRule);
+  const cutoffPassed = isOrderCutoffPassed(cutoffRule);
 
   useEffect(() => {
     let mounted = true;
@@ -108,6 +125,26 @@ export default function ProductDetailsScreen() {
     };
   }, [initialProduct, productId]);
 
+  useEffect(() => {
+    const adminId = product?.admin_id;
+    if (!adminId) return;
+    let mounted = true;
+    const loadCutoffs = async () => {
+      try {
+        const data = await api.getCatalogOrderCutoffs(String(adminId));
+        if (mounted) setOrderCutoffs(data || []);
+      } catch {
+        if (mounted) setOrderCutoffs([]);
+      }
+    };
+    loadCutoffs();
+    const interval = setInterval(loadCutoffs, 2000);
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, [product?.admin_id]);
+
   const theme = useMemo(() => getTheme(product?.category), [product?.category]);
   const isUnavailable = !product?.is_available || (product?.stock ?? 1) === 0;
   const isDairy = isDairyProduct(product);
@@ -115,6 +152,14 @@ export default function ProductDetailsScreen() {
 
   const openBuyFlow = () => {
     if (!productId || isUnavailable) return;
+    if (cutoffRule && isOrderCutoffPassed(cutoffRule)) {
+      Alert.alert(
+        "Order cut-off time passed",
+        getOrderCutoffBlockedMessage(product, cutoffRule),
+        [{ text: "Got it" }],
+      );
+      return;
+    }
     setQuantity(1);
     setPattern(isDairy ? "daily" : "buy_once");
     setCustomDays([]);
@@ -160,6 +205,15 @@ export default function ProductDetailsScreen() {
 
   const handleBuySubmit = async () => {
     if (!product || !productId) return;
+    const latestCutoff = getOrderCutoffForProduct(product, orderCutoffs);
+    if (latestCutoff && isOrderCutoffPassed(latestCutoff)) {
+      Alert.alert(
+        "Order cut-off time passed",
+        getOrderCutoffBlockedMessage(product, latestCutoff),
+        [{ text: "Got it" }],
+      );
+      return;
+    }
     if (pattern === "custom" && customDays.length === 0) {
       setFeedback("Please choose at least one custom delivery day.");
       setFeedbackType(null);
@@ -197,6 +251,16 @@ export default function ProductDetailsScreen() {
       setFeedbackType(null);
       setTimeout(() => setBuySheetVisible(false), 700);
     } catch (error: any) {
+      if (isCutoffError(error)) {
+        Alert.alert(
+          "Order cut-off time passed",
+          error?.message ||
+            "Please place this order before the product cut-off time.",
+          [{ text: "Got it" }],
+        );
+        setBuySheetVisible(false);
+        return;
+      }
       setFeedback(error?.message || "Could not place order. Please try again.");
       setFeedbackType(null);
     } finally {
@@ -262,6 +326,23 @@ export default function ProductDetailsScreen() {
             <Text style={[s.price, { color: theme.accent }]}>₹{product.price}</Text>
             <Text style={s.unit}>per {formatUnit(product.unit)}</Text>
           </View>
+          {cutoffText ? (
+            <View style={[s.cutoffNotice, cutoffPassed && s.cutoffNoticeBlocked]}>
+              <Ionicons
+                name={cutoffPassed ? "alert-circle-outline" : "time-outline"}
+                size={15}
+                color={cutoffPassed ? "#DC2626" : "#B45309"}
+              />
+              <Text
+                style={[
+                  s.cutoffNoticeText,
+                  cutoffPassed && s.cutoffNoticeTextBlocked,
+                ]}
+              >
+                {cutoffText}
+              </Text>
+            </View>
+          ) : null}
 
           <View style={s.infoGrid}>
             <View style={s.infoBox}>
@@ -463,6 +544,29 @@ const s = StyleSheet.create({
   priceRow: { flexDirection: "row", alignItems: "baseline", gap: 8, marginTop: 10 },
   price: { fontSize: 28, fontWeight: "900", letterSpacing: -0.5 },
   unit: { fontSize: 13, fontWeight: "800", color: "#9CA3AF" },
+  cutoffNotice: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    backgroundColor: "#FFFBEB",
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    marginTop: 12,
+  },
+  cutoffNoticeBlocked: {
+    backgroundColor: "#FEF2F2",
+    borderColor: "#FECACA",
+  },
+  cutoffNoticeText: {
+    flex: 1,
+    fontSize: 12.5,
+    fontWeight: "900",
+    color: "#B45309",
+  },
+  cutoffNoticeTextBlocked: { color: "#DC2626" },
   infoGrid: { flexDirection: "row", gap: 12, marginTop: 18 },
   infoBox: { flex: 1, backgroundColor: "#F9FAFB", borderRadius: 18, padding: 14, gap: 5, borderWidth: 1, borderColor: "#F0F2F5" },
   infoLabel: { fontSize: 11, fontWeight: "800", color: "#9CA3AF", textTransform: "uppercase" },

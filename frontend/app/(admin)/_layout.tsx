@@ -105,6 +105,18 @@ export default function AdminLayout() {
           }}
         />
         <Tabs.Screen
+          name="order-cutoff"
+          options={{
+            href: null,
+          }}
+        />
+        <Tabs.Screen
+          name="delivery-window"
+          options={{
+            href: null,
+          }}
+        />
+        <Tabs.Screen
           name="content"
           options={{
             href: null,
@@ -112,6 +124,18 @@ export default function AdminLayout() {
         />
         <Tabs.Screen
           name="wallet-payment"
+          options={{
+            href: null,
+          }}
+        />
+        <Tabs.Screen
+          name="app-settings"
+          options={{
+            href: null,
+          }}
+        />
+        <Tabs.Screen
+          name="invoice-template"
           options={{
             href: null,
           }}
