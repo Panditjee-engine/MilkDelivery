@@ -364,9 +364,6 @@ export default function ProfileScreen() {
     normalizeAddressBook(user)[0] || emptyAddress(),
   );
   const [saving, setSaving] = useState(false);
-  const [deleteModal, setDeleteModal] = useState(false);
-  const [deletePassword, setDeletePassword] = useState("");
-  const [deletingAccount, setDeletingAccount] = useState(false);
   const [connectModal, setConnectModal] = useState(false);
   const [connectReferralCode, setConnectReferralCode] = useState("");
   const [connectingGaushala, setConnectingGaushala] = useState(false);
@@ -470,11 +467,6 @@ const fetchData = async () => {
     });
   };
 
-  const handleDeleteAccount = () => {
-    setDeletePassword("");
-    setDeleteModal(true);
-  };
-
   const handleOpenConnectGaushala = () => {
     setConnectReferralCode("");
     setConnectModal(true);
@@ -528,40 +520,6 @@ const fetchData = async () => {
     } finally {
       setSaving(false);
     }
-  };
-
-  const confirmDeleteAccount = async () => {
-    if (!deletePassword.trim()) {
-      showToast("Please enter your password to delete your account.", "error");
-      return;
-    }
-    showAlert({
-      icon: "trash-outline",
-      iconColor: "#DC2626",
-      iconBg: "#FEF2F2",
-      title: "Delete Account",
-      message:
-        "This will permanently delete your Gau Satva account and remove your personal profile data. This action cannot be undone.",
-      actions: [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete Account",
-          style: "destructive",
-          onPress: async () => {
-            setDeletingAccount(true);
-            try {
-              await api.deleteAccount(deletePassword);
-              setDeleteModal(false);
-              router.replace("/(auth)/login");
-            } catch (error: any) {
-              showToast(error?.message || "Could not delete account. Please try again.", "error");
-            } finally {
-              setDeletingAccount(false);
-            }
-          },
-        },
-      ],
-    });
   };
 
 const handleAddVacation = async () => {
@@ -841,7 +799,7 @@ const handleDeleteVacation = (id: string) => {
           )}
           <TouchableOpacity
             style={styles.editBtn}
-            onPress={() => setEditModal(true)}
+            onPress={() => router.push("/(customer)/edit-profile" as any)}
           >
             <Ionicons name="create-outline" size={15} color="#fff" />
             <Text style={styles.editBtnText}>Edit Profile</Text>
@@ -1110,50 +1068,7 @@ const handleDeleteVacation = (id: string) => {
           />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.deleteAccountBtn} onPress={handleDeleteAccount}>
-          <View style={styles.logoutIcon}>
-            <Ionicons name="trash-outline" size={18} color="#dc2626" />
-          </View>
-          <Text style={styles.deleteAccountText}>Delete Account</Text>
-          <Ionicons
-            name="chevron-forward"
-            size={16}
-            color="#fca5a5"
-            style={{ marginLeft: "auto" }}
-          />
-        </TouchableOpacity>
       </ScrollView>
-
-      <Modal visible={deleteModal} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalSheet}>
-            <View style={styles.dragHandle} />
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Delete Account</Text>
-              <TouchableOpacity onPress={() => setDeleteModal(false)}>
-                <Ionicons name="close" size={22} color="#6B7280" />
-              </TouchableOpacity>
-            </View>
-            <View style={styles.modalBody}>
-              <Text style={styles.deleteAccountHelp}>
-                Enter your password to confirm permanent account deletion.
-              </Text>
-              <Input
-                label="Password"
-                placeholder="Enter password"
-                value={deletePassword}
-                onChangeText={setDeletePassword}
-                secureTextEntry
-              />
-              <Button
-                title={deletingAccount ? "Deleting..." : "Continue"}
-                onPress={confirmDeleteAccount}
-                loading={deletingAccount}
-              />
-            </View>
-          </View>
-        </View>
-      </Modal>
 
       {/* ── Vacation Modal ── */}
       <Modal visible={vacationModal} animationType="slide" transparent>

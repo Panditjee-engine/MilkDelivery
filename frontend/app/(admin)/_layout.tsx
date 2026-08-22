@@ -98,6 +98,13 @@ export default function AdminLayout() {
             href: null,
           }}
         />
+
+        <Tabs.Screen
+          name="price-update"
+          options={{
+            href: null,
+          }}
+        />
         <Tabs.Screen
           name="order-summary"
           options={{
@@ -130,6 +137,12 @@ export default function AdminLayout() {
         />
         <Tabs.Screen
           name="app-settings"
+          options={{
+            href: null,
+          }}
+        />
+        <Tabs.Screen
+          name="business-information"
           options={{
             href: null,
           }}

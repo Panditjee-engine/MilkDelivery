@@ -92,8 +92,46 @@ const dateFromKey = (dateKey?: string) => {
   return new Date(year, month - 1, day);
 };
 
-const STATUS_FILTERS = ["ALL", "PENDING", "DELIVERED"] as const;
+const STATUS_FILTERS = ["ALL", "PENDING", "DELIVERED", "CANCEL"] as const;
 const DATE_FILTERS = ["ALL", "TODAY", "TOMORROW", "CUSTOM"] as const;
+
+const normalizeStatus = (status?: string) => {
+  const value = String(status || "").trim().toLowerCase();
+  if (["cancel", "canceled", "cancelled"].includes(value)) return "cancel";
+  return value;
+};
+
+const statusFilterLabel = (filter: (typeof STATUS_FILTERS)[number]) =>
+  filter === "CANCEL" ? "Cancel" : filter;
+
+const orderStatusMeta = (status?: string) => {
+  const value = normalizeStatus(status);
+  if (value === "delivered") {
+    return {
+      label: "Delivered",
+      icon: "checkmark-circle-outline" as const,
+      color: "#16A34A",
+      bg: "#DCFCE7",
+      border: "#BBF7D0",
+    };
+  }
+  if (value === "cancel") {
+    return {
+      label: "Cancel",
+      icon: "close-circle-outline" as const,
+      color: "#DC2626",
+      bg: "#FEE2E2",
+      border: "#FECACA",
+    };
+  }
+  return {
+    label: value ? value.replace(/_/g, " ") : "Pending",
+    icon: "time-outline" as const,
+    color: "#D97706",
+    bg: "#FEF3C7",
+    border: "#FDE68A",
+  };
+};
 
 const productId = (product?: Product) => product?.id || product?._id || "";
 const itemName = (item: OrderItem) =>
@@ -320,12 +358,14 @@ export default function AdminOrderSummaryScreen() {
 
   const filteredOrders = useMemo(() => {
     return orders.filter((order) => {
-      const status = order.status?.toLowerCase();
+      const status = normalizeStatus(order.status);
       const statusMatch =
         statusFilter === "ALL" ||
         (statusFilter === "DELIVERED"
           ? status === "delivered"
-          : status !== "delivered" && status !== "cancelled");
+          : statusFilter === "CANCEL"
+          ? status === "cancel"
+          : status !== "delivered" && status !== "cancel");
       const customerMatch =
         selectedCustomer === "ALL" ||
         order.customer_name === selectedCustomer ||
@@ -437,6 +477,7 @@ export default function AdminOrderSummaryScreen() {
     const expanded = expandedOrderIds[item.id] === true;
     const totalQty = visibleItems.reduce((sum, orderItem) => sum + qty(orderItem), 0);
     const productTitle = orderProductTitle(visibleItems);
+    const statusMeta = orderStatusMeta(item.status);
     const itemUnit = (orderItem: OrderItem) => {
       const id = itemProductId(orderItem);
       const meta = products.find(
@@ -466,6 +507,27 @@ export default function AdminOrderSummaryScreen() {
             </Text>
           </View>
           <View style={s.productSummary}>
+            <View
+              style={[
+                s.statusBadge,
+                {
+                  backgroundColor: statusMeta.bg,
+                  borderColor: statusMeta.border,
+                },
+              ]}
+            >
+              <Ionicons
+                name={statusMeta.icon}
+                size={11}
+                color={statusMeta.color}
+              />
+              <Text
+                style={[s.statusBadgeText, { color: statusMeta.color }]}
+                numberOfLines={1}
+              >
+                {statusMeta.label}
+              </Text>
+            </View>
             <Text style={s.productSummaryTitle} numberOfLines={1}>
               {productTitle}
             </Text>
@@ -540,7 +602,7 @@ export default function AdminOrderSummaryScreen() {
         <View style={{ flex: 1 }}>
           <Text style={s.title}>Order Summary</Text>
           <Text style={s.subtitle}>
-            {filteredOrders.length} shown · {statusFilter} · {dateFilter}
+            {filteredOrders.length} shown · {statusFilterLabel(statusFilter)} · {dateFilter}
           </Text>
         </View>
         <TouchableOpacity
@@ -650,7 +712,7 @@ export default function AdminOrderSummaryScreen() {
                       statusFilter === filter && s.filterChipTextActive,
                     ]}
                   >
-                    {filter}
+                    {statusFilterLabel(filter)}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -1120,6 +1182,22 @@ const s = StyleSheet.create({
     width: 132,
     alignItems: "flex-end",
     gap: 4,
+  },
+  statusBadge: {
+    maxWidth: 132,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  statusBadgeText: {
+    flexShrink: 1,
+    fontSize: 10,
+    fontWeight: "900",
+    textTransform: "capitalize",
   },
   productSummaryTitle: {
     maxWidth: 132,

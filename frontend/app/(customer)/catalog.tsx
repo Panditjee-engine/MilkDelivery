@@ -4018,6 +4018,10 @@ export default function CatalogScreen() {
     setLinkedAdminId(id ?? null);
   }, [user]);
 
+  const getProductId = useCallback((product: any) => {
+    return product?.id || product?._id || product?.product_id || null;
+  }, []);
+
   const fetchData = useCallback(async () => {
     try {
       const [prods, cats, wallet, content, appSettings] = await Promise.all([
@@ -4048,6 +4052,31 @@ export default function CatalogScreen() {
       setRefreshing(false);
     }
   }, [selectedCategory, fetchSubs, linkedAdminId]);
+
+  useEffect(() => {
+    if (!products.length) return;
+
+    const latestById = new Map(
+      products
+        .map((product) => [getProductId(product), product] as const)
+        .filter(([id]) => Boolean(id)),
+    );
+
+    setQuickAddProduct((prev) => {
+      if (!prev) return prev;
+      return latestById.get(getProductId(prev)) || prev;
+    });
+    setSubscribeProduct((prev) => {
+      if (!prev) return prev;
+      return latestById.get(getProductId(prev)) || prev;
+    });
+    setCart((prev) =>
+      prev.map((item) => {
+        const latestProduct = latestById.get(getProductId(item.product));
+        return latestProduct ? { ...item, product: latestProduct } : item;
+      }),
+    );
+  }, [products, getProductId]);
 
   useEffect(() => {
     if (!isFocused) return;

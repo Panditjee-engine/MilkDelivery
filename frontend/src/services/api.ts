@@ -800,6 +800,7 @@ class ApiService {
 
     if (adminId) params.append("admin_id", adminId);
     if (category) params.append("category", category);
+    params.append("_ts", Date.now().toString());
 
     const query = params.toString() ? `?${params.toString()}` : "";
     return this.request<any[]>(`/catalog/products${query}`);
@@ -1260,6 +1261,12 @@ async getSubscriptionHistory() {
     });
   }
 
+  async getRazorpaySettlementSummary() {
+    return this.request<any>("/wallet/razorpay/settlements/summary", {
+      silentErrorLog: true,
+    });
+  }
+
   async getRazorpayLinkedAccount() {
     return this.request<{
       configured: boolean;
@@ -1581,6 +1588,16 @@ async getSubscriptionHistory() {
     return this.request<any>(`/products/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
+    });
+  }
+
+
+  async updateProductPrices(
+    updates: Array<{ product_id: string; price: number }>,
+  ) {
+    return this.request<any>("/products/prices/bulk", {
+      method: "PUT",
+      body: JSON.stringify({ updates }),
     });
   }
 

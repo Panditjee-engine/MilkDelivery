@@ -14,6 +14,7 @@ import {
   StatusBar,
   ActivityIndicator,
   Image,
+  BackHandler,
 } from "react-native";
 import { api, BusinessLocation, BusinessLocationCreate, getApiBaseUrl } from "../../src/services/api";
 import QRCode from "react-native-qrcode-svg";
@@ -797,6 +798,21 @@ export default function AdminSettingsScreen() {
     setActiveModal(type);
   };
   const closeModal = () => setActiveModal(null);
+
+  useEffect(() => {
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (deleteModal) {
+        setDeleteModal(false);
+        return true;
+      }
+      if (activeModal) {
+        closeModal();
+        return true;
+      }
+      return false;
+    });
+    return () => sub.remove();
+  }, [activeModal, deleteModal]);
 
   const getContentId = (item: AdminContent) =>
     String(item.id || item._id || item.content_id || "");
@@ -1910,27 +1926,14 @@ export default function AdminSettingsScreen() {
               icon="storefront-outline"
               iconBg="#FFF0E8"
               iconColor={C.accent}
-              label="Business Name"
-              value={settings.businessName}
-              onPress={() => openModal("business")}
-            />
-            <View style={s.divider} />
-            <SettingRow
-              icon="call-outline"
-              iconBg="#FFF8E8"
-              iconColor={C.accent}
-              label="Support Contact"
-              value={settings.supportContact}
-              onPress={() => openModal("contact")}
-            />
-            <View style={s.divider} />
-            <SettingRow
-              icon="location-outline"
-              iconBg="#F5EDE8"
-              iconColor={C.dark}
-              label="Business Locations"
-              value={locationsDisplay}
-              onPress={() => openModal("locations")}
+              label="Business Information"
+              value={`${settings.businessName} · ${locationsDisplay}`}
+              onPress={() =>
+                router.push({
+                  pathname: "/(admin)/business-information",
+                  params: { from: "settings" },
+                } as any)
+              }
             />
           </View>
         </View>
@@ -1959,22 +1962,6 @@ export default function AdminSettingsScreen() {
           />
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={s.deleteAccountBtn}
-          onPress={handleDeleteAccount}
-          activeOpacity={0.8}
-        >
-          <View style={s.deleteIconWrap}>
-            <Ionicons name="trash-outline" size={18} color="#dc2626" />
-          </View>
-          <Text style={s.deleteAccountTxt}>Delete Account</Text>
-          <Ionicons
-            name="chevron-forward"
-            size={15}
-            color="#FCA5A5"
-            style={{ marginLeft: "auto" }}
-          />
-        </TouchableOpacity>
       </ScrollView>
 
       {/* ── Share Modal */}
@@ -1985,7 +1972,12 @@ export default function AdminSettingsScreen() {
       />
 
       {/* ── Delete Account Modal */}
-      <Modal visible={deleteModal} animationType="slide" transparent>
+      <Modal
+        visible={deleteModal}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setDeleteModal(false)}
+      >
         <View style={mS.overlay}>
           <KeyboardAvoidingView
             behavior={Platform.OS === "ios" ? "padding" : undefined}

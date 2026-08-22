@@ -99,6 +99,8 @@ interface Subscription {
   custom_days?: number[];
   total_amount?: number;
   total_quantity?: number;
+  payment_method?: string;
+  wallet_balance?: number;
   delivery_status?: string;
   items: SubscriptionItem[];
   customer_name?: string;
@@ -463,6 +465,34 @@ const shouldSubscriptionDeliverOn = (sub: Subscription, dateKey: string) => {
 //new helper for cehck status not is active true false
 const isSubscriptionActive = (sub: Subscription) =>
   String(sub.status || "").toLowerCase() === "active";
+
+const subscriptionDeliveryAmount = (sub: Subscription) => {
+  const itemTotal = (sub.items || []).reduce(
+    (sum, item) => sum + Number(item.amount || 0),
+    0,
+  );
+  return Number(itemTotal || sub.total_amount || 0);
+};
+
+const isWalletSubscription = (sub: Subscription) =>
+  String(sub.payment_method || "").toLowerCase() === "wallet";
+
+const getSubscriptionWalletBlock = (sub: Subscription) => {
+  if (!isWalletSubscription(sub)) return null;
+  if (sub.wallet_balance === undefined || sub.wallet_balance === null) return null;
+  const due = subscriptionDeliveryAmount(sub);
+  const balance = Number(sub.wallet_balance ?? 0);
+  if (Number.isFinite(balance) && due > 0 && balance < due) {
+    return { due, balance };
+  }
+  return null;
+};
+
+const getKnownCustomerWalletBalance = (customer: any) => {
+  const raw = customer?.wallet_balance ?? customer?.wallet?.balance;
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : undefined;
+};
 
 const subscriptionOverlapsRange = (
   sub: Subscription,
@@ -1183,11 +1213,13 @@ function SubscriptionRow({
   const todayKey = getLocalDateKey();
   const startKey = getOrderDateKey(item.start_date);
   const notStartedYet = !!startKey && todayKey < startKey;
+  const walletBlock = getSubscriptionWalletBlock(item);
 
   const canDeliver =
     isSubscriptionActive(item) &&
     !item.on_vacation_today &&
     !notStartedYet &&
+    !walletBlock &&
     !["delivered", "cancelled", "skipped"].includes(
       String(item.delivery_status || item.status || "").toLowerCase(),
     );
@@ -1285,6 +1317,12 @@ function SubscriptionRow({
                   <Text style={ss.deliveredTodayText}>Delivered Today</Text>
                 </View>
               )}
+              {walletBlock ? (
+                <View style={ss.walletLowPill}>
+                  <Ionicons name="wallet-outline" size={10} color="#DC2626" />
+                  <Text style={ss.walletLowText}>Low Wallet</Text>
+                </View>
+              ) : null}
               <Text style={ss.headerProductName} numberOfLines={1}>
                 {productTitle}
               </Text>
@@ -1488,6 +1526,21 @@ function SubscriptionRow({
               </View>
               <View style={styles.actionGap} />
             </>
+          ) : walletBlock ? (
+            <>
+              <View style={styles.walletBlockedBanner}>
+                <Ionicons name="wallet-outline" size={16} color="#DC2626" />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.walletBlockedTitle}>
+                    Low Wallet Balance
+                  </Text>
+                  <Text style={styles.walletBlockedSub}>
+                    Balance ₹{walletBlock.balance} · Required ₹{walletBlock.due}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.actionGap} />
+            </>
           ) : null}
           <TouchableOpacity
             style={ss.detailBtn}
@@ -1648,29 +1701,45 @@ const fetchOrders = useCallback(async () => {
         return p !== "buy_once" && p !== "";
       });
 
-      const customers = await api.getAllUsers("customer").catch(() => []);
+      const [customers, adminCustomers] = await Promise.all([
+        api.getAllUsers("customer").catch(() => []),
+        api.getAdminCustomers({ limit: 1000 }).catch(() => []),
+      ]);
       const customerMap = new Map<string, any>();
       (Array.isArray(customers) ? customers : []).forEach((customer) => {
         [customer.id, customer._id, customer.phone, customer.name]
           .filter(Boolean)
           .forEach((key) => customerMap.set(String(key), customer));
       });
+      (Array.isArray(adminCustomers) ? adminCustomers : []).forEach((customer) => {
+        [
+          customer.id,
+          customer._id,
+          customer.linked_user_id,
+          customer.phone,
+          customer.name,
+        ]
+          .filter(Boolean)
+          .forEach((key) => customerMap.set(String(key), customer));
+      });
 
       const withAddress = recurring.map((sub) => {
-        if (buildAddressText(sub.customer_address)) return sub;
         const customer =
           customerMap.get(String(sub.user_id || "")) ||
           customerMap.get(String(sub.customer_phone || "")) ||
           customerMap.get(String(sub.customer_name || ""));
         const address = pickUserAddress(customer);
-        return address
-          ? {
-              ...sub,
-              customer_address: address,
-              customer_name: sub.customer_name || customer?.name,
-              customer_phone: sub.customer_phone || customer?.phone,
-            }
-          : sub;
+        const currentAddress = buildAddressText(sub.customer_address)
+          ? sub.customer_address
+          : address;
+        return {
+          ...sub,
+          customer_address: currentAddress,
+          customer_name: sub.customer_name || customer?.name,
+          customer_phone: sub.customer_phone || customer?.phone,
+          wallet_balance:
+            sub.wallet_balance ?? getKnownCustomerWalletBalance(customer),
+        };
       });
 
       const vacations = await api.getAdminVacationsAll().catch(() => []);
@@ -1700,10 +1769,10 @@ const fetchOrders = useCallback(async () => {
         ),
       );
 
-      setAllSubscriptions(withAddress);
+      setAllSubscriptions(withVacation);
 
       // Only resolve names for items that DON'T have product_name stored
-      const needsResolution = withAddress.flatMap((s) =>
+      const needsResolution = withVacation.flatMap((s) =>
         (s.items ?? [])
           .filter((item) => !item.product_name)
           .map((item) => item.product_id),
@@ -1741,6 +1810,8 @@ const fetchOrders = useCallback(async () => {
     } else {
       setSubsLoading(true);
       fetchSubscriptions();
+      const timer = setInterval(fetchSubscriptions, 5_000);
+      return () => clearInterval(timer);
     }
   }, [
     activeTab,
@@ -1788,6 +1859,15 @@ const fetchOrders = useCallback(async () => {
   };
 
   const toggleSubSelected = (id: string) => {
+    const sub = allSubscriptions.find((item) => item.id === id);
+    if (sub && getSubscriptionWalletBlock(sub)) {
+      const block = getSubscriptionWalletBlock(sub)!;
+      Alert.alert(
+        "Low wallet balance",
+        `This subscription cannot be selected for delivery. Customer balance is ₹${block.balance}, required ₹${block.due}.`,
+      );
+      return;
+    }
     setSelectedSubIds((prev) => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
@@ -2034,7 +2114,8 @@ const fetchOrders = useCallback(async () => {
           status !== "cancelled" &&
           status !== "skipped" &&
           isSubscriptionActive(sub) &&
-          !notStartedYet
+          !notStartedYet &&
+          !getSubscriptionWalletBlock(sub)
         );
       }),
     [filteredSubs],
@@ -2047,6 +2128,15 @@ const fetchOrders = useCallback(async () => {
       ),
     [selectableSubs],
   );
+
+  useEffect(() => {
+    if (activeTab !== "subscriptions") return;
+    const allowed = new Set(selectableSubs.map((sub) => sub.id));
+    setSelectedSubIds((prev) => {
+      const next = new Set(Array.from(prev).filter((id) => allowed.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [activeTab, selectableSubs]);
 
   const setSelectedOrders = (ids: string[]) =>
     setSelectedOrderIds(new Set(ids));
@@ -2073,6 +2163,14 @@ const fetchOrders = useCallback(async () => {
   };
 
   const handleSingleSubDelivered = async (sub: Subscription) => {
+    const walletBlock = getSubscriptionWalletBlock(sub);
+    if (walletBlock) {
+      Alert.alert(
+        "Low wallet balance",
+        `Cannot mark this subscription delivered. Customer balance is ₹${walletBlock.balance}, required ₹${walletBlock.due}.`,
+      );
+      return;
+    }
     setBulkLoading(true);
     try {
       await api.updateAdminSubscriptionStatus(sub.id, "delivered");
@@ -2094,7 +2192,19 @@ const fetchOrders = useCallback(async () => {
 
   const handleBulkDelivered = async () => {
     const isOrders = activeTab === "orders";
-    const ids = Array.from(isOrders ? selectedOrderIds : selectedSubIds);
+    let ids = Array.from(isOrders ? selectedOrderIds : selectedSubIds);
+    if (!isOrders) {
+      const allowedIds = new Set(selectableSubs.map((sub) => sub.id));
+      const blockedCount = ids.filter((id) => !allowedIds.has(id)).length;
+      ids = ids.filter((id) => allowedIds.has(id));
+      if (blockedCount) {
+        setSelectedSubIds(new Set(ids));
+        Alert.alert(
+          "Some subscriptions skipped",
+          "Low-wallet or inactive subscriptions were removed from selection.",
+        );
+      }
+    }
     if (!ids.length) {
       Alert.alert(
         "Select items",
@@ -3508,6 +3618,21 @@ const ss = StyleSheet.create({
     fontWeight: "800",
     color: "#16A34A",
   },
+  walletLowPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: "#FEE2E2",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 20,
+    marginTop: 4,
+  },
+  walletLowText: {
+    fontSize: 10,
+    fontWeight: "900",
+    color: "#DC2626",
+  },
   patternPill: {
     flexDirection: "row",
     alignItems: "center",
@@ -4331,6 +4456,19 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#BBF7D0",
   },
+  walletBlockedBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    backgroundColor: "#FEF2F2",
+    borderWidth: 1,
+    borderColor: "#FECACA",
+  },
+  walletBlockedTitle: { fontSize: 13.5, fontWeight: "900", color: "#DC2626" },
+  walletBlockedSub: { fontSize: 11.5, color: "#991B1B", marginTop: 1 },
   actionGap: { height: 8 },
   cancelExpandedBtn: {
     flexDirection: "row",

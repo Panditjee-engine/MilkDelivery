@@ -1446,6 +1446,16 @@ export default function CustomerHome() {
     setBannerModalVisible(true);
   };
 
+  useEffect(() => {
+    if (!selectedProduct) return;
+    const selectedId = selectedProduct.id || selectedProduct._id || selectedProduct.product_id;
+    const latestProduct = featuredProducts.find((product) => {
+      const productId = product?.id || product?._id || product?.product_id;
+      return productId && selectedId && String(productId) === String(selectedId);
+    });
+    if (latestProduct) setSelectedProduct(latestProduct);
+  }, [featuredProducts, selectedProduct]);
+
   const closeBannerModal = () => {
     setBannerModalVisible(false);
     setTimeout(() => setSelectedBanner(null), 300);
