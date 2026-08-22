@@ -567,6 +567,8 @@ function OrderCard({
   const contactPhone = order.display_phone || order.customer_phone || "N/A";
   const addressText = formatOrderAddress(order.display_address || order.address);
   const items: any[] = order.items || [];
+  const isWalletPayment =
+    String(order.payment_method || "").toLowerCase().trim() === "wallet";
 
   return (
     <View style={styles.card}>
@@ -584,7 +586,9 @@ function OrderCard({
           </View>
           <Text style={styles.customerName}>{contactName}</Text>
         </View>
-        <Text style={styles.amount}>₹{order.total_amount || 0}</Text>
+        {!isWalletPayment && (
+          <Text style={styles.amount}>₹{order.total_amount || 0}</Text>
+        )}
       </View>
 
       <Text style={styles.phone}> {contactPhone}</Text>
@@ -598,9 +602,11 @@ function OrderCard({
               <Text style={styles.itemName} numberOfLines={1}>
                 {item.product_name || "Product"} × {item.quantity}
               </Text>
-              <Text style={styles.itemAmount}>
-                ₹{item.amount ?? (item.price || 0) * (item.quantity || 0)}
-              </Text>
+              {!isWalletPayment && (
+                <Text style={styles.itemAmount}>
+                  ₹{item.amount ?? (item.price || 0) * (item.quantity || 0)}
+                </Text>
+              )}
             </View>
           ))}
         </View>

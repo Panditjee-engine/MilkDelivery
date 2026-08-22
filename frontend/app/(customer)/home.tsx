@@ -1527,25 +1527,11 @@ export default function CustomerHome() {
   useEffect(() => {
     if (!isFocused) return;
     void fetchData(true).catch(() => undefined);
-    const interval = setInterval(() => {
-      void fetchData(false).catch(() => undefined);
-    }, 2000);
-    return () => clearInterval(interval);
   }, [isFocused]);
 
   useEffect(() => {
     if (!isFocused) return;
     void fetchDeliveryWindows().catch(() => undefined);
-    const interval = setInterval(() => {
-      void fetchDeliveryWindows().catch(() => undefined);
-    }, 3000);
-    const sub = AppState.addEventListener("change", (state) => {
-      if (state === "active") void fetchDeliveryWindows().catch(() => undefined);
-    });
-    return () => {
-      clearInterval(interval);
-      sub.remove();
-    };
   }, [isFocused, fetchDeliveryWindows]);
 
   const goToCatalog = () => router.push("/(customer)/catalog");

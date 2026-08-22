@@ -1498,6 +1498,16 @@ async getSubscriptionHistory() {
     return this.request<any[]>("/subscriptions/delivery/assigned");
   }
 
+  // Per-date delivered/pending status for a batch of subscriptions —
+  // used to render the delivery calendar in the rider app. by golu
+  async getSubscriptionOrdersBulk(
+    subscriptionIds: string,
+  ): Promise<Record<string, Record<string, string>>> {
+    return this.request<Record<string, Record<string, string>>>(
+      `/delivery/subscription-orders?subscription_ids=${encodeURIComponent(subscriptionIds)}`,
+    );
+  }
+
   async assignDeliveryPartner(orderId: string, partnerId: string) {
     return this.request<any>(
       `/admin/orders/${orderId}/assign?partner_id=${partnerId}`,

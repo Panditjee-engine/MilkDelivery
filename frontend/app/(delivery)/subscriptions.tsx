@@ -92,7 +92,10 @@ const isRecurring = (s: any): boolean => {
   return p !== "buy_once" && p !== "one_time" && p !== "once";
 };
 
-const getStatus = (s: any): string => String(s?.status ?? "").toLowerCase().trim();
+const getStatus = (s: any): string =>
+  String(s?.status ?? "")
+    .toLowerCase()
+    .trim();
 const isCancelledStatus = (s: any): boolean => getStatus(s) === "cancelled";
 const isInactiveStatus = (s: any): boolean => getStatus(s) === "inactive";
 
@@ -172,10 +175,28 @@ const formatAddress = (a: any): string => {
 
   const parts = [
     take("full_address", "fullAddress"),
-    take("flat", "house", "house_no", "houseNo", "flatNo", "flat_no", "apartment", "doorNo", "door_no"),
+    take(
+      "flat",
+      "house",
+      "house_no",
+      "houseNo",
+      "flatNo",
+      "flat_no",
+      "apartment",
+      "doorNo",
+      "door_no",
+    ),
     take("line1", "addressLine1", "address_line1", "street"),
     take("line2", "addressLine2", "address_line2"),
-    take("society", "area", "tower", "societyName", "locality", "block", "colony"),
+    take(
+      "society",
+      "area",
+      "tower",
+      "societyName",
+      "locality",
+      "block",
+      "colony",
+    ),
     take("landmark"),
     take("city"),
     take("state"),
@@ -326,7 +347,12 @@ const PATTERN_CONFIG: Record<
   string,
   { label: string; icon: any; color: string; bg: string }
 > = {
-  daily: { label: "Daily", icon: "calendar", color: C.primary, bg: C.light + "55" },
+  daily: {
+    label: "Daily",
+    icon: "calendar",
+    color: C.primary,
+    bg: C.light + "55",
+  },
   alternate: {
     label: "Alternate Days",
     icon: "calendar-outline",
@@ -362,6 +388,11 @@ export default function SubscriptionsScreen() {
   const [checkinStatus, setCheckinStatus] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [deliveredToday, setDeliveredToday] = useState<Set<string>>(new Set());
+
+  const [deliveredDatesMap, setDeliveredDatesMap] = useState<
+    Record<string, Set<string>>
+  >({});
+
   const [acceptedIds, setAcceptedIds] = useState<Set<string>>(new Set());
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -390,22 +421,32 @@ export default function SubscriptionsScreen() {
       setAcceptedIds(accepted);
 
       const today = todayStr();
-      const deliveredKeys = new Set<string>(
-        (Array.isArray(orders) ? orders : [])
-          .filter(
-            (o: any) =>
-              o.subscription_id &&
-              o.delivery_date === today &&
-              o.status === "delivered",
-          )
-          .map((o: any) => `${o.subscription_id}:${today}`),
-      );
+      const subIds = recurring.map((s: any) => s.id).join(",");
+      const historyMap: Record<string, Record<string, string>> = subIds
+        ? await api.getSubscriptionOrdersBulk(subIds).catch(() => ({}))
+        : {};
+
+      const deliveredMap: Record<string, Set<string>> = {};
+      Object.entries(historyMap).forEach(([subId, dates]) => {
+        const set = new Set<string>();
+        Object.entries(dates).forEach(([date, status]) => {
+          if (status === "delivered") set.add(date);
+        });
+        deliveredMap[subId] = set;
+      });
       recurring.forEach((s: any) => {
         if (String(s.delivery_status || "").toLowerCase() === "delivered") {
-          deliveredKeys.add(`${s.id}:${today}`);
+          if (!deliveredMap[s.id]) deliveredMap[s.id] = new Set();
+          deliveredMap[s.id].add(today);
         }
       });
+      setDeliveredDatesMap(deliveredMap);
 
+      const deliveredKeys = new Set<string>(
+        Object.entries(deliveredMap)
+          .filter(([, dates]) => dates.has(today))
+          .map(([subId]) => `${subId}:${today}`),
+      );
       setDeliveredToday(deliveredKeys);
     } catch (err: any) {
       setError(err?.message || "Failed to load subscriptions");
@@ -467,6 +508,13 @@ export default function SubscriptionsScreen() {
               await api.updateSubscriptionStatus(sub.id, "delivered");
 
               setDeliveredToday((prev) => new Set([...prev, key]));
+              setDeliveredDatesMap((prev) => {
+                const next = { ...prev };
+                const set = new Set(next[sub.id] ?? []);
+                set.add(todayStr());
+                next[sub.id] = set;
+                return next;
+              });
               Alert.alert(
                 "✅ Delivered!",
                 "Marked as delivered for today. See you tomorrow!",
@@ -548,6 +596,7 @@ export default function SubscriptionsScreen() {
         isEffectivelyExpired={isEffectivelyExpired(sub, accepted, delivers)}
         isCancelled={isCancelledStatus(sub)}
         isDeliveredToday={deliveredToday.has(key)}
+        deliveredDates={deliveredDatesMap[sub.id] ?? new Set()}
         isExpanded={expandedId === sub.id}
         onToggleExpand={() => toggleExpand(sub.id)}
         onAccept={() => handleAccept(sub)}
@@ -683,6 +732,7 @@ function SubCard({
   isEffectivelyExpired,
   isCancelled,
   isDeliveredToday,
+  deliveredDates,
   isOnVacation,
   isExpanded,
   onToggleExpand,
@@ -697,6 +747,7 @@ function SubCard({
   isEffectivelyExpired: boolean;
   isCancelled: boolean;
   isDeliveredToday: boolean;
+  deliveredDates: Set<string>;
   isExpanded: boolean;
   isOnVacation: boolean;
   onToggleExpand: () => void;
@@ -722,11 +773,17 @@ function SubCard({
 
   // Horizontal calendar timeline for the Today tab when expanded
   const calendarTimeline =
-    context === "today" && !expired ? buildCalendarTimeline(sub, patternKey) : [];
+    context === "today" && !expired
+      ? buildCalendarTimeline(sub, patternKey)
+      : [];
 
   const dateLabel = getDeliveryDateLabel(sub, deliversToday);
   const canQuickDeliver =
-    context === "today" && isAccepted && deliversToday && !expired && !isOnVacation;
+    context === "today" &&
+    isAccepted &&
+    deliversToday &&
+    !expired &&
+    !isOnVacation;
 
   const expiredMessage = isCancelled
     ? "Subscription Cancelled"
@@ -833,8 +890,8 @@ function SubCard({
                 {address}
               </Text>
               <Text style={styles.customerName} numberOfLines={1}>
-                {sub.customer_name || "Customer"} • ₹
-                {Number(sub.total_amount).toFixed(0)}/day
+                {sub.customer_name || "Customer"}
+                {/* {Number(sub.total_amount).toFixed(0)}/day */}
               </Text>
             </View>
           ) : (
@@ -848,8 +905,6 @@ function SubCard({
                   : items.length > 1
                     ? `${items[0].product_name || "Product"} +${items.length - 1} more`
                     : "Product"}
-                {" • ₹"}
-                {Number(sub.total_amount).toFixed(0)}/day
               </Text>
             </View>
           )}
@@ -909,19 +964,31 @@ function SubCard({
               </>
             ) : context === "assigned" ? (
               <>
-                <Ionicons name="calendar-outline" size={12} color={C.textMuted} />
+                <Ionicons
+                  name="calendar-outline"
+                  size={12}
+                  color={C.textMuted}
+                />
                 <Text style={styles.quickRowText}>
                   {sub.start_date} → {sub.end_date || "Ongoing"}
                 </Text>
               </>
             ) : context === "today" ? (
               <>
-                <Ionicons name="calendar-outline" size={12} color={C.textMuted} />
+                <Ionicons
+                  name="calendar-outline"
+                  size={12}
+                  color={C.textMuted}
+                />
                 <Text style={styles.quickRowText}>Delivery: {dateLabel}</Text>
               </>
             ) : (
               <>
-                <Ionicons name="calendar-outline" size={12} color={C.textMuted} />
+                <Ionicons
+                  name="calendar-outline"
+                  size={12}
+                  color={C.textMuted}
+                />
                 <Text style={styles.quickRowText}>Delivery: {dateLabel}</Text>
               </>
             )}
@@ -939,18 +1006,8 @@ function SubCard({
                 <Text style={styles.itemName} numberOfLines={1}>
                   {item.product_name || item.name || "Product"}
                 </Text>
-                <Text style={styles.itemQty}>×{item.quantity}</Text>
-                <Text style={styles.itemAmt}>
-                  ₹{Number(item.amount).toFixed(0)}
-                </Text>
               </View>
             ))}
-            <View style={styles.itemTotalRow}>
-              <Text style={styles.itemTotalLabel}>Daily Total</Text>
-              <Text style={styles.itemTotal}>
-                ₹{Number(sub.total_amount).toFixed(2)}
-              </Text>
-            </View>
           </View>
 
           <View style={styles.customerBox}>
@@ -1015,7 +1072,8 @@ function SubCard({
             <View style={styles.vacationBadge}>
               <Ionicons name="airplane" size={10} color="#fff" />
               <Text style={styles.vacationBadgeText}>
-                On Vacation{sub.vacation_end_date ? ` till ${sub.vacation_end_date}` : ""}
+                On Vacation
+                {sub.vacation_end_date ? ` till ${sub.vacation_end_date}` : ""}
               </Text>
             </View>
           )}
@@ -1023,13 +1081,25 @@ function SubCard({
           {context === "today" && calendarTimeline.length > 0 && (
             <View style={styles.calendarSection}>
               <Text style={styles.sectionLabel}>DELIVERY TIMELINE</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.calendarRow}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.calendarRow}
+              >
                 {calendarTimeline.map((dateStr, i) => {
                   const isToday = dateStr === todayStr();
-                  const isDelivered = isToday && isDeliveredToday;
+                  const isPast = dateStr < todayStr();
+                  const isDelivered =
+                    deliveredDates.has(dateStr) ||
+                    (isToday && isDeliveredToday);
+                  const isMissed = isPast && !isDelivered;
                   const dObj = new Date(dateStr);
-                  const monthName = dObj.toLocaleDateString("en-IN", { month: "short" });
-                  const dayName = dObj.toLocaleDateString("en-IN", { weekday: "short" });
+                  const monthName = dObj.toLocaleDateString("en-IN", {
+                    month: "short",
+                  });
+                  const dayName = dObj.toLocaleDateString("en-IN", {
+                    weekday: "short",
+                  });
                   const dayNum = dObj.getDate();
 
                   return (
@@ -1041,18 +1111,37 @@ function SubCard({
                         isDelivered && styles.calendarCellDelivered,
                       ]}
                     >
-                      <Text style={[styles.calendarMonthName, isToday && styles.calendarTextActive]}>
+                      <Text
+                        style={[
+                          styles.calendarMonthName,
+                          isToday && styles.calendarTextActive,
+                        ]}
+                      >
                         {monthName}
                       </Text>
-                      <Text style={[styles.calendarDayNum, isToday && styles.calendarTextActive]}>
+                      <Text
+                        style={[
+                          styles.calendarDayNum,
+                          isToday && styles.calendarTextActive,
+                        ]}
+                      >
                         {dayNum}
                       </Text>
-                      <Text style={[styles.calendarDayName, isToday && styles.calendarTextActive]}>
+                      <Text
+                        style={[
+                          styles.calendarDayName,
+                          isToday && styles.calendarTextActive,
+                        ]}
+                      >
                         {dayName}
                       </Text>
                       {isDelivered ? (
                         <View style={styles.calendarTickBadge}>
                           <Ionicons name="checkmark" size={10} color="#fff" />
+                        </View>
+                      ) : isMissed ? (
+                        <View style={styles.calendarMissedBadge}>
+                          <Ionicons name="close" size={10} color="#fff" />
                         </View>
                       ) : (
                         <View style={styles.calendarDotSpace} />
@@ -1125,7 +1214,8 @@ function SubCard({
               <View style={styles.vacationPill}>
                 <Ionicons name="airplane" size={14} color={C.dark} />
                 <Text style={styles.vacationPillText}>
-                  Customer on vacation — no delivery until {sub.vacation_end_date || "further notice"}
+                  Customer on vacation — no delivery until{" "}
+                  {sub.vacation_end_date || "further notice"}
                 </Text>
               </View>
             ) : !isAccepted ? (
@@ -1533,7 +1623,24 @@ const styles = StyleSheet.create({
     backgroundColor: C.greenBg,
     borderColor: C.green,
   },
-  calendarMonthName: { fontSize: 9, fontWeight: "700", color: C.textMuted, textTransform: "uppercase" },
+  calendarCellMissed: {
+    backgroundColor: C.redBg,
+    borderColor: C.red,
+  },
+  calendarMissedBadge: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: C.red,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  calendarMonthName: {
+    fontSize: 9,
+    fontWeight: "700",
+    color: C.textMuted,
+    textTransform: "uppercase",
+  },
   calendarDayName: { fontSize: 9, fontWeight: "600", color: C.textMuted },
   calendarDayNum: { fontSize: 13, fontWeight: "700", color: C.text },
   calendarTextActive: { color: C.primary },
@@ -1688,5 +1795,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: C.light,
   },
-  vacationPillText: { fontSize: 11.5, fontWeight: "700", color: C.dark, flex: 1, textAlign: "center" },
+  vacationPillText: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: C.dark,
+    flex: 1,
+    textAlign: "center",
+  },
 });
