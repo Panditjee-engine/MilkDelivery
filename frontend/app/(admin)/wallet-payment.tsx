@@ -56,6 +56,14 @@ function statusColor(status?: string) {
   return C.warn;
 }
 
+function paymentStatusColor(status?: string) {
+  const value = String(status || "").toLowerCase();
+  if (["paid", "captured"].includes(value)) return C.success;
+  if (["failed", "signature_failed"].includes(value)) return C.danger;
+  if (["authorized", "credit_processing"].includes(value)) return C.warn;
+  return C.muted;
+}
+
 export default function WalletPaymentScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ from?: string }>();
@@ -64,6 +72,7 @@ export default function WalletPaymentScreen() {
   const [pickedFile, setPickedFile] = useState<any>(null);
   const [pickedPreview, setPickedPreview] = useState("");
   const [requests, setRequests] = useState<any[]>([]);
+  const [razorpaySummary, setRazorpaySummary] = useState<any>(null);
   const [status, setStatus] = useState("");
   const [noteById, setNoteById] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
@@ -73,13 +82,15 @@ export default function WalletPaymentScreen() {
 
   const loadData = useCallback(async () => {
     try {
-      const [qrData, rechargeData] = await Promise.all([
+      const [qrData, rechargeData, razorpayData] = await Promise.all([
         api.getMyPaymentQr().catch(() => null),
         api.getAdminRechargeRequests(status || undefined),
+        api.getRazorpaySettlementSummary().catch(() => null),
       ]);
       setQr(qrData || null);
       setLabel(qrData?.label || "");
       setRequests(Array.isArray(rechargeData) ? rechargeData : []);
+      setRazorpaySummary(razorpayData || null);
     } catch (error: any) {
       Alert.alert("Load Failed", error?.message || "Could not load wallet payment data.");
     } finally {
@@ -283,6 +294,60 @@ export default function WalletPaymentScreen() {
             </View>
           </View>
 
+          <View style={s.liveCard}>
+            <View style={s.cardHeader}>
+              <View style={[s.iconBox, { backgroundColor: "#E8F5E9" }]}>
+                <Ionicons name="radio-outline" size={20} color={C.success} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.cardTitle}>Razorpay Live Status</Text>
+                <Text style={s.cardSub}>
+                  Paid ₹{razorpaySummary?.total_paid ?? 0} · Pending {razorpaySummary?.pending_count ?? 0}
+                </Text>
+              </View>
+            </View>
+
+            {(razorpaySummary?.recent_payments || []).slice(0, 5).length ? (
+              (razorpaySummary?.recent_payments || []).slice(0, 5).map((item: any) => {
+                const current = item.status || item.razorpay_payment_status || "created";
+                return (
+                  <View key={item.id || item.razorpay_order_id} style={s.paymentRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.paymentTitle} numberOfLines={1}>
+                        ₹{item.amount || 0} · {item.type || "payment"}
+                      </Text>
+                      <Text style={s.paymentSub} numberOfLines={2}>
+                        {item.razorpay_payment_id || item.razorpay_order_id || "Waiting for Razorpay"}{item.last_webhook_event ? ` · ${item.last_webhook_event}` : ""}
+                      </Text>
+                      {item.razorpay_failure_reason ? (
+                        <Text style={s.failureText} numberOfLines={2}>
+                          {item.razorpay_failure_reason}
+                        </Text>
+                      ) : null}
+                    </View>
+                    <View
+                      style={[
+                        s.statusPill,
+                        { backgroundColor: paymentStatusColor(current) + "18" },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          s.statusText,
+                          { color: paymentStatusColor(current) },
+                        ]}
+                      >
+                        {current}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              })
+            ) : (
+              <Text style={s.emptyText}>No Razorpay payments yet</Text>
+            )}
+          </View>
+
           <View style={s.listHead}>
             <Text style={s.listTitle}>Recharge Requests</Text>
             <View style={s.countPill}>
@@ -429,6 +494,18 @@ const s = StyleSheet.create({
     shadowRadius: 10,
     elevation: 2,
   },
+  liveCard: {
+    backgroundColor: C.card,
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: C.deepPeach,
+    marginTop: 14,
+    shadowColor: C.dark,
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 2,
+  },
   cardHeader: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 14 },
   iconBox: {
     width: 40,
@@ -540,6 +617,22 @@ const s = StyleSheet.create({
   requestTop: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
   requestTitle: { fontSize: 14, fontWeight: "900", color: C.text, marginBottom: 4 },
   requestSub: { fontSize: 12, color: C.muted, fontWeight: "700" },
+  paymentRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    paddingVertical: 11,
+    borderTopWidth: 1,
+    borderTopColor: C.peach,
+  },
+  paymentTitle: { fontSize: 13, fontWeight: "900", color: C.text },
+  paymentSub: { marginTop: 3, fontSize: 11, fontWeight: "700", color: C.muted },
+  failureText: {
+    marginTop: 4,
+    fontSize: 11,
+    fontWeight: "800",
+    color: C.danger,
+  },
   statusPill: { borderRadius: 10, paddingHorizontal: 9, paddingVertical: 5 },
   statusText: { fontSize: 10, fontWeight: "900", textTransform: "capitalize" },
   noteInput: {

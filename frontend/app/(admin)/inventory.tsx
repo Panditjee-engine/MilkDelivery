@@ -26,7 +26,7 @@ import {
 } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import SwipeToConfirm from "../../src/components/SwipeToConfirm";
 import { api } from "../../src/services/api";
 import LoadingScreen from "../../src/components/LoadingScreen";
@@ -453,7 +453,7 @@ export default function InventoryScreen() {
   const [orderCutoffs, setOrderCutoffs] = useState<OrderCutoffRule[]>([]);
 
   // ── Fetch Data
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       const [data, cutoffs] = await Promise.all([
         api.getProducts(),
@@ -465,16 +465,22 @@ export default function InventoryScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchData();
+    }, [fetchData]),
+  );
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     fetchData();
-  }, []);
+  }, [fetchData]);
 
   // ── Image Picker Helper
   const pickImage = async (onPicked: (base64Uri: string) => void) => {
@@ -1571,12 +1577,22 @@ export default function InventoryScreen() {
       />
     </TouchableOpacity>
     {isAdmin && !showSearch && (
-      <TouchableOpacity
-        style={styles.addBtn}
-        onPress={() => setAddModal(true)}
-      >
-        <Ionicons name="add" size={22} color={C.white} />
-      </TouchableOpacity>
+      <>
+        <TouchableOpacity
+          style={[styles.addBtn, styles.priceBtn]}
+          onPress={() => router.push("/(admin)/price-update" as any)}
+          accessibilityRole="button"
+          accessibilityLabel="Update product prices"
+        >
+          <Text style={styles.priceBtnText}>Rs</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.addBtn}
+          onPress={() => setAddModal(true)}
+        >
+          <Ionicons name="add" size={22} color={C.white} />
+        </TouchableOpacity>
+      </>
     )}
   </View>
 </View>
@@ -2068,6 +2084,14 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 4,
+  },
+  priceBtn: {
+    backgroundColor: C.text,
+  },
+  priceBtnText: {
+    color: C.white,
+    fontSize: 15,
+    fontWeight: "900",
   },
 
   // ── Summary Strip

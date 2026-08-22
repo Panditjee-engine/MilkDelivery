@@ -667,6 +667,8 @@ export default function WalletScreen() {
    useFocusEffect(
     useCallback(() => {
       fetchData();
+      const interval = setInterval(fetchData, 3000);
+      return () => clearInterval(interval);
     }, [fetchData]),
   );
 
@@ -787,7 +789,10 @@ export default function WalletScreen() {
         razorpay_payment_id: checkoutResult.razorpay_payment_id,
         razorpay_signature: checkoutResult.razorpay_signature,
       });
-      setBalance(Number(verified.new_balance || 0));
+      const verifiedBalance = Number(verified?.new_balance);
+      if (Number.isFinite(verifiedBalance)) {
+        setBalance(verifiedBalance);
+      }
       setRechargeModal(false);
       setRechargeAmount("");
       setReference("");
@@ -798,7 +803,7 @@ export default function WalletScreen() {
         pathname: "/(customer)/payment-success",
         params: {
           amount: amount.toFixed(2),
-          balance: String(Number(verified.new_balance || 0)),
+          balance: Number.isFinite(verifiedBalance) ? String(verifiedBalance) : "",
           paymentId: checkoutResult.razorpay_payment_id || "",
         },
       });
