@@ -1675,18 +1675,22 @@ function QuickAddModal({
         <View style={sheetS.sheet}>
           <View style={sheetS.handle} />
           <View style={[sheetS.prodRow, { backgroundColor: theme.bg }]}>
-            <View
-              style={[
-                sheetS.prodIcon,
-                { backgroundColor: theme.accent + "20" },
-              ]}
-            >
-              <Ionicons
-                name={theme.icon as any}
-                size={22}
-                color={theme.accent}
-              />
-            </View>
+ {product.image ? (
+  <Image source={{ uri: product.image }} style={sheetS.prodImg} resizeMode="cover" />
+) : (
+  <View
+    style={[
+      sheetS.prodIcon,
+      { backgroundColor: theme.accent + "20" },
+    ]}
+  >
+    <Ionicons
+      name={theme.icon as any}
+      size={22}
+      color={theme.accent}
+    />
+  </View>
+)}
             <View style={{ flex: 1 }}>
               <Text style={sheetS.prodName}>{product.name}</Text>
               <Text style={[sheetS.prodPrice, { color: theme.accent }]}>
@@ -1844,18 +1848,28 @@ function SubscribeModal({
     customDays,
   );
 
-  useEffect(() => {
-    if (visible) {
-      setStep(1);
-      setQty(1);
-      setPattern("daily");
-      setCustomDays([]);
-      setSlot("morning");
-      setStartDate(tomorrow);
-      setEndDate(null);
-      setPaymentMethod(getFirstEnabledPaymentMethod(paymentMethods));
-    }
-  }, [visible, tomorrow, paymentMethods]);
+const prevVisibleRef = useRef(false);
+
+useEffect(() => {
+  if (visible && !prevVisibleRef.current) {
+    setStep(1);
+    setQty(1);
+    setPattern("daily");
+    setCustomDays([]);
+    setSlot("morning");
+    setStartDate(tomorrow);
+    setEndDate(null);
+    setPaymentMethod(getFirstEnabledPaymentMethod(paymentMethods));
+  }
+  prevVisibleRef.current = visible;
+}, [visible, tomorrow]);
+
+useEffect(() => {
+  if (!visible) return;
+  setPaymentMethod((current) =>
+    paymentMethods[current] ? current : getFirstEnabledPaymentMethod(paymentMethods),
+  );
+}, [paymentMethods, visible]);
 
   const toggleDay = (d: number) =>
     setCustomDays((p) =>
@@ -2113,47 +2127,42 @@ function SubscribeModal({
 
                 <Text style={sheetS.sectionLabel}>Schedule</Text>
                 <View style={subModalS.patternRow}>
-                  {subscriptionPatterns.map((p) => {
-                    const active = pattern === p.value;
-                    return (
-                      <TouchableOpacity
-                        key={p.value}
-                        style={[
-                          subModalS.patternCard,
-                          active && {
-                            backgroundColor: theme.accent,
-                            borderColor: theme.accent,
-                          },
-                        ]}
-                        onPress={() => setPattern(p.value)}
-                      >
-                        <Ionicons
-                          name={p.icon as any}
-                          size={16}
-                          color={active ? "#fff" : theme.accent}
-                        />
-                        <Text
-                          style={[
-                            subModalS.patternLabel,
-                            active && { color: "#fff" },
-                          ]}
-                        >
-                          {p.label}
-                        </Text>
-                        <Text
-                          style={[
-                            subModalS.patternHint,
-                            {
-                              color: active ? "rgba(255,255,255,0.7)" : T.faint,
-                            },
-                          ]}
-                        >
-                          {p.hint}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
+  {subscriptionPatterns.map((p) => {
+    const active = pattern === p.value;
+    return (
+      <TouchableOpacity
+        key={p.value}
+        style={[
+          subModalS.patternCard,
+          active && {
+            backgroundColor: theme.accent,
+            borderColor: theme.accent,
+          },
+        ]}
+        onPress={() => setPattern(p.value)}
+      >
+        <Ionicons
+          name={p.icon as any}
+          size={16}
+          color={active ? "#fff" : theme.accent}
+        />
+        <View style={{ flex: 1 }}>
+          <Text style={[subModalS.patternLabel, active && { color: "#fff" }]}>
+            {p.label}
+          </Text>
+          <Text
+            style={[
+              subModalS.patternHint,
+              { color: active ? "rgba(255,255,255,0.7)" : T.faint },
+            ]}
+          >
+            {p.hint}
+          </Text>
+        </View>
+      </TouchableOpacity>
+    );
+  })}
+</View>
 
                 {pattern === "custom" && (
                   <>
@@ -2539,21 +2548,22 @@ const subModalS = StyleSheet.create({
   },
   subtotalLabel: { fontSize: 12, fontWeight: "600", color: T.muted },
   subtotalVal: { fontSize: 16, fontWeight: "800" },
-  patternRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 14,
-  },
-  patternCard: {
-    width: "47%",
-    padding: 12,
-    borderRadius: T.radius.md,
-    backgroundColor: "#F7F6F4",
-    borderWidth: 1.5,
-    borderColor: "transparent",
-    gap: 4,
-  },
+patternRow: {
+  flexDirection: "column",
+  gap: 8,
+  marginBottom: 14,
+},
+patternCard: {
+  width: "100%",
+  flexDirection: "row",
+  alignItems: "center",
+  padding: 12,
+  borderRadius: T.radius.md,
+  backgroundColor: "#F7F6F4",
+  borderWidth: 1.5,
+  borderColor: "transparent",
+  gap: 10,
+},
   patternLabel: { fontSize: 12, fontWeight: "700", color: T.text },
   patternHint: { fontSize: 10, fontWeight: "500" },
   daysRow: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginBottom: 6 },
@@ -2778,13 +2788,19 @@ const sheetS = StyleSheet.create({
     padding: 12,
     marginBottom: 4,
   },
-  prodIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: T.radius.sm,
-    justifyContent: "center",
-    alignItems: "center",
-  },
+prodIcon: {
+  width: 46,
+  height: 46,
+  borderRadius: T.radius.sm,
+  justifyContent: "center",
+  alignItems: "center",
+},
+prodImg: {
+  width: 46,
+  height: 46,
+  borderRadius: T.radius.sm,
+  backgroundColor: "#F5F5F3",
+},
   prodName: { fontSize: 14, fontWeight: "800", color: T.text, marginBottom: 3 },
   prodPrice: { fontSize: 12, fontWeight: "600" },
   closeBtn: {
@@ -4078,57 +4094,32 @@ export default function CatalogScreen() {
     );
   }, [products, getProductId]);
 
-  useEffect(() => {
-    if (!isFocused) return;
-    void fetchData().catch(() => undefined);
-    const iv = setInterval(() => {
-      if (
-        !quickAddVisible &&
-        !subscribeVisible &&
-        !cartVisible &&
-        !subSheetVisible
-      )
-        void fetchData().catch(() => undefined);
-    }, 2000);
-    return () => clearInterval(iv);
-  }, [
-    isFocused,
-    fetchData,
-    quickAddVisible,
-    subscribeVisible,
-    cartVisible,
-    subSheetVisible,
-  ]);
+useEffect(() => {
+  if (!isFocused) return;
+  void fetchData().catch(() => undefined);
+}, [isFocused, fetchData]);
 
-  useEffect(() => {
-    if (!isFocused) return;
-    void fetchPaymentMethods().catch(() => undefined);
-    const iv = setInterval(() => {
-      void fetchPaymentMethods().catch(() => undefined);
-    }, 3000);
-    const sub = AppState.addEventListener("change", (state) => {
-      if (state === "active") void fetchPaymentMethods().catch(() => undefined);
-    });
-    return () => {
-      clearInterval(iv);
-      sub.remove();
-    };
-  }, [isFocused, fetchPaymentMethods]);
+useEffect(() => {
+  if (!isFocused) return;
+  void fetchPaymentMethods().catch(() => undefined);
+  const sub = AppState.addEventListener("change", (state) => {
+    if (state === "active") void fetchPaymentMethods().catch(() => undefined);
+  });
+  return () => {
+    sub.remove();
+  };
+}, [isFocused, fetchPaymentMethods]);
 
-  useEffect(() => {
-    if (!isFocused) return;
-    void fetchDeliveryWindows().catch(() => undefined);
-    const iv = setInterval(() => {
-      void fetchDeliveryWindows().catch(() => undefined);
-    }, 3000);
-    const sub = AppState.addEventListener("change", (state) => {
-      if (state === "active") void fetchDeliveryWindows().catch(() => undefined);
-    });
-    return () => {
-      clearInterval(iv);
-      sub.remove();
-    };
-  }, [isFocused, fetchDeliveryWindows]);
+useEffect(() => {
+  if (!isFocused) return;
+  void fetchDeliveryWindows().catch(() => undefined);
+  const sub = AppState.addEventListener("change", (state) => {
+    if (state === "active") void fetchDeliveryWindows().catch(() => undefined);
+  });
+  return () => {
+    sub.remove();
+  };
+}, [isFocused, fetchDeliveryWindows]);
 
   useEffect(() => {
     if (!addToCartProduct) return;

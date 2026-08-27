@@ -37,6 +37,7 @@ interface MilkRow {
   isLeasedIn: boolean;
   isLeasedOut: boolean;
   lessorFarmName?: string;
+  photo?: string;
 }
 
 interface Summary {
@@ -57,6 +58,12 @@ function dateStr(offset = 0) {
 const cowImg = require("../../../assets/images/gir-cow.png");
 const bullImg = require("../../../assets/images/bull-cow.png");
 const calfImg = require("../../../assets/images/calf-cow.png");
+
+const getAnimalImage = (type?: string) => {   // ← add this
+  if (type === "bull") return bullImg;
+  if (type === "newborn") return calfImg;
+  return cowImg;
+};
 
 const todayLabel = new Date().toLocaleDateString("en-IN", {
   weekday: "long",
@@ -641,12 +648,20 @@ function MilkCard({
         activeOpacity={0.8}
         style={s.cardHeader}
       >
-        <View style={s.avatarWrap}>
-          <Image
-            source={cowImg}
-            style={{ width: 32, height: 32, resizeMode: "contain" }}
-          />
-        </View>
+<View style={s.avatarWrap}>
+  {item.photo ? (
+    <Image
+      source={{ uri: item.photo }}
+      style={{ width: 40, height: 40, borderRadius: 12 }}
+      resizeMode="cover"
+    />
+  ) : (
+    <Image
+      source={getAnimalImage(item.cowType)}
+      style={{ width: 32, height: 32, resizeMode: "contain" }}
+    />
+  )}
+</View>
         <View style={{ flex: 1, marginLeft: 10 }}>
           <Text style={s.cowName} numberOfLines={1}>
             {item.name}
@@ -947,6 +962,7 @@ export default function MilkYieldScreen() {
              isLeasedIn: !!c.is_leased_in,
     isLeasedOut: !!c.is_leased_out,
     lessorFarmName: c.lessor_farm_name,
+    photo: c.photo || undefined, 
           })),
         );
       } catch (e) {

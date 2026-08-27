@@ -11,6 +11,7 @@ import {
   LayoutAnimation,
   Platform,
   UIManager,
+  Image,
 } from "react-native";
 import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -40,6 +41,7 @@ interface Cow {
   isSold?: boolean;
   farmLocationId?: string;
   isLeasedIn?: boolean;
+  photo?: string;
 }
 
 interface HealthLog {
@@ -171,7 +173,7 @@ export default function HealthScreen() {
         api.workerGetCows(),
         api.workerGetTodayHealthLogs(),
       ]);
-          const active = (cowsData ?? []).filter(
+      const active = (cowsData ?? []).filter(
         (c) =>
           c.isActive !== false &&
           !c.isSold &&
@@ -383,28 +385,42 @@ export default function HealthScreen() {
                   { backgroundColor: selectedOpt ? selectedOpt.bg : "#f3f4f6" },
                 ]}
               >
-                <MaterialCommunityIcons
-                  name="cow"
-                  size={22}
-                  color={selectedOpt?.color ?? "#9ca3af"}
-                />
+                {cow.photo ? (
+                  <Image
+                    source={{ uri: cow.photo }}
+                    style={s.cowAvatarImg}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <MaterialCommunityIcons
+                    name="cow"
+                    size={22}
+                    color={selectedOpt?.color ?? "#9ca3af"}
+                  />
+                )}
               </View>
 
-             <View style={{ flex: 1 }}>
-  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-    <Text style={s.cowName}>{cow.name}</Text>
-    {cow.isLeasedIn && (
-      <View style={s.leaseBadge}>
-        <Ionicons name="swap-horizontal" size={10} color="#7c3aed" />
-        <Text style={s.leaseBadgeText}>Leased In</Text>
-      </View>
-    )}
-  </View>
-  <Text style={s.cowTag}>
-    #{cow.tag ?? cow.tag_id ?? "—"}
-    {cow.breed ? ` · ${cow.breed}` : ""}
-  </Text>
-</View>
+              <View style={{ flex: 1 }}>
+                <View
+                  style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+                >
+                  <Text style={s.cowName}>{cow.name}</Text>
+                  {cow.isLeasedIn && (
+                    <View style={s.leaseBadge}>
+                      <Ionicons
+                        name="swap-horizontal"
+                        size={10}
+                        color="#7c3aed"
+                      />
+                      <Text style={s.leaseBadgeText}>Leased In</Text>
+                    </View>
+                  )}
+                </View>
+                <Text style={s.cowTag}>
+                  #{cow.tag ?? cow.tag_id ?? "—"}
+                  {cow.breed ? ` · ${cow.breed}` : ""}
+                </Text>
+              </View>
 
               {selectedOpt ? (
                 <View style={s.badgeChevronRow}>
@@ -588,6 +604,11 @@ const s = StyleSheet.create({
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
+  },
+  cowAvatarImg: {
+    width: 46,
+    height: 46,
   },
   cowName: { fontSize: 16, fontWeight: "800", color: "#111827" },
   cowTag: { fontSize: 12, color: "#9ca3af", marginTop: 2 },
@@ -635,15 +656,15 @@ const s = StyleSheet.create({
   },
   optLabel: { fontSize: 14, fontWeight: "600", flex: 1 },
   leaseBadge: {
-  flexDirection: "row",
-  alignItems: "center",
-  gap: 3,
-  backgroundColor: "#f5f3ff",
-  borderWidth: 1,
-  borderColor: "#ddd6fe",
-  borderRadius: 8,
-  paddingHorizontal: 5,
-  paddingVertical: 2,
-},
-leaseBadgeText: { fontSize: 5, fontWeight: "800", color: "#7c3aed" },
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: "#f5f3ff",
+    borderWidth: 1,
+    borderColor: "#ddd6fe",
+    borderRadius: 8,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+  },
+  leaseBadgeText: { fontSize: 5, fontWeight: "800", color: "#7c3aed" },
 });

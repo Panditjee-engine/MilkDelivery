@@ -1762,12 +1762,6 @@ const fetchOrders = useCallback(async () => {
             }
           : { ...sub, on_vacation_today: false };
       });
-      console.log(
-        "RAW SUB SAMPLE:",
-        JSON.stringify(
-          withAddress.find((s) => s.customer_name) || withAddress[0],
-        ),
-      );
 
       setAllSubscriptions(withVacation);
 
@@ -1799,28 +1793,25 @@ const fetchOrders = useCallback(async () => {
   }, [currentAdmin]);
 
   // ── Fetch on tab/focus change
-  useEffect(() => {
-    if (!isFocused || globalLoading || !currentAdmin) return;
+  // ── Fetch on tab/focus change (no polling — manual refresh via pull-to-refresh)
+useEffect(() => {
+  if (!isFocused || globalLoading || !currentAdmin) return;
 
-    if (activeTab === "orders") {
-      setOrdersLoading(true);
-      fetchOrders();
-      const timer = setInterval(fetchOrders, 30_000);
-      return () => clearInterval(timer);
-    } else {
-      setSubsLoading(true);
-      fetchSubscriptions();
-      const timer = setInterval(fetchSubscriptions, 5_000);
-      return () => clearInterval(timer);
-    }
-  }, [
-    activeTab,
-    isFocused,
-    globalLoading,
-    currentAdmin,
-    fetchOrders,
-    fetchSubscriptions,
-  ]);
+  if (activeTab === "orders") {
+    setOrdersLoading(true);
+    fetchOrders();
+  } else {
+    setSubsLoading(true);
+    fetchSubscriptions();
+  }
+}, [
+  activeTab,
+  isFocused,
+  globalLoading,
+  currentAdmin,
+  fetchOrders,
+  fetchSubscriptions,
+]);
 
   const onOrdersRefresh = useCallback(() => {
     setOrdersRefreshing(true);
@@ -4540,4 +4531,4 @@ const styles = StyleSheet.create({
     color: "#92400e",
   },
 });
-//for confirmation
+//for confirmation -- 27 august

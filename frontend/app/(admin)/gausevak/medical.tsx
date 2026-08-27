@@ -27,6 +27,13 @@ const bullImg = require("../../../assets/images/bull-cow.png");
 const calfImg = require("../../../assets/images/calf-cow.png");
 const cowImg = require("../../../assets/images/icon-cow.png");
 
+const getAnimalImage = (type?: string) => {
+  // ← add this
+  if (type === "bull") return bullImg;
+  if (type === "newborn") return calfImg;
+  return cowImg;
+};
+
 // INTERFACES
 interface MedicalRecord {
   id: string;
@@ -35,6 +42,7 @@ interface MedicalRecord {
   cowName?: string;
   cowAge?: string;
   cowType?: string;
+  cowPhoto?: string;
   currentStatus: "healthy" | "unhealthy";
   lastVaccinationDate?: string;
   nextVaccinationDate?: string;
@@ -57,6 +65,7 @@ interface MedicalGroup {
   cowSrNo: string;
   cowName?: string;
   cowType?: string;
+  cowPhoto?: string;
   cowAge?: string;
   records: MedicalRecord[];
 }
@@ -71,6 +80,7 @@ interface CowOption {
   age: string;
   breed: string;
   type: string;
+  photo?: string;
 }
 
 interface MedicalForm {
@@ -943,7 +953,22 @@ function CowSelector({
                       activeOpacity={0.75}
                     >
                       <View style={cs.cowIcon}>
-                        <Text style={{ fontSize: 20 }}>🐄</Text>
+                        {item.photo ? (
+                          <Image
+                            source={{ uri: item.photo }}
+                            style={{ width: 38, height: 38, borderRadius: 10 }}
+                            resizeMode="cover"
+                          />
+                        ) : (
+                          <Image
+                            source={getAnimalImage(item.type)}
+                            style={{
+                              width: 24,
+                              height: 24,
+                              resizeMode: "contain",
+                            }}
+                          />
+                        )}
                       </View>
                       <View style={{ flex: 1 }}>
                         <Text style={cs.cowTag}>{item.tag}</Text>
@@ -1726,16 +1751,18 @@ function MedicalCard({
                 { borderColor: statusBorder, backgroundColor: statusBg },
               ]}
             >
-              <Image
-                source={
-                  item.cowType === "bull"
-                    ? bullImg
-                    : item.cowType === "newborn"
-                      ? calfImg
-                      : cowImg
-                }
-                style={{ width: 32, height: 32, resizeMode: "contain" }}
-              />
+              {item.cowPhoto ? (
+                <Image
+                  source={{ uri: item.cowPhoto }}
+                  style={{ width: 48, height: 48, borderRadius: 13 }}
+                  resizeMode="cover"
+                />
+              ) : (
+                <Image
+                  source={getAnimalImage(item.cowType)}
+                  style={{ width: 32, height: 32, resizeMode: "contain" }}
+                />
+              )}
             </View>
             <View style={{ flex: 1, marginLeft: 12 }}>
               <View
@@ -2856,6 +2883,9 @@ export default function MedicalScreen() {
   const [recLoading, setRecLoading] = useState(false);
   const [recRefreshing, setRecRefreshing] = useState(false);
   const [recError, setRecError] = useState<string | null>(null);
+  const [cowLookup, setCowLookup] = useState<
+    Record<string, { type: string; photo?: string }>
+  >({});
 
   const [medicines, setMedicines] = useState<Medicine[]>([]);
   const [medSummary, setMedSummary] = useState<MedicineStockSummary | null>(
@@ -2884,15 +2914,19 @@ export default function MedicalScreen() {
         api.getCows().catch(() => []),
       ]);
 
-      const cowTypeMap: Record<string, string> = {};
+      const lookup: Record<string, { type: string; photo?: string }> = {};
       for (const cow of cowsData) {
-        cowTypeMap[cow.tag] = cow.type;
+        lookup[cow.tag] = { type: cow.type, photo: cow.photo };
       }
+      setCowLookup(lookup);
 
       const enriched = data.map((r: MedicalRecord) => ({
         ...r,
-        cowType: cowTypeMap[r.cowSrNo] ?? "mature",
+        cowType: lookup[r.cowSrNo]?.type ?? "mature",
+        cowPhoto: lookup[r.cowSrNo]?.photo,
       }));
+
+      setRecords(enriched);
 
       setRecords(enriched);
     } catch (err: any) {
@@ -3038,6 +3072,7 @@ export default function MedicalScreen() {
         cowSrNo: record.cowSrNo,
         cowName: record.cowName,
         cowType: record.cowType,
+        cowPhoto: record.cowPhoto,
         cowAge: record.cowAge,
         records: [record],
       });
@@ -3181,8 +3216,8 @@ export default function MedicalScreen() {
               {fil === "all"
                 ? "All"
                 : fil === "healthy"
-                  ? "✅ Healthy"
-                  : "🤒 Unhealthy"}
+                  ? " Healthy"
+                  : "Unhealthy"}
             </Text>
           </TouchableOpacity>
         ))}
@@ -3888,10 +3923,17 @@ export default function MedicalScreen() {
         }}
         editRecord={editRecord}
         onSave={(r) => {
+          const enriched = {
+            ...r,
+            cowType: cowLookup[r.cowSrNo]?.type ?? "mature",
+            cowPhoto: cowLookup[r.cowSrNo]?.photo,
+          };
           if (editRecord) {
-            setRecords((p) => p.map((x) => (x.id === r.id ? r : x)));
+            setRecords((p) =>
+              p.map((x) => (x.id === enriched.id ? enriched : x)),
+            );
           } else {
-            setRecords((p) => [r, ...p]);
+            setRecords((p) => [enriched, ...p]);
             setRecScreen("list");
           }
         }}

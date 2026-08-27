@@ -58,6 +58,7 @@ interface Cow {
   name: string;
   breed: string;
   type: string;
+  photo?: string;
 }
 
 interface FormData {
@@ -80,6 +81,13 @@ interface FormData {
 const cowImg = require("../../../assets/images/gir-cow.png");
 const bullImg = require("../../../assets/images/bull-cow.png");
 const calfImg = require("../../../assets/images/calf-cow.png");
+
+const getAnimalImage = (type?: string) => {
+  // ← add this
+  if (type === "bull") return bullImg;
+  if (type === "newborn") return calfImg;
+  return cowImg;
+};
 
 const EMPTY_FORM: FormData = {
   inseminationType: "ai",
@@ -402,20 +410,22 @@ function CowSelector({
                       activeOpacity={0.75}
                     >
                       <View style={cs.cowEmoji}>
-                        <Image
-                          source={
-                            item.type === "bull"
-                              ? bullImg
-                              : item.type === "newborn"
-                                ? calfImg
-                                : cowImg
-                          }
-                          style={{
-                            width: 26,
-                            height: 26,
-                            resizeMode: "contain",
-                          }}
-                        />
+                        {item.photo ? (
+                          <Image
+                            source={{ uri: item.photo }}
+                            style={{ width: 40, height: 40, borderRadius: 10 }}
+                            resizeMode="cover"
+                          />
+                        ) : (
+                          <Image
+                            source={getAnimalImage(item.type)}
+                            style={{
+                              width: 26,
+                              height: 26,
+                              resizeMode: "contain",
+                            }}
+                          />
+                        )}
                       </View>
                       <View style={{ flex: 1 }}>
                         <Text style={cs.cowTag}>{item.tag}</Text>
@@ -1296,11 +1306,15 @@ function DetailRow({
 function InseminationCard({
   group,
   index,
+  cowType,
+  cowPhoto,
   onEdit,
   onDelete,
 }: {
   group: InseminationGroup;
   index: number;
+  cowType?: string;
+  cowPhoto?: string;
   onEdit: (r: InseminationRecord) => void;
   onDelete: (r: InseminationRecord) => void;
 }) {
@@ -1357,10 +1371,18 @@ function InseminationCard({
       >
         <View style={c.topRow}>
           <View style={c.avatar}>
-            <Image
-              source={cowImg}
-              style={{ width: 28, height: 28, resizeMode: "contain" }}
-            />
+            {cowPhoto ? (
+              <Image
+                source={{ uri: cowPhoto }}
+                style={{ width: 44, height: 44, borderRadius: 12 }}
+                resizeMode="cover"
+              />
+            ) : (
+              <Image
+                source={getAnimalImage(cowType)}
+                style={{ width: 28, height: 28, resizeMode: "contain" }}
+              />
+            )}
           </View>
           <View style={{ flex: 1, marginLeft: 10 }}>
             <Text style={c.name}>{item.cowName}</Text>
@@ -1782,6 +1804,9 @@ export default function InseminationScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [cowMap, setCowMap] = useState<
+    Record<string, { type: string; photo?: string }>
+  >({});
   const fetchRecords = useCallback(async (searchTerm?: string) => {
     setLoading(true);
     setError(null);
@@ -1798,10 +1823,25 @@ export default function InseminationScreen() {
   useEffect(() => {
     fetchRecords();
   }, [fetchRecords]);
+
   useEffect(() => {
     const t = setTimeout(() => fetchRecords(search || undefined), 400);
     return () => clearTimeout(t);
   }, [search]);
+
+  //for fetch cow image
+  useEffect(() => {
+    api
+      .getCows()
+      .then((data: Cow[]) => {
+        const map: Record<string, { type: string; photo?: string }> = {};
+        data.forEach((c) => {
+          map[c.tag] = { type: c.type, photo: c.photo };
+        });
+        setCowMap(map);
+      })
+      .catch(() => {});
+  }, []);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -2076,6 +2116,8 @@ export default function InseminationScreen() {
             <InseminationCard
               group={item}
               index={index}
+              cowType={cowMap[item.cowSrNo]?.type}
+              cowPhoto={cowMap[item.cowSrNo]?.photo}
               onEdit={(r) => {
                 setEditingRecord(r);
                 setEditModal(true);

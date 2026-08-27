@@ -9,6 +9,7 @@ import {
   RefreshControl,
   Modal,
   Animated,
+  Image,
 } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -40,6 +41,7 @@ interface Cow {
   milkActive?: boolean;
   farmLocationId?: string;
   isLeasedIn?: boolean;
+  photo?: string;
 }
 
 interface ShiftStatus {
@@ -114,7 +116,10 @@ function ModernAlert({
           ]}
         >
           <View
-            style={[al.iconWrap, { backgroundColor: config.iconBg ?? "#fee2e2" }]}
+            style={[
+              al.iconWrap,
+              { backgroundColor: config.iconBg ?? "#fee2e2" },
+            ]}
           >
             <Ionicons
               name={(config.icon ?? "alert-circle-outline") as any}
@@ -124,7 +129,11 @@ function ModernAlert({
           </View>
           <Text style={al.title}>{config.title}</Text>
           <Text style={al.message}>{config.message}</Text>
-          <TouchableOpacity style={al.btn} onPress={onClose} activeOpacity={0.85}>
+          <TouchableOpacity
+            style={al.btn}
+            onPress={onClose}
+            activeOpacity={0.85}
+          >
             <Text style={al.btnText}>OK, Got it</Text>
           </TouchableOpacity>
         </Animated.View>
@@ -271,7 +280,9 @@ function UndoConfirmModal({
           </View>
 
           <Text style={uc.title}>Undo Milk Log?</Text>
-          <Text style={uc.subtitle}>This will permanently remove the entry for</Text>
+          <Text style={uc.subtitle}>
+            This will permanently remove the entry for
+          </Text>
 
           {/* Entry preview chip */}
           <View style={uc.chip}>
@@ -285,7 +296,8 @@ function UndoConfirmModal({
           </View>
 
           <Text style={uc.warn}>
-            The quantity will be removed from today's total and you can re-enter it.
+            The quantity will be removed from today's total and you can re-enter
+            it.
           </Text>
 
           {/* Buttons */}
@@ -494,11 +506,19 @@ function CowSearchBar({
 
   const onFocus = () => {
     setFocused(true);
-    Animated.timing(focusAnim, { toValue: 1, duration: 180, useNativeDriver: false }).start();
+    Animated.timing(focusAnim, {
+      toValue: 1,
+      duration: 180,
+      useNativeDriver: false,
+    }).start();
   };
   const onBlur = () => {
     setFocused(false);
-    Animated.timing(focusAnim, { toValue: 0, duration: 180, useNativeDriver: false }).start();
+    Animated.timing(focusAnim, {
+      toValue: 0,
+      duration: 180,
+      useNativeDriver: false,
+    }).start();
   };
 
   const borderColor = focusAnim.interpolate({
@@ -550,11 +570,16 @@ function CowSearchBar({
         {value.length > 0 && (
           <TouchableOpacity
             style={sb.clearBtn}
-            onPress={() => { onClear(); inputRef.current?.focus(); }}
+            onPress={() => {
+              onClear();
+              inputRef.current?.focus();
+            }}
             activeOpacity={0.7}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <View style={[sb.clearIcon, { backgroundColor: accentColor + "18" }]}>
+            <View
+              style={[sb.clearIcon, { backgroundColor: accentColor + "18" }]}
+            >
               <Ionicons name="close" size={13} color={accentColor} />
             </View>
           </TouchableOpacity>
@@ -564,16 +589,31 @@ function CowSearchBar({
       {value.length > 0 && (
         <View style={sb.resultRow}>
           {resultCount > 0 ? (
-            <View style={[sb.resultPill, { backgroundColor: accentColor + "14", borderColor: accentColor + "30" }]}>
-              <MaterialCommunityIcons name="cow" size={12} color={accentColor} />
+            <View
+              style={[
+                sb.resultPill,
+                {
+                  backgroundColor: accentColor + "14",
+                  borderColor: accentColor + "30",
+                },
+              ]}
+            >
+              <MaterialCommunityIcons
+                name="cow"
+                size={12}
+                color={accentColor}
+              />
               <Text style={[sb.resultText, { color: accentColor }]}>
-                {resultCount} of {totalCount} cow{totalCount !== 1 ? "s" : ""} matched
+                {resultCount} of {totalCount} cow{totalCount !== 1 ? "s" : ""}{" "}
+                matched
               </Text>
             </View>
           ) : (
             <View style={sb.noResultPill}>
               <Ionicons name="alert-circle-outline" size={12} color="#ef4444" />
-              <Text style={sb.noResultText}>No cow found with tag "{value}"</Text>
+              <Text style={sb.noResultText}>
+                No cow found with tag "{value}"
+              </Text>
             </View>
           )}
         </View>
@@ -674,7 +714,11 @@ function MilkScreenInner({
     >
   >({});
 
-  const { config: alertConfig, show: showAlert, hide: hideAlert } = useModernAlert();
+  const {
+    config: alertConfig,
+    show: showAlert,
+    hide: hideAlert,
+  } = useModernAlert();
 
   const get = (id: string) =>
     cowData[id] ?? { qty: 0, saving: false, saved: false };
@@ -702,7 +746,7 @@ function MilkScreenInner({
         api.workerGetShiftStatus(),
         api.workerGetTodayMilk(),
       ]);
-      
+
       const activeCows = cowsData.filter(
         (c: Cow) =>
           c.isActive !== false &&
@@ -743,7 +787,9 @@ function MilkScreenInner({
     }
   }, [token, shift]);
 
-  useEffect(() => { fetchAll(); }, []);
+  useEffect(() => {
+    fetchAll();
+  }, []);
 
   // ── Filter cows by search ──
   const filteredCows = searchQuery.trim()
@@ -760,7 +806,9 @@ function MilkScreenInner({
   }, 0);
   const totalMilk = savedTotal + pendingTotal;
 
-  useEffect(() => { onTotalChange?.(totalMilk); }, [totalMilk]);
+  useEffect(() => {
+    onTotalChange?.(totalMilk);
+  }, [totalMilk]);
 
   const doneCount = cows.filter((c) => get(c.id).saved).length;
 
@@ -784,7 +832,8 @@ function MilkScreenInner({
       patch(cow.id, { saving: false });
       showAlert(
         "Could Not Save",
-        err?.message ?? "Something went wrong while saving the milk entry. Please try again.",
+        err?.message ??
+          "Something went wrong while saving the milk entry. Please try again.",
         "water-outline",
         "#ef4444",
         "#fee2e2",
@@ -829,7 +878,8 @@ function MilkScreenInner({
       setUndoTarget(null);
       showAlert(
         "Undo Failed",
-        err?.message ?? "Could not remove the entry. You can only undo today's logs.",
+        err?.message ??
+          "Could not remove the entry. You can only undo today's logs.",
         "arrow-undo-outline",
         "#ef4444",
         "#fee2e2",
@@ -839,7 +889,10 @@ function MilkScreenInner({
     }
   };
 
-  const onRefresh = () => { setRefreshing(true); fetchAll(); };
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchAll();
+  };
 
   const accentColor = isMorning ? "#d97706" : "#4f46e5";
   const accentBg = isMorning ? "#fffbeb" : "#eef2ff";
@@ -876,17 +929,28 @@ function MilkScreenInner({
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#16a34a" />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#16a34a"
+          />
         }
       >
         {/* ── Shift Banner ── */}
         <LinearGradient
           colors={isMorning ? ["#fffbeb", "#fef3c7"] : ["#eef2ff", "#e0e7ff"]}
-          style={[s.shiftBanner, { borderColor: isMorning ? "#f59e0b40" : "#6366f140" }]}
+          style={[
+            s.shiftBanner,
+            { borderColor: isMorning ? "#f59e0b40" : "#6366f140" },
+          ]}
         >
           <View style={s.shiftLeft}>
             <View style={[s.shiftIconBox, { backgroundColor: accentLight }]}>
-              <Ionicons name={isMorning ? "sunny" : "moon"} size={22} color={accentColor} />
+              <Ionicons
+                name={isMorning ? "sunny" : "moon"}
+                size={22}
+                color={accentColor}
+              />
             </View>
             <View>
               <Text style={[s.shiftTitle, { color: accentColor }]}>
@@ -940,7 +1004,12 @@ function MilkScreenInner({
                   size={14}
                   color={item.done ? item.doneColor : "#9ca3af"}
                 />
-                <Text style={[s.statusText, { color: item.done ? item.doneColor : "#9ca3af" }]}>
+                <Text
+                  style={[
+                    s.statusText,
+                    { color: item.done ? item.doneColor : "#9ca3af" },
+                  ]}
+                >
                   {item.label} {item.done ? `✓ ${item.count}` : "—"}
                 </Text>
               </View>
@@ -962,7 +1031,8 @@ function MilkScreenInner({
             style={[
               s.progressFill,
               {
-                width: `${cows.length > 0 ? (doneCount / cows.length) * 100 : 0}%` as any,
+                width:
+                  `${cows.length > 0 ? (doneCount / cows.length) * 100 : 0}%` as any,
                 backgroundColor: accentColor,
               },
             ]}
@@ -985,7 +1055,12 @@ function MilkScreenInner({
 
         {/* ── All Done Banner ── */}
         {!searchQuery && doneCount === cows.length && cows.length > 0 && (
-          <View style={[s.allDoneBanner, { backgroundColor: accentBg, borderColor: accentColor + "40" }]}>
+          <View
+            style={[
+              s.allDoneBanner,
+              { backgroundColor: accentBg, borderColor: accentColor + "40" },
+            ]}
+          >
             <Text style={s.allDoneEmoji}>{isMorning ? "☀️" : "🌙"}</Text>
             <View style={{ flex: 1 }}>
               <Text style={[s.allDoneTitle, { color: accentColor }]}>
@@ -1015,14 +1090,17 @@ function MilkScreenInner({
             </View>
             <Text style={s.emptyTitle}>Tag not found</Text>
             <Text style={s.emptySub}>
-              No cow with tag containing "{searchQuery}" is assigned to you for milking.
+              No cow with tag containing "{searchQuery}" is assigned to you for
+              milking.
             </Text>
             <TouchableOpacity
               style={[s.clearSearchBtn, { borderColor: accentColor }]}
               onPress={() => setSearchQuery("")}
               activeOpacity={0.7}
             >
-              <Text style={[s.clearSearchBtnText, { color: accentColor }]}>Clear Search</Text>
+              <Text style={[s.clearSearchBtnText, { color: accentColor }]}>
+                Clear Search
+              </Text>
             </TouchableOpacity>
           </View>
         )}
@@ -1033,7 +1111,10 @@ function MilkScreenInner({
             <Text style={[s.searchResultHeading, { color: accentColor }]}>
               Results for "{searchQuery}"
             </Text>
-            <TouchableOpacity onPress={() => setSearchQuery("")} activeOpacity={0.7}>
+            <TouchableOpacity
+              onPress={() => setSearchQuery("")}
+              activeOpacity={0.7}
+            >
               <Text style={s.searchResultClear}>Show all</Text>
             </TouchableOpacity>
           </View>
@@ -1051,41 +1132,76 @@ function MilkScreenInner({
               key={cow.id}
               style={[
                 s.card,
-                d.saved && { borderColor: "#16a34a40", backgroundColor: "#f0fdf4" },
+                d.saved && {
+                  borderColor: "#16a34a40",
+                  backgroundColor: "#f0fdf4",
+                },
               ]}
             >
               <View style={s.cardTop}>
-                <View style={[s.cowAvatar, { backgroundColor: d.saved ? "#dcfce7" : "#f3f4f6" }]}>
-                  <MaterialCommunityIcons
-                    name="cow"
-                    size={22}
-                    color={d.saved ? "#16a34a" : "#6b7280"}
-                  />
+                <View
+                  style={[
+                    s.cowAvatar,
+                    { backgroundColor: d.saved ? "#dcfce7" : "#f3f4f6" },
+                  ]}
+                >
+                  {cow.photo ? (
+                    <Image
+                      source={{ uri: cow.photo }}
+                      style={s.cowAvatarImg}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <MaterialCommunityIcons
+                      name="cow"
+                      size={22}
+                      color={d.saved ? "#16a34a" : "#6b7280"}
+                    />
+                  )}
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={s.cowName}>{cow.name}</Text>
                   <Text style={s.cowTag}>
-                    #{cow.tag}{cow.breed ? ` · ${cow.breed}` : ""}
+                    #{cow.tag}
+                    {cow.breed ? ` · ${cow.breed}` : ""}
                   </Text>
                 </View>
 
-                 {cow.isLeasedIn && (
-    <View style={s.leaseBadge}>
-      <Ionicons name="swap-horizontal" size={12} color="#7c3aed" />
-      <Text style={s.leaseBadgeText}>Leased In</Text>
-    </View>
-  )}
+                {cow.isLeasedIn && (
+                  <View style={s.leaseBadge}>
+                    <Ionicons
+                      name="swap-horizontal"
+                      size={12}
+                      color="#7c3aed"
+                    />
+                    <Text style={s.leaseBadgeText}>Leased In</Text>
+                  </View>
+                )}
 
                 {/* Tag badge during search */}
                 {searchQuery.trim().length > 0 && (
-                  <View style={[s.tagBadge, { backgroundColor: accentColor + "14", borderColor: accentColor + "30" }]}>
-                    <Text style={[s.tagBadgeText, { color: accentColor }]}>#{cow.tag}</Text>
+                  <View
+                    style={[
+                      s.tagBadge,
+                      {
+                        backgroundColor: accentColor + "14",
+                        borderColor: accentColor + "30",
+                      },
+                    ]}
+                  >
+                    <Text style={[s.tagBadgeText, { color: accentColor }]}>
+                      #{cow.tag}
+                    </Text>
                   </View>
                 )}
 
                 {d.saved && (
                   <View style={s.savedBadge}>
-                    <Ionicons name="checkmark-circle" size={16} color="#16a34a" />
+                    <Ionicons
+                      name="checkmark-circle"
+                      size={16}
+                      color="#16a34a"
+                    />
                     <Text style={s.savedBadgeText}>{t("done")}</Text>
                   </View>
                 )}
@@ -1097,7 +1213,8 @@ function MilkScreenInner({
                   <View style={s.savedRow}>
                     <Ionicons name="water" size={13} color="#16a34a" />
                     <Text style={s.savedQtyText}>
-                      {savedEntry.quantity.toFixed(1)} L {t("recordedThisShift")}
+                      {savedEntry.quantity.toFixed(1)} L{" "}
+                      {t("recordedThisShift")}
                     </Text>
                   </View>
 
@@ -1118,7 +1235,9 @@ function MilkScreenInner({
                   <TouchableOpacity
                     style={s.stepBtn}
                     onPress={() =>
-                      patch(cow.id, { qty: Math.max(0, Math.round((d.qty - 0.5) * 10) / 10) })
+                      patch(cow.id, {
+                        qty: Math.max(0, Math.round((d.qty - 0.5) * 10) / 10),
+                      })
                     }
                     disabled={d.saving}
                   >
@@ -1134,7 +1253,9 @@ function MilkScreenInner({
                   <TouchableOpacity
                     style={s.stepBtn}
                     onPress={() =>
-                      patch(cow.id, { qty: Math.round((d.qty + 0.5) * 10) / 10 })
+                      patch(cow.id, {
+                        qty: Math.round((d.qty + 0.5) * 10) / 10,
+                      })
                     }
                     disabled={d.saving}
                   >
@@ -1155,7 +1276,12 @@ function MilkScreenInner({
                     {d.saving ? (
                       <ActivityIndicator size="small" color="#fff" />
                     ) : (
-                      <Text style={[s.saveBtnText, { color: d.qty > 0 ? "#fff" : "#9ca3af" }]}>
+                      <Text
+                        style={[
+                          s.saveBtnText,
+                          { color: d.qty > 0 ? "#fff" : "#9ca3af" },
+                        ]}
+                      >
                         {t("save")}
                       </Text>
                     )}
@@ -1187,7 +1313,12 @@ export default function MilkScreen(props: {
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#ffffff" },
   content: { padding: 16 },
-  centered: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
+  centered: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+  },
   loadingText: { color: "#6b7280", fontSize: 14 },
 
   shiftBanner: {
@@ -1227,10 +1358,19 @@ const s = StyleSheet.create({
   },
   statusText: { fontSize: 12, fontWeight: "700" },
 
-  progressRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 6 },
+  progressRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 6,
+  },
   progressTxt: { fontSize: 12, color: "#6b7280", fontWeight: "600" },
   progressPct: { fontSize: 12, fontWeight: "800", color: "#374151" },
-  progressBg: { height: 6, backgroundColor: "#f3f4f6", borderRadius: 4, marginBottom: 16 },
+  progressBg: {
+    height: 6,
+    backgroundColor: "#f3f4f6",
+    borderRadius: 4,
+    marginBottom: 16,
+  },
   progressFill: { height: 6, borderRadius: 4 },
 
   searchSection: { marginBottom: 16 },
@@ -1305,13 +1445,23 @@ const s = StyleSheet.create({
     shadowRadius: 6,
     elevation: 1,
   },
-  cardTop: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 10 },
+  cardTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 10,
+  },
   cowAvatar: {
     width: 46,
     height: 46,
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden", // clip image to rounded corners
+  },
+  cowAvatarImg: {
+    width: 46,
+    height: 46,
   },
   cowName: { fontSize: 16, fontWeight: "800", color: "#111827" },
   cowTag: { fontSize: 12, color: "#9ca3af", marginTop: 2 },
@@ -1361,7 +1511,12 @@ const s = StyleSheet.create({
   },
   undoBtnText: { fontSize: 12, fontWeight: "800", color: "#ef4444" },
 
-  controls: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 4 },
+  controls: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 4,
+  },
   stepBtn: {
     width: 44,
     height: 44,
@@ -1395,16 +1550,16 @@ const s = StyleSheet.create({
   },
   saveBtnText: { fontSize: 14, fontWeight: "800" },
   leaseBadge: {
-  flexDirection: "row",
-  alignItems: "center",
-  gap: 4,
-  backgroundColor: "#f5f3ff",
-  borderWidth: 1,
-  borderColor: "#c4b5fd",
-  borderRadius: 20,
-  paddingHorizontal: 9,
-  paddingVertical: 4,
-  marginRight: 4,
-},
-leaseBadgeText: { fontSize: 11, fontWeight: "800", color: "#7c3aed" },
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#f5f3ff",
+    borderWidth: 1,
+    borderColor: "#c4b5fd",
+    borderRadius: 20,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    marginRight: 4,
+  },
+  leaseBadgeText: { fontSize: 11, fontWeight: "800", color: "#7c3aed" },
 });

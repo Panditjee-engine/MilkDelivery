@@ -35,6 +35,7 @@ interface CowRow {
   isLeasedIn: boolean;
   isLeasedOut: boolean;
   lessorFarmName?: string;
+  photo?: string;  
 }
 
 interface Summary {
@@ -108,6 +109,7 @@ function mapRow(r: any): CowRow {
     isLeasedIn: !!r.is_leased_in,
     isLeasedOut: !!r.is_leased_out,
     lessorFarmName: r.lessor_farm_name,
+    photo: r.photo ?? undefined, 
   };
 }
 
@@ -157,18 +159,26 @@ function CowCard({
       ]}
     >
       <View style={cc.row}>
-        <View
-          style={[
-            cc.avatar,
-            healthy && { backgroundColor: "#f0fdf4", borderColor: "#86efac" },
-            unhealthy && { backgroundColor: "#fef2f2", borderColor: "#fca5a5" },
-          ]}
-        >
-          <Image
-            source={getCowImage(item.type)}
-            style={{ width: 26, height: 26, resizeMode: "contain" }}
-          />
-        </View>
+<View
+  style={[
+    cc.avatar,
+    healthy && { backgroundColor: "#f0fdf4", borderColor: "#86efac" },
+    unhealthy && { backgroundColor: "#fef2f2", borderColor: "#fca5a5" },
+  ]}
+>
+  {item.photo ? (
+    <Image
+      source={{ uri: item.photo }}
+      style={{ width: 40, height: 40, borderRadius: 10 }}
+      resizeMode="cover"
+    />
+  ) : (
+    <Image
+      source={getCowImage(item.type)}
+      style={{ width: 26, height: 26, resizeMode: "contain" }}
+    />
+  )}
+</View>
 
         <View style={{ flex: 1, marginLeft: 10 }}>
           <Text style={cc.cowName}>{item.cow_name}</Text>
@@ -310,8 +320,10 @@ export default function CowHealthScreen() {
 
       // update by Badal on 28-06-2024: creating a map of cow_id to type for quick lookup while mapping rows
       const typeMap: Record<string, string> = {};
+      const photoMap: Record<string, string | undefined> = {};  
       cowsList.forEach((c: any) => {
         typeMap[c.id] = c.type ?? "mature";
+         photoMap[c.id] = c.photo ?? undefined; 
       });
 
       setSummary(
@@ -319,7 +331,9 @@ export default function CowHealthScreen() {
       );
       setRows(
         Array.isArray(res.cows)
-          ? res.cows.map((r: any) => mapRow({ ...r, type: typeMap[r.cow_id] ?? "mature" }))
+          ? res.cows.map((r: any) => mapRow({ ...r, type: typeMap[r.cow_id] ?? "mature",
+            photo: photoMap[r.cow_id],
+           }))
           : []
       );
     } catch (e: any) {

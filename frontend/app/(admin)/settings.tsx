@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useLocalSearchParams } from "expo-router";
 import {
   View,
   Text,
@@ -16,7 +17,12 @@ import {
   Image,
   BackHandler,
 } from "react-native";
-import { api, BusinessLocation, BusinessLocationCreate, getApiBaseUrl } from "../../src/services/api";
+import {
+  api,
+  BusinessLocation,
+  BusinessLocationCreate,
+  getApiBaseUrl,
+} from "../../src/services/api";
 import QRCode from "react-native-qrcode-svg";
 import * as Sharing from "expo-sharing";
 import * as ImagePicker from "expo-image-picker";
@@ -309,7 +315,7 @@ function SettingModal({
         style={{ flex: 1 }}
       >
         <Pressable style={mS.overlay} onPress={onClose}>
-          <Pressable style={mS.sheet} onPress={() => { }}>
+          <Pressable style={mS.sheet} onPress={() => {}}>
             <View style={mS.drag} />
             <View style={mS.header}>
               <View style={mS.headerLeft}>
@@ -450,8 +456,8 @@ function ShareModal({
                     color={C.dark}
                   />
                   <Text style={qrS.infoBannerText}>
-                    The customer who uses your referral code will only see your
-                    {" "}Gaushala{"'"}s products.
+                    The customer who uses your referral code will only see your{" "}
+                    Gaushala{"'"}s products.
                   </Text>
                 </View>
                 <ViewShot
@@ -662,8 +668,13 @@ function InfoPill({ icon, label }: { icon: string; label: string }) {
 export default function AdminSettingsScreen() {
   const { user, logout, updateUser } = useAuth();
   const router = useRouter();
+  const { openLocations } = useLocalSearchParams<{ openLocations?: string }>();
   const { cfg: alertCfg, show: showAlert, dismiss: dismissAlert } = useAlert();
   const headerAnim = useRef(new Animated.Value(0)).current;
+
+  const scrollRef = useRef<ScrollView>(null);
+  const businessInfoY = useRef(0);
+  const hasAutoOpenedLocations = useRef(false);
 
   const referralCode = buildReferralCode(user);
 
@@ -798,6 +809,20 @@ export default function AdminSettingsScreen() {
     setActiveModal(type);
   };
   const closeModal = () => setActiveModal(null);
+
+  useEffect(() => {
+    if (openLocations === "1" && !hasAutoOpenedLocations.current) {
+      hasAutoOpenedLocations.current = true;
+      const t = setTimeout(() => {
+        scrollRef.current?.scrollTo({
+          y: businessInfoY.current,
+          animated: true,
+        });
+        openModal("locations");
+      }, 300);
+      return () => clearTimeout(t);
+    }
+  }, [openLocations]);
 
   useEffect(() => {
     const sub = BackHandler.addEventListener("hardwareBackPress", () => {
@@ -1597,6 +1622,7 @@ export default function AdminSettingsScreen() {
       <CustomAlert cfg={alertCfg} onDismiss={dismissAlert} />
 
       <ScrollView
+        ref={scrollRef}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 40 }}
       >
@@ -1796,7 +1822,11 @@ export default function AdminSettingsScreen() {
         <View style={s.contentCard}>
           <View style={s.contentCardHeader}>
             <View style={s.contentIconWrap}>
-              <Ionicons name="phone-portrait-outline" size={18} color={C.dark} />
+              <Ionicons
+                name="phone-portrait-outline"
+                size={18}
+                color={C.dark}
+              />
             </View>
             <View style={s.contentCardBody}>
               <Text style={s.contentCardTitle}>App Settings</Text>
@@ -1919,7 +1949,12 @@ export default function AdminSettingsScreen() {
         </View>
 
         {/* ── Business Information */}
-        <View style={s.section}>
+        <View
+          style={s.section}
+          onLayout={(e) => {
+            businessInfoY.current = e.nativeEvent.layout.y;
+          }}
+        >
           <SectionHeader title="Business Information" />
           <View style={s.card}>
             <SettingRow
@@ -1961,7 +1996,6 @@ export default function AdminSettingsScreen() {
             style={{ marginLeft: "auto" }}
           />
         </TouchableOpacity>
-
       </ScrollView>
 
       {/* ── Share Modal */}
@@ -2239,13 +2273,10 @@ export default function AdminSettingsScreen() {
         title="Business Locations"
         icon="location-outline"
         onClose={closeModal}
-        onSave={() => { }}
+        onSave={() => {}}
       >
         {locationsLoading ? (
-          <ActivityIndicator
-            color={C.primary}
-            style={{ marginVertical: 24 }}
-          />
+          <ActivityIndicator color={C.primary} style={{ marginVertical: 24 }} />
         ) : locations.length === 0 ? (
           <View style={loc.emptyBox}>
             <Ionicons name="location-outline" size={26} color={C.light} />
@@ -2284,8 +2315,7 @@ export default function AdminSettingsScreen() {
                 </View>
               </View>
               <Text style={loc.cardAddress}>
-                {item.address_line}, {item.city}, {item.state} -{" "}
-                {item.pincode}
+                {item.address_line}, {item.city}, {item.state} - {item.pincode}
               </Text>
             </View>
           ))
@@ -2301,9 +2331,7 @@ export default function AdminSettingsScreen() {
         <TextInput
           style={mS.input}
           value={locationDraft.label}
-          onChangeText={(v) =>
-            setLocationDraft((d) => ({ ...d, label: v }))
-          }
+          onChangeText={(v) => setLocationDraft((d) => ({ ...d, label: v }))}
           placeholder="e.g. Main Farm, Sector 12 Branch"
           placeholderTextColor={C.light}
         />
@@ -2391,10 +2419,7 @@ export default function AdminSettingsScreen() {
         </TouchableOpacity>
 
         {editingLocationId ? (
-          <TouchableOpacity
-            style={mS.backBtn}
-            onPress={resetLocationDraft}
-          >
+          <TouchableOpacity style={mS.backBtn} onPress={resetLocationDraft}>
             <Ionicons name="close-outline" size={14} color={C.muted} />
             <Text style={mS.backTxt}>Cancel edit</Text>
           </TouchableOpacity>
@@ -2490,7 +2515,7 @@ export default function AdminSettingsScreen() {
         title={pwStepTitle}
         icon="lock-closed-outline"
         onClose={closeModal}
-        onSave={() => { }}
+        onSave={() => {}}
       >
         {/* Step indicator */}
         <View style={mS.stepRow}>

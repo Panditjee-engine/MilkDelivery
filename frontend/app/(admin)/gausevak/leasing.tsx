@@ -291,8 +291,9 @@ export default function LeaseModal({
     >
       <View style={s.overlay}>
         <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          style={{ width: "100%" }}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
+          style={{ width: "100%", maxHeight: "90%" }}
         >
           <View style={s.sheet}>
             <View style={s.handle} />
@@ -331,6 +332,7 @@ export default function LeaseModal({
                 <ScrollView
                   style={{ maxHeight: 320 }}
                   showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
                 >
                   {results.map((farm) => (
                     <TouchableOpacity
@@ -379,6 +381,7 @@ export default function LeaseModal({
               <ScrollView
                 showsVerticalScrollIndicator={false}
                 style={{ maxHeight: 420 }}
+                keyboardShouldPersistTaps="handled"
               >
                 <View style={s.selectedFarmBanner}>
                   <Ionicons name="checkmark-circle" size={16} color="#16a34a" />
@@ -392,7 +395,7 @@ export default function LeaseModal({
                   </View>
                 </View>
 
-                                <Text style={s.label}>Lease Price (₹)</Text>
+                <Text style={s.label}>Lease Price (₹)</Text>
                 <View style={s.priceRow}>
                   <TouchableOpacity
                     onPress={toggleNegative}
@@ -564,6 +567,7 @@ const s = StyleSheet.create({
     borderTopRightRadius: 28,
     padding: 20,
     paddingBottom: Platform.OS === "ios" ? 36 : 24,
+    maxHeight: "100%",
   },
   handle: {
     width: 36,
@@ -757,7 +761,7 @@ const s = StyleSheet.create({
     paddingVertical: 7,
   },
   pickerDoneText: { fontSize: 13, fontWeight: "800", color: "#fff" },
-    priceRow: {
+  priceRow: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#FFF8F0",

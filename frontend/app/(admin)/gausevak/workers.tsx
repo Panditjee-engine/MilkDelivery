@@ -1044,9 +1044,7 @@ function WorkerDetailModal({
                       color={active ? "#2d6a4f" : "#888"}
                     />
                     <View style={{ flex: 1 }}>
-                      <Text
-                        style={[trS.locText, active && trS.locTextActive]}
-                      >
+                      <Text style={[trS.locText, active && trS.locTextActive]}>
                         {loc.label}
                       </Text>
                       {isCurrent && (
@@ -1452,7 +1450,12 @@ const trS = StyleSheet.create({
   locRowActive: { borderColor: "#2d6a4f", backgroundColor: "#f0fdf4" },
   locText: { fontSize: 13.5, fontWeight: "700", color: "#444" },
   locTextActive: { color: "#2d6a4f" },
-  currentTag: { fontSize: 10.5, color: "#b45309", fontWeight: "600", marginTop: 2 },
+  currentTag: {
+    fontSize: 10.5,
+    color: "#b45309",
+    fontWeight: "600",
+    marginTop: 2,
+  },
   btnRow: { flexDirection: "row", gap: 10, marginTop: 16 },
   cancelBtn: {
     flex: 1,
@@ -1640,6 +1643,28 @@ export default function WorkersScreen() {
     setToast({ visible: true, msg, variant });
   const hideToast = () => setToast((t) => ({ ...t, visible: false }));
 
+  const requireLocation = () => {
+    if (locations.length === 0) {
+      Alert.alert(
+        "Business Location Required",
+        "You can't add a worker until a business location is set. Add one in Business Information first.",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Go to Settings",
+            onPress: () =>
+              router.push({
+                pathname: "/(admin)/settings",
+                params: { openLocations: "1" },
+              } as any),
+          },
+        ],
+      );
+      return false;
+    }
+    return true;
+  };
+
   const fetchWorkers = async () => {
     try {
       setLoading(true);
@@ -1673,6 +1698,15 @@ export default function WorkersScreen() {
   const handleCreate = async () => {
     if (!form.name.trim() || !form.email.trim() || !form.password.trim()) {
       showToast("Name, email and password are required", "error");
+      return;
+    }
+    if (!form.farm_location_id) {
+      Alert.alert(
+        "Farm Location Required",
+        locations.length > 1
+          ? "Please choose the worker's farm location before creating this worker."
+          : "Please select a farm location before creating this worker.",
+      );
       return;
     }
     try {
@@ -1860,7 +1894,13 @@ export default function WorkersScreen() {
         <TouchableOpacity
           style={styles.addBtn}
           onPress={() => {
+            if (!requireLocation()) return;
             setShowPassword(false);
+            setForm((f) => ({
+              ...f,
+              farm_location_id:
+                locations.length === 1 ? locations[0].id : f.farm_location_id,
+            }));
             setModalVisible(true);
           }}
         >
@@ -1970,7 +2010,13 @@ export default function WorkersScreen() {
           <TouchableOpacity
             style={styles.emptyBtn}
             onPress={() => {
+              if (!requireLocation()) return;
               setShowPassword(false);
+              setForm((f) => ({
+                ...f,
+                farm_location_id:
+                  locations.length === 1 ? locations[0].id : f.farm_location_id,
+              }));
               setModalVisible(true);
             }}
           >
@@ -2167,7 +2213,7 @@ export default function WorkersScreen() {
                 {locations.length > 0 && (
                   <>
                     <Text style={[styles.sectionLabel, { marginTop: 4 }]}>
-                      FARM LOCATION
+                      FARM LOCATION *
                     </Text>
                     <ScrollView
                       horizontal

@@ -43,6 +43,7 @@ interface SemenGroup {
   bullName?: string;
   breed?: string;
   records: SemenRecord[];
+  bullPhoto?: string;
 }
 
 type SortOption = "newest" | "oldest" | "name_asc" | "name_desc";
@@ -174,10 +175,12 @@ function BullNameSelector({
   value,
   onChange,
   existingBulls,
+  existingBullPhotos,
 }: {
   value: string;
   onChange: (v: string) => void;
   existingBulls: string[];
+  existingBullPhotos: Record<string, string | undefined>;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -352,14 +355,26 @@ function BullNameSelector({
                               },
                             ]}
                           >
-                            <Image
-                              source={bullImg}
-                              style={{
-                                width: 22,
-                                height: 22,
-                                resizeMode: "contain",
-                              }}
-                            />
+                            {existingBullPhotos[name] ? (
+                              <Image
+                                source={{ uri: existingBullPhotos[name] }}
+                                style={{
+                                  width: 42,
+                                  height: 42,
+                                  borderRadius: 12,
+                                }}
+                                resizeMode="cover"
+                              />
+                            ) : (
+                              <Image
+                                source={bullImg}
+                                style={{
+                                  width: 22,
+                                  height: 22,
+                                  resizeMode: "contain",
+                                }}
+                              />
+                            )}
                           </View>
                           <View style={{ flex: 1, marginLeft: 12 }}>
                             <Text
@@ -649,12 +664,14 @@ function SemenFormModal({
   onSave,
   editRecord,
   existingBullNames,
+  bullPhotoByName,
 }: {
   visible: boolean;
   onClose: () => void;
   onSave: (r: SemenRecord) => void;
   editRecord: SemenRecord | null;
   existingBullNames: string[];
+  bullPhotoByName: Record<string, string | undefined>;
 }) {
   const isEdit = !!editRecord;
   const [form, setForm] = useState<SemenForm>(EMPTY_FORM);
@@ -808,8 +825,8 @@ function SemenFormModal({
                 value={form.bullName}
                 onChange={setF("bullName")}
                 existingBulls={existingBullNames}
+                existingBullPhotos={bullPhotoByName}
               />
-
               <BreedSelector value={form.breed} onChange={setF("breed")} />
 
               <SectionHeader
@@ -999,14 +1016,18 @@ function SemenCard({
       >
         <View style={c.topRow}>
           <View style={c.bullAvatar}>
-            <Image
-              source={bullImg}
-              style={{
-                width: 26,
-                height: 26,
-                resizeMode: "contain",
-              }}
-            />
+            {group.bullPhoto ? (
+              <Image
+                source={{ uri: group.bullPhoto }}
+                style={{ width: 50, height: 50, borderRadius: 14 }}
+                resizeMode="cover"
+              />
+            ) : (
+              <Image
+                source={bullImg}
+                style={{ width: 26, height: 26, resizeMode: "contain" }}
+              />
+            )}
           </View>
           <View style={{ flex: 1, marginLeft: 12 }}>
             <View
@@ -1079,7 +1100,10 @@ function SemenCard({
                 activeOpacity={0.85}
                 onPress={() => setRecordIndex((prev) => Math.max(0, prev - 1))}
                 disabled={recordIndex === 0}
-                style={[c.historyBtn, recordIndex === 0 && c.historyBtnDisabled]}
+                style={[
+                  c.historyBtn,
+                  recordIndex === 0 && c.historyBtnDisabled,
+                ]}
               >
                 <Ionicons
                   name="chevron-back"
@@ -1176,7 +1200,9 @@ function SemenCard({
                       style={[
                         c.timelineBadge,
                         {
-                          backgroundColor: active ? badgeColor + "18" : "#ffffff",
+                          backgroundColor: active
+                            ? badgeColor + "18"
+                            : "#ffffff",
                           borderColor: active ? badgeColor + "55" : "#e5e7eb",
                         },
                       ]}
@@ -1197,7 +1223,8 @@ function SemenCard({
                         active && c.timelineChipSubActive,
                       ]}
                     >
-                      {record.femalCalves + record.maleCalves} calves · {record.breed ?? "Breed"}
+                      {record.femalCalves + record.maleCalves} calves ·{" "}
+                      {record.breed ?? "Breed"}
                     </Text>
                   </TouchableOpacity>
                 );
@@ -1365,8 +1392,13 @@ export default function SemenRecordScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // ✅ NEW: Bulls from cows/animals table
   const [cowBulls, setCowBulls] = useState<string[]>([]);
+  const [bullPhotoByTag, setBullPhotoByTag] = useState<
+    Record<string, string | undefined>
+  >({});
+  const [bullPhotoByName, setBullPhotoByName] = useState<
+    Record<string, string | undefined>
+  >({});
 
   const fetchRecords = useCallback(async (q?: string) => {
     setLoading(true);
@@ -1385,10 +1417,17 @@ export default function SemenRecordScreen() {
   const fetchBulls = useCallback(async () => {
     try {
       const allCows = await api.getCows();
-      const bullNames: string[] = allCows
-        .filter((c: any) => c.type === "bull" && c.name)
-        .map((c: any) => c.name as string);
-      setCowBulls(bullNames);
+      const bulls = allCows.filter((c: any) => c.type === "bull" && c.name);
+      setCowBulls(bulls.map((c: any) => c.name as string));
+
+      const byTag: Record<string, string | undefined> = {};
+      const byName: Record<string, string | undefined> = {};
+      for (const b of bulls) {
+        byTag[b.tag] = b.photo;
+        byName[b.name] = b.photo;
+      }
+      setBullPhotoByTag(byTag);
+      setBullPhotoByName(byName);
     } catch {
       // silent fail — semen records wali list kaam karegi
     }
@@ -1462,8 +1501,7 @@ export default function SemenRecordScreen() {
     if (range === "all_time") return true;
     const created = new Date(createdAt);
     if (Number.isNaN(created.getTime())) return true;
-    const diffDays =
-      (Date.now() - created.getTime()) / (1000 * 60 * 60 * 24);
+    const diffDays = (Date.now() - created.getTime()) / (1000 * 60 * 60 * 24);
     if (range === "last_week") return diffDays <= 7;
     if (range === "last_month") return diffDays <= 30;
     return diffDays <= 365;
@@ -1481,6 +1519,9 @@ export default function SemenRecordScreen() {
         bullSrNo: record.bullSrNo,
         bullName: record.bullName,
         breed: record.breed,
+        bullPhoto:
+          bullPhotoByTag[record.bullSrNo] ??
+          (record.bullName ? bullPhotoByName[record.bullName] : undefined),
         records: [record],
       });
     }
@@ -1492,10 +1533,14 @@ export default function SemenRecordScreen() {
     )
     .sort((a, b) => {
       if (sortBy === "name_asc") {
-        return (a.bullName ?? a.bullSrNo).localeCompare(b.bullName ?? b.bullSrNo);
+        return (a.bullName ?? a.bullSrNo).localeCompare(
+          b.bullName ?? b.bullSrNo,
+        );
       }
       if (sortBy === "name_desc") {
-        return (b.bullName ?? b.bullSrNo).localeCompare(a.bullName ?? a.bullSrNo);
+        return (b.bullName ?? b.bullSrNo).localeCompare(
+          a.bullName ?? a.bullSrNo,
+        );
       }
       const aTime = new Date(a.records[0]?.created_at ?? 0).getTime();
       const bTime = new Date(b.records[0]?.created_at ?? 0).getTime();
@@ -1547,7 +1592,11 @@ export default function SemenRecordScreen() {
               onPress={() => setSortVisible(true)}
               activeOpacity={0.85}
             >
-              <Ionicons name={sortMeta[sortBy].icon} size={16} color="#0891b2" />
+              <Ionicons
+                name={sortMeta[sortBy].icon}
+                size={16}
+                color="#0891b2"
+              />
             </TouchableOpacity>
             <View style={s.countBadge}>
               <Text style={s.countText}>{visibleGroupedRecords.length}</Text>
@@ -1570,35 +1619,41 @@ export default function SemenRecordScreen() {
             <Text style={s.sortSheetTitle}>Sort Records</Text>
             <Text style={s.sortSheetSub}>Choose date filter and ordering</Text>
             <Text style={s.sortSectionTitle}>Date Filter</Text>
-            {(["all_time", "last_week", "last_month", "last_year"] as const).map(
-              (option) => (
-                <TouchableOpacity
-                  key={option}
-                  style={[s.sortOption, dateRange === option && s.sortOptionActive]}
-                  onPress={() => setDateRange(option)}
+            {(
+              ["all_time", "last_week", "last_month", "last_year"] as const
+            ).map((option) => (
+              <TouchableOpacity
+                key={option}
+                style={[
+                  s.sortOption,
+                  dateRange === option && s.sortOptionActive,
+                ]}
+                onPress={() => setDateRange(option)}
+              >
+                <Ionicons
+                  name={dateRangeMeta[option].icon}
+                  size={15}
+                  color={dateRange === option ? "#0891b2" : "#9ca3af"}
+                />
+                <Text
+                  style={[
+                    s.sortOptionText,
+                    dateRange === option && s.sortOptionTextActive,
+                  ]}
                 >
-                  <Ionicons
-                    name={dateRangeMeta[option].icon}
-                    size={15}
-                    color={dateRange === option ? "#0891b2" : "#9ca3af"}
-                  />
-                  <Text
-                    style={[
-                      s.sortOptionText,
-                      dateRange === option && s.sortOptionTextActive,
-                    ]}
-                  >
-                    {dateRangeMeta[option].label}
-                  </Text>
-                </TouchableOpacity>
-              ),
-            )}
+                  {dateRangeMeta[option].label}
+                </Text>
+              </TouchableOpacity>
+            ))}
             <Text style={s.sortSectionTitle}>Order By</Text>
             {(["newest", "oldest", "name_asc", "name_desc"] as const).map(
               (option) => (
                 <TouchableOpacity
                   key={option}
-                  style={[s.sortOption, sortBy === option && s.sortOptionActive]}
+                  style={[
+                    s.sortOption,
+                    sortBy === option && s.sortOptionActive,
+                  ]}
                   onPress={() => {
                     setSortBy(option);
                     setSortVisible(false);
@@ -1836,6 +1891,7 @@ export default function SemenRecordScreen() {
         }}
         editRecord={editRecord}
         existingBullNames={existingBullNames}
+        bullPhotoByName={bullPhotoByName}
         onSave={(r) => {
           if (editRecord) {
             setRecords((prev) => prev.map((x) => (x.id === r.id ? r : x)));
@@ -1886,7 +1942,17 @@ const s = StyleSheet.create({
     fontWeight: "500",
     marginTop: 1,
   },
-  sortBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: "#ecfeff", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#a5f3fc", marginRight: 8 },
+  sortBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#ecfeff",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#a5f3fc",
+    marginRight: 8,
+  },
   countBadge: {
     backgroundColor: "#ecfeff",
     borderRadius: 20,
@@ -1896,12 +1962,46 @@ const s = StyleSheet.create({
     borderColor: "#a5f3fc",
   },
   countText: { fontSize: 12, fontWeight: "700", color: "#0891b2" },
-  sortOverlay: { flex: 1, backgroundColor: "rgba(17,24,39,0.28)", justifyContent: "flex-start", paddingTop: 96, paddingHorizontal: 16 },
-  sortSheet: { alignSelf: "flex-end", width: 220, backgroundColor: "#fff", borderRadius: 18, borderWidth: 1, borderColor: "#a5f3fc", padding: 12 },
+  sortOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(17,24,39,0.28)",
+    justifyContent: "flex-start",
+    paddingTop: 96,
+    paddingHorizontal: 16,
+  },
+  sortSheet: {
+    alignSelf: "flex-end",
+    width: 220,
+    backgroundColor: "#fff",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#a5f3fc",
+    padding: 12,
+  },
   sortSheetTitle: { fontSize: 15, fontWeight: "800", color: "#111827" },
-  sortSheetSub: { fontSize: 12, color: "#94a3b8", fontWeight: "500", marginTop: 2, marginBottom: 8 },
-  sortSectionTitle: { fontSize: 11, fontWeight: "800", color: "#94a3b8", textTransform: "uppercase", marginTop: 8, marginBottom: 4 },
-  sortOption: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 10, paddingVertical: 10, borderRadius: 12 },
+  sortSheetSub: {
+    fontSize: 12,
+    color: "#94a3b8",
+    fontWeight: "500",
+    marginTop: 2,
+    marginBottom: 8,
+  },
+  sortSectionTitle: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#94a3b8",
+    textTransform: "uppercase",
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  sortOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
   sortOptionActive: { backgroundColor: "#ecfeff" },
   sortOptionText: { fontSize: 13, fontWeight: "700", color: "#64748b" },
   sortOptionTextActive: { color: "#0891b2" },
@@ -2098,7 +2198,12 @@ const c = StyleSheet.create({
     borderRadius: 6,
   },
   breed: { fontSize: 12, color: "#94a3b8", fontWeight: "500", marginTop: 2 },
-  historyHint: { fontSize: 11, color: "#0891b2", fontWeight: "700", marginTop: 3 },
+  historyHint: {
+    fontSize: 11,
+    color: "#0891b2",
+    fontWeight: "700",
+    marginTop: 3,
+  },
   rateBadge: {
     borderRadius: 12,
     borderWidth: 1.5,
@@ -2132,7 +2237,12 @@ const c = StyleSheet.create({
     textTransform: "uppercase",
   },
   historyWrap: { marginTop: 10, gap: 10 },
-  historyNav: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  historyNav: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
   historyBtn: {
     flexDirection: "row",
     alignItems: "center",

@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
+import * as ImagePicker from "expo-image-picker";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import type { BusinessLocation } from "../../../src/services/api";
 import LeaseModal from "./leasing";
@@ -95,6 +96,7 @@ interface Cow {
   leasePrice?: number;
   leaseStartDate?: string;
   leaseReason?: string;
+  photo?: string;
 }
 
 interface Insurance {
@@ -149,6 +151,7 @@ interface CowForm {
   farmLocationLabel: string;
   transferLocationId: string;
   transferLocationLabel: string;
+  photo: string;
 }
 
 // ── Assets
@@ -202,6 +205,7 @@ const EMPTY_FORM: CowForm = {
   farmLocationLabel: "",
   transferLocationId: "",
   transferLocationLabel: "",
+  photo: "",
 };
 
 const STATUS = {
@@ -810,21 +814,213 @@ function QRActionSheet({
   );
 }
 
+async function pickFromLibrary(): Promise<string | null> {
+  const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  if (!perm.granted) return null;
+  const result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ImagePicker.MediaTypeOptions.Images,
+    allowsEditing: false,
+    aspect: [1, 1],
+    quality: 0.4,
+    base64: true,
+  });
+  if (result.canceled || !result.assets?.[0]?.base64) return null;
+  return `data:image/jpeg;base64,${result.assets[0].base64}`;
+}
+
+async function pickFromCamera(): Promise<string | null> {
+  const perm = await ImagePicker.requestCameraPermissionsAsync();
+  if (!perm.granted) return null;
+  const result = await ImagePicker.launchCameraAsync({
+    allowsEditing: false,
+    aspect: [1, 1],
+    quality: 0.4,
+    base64: true,
+  });
+  if (result.canceled || !result.assets?.[0]?.base64) return null;
+  return `data:image/jpeg;base64,${result.assets[0].base64}`;
+}
+
+function PhotoPicker({
+  value,
+  onChange,
+  fallbackImage,
+  showAlert,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  fallbackImage: any;
+  showAlert: (c: AlertConfig) => void;
+}) {
+  const [sheetVisible, setSheetVisible] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const handlePick = async (source: "camera" | "library") => {
+    setSheetVisible(false);
+    setBusy(true);
+    try {
+      const uri =
+        source === "camera" ? await pickFromCamera() : await pickFromLibrary();
+      if (uri) onChange(uri);
+      else if (source === "camera") {
+        showAlert({
+          title: "Camera Permission Required",
+          message: "Enable camera access in Settings to take a photo.",
+          type: "warning",
+        });
+      }
+    } catch (err: any) {
+      showAlert({
+        title: "Photo Failed",
+        message: err.message ?? "Couldn't set the photo.",
+        type: "error",
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <View style={{ alignItems: "center", marginBottom: 18 }}>
+      <TouchableOpacity
+        onPress={() => setSheetVisible(true)}
+        activeOpacity={0.85}
+        style={{
+          width: 96,
+          height: 96,
+          borderRadius: 24,
+          backgroundColor: "#FFF8F0",
+          borderWidth: 1.5,
+          borderColor: "#F5EDE5",
+          alignItems: "center",
+          justifyContent: "center",
+          overflow: "hidden",
+        }}
+      >
+        {busy ? (
+          <ActivityIndicator color="#FFBF55" />
+        ) : (
+          <Image
+            source={value ? { uri: value } : fallbackImage}
+            style={{
+              width: value ? 96 : 56,
+              height: value ? 96 : 56,
+              resizeMode: value ? "cover" : "contain",
+            }}
+          />
+        )}
+        <View
+          style={{
+            position: "absolute",
+            bottom: 0,
+            right: 0,
+            width: 28,
+            height: 28,
+            borderRadius: 14,
+            backgroundColor: "#16a34a",
+            alignItems: "center",
+            justifyContent: "center",
+            borderWidth: 2,
+            borderColor: "#fff",
+          }}
+        >
+          <Ionicons name="camera" size={13} color="#fff" />
+        </View>
+      </TouchableOpacity>
+      <Text
+        style={{
+          fontSize: 11,
+          color: "#C4A882",
+          fontWeight: "600",
+          marginTop: 6,
+        }}
+      >
+        {value ? "Tap to change photo" : "Add a photo"}
+      </Text>
+
+      <Modal
+        visible={sheetVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSheetVisible(false)}
+      >
+        <TouchableOpacity
+          style={qa.overlay}
+          activeOpacity={1}
+          onPress={() => setSheetVisible(false)}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            style={[qa.sheet, { paddingBottom: 24 }]}
+          >
+            <View style={qa.handle} />
+            <Text style={qa.title}>Animal Photo</Text>
+            <TouchableOpacity
+              style={qa.optionCard}
+              onPress={() => handlePick("camera")}
+            >
+              <View style={[qa.optionIcon, { backgroundColor: "#f0fdf4" }]}>
+                <Ionicons name="camera-outline" size={20} color="#16a34a" />
+              </View>
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={qa.optionTitle}>Take Photo</Text>
+                <Text style={qa.optionSub}>Use the camera</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color="#C4A882" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={qa.optionCard}
+              onPress={() => handlePick("library")}
+            >
+              <View style={[qa.optionIcon, { backgroundColor: "#eff6ff" }]}>
+                <Ionicons name="images-outline" size={20} color="#2563eb" />
+              </View>
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={qa.optionTitle}>Choose from Gallery</Text>
+                <Text style={qa.optionSub}>Pick an existing photo</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color="#C4A882" />
+            </TouchableOpacity>
+            {!!value && (
+              <TouchableOpacity
+                style={[qa.optionCard, { marginBottom: 0 }]}
+                onPress={() => {
+                  setSheetVisible(false);
+                  onChange("");
+                }}
+              >
+                <View style={[qa.optionIcon, { backgroundColor: "#fff1f2" }]}>
+                  <Ionicons name="trash-outline" size={20} color="#dc2626" />
+                </View>
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text style={[qa.optionTitle, { color: "#dc2626" }]}>
+                    Remove Photo
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            )}
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+    </View>
+  );
+}
+
 // ── DateField
 function DateField({
   label,
   value,
   onChange,
   placeholder,
-  maximumDate,        // ADD
-  minimumDate,  
+  maximumDate, // ADD
+  minimumDate,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
-  maximumDate?: Date;   
-  minimumDate?: Date;   
+  maximumDate?: Date;
+  minimumDate?: Date;
 }) {
   const [focused, setFocused] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
@@ -884,8 +1080,8 @@ function DateField({
                 mode="date"
                 display="spinner"
                 onChange={handlePickerChange}
-                 maximumDate={maximumDate}
-    minimumDate={minimumDate}
+                maximumDate={maximumDate}
+                minimumDate={minimumDate}
               />
             </View>
           </View>
@@ -898,7 +1094,7 @@ function DateField({
           display="default"
           onChange={handlePickerChange}
           maximumDate={maximumDate}
-    minimumDate={minimumDate}
+          minimumDate={minimumDate}
         />
       )}
     </View>
@@ -1756,6 +1952,7 @@ function CowFormFields({
   tagLocked,
   locations,
   onAddLocation,
+  showAlert,
 }: {
   form: CowForm;
   setF: (k: keyof CowForm) => (v: any) => void;
@@ -1764,6 +1961,7 @@ function CowFormFields({
   tagLocked?: boolean;
   locations: BusinessLocation[];
   onAddLocation: () => void;
+  showAlert: (c: AlertConfig) => void;
 }) {
   const isBull = form.type === "bull";
   const motherOptions =
@@ -1771,6 +1969,12 @@ function CowFormFields({
 
   return (
     <>
+      <PhotoPicker
+        value={form.photo}
+        onChange={setF("photo")}
+        fallbackImage={getAnimalImage(form.type)}
+        showAlert={showAlert}
+      />
       {showTagField && (
         <View style={f.wrap}>
           <Text style={f.label}>
@@ -2092,6 +2296,18 @@ function AddCowModal({
     }
   }, [visible, prefillQrData, prefillIsBarcode]);
 
+  // Auto-select the farm location when the admin only has one branch —
+  // nothing to choose between, so don't make them tap it manually.
+  useEffect(() => {
+    if (visible && locations.length === 1 && !form.farmLocationId) {
+      setForm((p) => ({
+        ...p,
+        farmLocationId: locations[0].id,
+        farmLocationLabel: locations[0].label,
+      }));
+    }
+  }, [visible, locations]);
+
   const pickType = (t: CowType) => {
     setForm((p) => ({ ...p, type: t }));
     setStep("form");
@@ -2115,6 +2331,17 @@ function AddCowModal({
         title: "Missing Fields",
         message: "Please fill in Tag, Name, and Breed.",
         type: "error",
+      });
+      return;
+    }
+    if (!form.farmLocationId) {
+      showAlert({
+        title: "Farm Location Required",
+        message:
+          locations.length > 1
+            ? "Please select which farm location this animal belongs to."
+            : "Please select a farm location before registering this animal.",
+        type: "warning",
       });
       return;
     }
@@ -2407,6 +2634,7 @@ function AddCowModal({
                       tagLocked={tagLocked}
                       locations={locations}
                       onAddLocation={() => setQuickAddVisible(true)}
+                      showAlert={showAlert}
                     />
                   </ScrollView>
                   <TouchableOpacity
@@ -2534,82 +2762,99 @@ function EditCowModal({
         farmLocationLabel: cow.farmLocationLabel ?? "",
         transferLocationId: cow.transferLocationId ?? "",
         transferLocationLabel: cow.transferLocationLabel ?? "",
+        photo: cow.photo ?? "",
       });
     }
   }, [cow]);
 
   useEffect(() => {
-  if (cow && cow.isLeased && cow.activeLeaseId) {
-    setLeaseLoading(true);
-    api
-      .getLease(cow.activeLeaseId)
-      .then((l) => {
-        setLease(l);
-        setLeasePrice(String(l.price ?? ""));
-        setLeaseEndDate(l.end_date ?? "");
-        setLeaseReason(l.reason ?? "");
-      })
-      .catch(() => setLease(null))
-      .finally(() => setLeaseLoading(false));
-  } else {
-    setLease(null);
-  }
-}, [cow]);
+    if (cow && cow.isLeased && cow.activeLeaseId) {
+      setLeaseLoading(true);
+      api
+        .getLease(cow.activeLeaseId)
+        .then((l) => {
+          setLease(l);
+          setLeasePrice(String(l.price ?? ""));
+          setLeaseEndDate(l.end_date ?? "");
+          setLeaseReason(l.reason ?? "");
+        })
+        .catch(() => setLease(null))
+        .finally(() => setLeaseLoading(false));
+    } else {
+      setLease(null);
+    }
+  }, [cow]);
 
-const saveLeaseChanges = async () => {
-  if (!lease) return;
-  setLeaseSaving(true);
-  try {
-    const updated = await api.updateLease(lease.id, {
-      price: leasePrice ? parseFloat(leasePrice) : undefined,
-      end_date: leaseEndDate || undefined,
-      reason: leaseReason || undefined,
+  const saveLeaseChanges = async () => {
+    if (!lease) return;
+    setLeaseSaving(true);
+    try {
+      const updated = await api.updateLease(lease.id, {
+        price: leasePrice ? parseFloat(leasePrice) : undefined,
+        end_date: leaseEndDate || undefined,
+        reason: leaseReason || undefined,
+      });
+      setLease(updated);
+      onSaved({
+        ...cow!,
+        leasedToFarmName: updated.lessee_farm_name,
+        leaseEndDate: updated.end_date,
+      } as Cow);
+      showAlert({
+        title: "Lease Updated",
+        message: "Lease terms saved.",
+        type: "success",
+      });
+    } catch (err: any) {
+      showAlert({
+        title: "Update Failed",
+        message: err.message ?? "Failed to update lease.",
+        type: "error",
+      });
+    } finally {
+      setLeaseSaving(false);
+    }
+  };
+
+  const endLeaseNow = () => {
+    if (!lease) return;
+    showAlert({
+      title: "End Lease",
+      message: `End the lease for ${cow?.name} now? The cow will be marked as no longer leased.`,
+      type: "confirm",
+      confirmText: "End Lease",
+      cancelText: "Cancel",
+      onConfirm: async () => {
+        setLeaseEnding(true);
+        try {
+          await api.completeLease(lease.id);
+          setLease(null);
+          onSaved({
+            ...cow!,
+            isLeased: false,
+            activeLeaseId: undefined,
+            leasedToAdminId: undefined,
+            leasedToFarmName: undefined,
+            leaseEndDate: undefined,
+          } as Cow);
+          showAlert({
+            title: "Lease Ended",
+            message: `Lease for ${cow?.name} has ended.`,
+            type: "success",
+          });
+          onClose();
+        } catch (err: any) {
+          showAlert({
+            title: "Failed",
+            message: err.message ?? "Failed to end lease.",
+            type: "error",
+          });
+        } finally {
+          setLeaseEnding(false);
+        }
+      },
     });
-    setLease(updated);
-    onSaved({
-      ...cow!,
-      leasedToFarmName: updated.lessee_farm_name,
-      leaseEndDate: updated.end_date,
-    } as Cow);
-    showAlert({ title: "Lease Updated", message: "Lease terms saved.", type: "success" });
-  } catch (err: any) {
-    showAlert({ title: "Update Failed", message: err.message ?? "Failed to update lease.", type: "error" });
-  } finally {
-    setLeaseSaving(false);
-  }
-};
-
-const endLeaseNow = () => {
-  if (!lease) return;
-  showAlert({
-    title: "End Lease",
-    message: `End the lease for ${cow?.name} now? The cow will be marked as no longer leased.`,
-    type: "confirm",
-    confirmText: "End Lease",
-    cancelText: "Cancel",
-    onConfirm: async () => {
-      setLeaseEnding(true);
-      try {
-        await api.completeLease(lease.id);
-        setLease(null);
-        onSaved({
-          ...cow!,
-          isLeased: false,
-          activeLeaseId: undefined,
-          leasedToAdminId: undefined,
-          leasedToFarmName: undefined,
-          leaseEndDate: undefined,
-        } as Cow);
-        showAlert({ title: "Lease Ended", message: `Lease for ${cow?.name} has ended.`, type: "success" });
-        onClose();
-      } catch (err: any) {
-        showAlert({ title: "Failed", message: err.message ?? "Failed to end lease.", type: "error" });
-      } finally {
-        setLeaseEnding(false);
-      }
-    },
-  });
-};
+  };
 
   const setF = (k: keyof CowForm) => (v: any) =>
     setForm((p) => ({ ...p, [k]: v }));
@@ -2635,6 +2880,7 @@ const endLeaseNow = () => {
       const payload: any = {
         tag: form.tag,
         name: form.name,
+        photo: form.photo || undefined,
         breed: form.breed,
         weight: form.weight ? `${form.weight} kg` : undefined,
         father: !isBull && form.father ? form.father : undefined,
@@ -2768,84 +3014,117 @@ const endLeaseNow = () => {
                   tagLocked={tagLocked}
                   locations={locations}
                   onAddLocation={() => setQuickAddVisible(true)}
+                  showAlert={showAlert}
                 />
 
                 {cow?.isLeased && (
-  <View style={lm.wrap}>
-    <View style={lm.header}>
-      <Ionicons name="swap-horizontal" size={16} color="#7c3aed" />
-      <Text style={lm.title}>Lease Details</Text>
-    </View>
-    {leaseLoading ? (
-      <ActivityIndicator size="small" color="#7c3aed" style={{ marginVertical: 12 }} />
-    ) : lease ? (
-      <>
-        <Text style={lm.leaseTo}>Leased to: {lease.lessee_farm_name}</Text>
+                  <View style={lm.wrap}>
+                    <View style={lm.header}>
+                      <Ionicons
+                        name="swap-horizontal"
+                        size={16}
+                        color="#7c3aed"
+                      />
+                      <Text style={lm.title}>Lease Details</Text>
+                    </View>
+                    {leaseLoading ? (
+                      <ActivityIndicator
+                        size="small"
+                        color="#7c3aed"
+                        style={{ marginVertical: 12 }}
+                      />
+                    ) : lease ? (
+                      <>
+                        <Text style={lm.leaseTo}>
+                          Leased to: {lease.lessee_farm_name}
+                        </Text>
 
-        <Text style={f.label}>Lease Price (₹)</Text>
-        <View style={f.row}>
-          <Ionicons name="cash-outline" size={15} color="#C4A882" style={{ marginRight: 8 }} />
-          <TextInput
-            style={f.input}
-            value={leasePrice}
-            onChangeText={setLeasePrice}
-            keyboardType="numeric"
-            placeholder="e.g. 5000"
-            placeholderTextColor="#D4B8A8"
-          />
-        </View>
+                        <Text style={f.label}>Lease Price (₹)</Text>
+                        <View style={f.row}>
+                          <Ionicons
+                            name="cash-outline"
+                            size={15}
+                            color="#C4A882"
+                            style={{ marginRight: 8 }}
+                          />
+                          <TextInput
+                            style={f.input}
+                            value={leasePrice}
+                            onChangeText={setLeasePrice}
+                            keyboardType="numeric"
+                            placeholder="e.g. 5000"
+                            placeholderTextColor="#D4B8A8"
+                          />
+                        </View>
 
-        <DateField
-          label="End Date (edit to extend or shorten)"
-          value={leaseEndDate}
-          onChange={setLeaseEndDate}
-        />
+                        <DateField
+                          label="End Date (edit to extend or shorten)"
+                          value={leaseEndDate}
+                          onChange={setLeaseEndDate}
+                        />
 
-        <Field
-          label="Reason"
-          value={leaseReason}
-          onChange={setLeaseReason}
-          placeholder="e.g. Breeding, dairy supplement..."
-          icon="document-text-outline"
-          multiline
-        />
+                        <Field
+                          label="Reason"
+                          value={leaseReason}
+                          onChange={setLeaseReason}
+                          placeholder="e.g. Breeding, dairy supplement..."
+                          icon="document-text-outline"
+                          multiline
+                        />
 
-        <View style={{ flexDirection: "row", gap: 8, marginTop: 4 }}>
-          <TouchableOpacity
-            style={[lm.saveBtn, leaseSaving && { opacity: 0.7 }]}
-            onPress={saveLeaseChanges}
-            disabled={leaseSaving}
-          >
-            {leaseSaving ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <>
-                <Ionicons name="save-outline" size={14} color="#fff" />
-                <Text style={lm.saveBtnText}>Save Lease Changes</Text>
-              </>
-            )}
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[lm.endBtn, leaseEnding && { opacity: 0.7 }]}
-            onPress={endLeaseNow}
-            disabled={leaseEnding}
-          >
-            {leaseEnding ? (
-              <ActivityIndicator color="#dc2626" size="small" />
-            ) : (
-              <>
-                <Ionicons name="close-circle-outline" size={14} color="#dc2626" />
-                <Text style={lm.endBtnText}>End Lease</Text>
-              </>
-            )}
-          </TouchableOpacity>
-        </View>
-      </>
-    ) : (
-      <Text style={{ fontSize: 12, color: "#C4A882" }}>Could not load lease details.</Text>
-    )}
-  </View>
-)}
+                        <View
+                          style={{ flexDirection: "row", gap: 8, marginTop: 4 }}
+                        >
+                          <TouchableOpacity
+                            style={[
+                              lm.saveBtn,
+                              leaseSaving && { opacity: 0.7 },
+                            ]}
+                            onPress={saveLeaseChanges}
+                            disabled={leaseSaving}
+                          >
+                            {leaseSaving ? (
+                              <ActivityIndicator color="#fff" size="small" />
+                            ) : (
+                              <>
+                                <Ionicons
+                                  name="save-outline"
+                                  size={14}
+                                  color="#fff"
+                                />
+                                <Text style={lm.saveBtnText}>
+                                  Save Lease Changes
+                                </Text>
+                              </>
+                            )}
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[lm.endBtn, leaseEnding && { opacity: 0.7 }]}
+                            onPress={endLeaseNow}
+                            disabled={leaseEnding}
+                          >
+                            {leaseEnding ? (
+                              <ActivityIndicator color="#dc2626" size="small" />
+                            ) : (
+                              <>
+                                <Ionicons
+                                  name="close-circle-outline"
+                                  size={14}
+                                  color="#dc2626"
+                                />
+                                <Text style={lm.endBtnText}>End Lease</Text>
+                              </>
+                            )}
+                          </TouchableOpacity>
+                        </View>
+                      </>
+                    ) : (
+                      <Text style={{ fontSize: 12, color: "#C4A882" }}>
+                        Could not load lease details.
+                      </Text>
+                    )}
+                  </View>
+                )}
               </ScrollView>
               <TouchableOpacity
                 onPress={submit}
@@ -3329,8 +3608,15 @@ function CowCard({
             ]}
           >
             <Image
-              source={getAnimalImage(item.type)}
-              style={{ width: 40, height: 40, resizeMode: "contain" }}
+              source={
+                item.photo ? { uri: item.photo } : getAnimalImage(item.type)
+              }
+              style={{
+                width: item.photo ? 52 : 40,
+                height: item.photo ? 52 : 40,
+                borderRadius: item.photo ? 14 : 0,
+                resizeMode: item.photo ? "cover" : "contain",
+              }}
             />
           </View>
           <View style={{ flex: 1, marginLeft: 12, minWidth: 0 }}>
@@ -4163,8 +4449,10 @@ function ListHeader({
   cows: Cow[];
   search: string;
   setSearch: (v: string) => void;
-  filterType: "all" | "mature" | "newborn" | "bull";
-  setFilterType: (v: "all" | "mature" | "newborn" | "bull") => void;
+  filterType: "all" | "mature" | "newborn" | "bull" | "leaseOut" | "leaseIn";
+  setFilterType: (
+    v: "all" | "mature" | "newborn" | "bull" | "leaseOut" | "leaseIn",
+  ) => void;
   sortBy: SortOption;
   setSortBy: (v: SortOption) => void;
   dateRange: DateRangeOption;
@@ -4467,35 +4755,54 @@ function ListHeader({
         style={lh.filterScroll}
         contentContainerStyle={lh.filterContent}
       >
-        {(["all", "mature", "newborn", "bull"] as const).map((t) => (
-          <TouchableOpacity
-            key={t}
-            onPress={() => setFilterType(t)}
-            style={[lh.filterChip, filterType === t && lh.filterChipActive]}
-            activeOpacity={0.8}
-          >
-            <Image
-              source={
-                t === "bull" ? bullImg : t === "newborn" ? calfImg : cowImg
-              }
-              style={lh.filterChipImg}
-            />
-            <Text
-              style={[
-                lh.filterChipText,
-                filterType === t && lh.filterChipTextActive,
-              ]}
+        {(
+           ["all", "mature", "leaseIn", "newborn", "bull", "leaseOut"] as const
+        ).map((t) => {
+          const isLeaseChip = t === "leaseOut" || t === "leaseIn";
+          return (
+            <TouchableOpacity
+              key={t}
+              onPress={() => setFilterType(t)}
+              style={[lh.filterChip, filterType === t && lh.filterChipActive]}
+              activeOpacity={0.8}
             >
-              {t === "all"
-                ? "All"
-                : t === "mature"
-                  ? "Cows"
-                  : t === "newborn"
-                    ? "Calves"
-                    : "Bulls"}
-            </Text>
-          </TouchableOpacity>
-        ))}
+              {isLeaseChip ? (
+                <Ionicons
+                  name={
+                    t === "leaseOut" ? "swap-horizontal" : "business-outline"
+                  }
+                  size={15}
+                  color={filterType === t ? "#fff" : "#8B6854"}
+                />
+              ) : (
+                <Image
+                  source={
+                    t === "bull" ? bullImg : t === "newborn" ? calfImg : cowImg
+                  }
+                  style={lh.filterChipImg}
+                />
+              )}
+              <Text
+                style={[
+                  lh.filterChipText,
+                  filterType === t && lh.filterChipTextActive,
+                ]}
+              >
+                {t === "all"
+                  ? "All"
+                  : t === "mature"
+                    ? "Cows"
+                    : t === "newborn"
+                      ? "Calves"
+                      : t === "bull"
+                        ? "Bulls"
+                        : t === "leaseOut"
+                          ? "Lease Out"
+                          : "Lease In"}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
       </ScrollView>
 
       <View style={{ height: 8 }} />
@@ -4538,7 +4845,7 @@ export default function CowsScreen() {
   // Filter / sort state
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState<
-    "all" | "mature" | "newborn" | "bull"
+    "all" | "mature" | "newborn" | "bull" | "leaseOut" | "leaseIn"
   >("all");
   const [sortBy, setSortBy] = useState<SortOption>("newest");
   const [dateRange, setDateRange] = useState<DateRangeOption>("all_time");
@@ -4588,6 +4895,25 @@ export default function CowsScreen() {
     setRefreshing(false);
   };
 
+    const requireLocation = () => {
+    if (locations.length === 0) {
+      showAlert({
+        title: "Business Location Required",
+        message: "You can't add cows until a business location is set. Add one in Business Information first.",
+        type: "confirm",
+        confirmText: "Go to Settings",
+        cancelText: "Cancel",
+        onConfirm: () =>
+          router.push({
+            pathname: "/(admin)/settings",
+            params: { openLocations: "1" },
+          } as any),
+      });
+      return false;
+    }
+    return true;
+  };
+
   const handleDelete = (cow: Cow) => {
     showAlert({
       title: `Delete ${cow.type === "bull" ? "Bull" : "Cow"}`,
@@ -4618,6 +4944,7 @@ export default function CowsScreen() {
   };
 
   const handleAddNewFromScan = (qrData: string, isBarcodeLinked: boolean) => {
+    if (!requireLocation()) return;
     setAddIsBarcode(isBarcodeLinked);
     setAddWithScan(true);
     setAddVisible(true);
@@ -4644,8 +4971,21 @@ export default function CowsScreen() {
     return diffDays <= 365;
   };
 
+
   const filteredCows = cows
-    .filter((c) => filterType === "all" || c.type === filterType)
+    .filter((c) => {
+      // A cow should never be both leased-out and leased-in at once.
+      // If the data has both flags set, isLeasedIn wins — the cow shows
+      // only in Lease In, never in Lease Out or both.
+      const isLeaseOut = !!c.isLeased && !c.isLeasedIn;
+      const isLeaseIn = !!c.isLeasedIn;
+
+      if (filterType === "leaseOut") return isLeaseOut;
+      if (filterType === "leaseIn") return isLeaseIn;
+      // Leased cows only ever show under their own lease tab, not elsewhere
+      if (isLeaseOut || isLeaseIn) return false;
+      return filterType === "all" || c.type === filterType;
+    })
     .filter((c) => isWithinRange(c.created_at, dateRange))
     .filter(
       (c) => locationFilter === "all" || c.farmLocationId === locationFilter, // NEW
@@ -4689,9 +5029,10 @@ export default function CowsScreen() {
           >
             <Ionicons name="barcode-outline" size={20} color="#7c3aed" />
           </TouchableOpacity>
-          <TouchableOpacity
+                  <TouchableOpacity
             style={sc.addBtn}
             onPress={() => {
+              if (!requireLocation()) return;
               setAddWithScan(false);
               setAddIsBarcode(false);
               setAddVisible(true);
@@ -4797,9 +5138,10 @@ export default function CowsScreen() {
                   : "Tap + to register your first animal"}
               </Text>
               {!search && (
-                <TouchableOpacity
+                                <TouchableOpacity
                   style={sc.emptyAddBtn}
                   onPress={() => {
+                    if (!requireLocation()) return;
                     setAddWithScan(false);
                     setAddIsBarcode(false);
                     setAddVisible(true);
@@ -4834,7 +5176,7 @@ export default function CowsScreen() {
         showAlert={showAlert}
       />
 
-      <AddCowModal
+          <AddCowModal
         visible={addVisible}
         onClose={() => {
           setAddVisible(false);
@@ -6499,9 +6841,19 @@ const lm = StyleSheet.create({
     marginTop: 8,
     marginBottom: 4,
   },
-  header: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 10,
+  },
   title: { fontSize: 14, fontWeight: "800", color: "#7c3aed" },
-  leaseTo: { fontSize: 12, color: "#6d28d9", fontWeight: "600", marginBottom: 10 },
+  leaseTo: {
+    fontSize: 12,
+    color: "#6d28d9",
+    fontWeight: "600",
+    marginBottom: 10,
+  },
   saveBtn: {
     flex: 1,
     flexDirection: "row",
@@ -6570,5 +6922,4 @@ const pr = StyleSheet.create({
     paddingVertical: 8,
   },
   btnText: { fontSize: 12, fontWeight: "700", color: "#fff" },
-  
 });

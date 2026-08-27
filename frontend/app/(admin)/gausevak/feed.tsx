@@ -133,6 +133,7 @@ interface CowFeedRow {
   isLeasedIn: boolean;
   isLeasedOut: boolean;
   lessorFarmName?: string;
+  photo?: string;
 }
 
 interface LogSummary {
@@ -788,6 +789,7 @@ function mapToCowRows(
       isLeasedIn: !!c.is_leased_in,
       isLeasedOut: !!c.is_leased_out,
       lessorFarmName: c.lessor_farm_name,
+      photo: c.photo || undefined,
     };
   });
 }
@@ -2514,13 +2516,21 @@ function FeedCard({
         activeOpacity={0.85}
         style={lc.hdr}
       >
-        <View style={lc.avatar}>
-          <Image
-            source={getAnimalImage(item.type)}
-            style={{ width: 36, height: 36 }}
-            resizeMode="contain"
-          />
-        </View>
+ <View style={lc.avatar}>
+  {item.photo ? (
+    <Image
+      source={{ uri: item.photo }}
+      style={{ width: 44, height: 44, borderRadius: 12 }}
+      resizeMode="cover"
+    />
+  ) : (
+    <Image
+      source={getAnimalImage(item.type)}
+      style={{ width: 36, height: 36 }}
+      resizeMode="contain"
+    />
+  )}
+</View>
         <View style={{ flex: 1, marginLeft: 10 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
             <Text style={lc.name} numberOfLines={1}>

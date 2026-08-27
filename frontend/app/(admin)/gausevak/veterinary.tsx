@@ -1080,10 +1080,7 @@ function VetDetailModal({
                             style={{ marginRight: 4 }}
                           />
                           <Text
-                            style={[
-                              dm.chipText,
-                              active && dm.chipTextActive,
-                            ]}
+                            style={[dm.chipText, active && dm.chipTextActive]}
                           >
                             {loc.label}
                           </Text>
@@ -1102,7 +1099,11 @@ function VetDetailModal({
                 )}
 
                 <TouchableOpacity
-                  style={[dm.saveBtn, saving && { opacity: 0.6 }, { marginTop: 16 }]}
+                  style={[
+                    dm.saveBtn,
+                    saving && { opacity: 0.6 },
+                    { marginTop: 16 },
+                  ]}
                   onPress={handleSave}
                   disabled={saving}
                 >
@@ -1667,6 +1668,28 @@ export default function VeterinaryScreen() {
     setToast({ visible: true, msg, variant });
   const hideToast = () => setToast((t) => ({ ...t, visible: false }));
 
+  const requireLocation = () => {
+    if (locations.length === 0) {
+      Alert.alert(
+        "Business Location Required",
+        "You can't add a veterinarian until a business location is set. Add one in Business Information first.",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Go to Settings",
+            onPress: () =>
+              router.push({
+                pathname: "/(admin)/settings",
+                params: { openLocations: "1" },
+              } as any),
+          },
+        ],
+      );
+      return false;
+    }
+    return true;
+  };
+
   const fetchVets = async () => {
     try {
       setLoading(true);
@@ -1708,6 +1731,15 @@ export default function VeterinaryScreen() {
   const handleCreate = async () => {
     if (!form.name.trim() || !form.email.trim() || !form.password.trim()) {
       showToast("Name, email and password are required", "error");
+      return;
+    }
+    if (form.farm_location_ids.length === 0) {
+      Alert.alert(
+        "Farm Location Required",
+        locations.length > 1
+          ? "Please choose at least one farm location for this veterinarian."
+          : "Please select a farm location before creating this veterinarian.",
+      );
       return;
     }
     try {
@@ -1869,7 +1901,15 @@ export default function VeterinaryScreen() {
         <TouchableOpacity
           style={styles.addBtn}
           onPress={() => {
+            if (!requireLocation()) return;
             setShowPassword(false);
+            setForm((f) => ({
+              ...f,
+              farm_location_ids:
+                locations.length === 1 ? [locations[0].id] : [],
+              farm_location_labels:
+                locations.length === 1 ? [locations[0].label] : [],
+            }));
             setModalVisible(true);
           }}
         >
@@ -1926,7 +1966,15 @@ export default function VeterinaryScreen() {
           <TouchableOpacity
             style={styles.emptyBtn}
             onPress={() => {
+              if (!requireLocation()) return;
               setShowPassword(false);
+              setForm((f) => ({
+                ...f,
+                farm_location_ids:
+                  locations.length === 1 ? [locations[0].id] : [],
+                farm_location_labels:
+                  locations.length === 1 ? [locations[0].label] : [],
+              }));
               setModalVisible(true);
             }}
           >
@@ -2176,7 +2224,7 @@ export default function VeterinaryScreen() {
                 </ScrollView>
 
                 <Text style={[styles.sectionLabel, { marginTop: 4 }]}>
-                  FARM ADDRESSES{" "}
+                  FARM ADDRESSES *{" "}
                   {form.farm_location_ids.length > 0 &&
                     `(${form.farm_location_ids.length} selected)`}
                 </Text>
@@ -2232,7 +2280,11 @@ export default function VeterinaryScreen() {
                 )}
 
                 <TouchableOpacity
-                  style={[styles.createBtn, creating && { opacity: 0.65 }, { marginTop: 20 }]}
+                  style={[
+                    styles.createBtn,
+                    creating && { opacity: 0.65 },
+                    { marginTop: 20 },
+                  ]}
                   onPress={handleCreate}
                   disabled={creating}
                 >
