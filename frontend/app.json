@@ -2,7 +2,7 @@
   "expo": {
     "name": "Gau Satva",
     "slug": "frontend",
-    "version": "1.0.16",
+    "version": "1.0.17",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "gausatv",
@@ -19,7 +19,7 @@
       }
     },
     "android": {
-      "versionCode": 17,
+      "versionCode": 18,
       "googleServicesFile": "./android/app/google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
