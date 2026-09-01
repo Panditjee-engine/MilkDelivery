@@ -613,6 +613,11 @@ function FarmSaleScreenInner() {
   const [qrImage, setQrImage] = useState<string | null>(null);
   const [qrError, setQrError] = useState<string | null>(null);
 
+  const [products, setProducts] = useState<any[]>([]);
+  const [productsLoading, setProductsLoading] = useState(false);
+  const [productPickerVisible, setProductPickerVisible] = useState(false);
+  const [productSearch, setProductSearch] = useState("");
+
   // ── Data loading (same API calls as before) ──
 
   const fetchAll = useCallback(async () => {
@@ -745,6 +750,32 @@ function FarmSaleScreenInner() {
     };
   }, [paymentMethod]);
 
+   const fetchProducts = useCallback(async () => {
+    setProductsLoading(true);
+    try {
+      const data = await api.workerGetProducts();
+      setProducts(Array.isArray(data) ? data : []);
+    } catch (e) {
+      console.log("worker products fetch error:", e);
+    } finally {
+      setProductsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchProducts();
+  }, [fetchProducts]);
+
+  const selectProduct = (p: any) => {
+    setProductName(p.name ?? "");
+    if (p.price != null) setPricePerUnit(String(p.price));
+    if (p.unit && (UNIT_OPTIONS as readonly string[]).includes(p.unit)) {
+      setUnit(p.unit);
+    }
+    setProductPickerVisible(false);
+    setProductSearch("");
+  };
+
   const pickReceipt = async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
@@ -861,6 +892,88 @@ function FarmSaleScreenInner() {
         onClose={() => setViewerVisible(false)}
       />
 
+            <Modal
+        visible={productPickerVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setProductPickerVisible(false)}
+      >
+        <View style={pp.overlay}>
+          <View style={pp.sheet}>
+            <View style={pp.header}>
+              <Text style={pp.title}>Select Product</Text>
+              <TouchableOpacity
+                onPress={() => setProductPickerVisible(false)}
+                hitSlop={10}
+              >
+                <Ionicons name="close" size={22} color="#111827" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={pp.searchBox}>
+              <Ionicons name="search" size={16} color="#9ca3af" />
+              <TextInput
+                style={pp.searchInput}
+                placeholder="Search products"
+                placeholderTextColor="#9ca3af"
+                value={productSearch}
+                onChangeText={setProductSearch}
+              />
+            </View>
+
+            {productsLoading ? (
+              <ActivityIndicator style={{ marginTop: 30 }} color="#4f46e5" />
+            ) : (
+              <ScrollView style={{ maxHeight: 420 }} keyboardShouldPersistTaps="handled">
+                {products
+                  .filter((p) =>
+                    (p.name ?? "")
+                      .toLowerCase()
+                      .includes(productSearch.trim().toLowerCase()),
+                  )
+                  .map((p) => (
+                    <TouchableOpacity
+                      key={p.id}
+                      style={pp.item}
+                      onPress={() => selectProduct(p)}
+                      activeOpacity={0.7}
+                    >
+                      {p.image ? (
+                        <Image source={{ uri: p.image }} style={pp.itemImage} />
+                      ) : (
+                        <View style={pp.itemImagePlaceholder}>
+                          <Ionicons name="cube-outline" size={18} color="#9ca3af" />
+                        </View>
+                      )}
+                      <View style={{ flex: 1 }}>
+                        <Text style={pp.itemName} numberOfLines={1}>
+                          {p.name}
+                        </Text>
+                        {p.category ? (
+                          <Text style={pp.itemCategory}>{p.category}</Text>
+                        ) : null}
+                      </View>
+                      <Text style={pp.itemPrice}>
+                        ₹{Number(p.price ?? 0).toFixed(2)}
+                        {p.unit ? ` / ${p.unit}` : ""}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+
+                {!productsLoading && products.length === 0 && (
+                  <View style={{ alignItems: "center", paddingVertical: 40 }}>
+                    <Ionicons name="cube-outline" size={32} color="#d1d5db" />
+                    <Text style={{ color: "#9ca3af", marginTop: 8, fontSize: 13 }}>
+                      No products found
+                    </Text>
+                  </View>
+                )}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
+
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
@@ -960,13 +1073,21 @@ function FarmSaleScreenInner() {
                 value={customerName}
                 onChangeText={setCustomerName}
               />
-              <TextInput
-                style={styles.inputField}
-                placeholder="Product name (e.g., Organic Tomatoes)"
-                placeholderTextColor="#9ca3af"
-                value={productName}
-                onChangeText={setProductName}
-              />
+          <TouchableOpacity
+  style={styles.inputField}
+  onPress={() => setProductPickerVisible(true)}
+  activeOpacity={0.7}
+>
+  <Text
+    style={[
+      styles.inputFieldText,
+      !productName && styles.inputFieldPlaceholder,
+    ]}
+    numberOfLines={1}
+  >
+    {productName || "Select product"}
+  </Text>
+</TouchableOpacity>
 
               <View style={styles.row}>
                 <View style={{ flex: 1 }}>
@@ -1303,6 +1424,12 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     color: "#111827",
   },
+    inputFieldText: {
+    fontSize: 13,
+    color: "#111827",
+    lineHeight: 44 - 2, // vertically centers within the 44px inputField height
+  },
+  inputFieldPlaceholder: { color: "#9ca3af" },
   row: { flexDirection: "row", gap: 10, marginBottom: 10 },
   unitSelector: { flexDirection: "row", gap: 6 },
   unitChip: {
@@ -1473,4 +1600,60 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   bottomAddBtnText: { color: "#fff", fontSize: 14, fontWeight: "bold" },
+});
+
+const pp = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "flex-end",
+  },
+  sheet: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    paddingHorizontal: 18,
+    paddingTop: 16,
+    paddingBottom: 24,
+    maxHeight: "80%",
+  },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 14,
+  },
+  title: { fontSize: 17, fontWeight: "800", color: "#111827" },
+  searchBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    height: 42,
+    marginBottom: 12,
+  },
+  searchInput: { flex: 1, fontSize: 13, color: "#111827" },
+  item: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f3f4f6",
+  },
+  itemImage: { width: 40, height: 40, borderRadius: 8, backgroundColor: "#f3f4f6" },
+  itemImagePlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    backgroundColor: "#f3f4f6",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  itemName: { fontSize: 14, fontWeight: "700", color: "#111827" },
+  itemCategory: { fontSize: 11, color: "#9ca3af", marginTop: 1 },
+  itemPrice: { fontSize: 13, fontWeight: "800", color: "#4f46e5" },
 });

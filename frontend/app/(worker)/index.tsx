@@ -333,8 +333,8 @@ function useActionMeta() {
     },
     farmSale: {
       ...ACTION_KEYS.farmSale,
-      label: t("farmSaleLabel") ?? "Farm Sale",
-      desc: t("farmSaleDesc") ?? "Record product sold on farm",
+      label: t("farm Sale") ?? "Farm Sale",
+      desc: t("Enter Farm Sale Details") ?? "Record product sold on farm",
     },
   };
 }
@@ -2556,13 +2556,13 @@ function DashboardContent() {
               </Text>
             </View>
           </TouchableOpacity>
-          <TouchableOpacity
+          {/* <TouchableOpacity
             style={s.settingsBtn}
             onPress={() => router.push("/(worker)/settings" as any)}
             activeOpacity={0.85}
           >
             <Ionicons name="settings-outline" size={18} color="#4f46e5" />
-          </TouchableOpacity>
+          </TouchableOpacity> */}
         </View>
       </Animated.View>
 
@@ -2672,6 +2672,27 @@ function DashboardContent() {
         delay={240}
         onPress={() => setActiveAction("farmSale")}
       />
+
+      <TouchableOpacity
+        style={[
+          bb.card,
+          { backgroundColor: "#eef2ff", borderColor: "#4f46e530" },
+        ]}
+        onPress={() => router.push("/(worker)/settings" as any)}
+        activeOpacity={0.85}
+      >
+        <View style={[bb.colorBar, { backgroundColor: "#4f46e5" }]} />
+        <View style={[bb.iconCircle, { backgroundColor: "#4f46e5" }]}>
+          <Ionicons name="settings-outline" size={26} color="#fff" />
+        </View>
+        <View style={bb.textWrap}>
+          <Text style={bb.label}>Settings</Text>
+          <Text style={bb.desc}>App settings & extra work</Text>
+        </View>
+        <View style={[bb.arrowWrap, { backgroundColor: "#4f46e515" }]}>
+          <Ionicons name="chevron-forward" size={20} color="#4f46e5" />
+        </View>
+      </TouchableOpacity>
 
       <View style={{ height: 40 }} />
 
