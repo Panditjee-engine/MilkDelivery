@@ -3889,6 +3889,32 @@ async getSubscriptionHistory() {
     });
   }
 
+    async workerGetProducts(category?: string) {
+    const token = await AsyncStorage.getItem("worker_token");
+    const query = category ? `?category=${encodeURIComponent(category)}` : "";
+    const response = await fetch(`${API_BASE}/api/worker/products${query}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await response.json();
+    if (!response.ok)
+      throw new Error(data.detail || "Failed to fetch products");
+    return data;
+  }
+
+  async workerGetProduct(productId: string) {
+    const token = await AsyncStorage.getItem("worker_token");
+    const response = await fetch(
+      `${API_BASE}/api/worker/products/${productId}`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    );
+    const data = await response.json();
+    if (!response.ok)
+      throw new Error(data.detail || "Failed to fetch product");
+    return data;
+  }
+
   // Logout
   logout = async () => {
     this.setToken(null);
