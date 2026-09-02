@@ -888,7 +888,7 @@ function ProductPickerModal({
                         {typeof p.stock === "number" ? `${p.stock} in stock` : "In inventory"}
                       </Text>
                     </View>
-                   
+
                   </TouchableOpacity>
                 ))
               )}
@@ -2037,7 +2037,7 @@ function FarmSaleScreenInner() {
     } catch (err: any) {
       setQrError(
         err?.message ??
-          "No payment QR uploaded yet. Upload one from Settings → Wallet Payment.",
+        "No payment QR uploaded yet. Upload one from Settings → Wallet Payment.",
       );
     } finally {
       setQrLoading(false);
@@ -2365,7 +2365,7 @@ function FarmSaleScreenInner() {
         <View style={styles.searchBox}>
           <TextInput
             placeholder="Search customer or product"
-            placeholderTextColor="#9ca3af"
+            placeholderTextColor="#a4a7ac"
             style={styles.searchInput}
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -2554,7 +2554,7 @@ function FarmSaleScreenInner() {
                   {saving ? (
                     <ActivityIndicator size="small" color="#000" />
                   ) : (
-                    <Text style={styles.saveBtnText}>Save Sale</Text>
+                    <Text style={styles.saveBtnText}>Save</Text>
                   )}
                 </TouchableOpacity>
               </View>
@@ -2698,17 +2698,19 @@ const styles = StyleSheet.create({
   },
   allSalesBtnTop: {
     flex: 1,
+    fontSize: 12,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#e5e7eb",
+    backgroundColor: "#f97316",
+    borderColor: "#f97316",
     paddingHorizontal: 10,
     paddingVertical: 10,
     borderRadius: 8,
     gap: 5,
   },
-  allSalesBtnTopText: { fontSize: 12, fontWeight: "bold", color: "#374151" },
+  allSalesBtnTopText: { fontSize: 12, fontWeight: "bold", color: "#08090c" },
   addBtnTop: {
     flex: 1,
     flexDirection: "row",
@@ -2787,7 +2789,8 @@ const styles = StyleSheet.create({
   cancelBtn: {
     flex: 1,
     borderWidth: 1,
-    borderColor: "#d1d5db",
+    borderColor: "#f87575",
+    backgroundColor: "#f17e7e",
     borderRadius: 10,
     paddingVertical: 12,
     alignItems: "center",
