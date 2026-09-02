@@ -30,7 +30,7 @@ if (
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-// ── Color Palette 
+// ── Color Palette
 const C = {
   primary: "#FF9675",
   accent: "#8B6854",
@@ -48,7 +48,7 @@ const C = {
   feedGreen: "#15803d",
 };
 
-// ── Images 
+// ── Images
 const cowImg = require("../../assets/images/gir-cow.png");
 const bullImg = require("../../assets/images/bull-cow.png");
 const calfImg = require("../../assets/images/calf-cow.png");
@@ -59,7 +59,7 @@ function getCowImage(type?: string) {
   return cowImg;
 }
 
-// ── Constants 
+// ── Constants
 const IS_IOS = Platform.OS === "ios";
 const STATUS_H = IS_IOS ? 0 : (StatusBar.currentHeight ?? 0);
 const TODAY = new Date().toISOString().split("T")[0];
@@ -72,7 +72,7 @@ const todayLabel = new Date().toLocaleDateString("en-IN", {
 const HEADER_MAX = IS_IOS ? 210 : 210 + STATUS_H;
 const HEADER_MIN = IS_IOS ? 60 : 60 + STATUS_H;
 
-// ── Types 
+// ── Types
 interface AnimalRow {
   id: string;
   tag_number: string;
@@ -95,6 +95,12 @@ interface AnimalRow {
   feedMorning?: boolean;
   feedEvening?: boolean;
   feedWorker?: string | null;
+  isLeasedIn: boolean;
+  isLeasedOut: boolean;
+  lessorFarmName?: string | null;
+  leasedToFarmName?: string | null;
+  leasedLocationLabel?: string | null;
+  leaseEndDate?: string | null;
 }
 
 interface MilkEntryRow {
@@ -113,7 +119,7 @@ interface FeedLogRow {
   worker_name?: string | null;
 }
 
-// ── Helpers 
+// ── Helpers
 function isHealthy(s: string) {
   return s === "healthy";
 }
@@ -159,7 +165,7 @@ function formatDate(d?: string) {
   });
 }
 
-// ── Stats Strip 
+// ── Stats Strip
 function StatsStrip({
   total,
   healthy,
@@ -219,7 +225,7 @@ const ss = StyleSheet.create({
   },
 });
 
-// ── Health Update Modal 
+// ── Health Update Modal
 const HEALTH_OPTIONS = [
   {
     key: "healthy",
@@ -454,7 +460,7 @@ const hm = StyleSheet.create({
   saveBtnText: { fontSize: 15, fontWeight: "800", color: "#fff" },
 });
 
-// ── Milk + Feed Modal (with Undo) 
+// ── Milk + Feed Modal (with Undo)
 const mf = StyleSheet.create({
   shiftRow: { flexDirection: "row", gap: 8, marginBottom: 14 },
   shiftChip: {
@@ -700,7 +706,11 @@ function MilkFeedModal({
             </View>
 
             {/* ── Add Milk ── */}
-            <SectionHead icon="water-outline" label="ADD MILK RECORD" color={C.milkBlue} />
+            <SectionHead
+              icon="water-outline"
+              label="ADD MILK RECORD"
+              color={C.milkBlue}
+            />
 
             <View style={mf.shiftRow}>
               {(["morning", "evening"] as const).map((sh) => {
@@ -757,20 +767,34 @@ function MilkFeedModal({
 
             {/* ── Today's entries with Undo ── */}
             <View style={{ marginTop: 18 }}>
-              <SectionHead icon="time-outline" label="TODAY'S MILK ENTRIES" color={C.dark} />
+              <SectionHead
+                icon="time-outline"
+                label="TODAY'S MILK ENTRIES"
+                color={C.dark}
+              />
               {loadingData ? (
-                <ActivityIndicator size="small" color={C.primary} style={{ marginVertical: 10 }} />
+                <ActivityIndicator
+                  size="small"
+                  color={C.primary}
+                  style={{ marginVertical: 10 }}
+                />
               ) : entries.length === 0 ? (
                 <Text style={mf.emptyRow}>No milk entries logged today</Text>
               ) : (
                 entries
                   .slice()
-                  .sort((a, b) => (a.shift === b.shift ? 0 : a.shift === "morning" ? -1 : 1))
+                  .sort((a, b) =>
+                    a.shift === b.shift ? 0 : a.shift === "morning" ? -1 : 1,
+                  )
                   .map((e) => (
                     <View key={e.id} style={mf.entryRow}>
                       <View style={mf.entryIcon}>
                         <Ionicons
-                          name={e.shift === "morning" ? "sunny-outline" : "moon-outline"}
+                          name={
+                            e.shift === "morning"
+                              ? "sunny-outline"
+                              : "moon-outline"
+                          }
                           size={14}
                           color={C.milkBlue}
                         />
@@ -792,7 +816,11 @@ function MilkFeedModal({
                           <ActivityIndicator size="small" color={C.sick} />
                         ) : (
                           <>
-                            <Ionicons name="arrow-undo-outline" size={12} color={C.sick} />
+                            <Ionicons
+                              name="arrow-undo-outline"
+                              size={12}
+                              color={C.sick}
+                            />
                             <Text style={mf.undoBtnText}>Undo</Text>
                           </>
                         )}
@@ -804,7 +832,11 @@ function MilkFeedModal({
 
             {/* ── Feed status ── */}
             <View style={{ marginTop: 18, marginBottom: 4 }}>
-              <SectionHead icon="leaf-outline" label="TODAY'S FEED" color={C.feedGreen} />
+              <SectionHead
+                icon="leaf-outline"
+                label="TODAY'S FEED"
+                color={C.feedGreen}
+              />
               <View style={mf.feedRow}>
                 {(["morning", "evening"] as const).map((sh) => {
                   const fed = !!feedStatus[sh];
@@ -812,17 +844,29 @@ function MilkFeedModal({
                   return (
                     <TouchableOpacity
                       key={sh}
-                      style={[mf.feedBox, fed ? mf.feedBoxFed : mf.feedBoxNotFed]}
+                      style={[
+                        mf.feedBox,
+                        fed ? mf.feedBoxFed : mf.feedBoxNotFed,
+                      ]}
                       onPress={() => toggleFeed(sh)}
                       disabled={busy}
                       activeOpacity={0.8}
                     >
                       {busy ? (
-                        <ActivityIndicator size="small" color={fed ? C.feedGreen : C.textMuted} />
+                        <ActivityIndicator
+                          size="small"
+                          color={fed ? C.feedGreen : C.textMuted}
+                        />
                       ) : (
                         <>
                           <Ionicons
-                            name={fed ? "checkmark-circle" : (sh === "morning" ? "sunny-outline" : "moon-outline")}
+                            name={
+                              fed
+                                ? "checkmark-circle"
+                                : sh === "morning"
+                                  ? "sunny-outline"
+                                  : "moon-outline"
+                            }
                             size={20}
                             color={fed ? C.feedGreen : C.textMuted}
                           />
@@ -861,7 +905,7 @@ function MilkFeedModal({
   );
 }
 
-// ── Detail Row 
+// ── Detail Row
 function DR({
   icon,
   label,
@@ -900,7 +944,7 @@ const dr = StyleSheet.create({
   value: { fontSize: 11, color: C.text, fontWeight: "600", flex: 1 },
 });
 
-// ── Section Header 
+// ── Section Header
 function SectionHead({
   icon,
   label,
@@ -941,7 +985,7 @@ const seh = StyleSheet.create({
   line: { flex: 1, height: 1, backgroundColor: C.card },
 });
 
-// ── Animal Card 
+// ── Animal Card
 function AnimalCard({
   item,
   index,
@@ -1007,8 +1051,12 @@ function AnimalCard({
       const todayMilkRows = milkArr.filter((m: any) =>
         (m.date || "").startsWith(TODAY),
       );
-      const morningEntry = todayMilkRows.find((m: any) => m.shift === "morning");
-      const eveningEntry = todayMilkRows.find((m: any) => m.shift === "evening");
+      const morningEntry = todayMilkRows.find(
+        (m: any) => m.shift === "morning",
+      );
+      const eveningEntry = todayMilkRows.find(
+        (m: any) => m.shift === "evening",
+      );
       const morning = morningEntry?.quantity ?? 0;
       const evening = eveningEntry?.quantity ?? 0;
       const total = morning + evening;
@@ -1026,7 +1074,8 @@ function AnimalCard({
       const eveningRow = todayFeedRows.find((f: any) => f.shift === "evening");
       const feedMorning = !!morningRow;
       const feedEvening = !!eveningRow;
-      const feedWorker = morningRow?.worker_name ?? eveningRow?.worker_name ?? null;
+      const feedWorker =
+        morningRow?.worker_name ?? eveningRow?.worker_name ?? null;
 
       setExtraData({
         milk: { morning, evening, total, mWorker, eWorker },
@@ -1104,6 +1153,28 @@ function AnimalCard({
               style={{ width: 30, height: 30, resizeMode: "contain" }}
             />
           </View>
+
+          {item.isLeasedIn ? (
+            <View style={[ac.chip, { backgroundColor: "#eff6ff" }]}>
+              <Ionicons
+                name="swap-horizontal-outline"
+                size={10}
+                color="#1a4a8a"
+              />
+              <Text style={[ac.chipText, { color: "#1a4a8a" }]}>
+                Leased in
+                {item.lessorFarmName ? ` · ${item.lessorFarmName}` : ""}
+              </Text>
+            </View>
+          ) : null}
+          {item.isLeasedOut ? (
+            <View style={[ac.chip, { backgroundColor: "#fef2f2" }]}>
+              <Ionicons name="lock-closed-outline" size={10} color={C.sick} />
+              <Text style={[ac.chipText, { color: C.sick }]}>
+                Leased out{item.leasedToFarmName ? ` · ${item.leasedToFarmName}` : ""}
+              </Text>
+            </View>
+          ) : null}
 
           <View style={{ flex: 1, marginLeft: 10 }}>
             <Text style={ac.name}>{item.name || "—"}</Text>
@@ -1194,17 +1265,19 @@ function AnimalCard({
           </View>
 
           {/* Update health button */}
-          <TouchableOpacity
-            style={ac.updateBtn}
-            onPress={() => onHealthPress(item)}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="create-outline" size={12} color={C.primary} />
-            <Text style={ac.updateBtnText}>Update</Text>
-          </TouchableOpacity>
+          {!item.isLeasedOut && (
+            <TouchableOpacity
+              style={ac.updateBtn}
+              onPress={() => onHealthPress(item)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="create-outline" size={12} color={C.primary} />
+              <Text style={ac.updateBtnText}>Update</Text>
+            </TouchableOpacity>
+          )}
 
           {/* Log Milk/Feed button */}
- {item.milkEligible && (
+          {item.milkEligible && (
             <TouchableOpacity
               style={[
                 ac.updateBtn,
@@ -1291,14 +1364,21 @@ function AnimalCard({
                       {hCfg.label}
                     </Text>
                   </View>
-                  <TouchableOpacity
-                    style={[ac.editHealthBtn, { backgroundColor: C.primary }]}
-                    onPress={() => onHealthPress(item)}
-                    activeOpacity={0.85}
-                  >
-                    <Ionicons name="create-outline" size={13} color="#fff" />
-                    <Text style={ac.editHealthText}>Edit Health</Text>
-                  </TouchableOpacity>
+                  {item.isLeasedOut ? (
+                    <View style={[ac.editHealthBtn, { backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder }]}>
+                      <Ionicons name="lock-closed-outline" size={13} color={C.textMuted} />
+                      <Text style={[ac.editHealthText, { color: C.textMuted }]}>Locked (Leased Out)</Text>
+                    </View>
+                  ) : (
+                    <TouchableOpacity
+                      style={[ac.editHealthBtn, { backgroundColor: C.primary }]}
+                      onPress={() => onHealthPress(item)}
+                      activeOpacity={0.85}
+                    >
+                      <Ionicons name="create-outline" size={13} color="#fff" />
+                      <Text style={ac.editHealthText}>Edit Health</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
                 {item.workerName ? (
                   <DR
@@ -1309,60 +1389,81 @@ function AnimalCard({
                 ) : null}
 
                 {/* Today's Milk */}
-                 {item.milkEligible && (
-                <>
-                <SectionHead
-                  icon="water-outline"
-                  label="TODAY'S MILK"
-                  color={C.milkBlue}
-                />
-                {extraData?.milk ? (
-                  <View style={ac.milkGrid}>
-                    <View style={[ac.milkBox, { backgroundColor: "#eff6ff" }]}>
-                      <Ionicons
-                        name="sunny-outline"
-                        size={14}
-                        color={C.milkBlue}
-                      />
-                      <Text style={ac.milkVal}>{extraData.milk.morning} L</Text>
-                      <Text style={ac.milkLbl}>Morning</Text>
-                      {extraData.milk.mWorker ? (
-                        <Text style={ac.milkWorker}>
-                          {extraData.milk.mWorker}
-                        </Text>
-                      ) : null}
-                    </View>
-                    <View style={[ac.milkBox, { backgroundColor: "#f0f9ff" }]}>
-                      <Ionicons name="moon-outline" size={14} color="#0891b2" />
-                      <Text style={ac.milkVal}>{extraData.milk.evening} L</Text>
-                      <Text style={ac.milkLbl}>Evening</Text>
-                      {extraData.milk.eWorker ? (
-                        <Text style={ac.milkWorker}>
-                          {extraData.milk.eWorker}
-                        </Text>
-                      ) : null}
-                    </View>
-                    <View
-                      style={[
-                        ac.milkBox,
-                        { backgroundColor: C.card, flex: 1.2 },
-                      ]}
-                    >
-                      <Ionicons name="flask-outline" size={14} color={C.dark} />
-                      <Text
-                        style={[ac.milkVal, { color: C.dark, fontSize: 18 }]}
-                      >
-                        {extraData.milk.total} L
+                {item.milkEligible && (
+                  <>
+                    <SectionHead
+                      icon="water-outline"
+                      label="TODAY'S MILK"
+                      color={C.milkBlue}
+                    />
+                    {extraData?.milk ? (
+                      <View style={ac.milkGrid}>
+                        <View
+                          style={[ac.milkBox, { backgroundColor: "#eff6ff" }]}
+                        >
+                          <Ionicons
+                            name="sunny-outline"
+                            size={14}
+                            color={C.milkBlue}
+                          />
+                          <Text style={ac.milkVal}>
+                            {extraData.milk.morning} L
+                          </Text>
+                          <Text style={ac.milkLbl}>Morning</Text>
+                          {extraData.milk.mWorker ? (
+                            <Text style={ac.milkWorker}>
+                              {extraData.milk.mWorker}
+                            </Text>
+                          ) : null}
+                        </View>
+                        <View
+                          style={[ac.milkBox, { backgroundColor: "#f0f9ff" }]}
+                        >
+                          <Ionicons
+                            name="moon-outline"
+                            size={14}
+                            color="#0891b2"
+                          />
+                          <Text style={ac.milkVal}>
+                            {extraData.milk.evening} L
+                          </Text>
+                          <Text style={ac.milkLbl}>Evening</Text>
+                          {extraData.milk.eWorker ? (
+                            <Text style={ac.milkWorker}>
+                              {extraData.milk.eWorker}
+                            </Text>
+                          ) : null}
+                        </View>
+                        <View
+                          style={[
+                            ac.milkBox,
+                            { backgroundColor: C.card, flex: 1.2 },
+                          ]}
+                        >
+                          <Ionicons
+                            name="flask-outline"
+                            size={14}
+                            color={C.dark}
+                          />
+                          <Text
+                            style={[
+                              ac.milkVal,
+                              { color: C.dark, fontSize: 18 },
+                            ]}
+                          >
+                            {extraData.milk.total} L
+                          </Text>
+                          <Text style={[ac.milkLbl, { color: C.accent }]}>
+                            Total Today
+                          </Text>
+                        </View>
+                      </View>
+                    ) : (
+                      <Text style={ac.noDataTxt}>
+                        No milk records for today
                       </Text>
-                      <Text style={[ac.milkLbl, { color: C.accent }]}>
-                        Total Today
-                      </Text>
-                    </View>
-                  </View>
-               ) : (
-                  <Text style={ac.noDataTxt}>No milk records for today</Text>
-                )}
-                </>
+                    )}
+                  </>
                 )}
 
                 {/* Today's Feed */}
@@ -1653,7 +1754,7 @@ const ac = StyleSheet.create({
   feedWorkerTxt: { fontSize: 10, color: C.textMuted, fontWeight: "500" },
 });
 
-// ── Main Page 
+// ── Main Page
 export default function FarmPage() {
   const router = useRouter();
   const isFocused = useIsFocused();
@@ -1687,7 +1788,7 @@ export default function FarmPage() {
   const scrollY = useRef(new Animated.Value(0)).current;
   const isMountedRef = useRef(true);
 
-  // ── Animated interpolations 
+  // ── Animated interpolations
   const threshold = HEADER_MAX - HEADER_MIN;
   const headerH = scrollY.interpolate({
     inputRange: [0, threshold],
@@ -1720,7 +1821,7 @@ export default function FarmPage() {
     extrapolate: "clamp",
   });
 
-  // ── Fetch 
+  // ── Fetch
   const fetchAll = useCallback(async (silent = false) => {
     if (!isMountedRef.current) return;
     try {
@@ -1745,7 +1846,7 @@ export default function FarmPage() {
           };
       });
 
-       const safeList: any[] = Array.isArray(cowsList) ? cowsList : [];
+      const safeList: any[] = Array.isArray(cowsList) ? cowsList : [];
       const merged: AnimalRow[] = safeList.map((c: any) => {
         const id = c.id ?? c.cow_id ?? "";
         const h = healthMap[id] ?? {
@@ -1771,6 +1872,12 @@ export default function FarmPage() {
           milkEligible,
           healthStatus: h.status,
           workerName: h.worker_name,
+          isLeasedIn: c.isLeasedIn ?? false,
+          isLeasedOut: c.isLeasedOut ?? false,
+          lessorFarmName: c.lessorFarmName ?? null,
+          leasedToFarmName: c.leasedToFarmName ?? null,
+          leasedLocationLabel: c.leasedLocationLabel ?? null,
+          leaseEndDate: c.leaseEndDate ?? null,
         };
       });
 
@@ -1815,7 +1922,7 @@ export default function FarmPage() {
     fetchAll(false);
   };
 
-  // ── Health update callback 
+  // ── Health update callback
   const handleHealthUpdated = useCallback(
     (id: string, status: string) => {
       setAnimals((prev) =>
@@ -1840,7 +1947,7 @@ export default function FarmPage() {
     setRefreshTokens((prev) => ({ ...prev, [id]: (prev[id] ?? 0) + 1 }));
   }, [milkFeedModal.animal]);
 
-  // ── Filter 
+  // ── Filter
   const q = search.toLowerCase().trim();
   const filtered = animals.filter((r) => {
     const matchSearch =
@@ -2062,7 +2169,7 @@ export default function FarmPage() {
   );
 }
 
-// ── Styles 
+// ── Styles
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: C.bg },
 
