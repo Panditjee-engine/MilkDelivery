@@ -2441,7 +2441,7 @@ function SubscribeModal({
                   total={total}
                   enabledMethods={paymentMethods}
                 />
-
+                <View style={{ height: 14 }} />
                 <View
                   style={[
                     reviewS.walletRow,
@@ -2991,7 +2991,7 @@ function PaymentMethodSelector({
 }
 
 const payS = StyleSheet.create({
-  wrap: { marginTop: 14, gap: 8 },
+  wrap: { marginTop: 14, marginBottom:5, gap: 10 },
   label: { fontSize: 12, fontWeight: "800", color: T.text },
   grid: { gap: 8 },
   option: {

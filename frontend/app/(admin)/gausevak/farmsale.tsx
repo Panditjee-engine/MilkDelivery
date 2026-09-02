@@ -2321,8 +2321,7 @@ function FarmSaleScreenInner() {
         </View>
       </Modal>
 
-      {/* Header — business name + admin support contact on top */}
-      <View style={styles.header}>
+           <View style={styles.header}>
         <View style={styles.headerTopRow}>
           <View style={styles.logoCircle}>
             <MaterialCommunityIcons name="sprout" size={20} color="#fff" />
@@ -2342,21 +2341,19 @@ function FarmSaleScreenInner() {
               ) : null}
             </View>
           </View>
-        </View>
-
-        <View style={styles.headerActionsRow}>
-          <TouchableOpacity style={styles.allSalesBtnTop} onPress={() => setAllSalesVisible(true)}>
-            <Ionicons name="people-outline" size={16} color="#374151" />
-            <Text style={styles.allSalesBtnTopText} numberOfLines={1}>
-              All Sales
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.addBtnTop} onPress={openNewSale}>
-            <Ionicons name="add" size={18} color="#000" />
-            <Text style={styles.addBtnTopText} numberOfLines={1}>
-              Add
-            </Text>
-          </TouchableOpacity>
+          <View style={styles.headerIconBtnsRow}>
+            <TouchableOpacity
+              style={styles.allSalesIconBtn}
+              onPress={() => setAllSalesVisible(true)}
+            >
+              <Ionicons name="people-outline" size={18} color="#000" />
+              <Text style={styles.allSalesIconBtnText}>All Sales</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.addIconBtn} onPress={openNewSale}>
+              <Ionicons name="add" size={20} color="#000" />
+              <Text style={styles.addIconBtnText}>Add</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
 
@@ -2692,37 +2689,32 @@ const styles = StyleSheet.create({
   headerSubRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2, flexWrap: "wrap" },
   headerSubtitle: { fontSize: 11, color: "#6b7280" },
   headerSubDot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: "#d1d5db" },
-  headerActionsRow: {
+     headerIconBtnsRow: {
     flexDirection: "row",
     gap: 8,
   },
-  allSalesBtnTop: {
-    flex: 1,
-    fontSize: 12,
+  allSalesIconBtn: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    backgroundColor: "#f97316",
-    borderColor: "#f97316",
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-    borderRadius: 8,
-    gap: 5,
-  },
-  allSalesBtnTopText: { fontSize: 12, fontWeight: "bold", color: "#08090c" },
-  addBtnTop: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#f97316",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 8,
     gap: 4,
+    height: 32,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#fd8567",
+    backgroundColor: "#fd8567",
   },
-  addBtnTopText: { fontSize: 13, fontWeight: "bold", color: "#000" },
+  allSalesIconBtnText: { fontSize: 11, fontWeight: "700", color: "#374151" },
+  addIconBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    height: 32,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    backgroundColor: "#fd8567",
+  },
+  addIconBtnText: { fontSize: 11, fontWeight: "700", color: "#000" },
 
   searchRow: { flexDirection: "row", paddingHorizontal: 16, gap: 10, marginBottom: 12 },
   searchBox: {
@@ -2798,7 +2790,7 @@ const styles = StyleSheet.create({
   },
   cancelBtnText: { fontSize: 13, fontWeight: "bold", color: "#111827" },
   saveBtn: {
-    flex: 1.4,
+    flex: 1,
     backgroundColor: "#4ade80",
     borderRadius: 10,
     paddingVertical: 12,
