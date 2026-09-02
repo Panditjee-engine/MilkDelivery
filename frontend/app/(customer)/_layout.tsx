@@ -52,7 +52,7 @@ export default function CustomerLayout() {
         name="my-subscriptions"
         options={{
           title: 'Subscriptions',
-          tabBarIcon: ({ color, size }) => <Ionicons name="refresh-circle" size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => <Ionicons name="repeat" size={size} color={color} />,
         }}
       />
       <Tabs.Screen

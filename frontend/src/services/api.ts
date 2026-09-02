@@ -27,8 +27,22 @@ export interface InvoiceTemplateSettings {
   footer_note?: string;
   terms?: string;
   primary_color?: string;
+  logo_base64?: string;
   show_payment_details?: boolean;
   show_terms?: boolean;
+}
+
+export interface StatementTemplateSettings {
+  business_name: string;
+  tagline?: string;
+  address?: string;
+  phone?: string;
+  email?: string;
+  footer_note?: string;
+  primary_color?: string;
+  logo_base64?: string;
+  show_summary?: boolean;
+  show_footer?: boolean;
 }
 
 export interface OrderCutoffRule {
@@ -842,6 +856,51 @@ class ApiService {
     });
   }
 
+  async getStatementTemplate() {
+    try {
+      return await this.request<StatementTemplateSettings>(
+        "/invoices/admin/statement-template",
+      );
+    } catch (error: any) {
+      if (error?.status === 404) {
+        return this.request<StatementTemplateSettings>(
+          "/wallet/statement-template",
+        );
+      }
+      throw error;
+    }
+  }
+
+  async saveStatementTemplate(data: StatementTemplateSettings) {
+    try {
+      return await this.request<StatementTemplateSettings>(
+        "/invoices/admin/statement-template",
+        {
+          method: "PUT",
+          body: JSON.stringify(data),
+        },
+      );
+    } catch (error: any) {
+      if (error?.status === 404) {
+        return this.request<StatementTemplateSettings>(
+          "/wallet/statement-template",
+          {
+            method: "PUT",
+            body: JSON.stringify(data),
+          },
+        );
+      }
+      throw error;
+    }
+  }
+
+  async getCurrentWalletStatementTemplate() {
+    return this.request<StatementTemplateSettings>(
+      "/wallet/statement-template/current",
+      { silentErrorLog: true },
+    );
+  }
+
   async getCatalogOrderCutoffs(adminId?: string) {
     const query = adminId ? `?admin_id=${encodeURIComponent(adminId)}` : "";
     return this.request<OrderCutoffRule[]>(`/order-cutoffs/catalog${query}`, {
@@ -1222,6 +1281,18 @@ async getSubscriptionHistory() {
 
   async getWalletTransactions() {
     return this.request<any[]>("/wallet/transactions");
+  }
+
+  async downloadWalletStatement(params: {
+    start_date: string;
+    end_date: string;
+  }) {
+    const query = new URLSearchParams();
+    query.append("start_date", params.start_date);
+    query.append("end_date", params.end_date);
+    return this.request<InvoiceDownloadPayload>(
+      `/wallet/statement/download?${query.toString()}`,
+    );
   }
 
   async rechargeWallet(amount: number) {

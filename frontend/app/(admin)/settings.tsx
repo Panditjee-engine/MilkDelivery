@@ -1854,6 +1854,37 @@ export default function AdminSettingsScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* ── Statement Template */}
+        <View style={s.contentCard}>
+          <View style={s.contentCardHeader}>
+            <View style={s.contentIconWrap}>
+              <Ionicons name="wallet-outline" size={18} color={C.dark} />
+            </View>
+            <View style={s.contentCardBody}>
+              <Text style={s.contentCardTitle}>Statement Template</Text>
+              <Text style={s.contentCardSubtitle}>
+                Add logo and branding for customer wallet statements.
+              </Text>
+            </View>
+            <View style={s.contentCountPill}>
+              <Ionicons name="document-attach-outline" size={16} color={C.dark} />
+            </View>
+          </View>
+          <TouchableOpacity
+            style={s.contentManageBtn}
+            activeOpacity={0.85}
+            onPress={() =>
+              router.push({
+                pathname: "/(admin)/statement-template",
+                params: { from: "settings" },
+              } as any)
+            }
+          >
+            <Ionicons name="create-outline" size={15} color="#fff" />
+            <Text style={s.contentManageText}>Manage Statement Template</Text>
+          </TouchableOpacity>
+        </View>
+
         {/* ── Notifications */}
         <View style={s.contentCard}>
           <View style={s.contentCardHeader}>

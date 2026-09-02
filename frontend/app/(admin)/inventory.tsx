@@ -1584,7 +1584,7 @@ export default function InventoryScreen() {
           accessibilityRole="button"
           accessibilityLabel="Update product prices"
         >
-          <Text style={styles.priceBtnText}>Rs</Text>
+          <Text style={styles.priceBtnText}>₹</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.addBtn}
