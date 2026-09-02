@@ -20,7 +20,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
 import * as ImagePicker from "expo-image-picker";
-import { api, InvoiceTemplateSettings } from "../../src/services/api";
+import { api, StatementTemplateSettings } from "../../src/services/api";
+import { useAuth } from "../../src/contexts/AuthContext";
 
 const C = {
   bg: "#FFF8F4",
@@ -30,23 +31,20 @@ const C = {
   text: "#1A1A1A",
   muted: "#A07850",
   border: "#FFE8D6",
-  green: "#16A34A",
   red: "#DC2626",
 };
 
-const DEFAULT_TEMPLATE: InvoiceTemplateSettings = {
+const DEFAULT_TEMPLATE: StatementTemplateSettings = {
   business_name: "",
-  tagline: "",
+  tagline: "Wallet statement",
   address: "",
   phone: "",
   email: "",
-  gstin: "",
-  footer_note: "",
-  terms: "",
+  footer_note: "This is a computer generated wallet statement.",
   primary_color: "#BB6B3F",
   logo_base64: "",
-  show_payment_details: true,
-  show_terms: true,
+  show_summary: true,
+  show_footer: true,
 };
 
 const PRIMARY_COLOR_OPTIONS = [
@@ -183,25 +181,63 @@ function PrimaryColorDropdown({
   );
 }
 
-export default function InvoiceTemplateScreen() {
+function addressText(address: any): string {
+  if (!address) return "";
+  if (typeof address === "string") return address;
+  if (typeof address !== "object") return String(address);
+  const keys = [
+    "address_line",
+    "addressLine",
+    "line1",
+    "street",
+    "area",
+    "city",
+    "district",
+    "state",
+    "pincode",
+    "pin_code",
+  ];
+  return keys
+    .map((key) => address[key])
+    .filter(Boolean)
+    .map((value) => String(value).trim())
+    .filter(Boolean)
+    .join(", ");
+}
+
+function adminDefaults(user: any): Partial<StatementTemplateSettings> {
+  return {
+    business_name: user?.farm_name || user?.business_name || user?.name || "",
+    address: addressText(user?.business_address || user?.address),
+    phone: user?.support_contact || user?.phone || "",
+    email: user?.email || "",
+  };
+}
+
+export default function StatementTemplateScreen() {
   const router = useRouter();
+  const { user } = useAuth();
   const params = useLocalSearchParams<{ from?: string }>();
-  const [form, setForm] = useState<InvoiceTemplateSettings>(DEFAULT_TEMPLATE);
+  const [form, setForm] = useState<StatementTemplateSettings>(DEFAULT_TEMPLATE);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
+    const fallback = adminDefaults(user);
     try {
-      const data = await api.getInvoiceTemplate();
-      setForm({ ...DEFAULT_TEMPLATE, ...data });
+      const data = await api.getStatementTemplate();
+      setForm({ ...DEFAULT_TEMPLATE, ...fallback, ...data });
     } catch (error: any) {
-      Alert.alert("Could not load template", error?.message || "Please try again.");
+      setForm((prev) => ({ ...DEFAULT_TEMPLATE, ...prev, ...fallback }));
+      if (error?.status !== 404) {
+        Alert.alert("Could not load template", error?.message || "Please try again.");
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     load();
@@ -225,7 +261,7 @@ export default function InvoiceTemplateScreen() {
     }, [goBack]),
   );
 
-  const setField = (key: keyof InvoiceTemplateSettings) => (value: any) => {
+  const setField = (key: keyof StatementTemplateSettings) => (value: any) => {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
@@ -249,18 +285,18 @@ export default function InvoiceTemplateScreen() {
 
   const save = async () => {
     if (!String(form.business_name || "").trim()) {
-      Alert.alert("Business name required", "Please enter the seller name shown on invoices.");
+      Alert.alert("Business name required", "Please enter the name shown on statements.");
       return;
     }
     try {
       setSaving(true);
-      const saved = await api.saveInvoiceTemplate({
+      const saved = await api.saveStatementTemplate({
         ...form,
         business_name: String(form.business_name || "").trim(),
         primary_color: form.primary_color || "#BB6B3F",
       });
       setForm({ ...DEFAULT_TEMPLATE, ...saved });
-      Alert.alert("Saved", "Invoice template updated successfully.");
+      Alert.alert("Saved", "Statement template updated successfully.");
     } catch (error: any) {
       Alert.alert("Could not save", error?.message || "Please try again.");
     } finally {
@@ -285,8 +321,8 @@ export default function InvoiceTemplateScreen() {
           <Ionicons name="chevron-back" size={22} color={C.text} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
-          <Text style={s.title}>Invoice Template</Text>
-          <Text style={s.subtitle}>Customize order and subscription PDFs</Text>
+          <Text style={s.title}>Statement Template</Text>
+          <Text style={s.subtitle}>Brand wallet statements for customers</Text>
         </View>
       </View>
 
@@ -314,15 +350,14 @@ export default function InvoiceTemplateScreen() {
               {logo ? (
                 <Image source={{ uri: logo }} style={s.logoImage} />
               ) : (
-                <Ionicons name="image-outline" size={24} color={form.primary_color || C.dark} />
+                <Ionicons name="image-outline" size={24} color={C.dark} />
               )}
             </View>
             <View style={s.previewBody}>
               <Text style={s.previewTitle}>{form.business_name || "Gau Satva Farm"}</Text>
-              <Text style={s.previewSub}>{form.tagline || "Fresh dairy delivered with care"}</Text>
-              <Text style={s.previewSmall}>Invoice header preview</Text>
+              <Text style={s.previewSub}>{form.tagline || "Wallet statement"}</Text>
+              <Text style={s.previewSmall}>Wallet statement header preview</Text>
             </View>
-            <Ionicons name="receipt-outline" size={26} color={form.primary_color || C.dark} />
           </View>
 
           <View style={s.section}>
@@ -340,7 +375,7 @@ export default function InvoiceTemplateScreen() {
               )}
               <View style={{ flex: 1 }}>
                 <Text style={s.logoPickerTitle}>{logo ? "Change Logo" : "Upload Logo"}</Text>
-                <Text style={s.logoPickerSub}>Shown on all order and subscription invoices.</Text>
+                <Text style={s.logoPickerSub}>Shown on customer wallet statements.</Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color={C.muted} />
             </TouchableOpacity>
@@ -358,44 +393,35 @@ export default function InvoiceTemplateScreen() {
           <View style={s.section}>
             <View style={s.sectionHead}>
               <Ionicons name="business-outline" size={18} color={C.dark} />
-              <Text style={s.sectionTitle}>Invoice Header</Text>
+              <Text style={s.sectionTitle}>Statement Header</Text>
             </View>
             <Field label="Business Name" value={form.business_name} onChangeText={setField("business_name")} placeholder="Gau Satva Farm" />
-            <Field label="Tagline" value={form.tagline} onChangeText={setField("tagline")} placeholder="Fresh dairy delivered with care" />
+            <Field label="Tagline" value={form.tagline} onChangeText={setField("tagline")} placeholder="Wallet statement" />
             <Field label="Business Address" value={form.address} onChangeText={setField("address")} placeholder="Street, city, state" multiline />
             <Field label="Phone" value={form.phone} onChangeText={setField("phone")} placeholder="+91..." keyboardType="phone-pad" />
             <Field label="Email" value={form.email} onChangeText={setField("email")} placeholder="billing@example.com" keyboardType="email-address" />
-            <Field label="GSTIN" value={form.gstin} onChangeText={setField("gstin")} placeholder="Optional tax registration number" />
           </View>
 
           <View style={s.section}>
             <View style={s.sectionHead}>
               <Ionicons name="color-palette-outline" size={18} color={C.dark} />
-              <Text style={s.sectionTitle}>Design & Visibility</Text>
+              <Text style={s.sectionTitle}>Design & Footer</Text>
             </View>
             <PrimaryColorDropdown value={form.primary_color} onChange={setField("primary_color")} />
             <ToggleRow
-              title="Show Payment Details"
-              subtitle="Payment method and status will appear on invoice."
-              value={form.show_payment_details !== false}
-              onValueChange={setField("show_payment_details")}
+              title="Show Summary"
+              subtitle="Opening balance, total added and total spent will appear."
+              value={form.show_summary !== false}
+              onValueChange={setField("show_summary")}
             />
             <View style={s.thinDivider} />
             <ToggleRow
-              title="Show Terms"
-              subtitle="Terms text will appear near the footer."
-              value={form.show_terms !== false}
-              onValueChange={setField("show_terms")}
+              title="Show Footer"
+              subtitle="Footer note will appear at the end of statement."
+              value={form.show_footer !== false}
+              onValueChange={setField("show_footer")}
             />
-          </View>
-
-          <View style={s.section}>
-            <View style={s.sectionHead}>
-              <Ionicons name="document-text-outline" size={18} color={C.dark} />
-              <Text style={s.sectionTitle}>Footer</Text>
-            </View>
-            <Field label="Footer Note" value={form.footer_note} onChangeText={setField("footer_note")} placeholder="Thank you for your order." multiline />
-            <Field label="Terms" value={form.terms} onChangeText={setField("terms")} placeholder="This is a computer generated invoice." multiline />
+            <Field label="Footer Note" value={form.footer_note} onChangeText={setField("footer_note")} placeholder="This is a computer generated wallet statement." multiline />
           </View>
         </ScrollView>
 
@@ -507,7 +533,7 @@ const s = StyleSheet.create({
     borderRadius: 15,
     borderWidth: 1,
     borderColor: C.border,
-    backgroundColor: "#FFF8F4",
+    backgroundColor: C.bg,
     paddingHorizontal: 12,
     flexDirection: "row",
     alignItems: "center",
@@ -533,7 +559,7 @@ const s = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: C.border,
   },
-  colorOptionActive: { backgroundColor: "#FFF8F4" },
+  colorOptionActive: { backgroundColor: C.bg },
   colorSwatchSmall: { width: 22, height: 22, borderRadius: 8 },
   colorOptionName: { fontSize: 13, fontWeight: "900", color: C.text },
   colorOptionHex: { marginTop: 1, fontSize: 10.5, fontWeight: "800", color: C.muted },
@@ -542,17 +568,13 @@ const s = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     borderColor: C.border,
-    backgroundColor: "#FFF8F4",
+    backgroundColor: C.bg,
     paddingHorizontal: 12,
     color: C.text,
     fontSize: 14,
     fontWeight: "700",
   },
-  textArea: {
-    minHeight: 82,
-    paddingTop: 12,
-    textAlignVertical: "top",
-  },
+  textArea: { minHeight: 82, paddingTop: 12, textAlignVertical: "top" },
   toggleRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 8 },
   toggleTitle: { fontSize: 14, fontWeight: "900", color: C.text },
   toggleSub: { fontSize: 11.5, fontWeight: "600", color: C.muted, lineHeight: 16, marginTop: 2 },

@@ -221,7 +221,7 @@ export default function PriceUpdateScreen() {
             </Text>
           </View>
           <View style={styles.currencyBadge}>
-            <Text style={styles.currencyText}>Rs</Text>
+            <Text style={styles.currencyText}>₹</Text>
           </View>
         </View>
 
@@ -283,14 +283,14 @@ export default function PriceUpdateScreen() {
                         <Text style={styles.productName} numberOfLines={2}>
                           {product.name}
                         </Text>
-                        <Text style={styles.currentPrice}>Current Rs {product.price ?? 0}</Text>
+                        <Text style={styles.currentPrice}>Current ₹{product.price ?? 0}</Text>
                       </View>
                       {changed ? <Text style={styles.changedPill}>Changed</Text> : null}
                     </View>
 
                     <View style={styles.priceRow}>
                       <View style={[styles.inputWrap, invalid && styles.inputError]}>
-                        <Text style={styles.inputPrefix}>Rs</Text>
+                        <Text style={styles.inputPrefix}>₹</Text>
                         <TextInput
                           style={styles.priceInput}
                           value={draft}
@@ -312,8 +312,12 @@ export default function PriceUpdateScreen() {
                     {invalid ? (
                       <Text style={styles.errorText}>Enter a valid price.</Text>
                     ) : changed ? (
-                      <TouchableOpacity onPress={() => resetOne(product)}>
-                        <Text style={styles.resetText}>Reset to Rs {product.price ?? 0}</Text>
+                      <TouchableOpacity
+                        style={styles.resetBtn}
+                        onPress={() => resetOne(product)}
+                        activeOpacity={0.85}
+                      >
+                        <Text style={styles.resetText}>Reset to ₹{product.price ?? 0}</Text>
                       </TouchableOpacity>
                     ) : null}
                   </View>
@@ -465,7 +469,17 @@ const styles = StyleSheet.create({
   smallBtnDisabled: { opacity: 0.45 },
   smallBtnText: { color: C.white, fontSize: 12, fontWeight: "900" },
   errorText: { color: "#DC2626", fontSize: 11, fontWeight: "700", marginTop: 6 },
-  resetText: { color: C.deep, fontSize: 11, fontWeight: "800", marginTop: 6 },
+  resetBtn: {
+    alignSelf: "flex-start",
+    marginTop: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: "#F1F1F1",
+    borderWidth: 1,
+    borderColor: "#E2E2E2",
+  },
+  resetText: { color: C.deep, fontSize: 11, fontWeight: "900" },
   emptyState: { alignItems: "center", paddingTop: 80, gap: 8 },
   emptyTitle: { color: C.text, fontSize: 18, fontWeight: "900" },
   emptySub: { color: C.textMuted, fontSize: 13, fontWeight: "600" },

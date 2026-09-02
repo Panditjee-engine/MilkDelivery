@@ -935,7 +935,19 @@ const mBase = StyleSheet.create({
   },
   btnTxt: { fontSize: 15, fontWeight: "700", color: "#fff" },
 });
-
+const confirmS = StyleSheet.create({
+  row: {
+    flexDirection: "row",
+    width: "100%",
+    gap: 10,
+  },
+  halfBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: T.radius.md,
+    alignItems: "center",
+  },
+});
 // ─── Subscription Sheet ─────────────────────────────────────────────────────
 function SubscriptionSheet({
   visible,
@@ -1675,22 +1687,22 @@ function QuickAddModal({
         <View style={sheetS.sheet}>
           <View style={sheetS.handle} />
           <View style={[sheetS.prodRow, { backgroundColor: theme.bg }]}>
- {product.image ? (
-  <Image source={{ uri: product.image }} style={sheetS.prodImg} resizeMode="cover" />
-) : (
-  <View
-    style={[
-      sheetS.prodIcon,
-      { backgroundColor: theme.accent + "20" },
-    ]}
-  >
-    <Ionicons
-      name={theme.icon as any}
-      size={22}
-      color={theme.accent}
-    />
-  </View>
-)}
+            {product.image ? (
+              <Image source={{ uri: product.image }} style={sheetS.prodImg} resizeMode="cover" />
+            ) : (
+              <View
+                style={[
+                  sheetS.prodIcon,
+                  { backgroundColor: theme.accent + "20" },
+                ]}
+              >
+                <Ionicons
+                  name={theme.icon as any}
+                  size={22}
+                  color={theme.accent}
+                />
+              </View>
+            )}
             <View style={{ flex: 1 }}>
               <Text style={sheetS.prodName}>{product.name}</Text>
               <Text style={[sheetS.prodPrice, { color: theme.accent }]}>
@@ -1848,28 +1860,28 @@ function SubscribeModal({
     customDays,
   );
 
-const prevVisibleRef = useRef(false);
+  const prevVisibleRef = useRef(false);
 
-useEffect(() => {
-  if (visible && !prevVisibleRef.current) {
-    setStep(1);
-    setQty(1);
-    setPattern("daily");
-    setCustomDays([]);
-    setSlot("morning");
-    setStartDate(tomorrow);
-    setEndDate(null);
-    setPaymentMethod(getFirstEnabledPaymentMethod(paymentMethods));
-  }
-  prevVisibleRef.current = visible;
-}, [visible, tomorrow]);
+  useEffect(() => {
+    if (visible && !prevVisibleRef.current) {
+      setStep(1);
+      setQty(1);
+      setPattern("daily");
+      setCustomDays([]);
+      setSlot("morning");
+      setStartDate(tomorrow);
+      setEndDate(null);
+      setPaymentMethod(getFirstEnabledPaymentMethod(paymentMethods));
+    }
+    prevVisibleRef.current = visible;
+  }, [visible, tomorrow]);
 
-useEffect(() => {
-  if (!visible) return;
-  setPaymentMethod((current) =>
-    paymentMethods[current] ? current : getFirstEnabledPaymentMethod(paymentMethods),
-  );
-}, [paymentMethods, visible]);
+  useEffect(() => {
+    if (!visible) return;
+    setPaymentMethod((current) =>
+      paymentMethods[current] ? current : getFirstEnabledPaymentMethod(paymentMethods),
+    );
+  }, [paymentMethods, visible]);
 
   const toggleDay = (d: number) =>
     setCustomDays((p) =>
@@ -2127,42 +2139,42 @@ useEffect(() => {
 
                 <Text style={sheetS.sectionLabel}>Schedule</Text>
                 <View style={subModalS.patternRow}>
-  {subscriptionPatterns.map((p) => {
-    const active = pattern === p.value;
-    return (
-      <TouchableOpacity
-        key={p.value}
-        style={[
-          subModalS.patternCard,
-          active && {
-            backgroundColor: theme.accent,
-            borderColor: theme.accent,
-          },
-        ]}
-        onPress={() => setPattern(p.value)}
-      >
-        <Ionicons
-          name={p.icon as any}
-          size={16}
-          color={active ? "#fff" : theme.accent}
-        />
-        <View style={{ flex: 1 }}>
-          <Text style={[subModalS.patternLabel, active && { color: "#fff" }]}>
-            {p.label}
-          </Text>
-          <Text
-            style={[
-              subModalS.patternHint,
-              { color: active ? "rgba(255,255,255,0.7)" : T.faint },
-            ]}
-          >
-            {p.hint}
-          </Text>
-        </View>
-      </TouchableOpacity>
-    );
-  })}
-</View>
+                  {subscriptionPatterns.map((p) => {
+                    const active = pattern === p.value;
+                    return (
+                      <TouchableOpacity
+                        key={p.value}
+                        style={[
+                          subModalS.patternCard,
+                          active && {
+                            backgroundColor: theme.accent,
+                            borderColor: theme.accent,
+                          },
+                        ]}
+                        onPress={() => setPattern(p.value)}
+                      >
+                        <Ionicons
+                          name={p.icon as any}
+                          size={16}
+                          color={active ? "#fff" : theme.accent}
+                        />
+                        <View style={{ flex: 1 }}>
+                          <Text style={[subModalS.patternLabel, active && { color: "#fff" }]}>
+                            {p.label}
+                          </Text>
+                          <Text
+                            style={[
+                              subModalS.patternHint,
+                              { color: active ? "rgba(255,255,255,0.7)" : T.faint },
+                            ]}
+                          >
+                            {p.hint}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
 
                 {pattern === "custom" && (
                   <>
@@ -2548,22 +2560,22 @@ const subModalS = StyleSheet.create({
   },
   subtotalLabel: { fontSize: 12, fontWeight: "600", color: T.muted },
   subtotalVal: { fontSize: 16, fontWeight: "800" },
-patternRow: {
-  flexDirection: "column",
-  gap: 8,
-  marginBottom: 14,
-},
-patternCard: {
-  width: "100%",
-  flexDirection: "row",
-  alignItems: "center",
-  padding: 12,
-  borderRadius: T.radius.md,
-  backgroundColor: "#F7F6F4",
-  borderWidth: 1.5,
-  borderColor: "transparent",
-  gap: 10,
-},
+  patternRow: {
+    flexDirection: "column",
+    gap: 8,
+    marginBottom: 14,
+  },
+  patternCard: {
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 12,
+    borderRadius: T.radius.md,
+    backgroundColor: "#F7F6F4",
+    borderWidth: 1.5,
+    borderColor: "transparent",
+    gap: 10,
+  },
   patternLabel: { fontSize: 12, fontWeight: "700", color: T.text },
   patternHint: { fontSize: 10, fontWeight: "500" },
   daysRow: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginBottom: 6 },
@@ -2788,19 +2800,19 @@ const sheetS = StyleSheet.create({
     padding: 12,
     marginBottom: 4,
   },
-prodIcon: {
-  width: 46,
-  height: 46,
-  borderRadius: T.radius.sm,
-  justifyContent: "center",
-  alignItems: "center",
-},
-prodImg: {
-  width: 46,
-  height: 46,
-  borderRadius: T.radius.sm,
-  backgroundColor: "#F5F5F3",
-},
+  prodIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: T.radius.sm,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  prodImg: {
+    width: 46,
+    height: 46,
+    borderRadius: T.radius.sm,
+    backgroundColor: "#F5F5F3",
+  },
   prodName: { fontSize: 14, fontWeight: "800", color: T.text, marginBottom: 3 },
   prodPrice: { fontSize: 12, fontWeight: "600" },
   closeBtn: {
@@ -3041,6 +3053,7 @@ function CartSheet({
   const router = useRouter();
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("wallet");
   const [addressPickerVisible, setAddressPickerVisible] = useState(false);
+  const [confirmOrderVisible, setConfirmOrderVisible] = useState(false);
   const slide = useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const overlay = useRef(new Animated.Value(0)).current;
 
@@ -3086,165 +3099,166 @@ function CartSheet({
   if (!visible) return null;
 
   return (
-    <Modal visible={visible} transparent animationType="none">
-      <View style={{ flex: 1 }}>
-        <Animated.View style={[cartS.overlay, { opacity: overlay }]}>
-          <TouchableOpacity
-            style={{ flex: 1 }}
-            onPress={onClose}
-            activeOpacity={1}
-          />
-        </Animated.View>
-        <Animated.View
-          style={[cartS.sidebar, { transform: [{ translateX: slide }] }]}
-        >
-          <View style={cartS.header}>
-            <TouchableOpacity onPress={onClose} style={cartS.backBtn}>
-              <Ionicons name="arrow-back" size={16} color={T.muted} />
-            </TouchableOpacity>
-            <Text style={cartS.title}>Cart</Text>
-            {cart.length > 0 && (
-              <View style={cartS.badge}>
-                <Text style={cartS.badgeTxt}>{cart.length}</Text>
-              </View>
-            )}
-          </View>
-
-          <ScrollView
-            style={cartS.contentScroll}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={cartS.contentScrollInner}
-          >
+    <>
+      <Modal visible={visible} transparent animationType="none">
+        <View style={{ flex: 1 }}>
+          <Animated.View style={[cartS.overlay, { opacity: overlay }]}>
             <TouchableOpacity
-              style={cartS.addressCard}
-              activeOpacity={0.86}
-              onPress={onAddAddress}
-            >
-              <Ionicons name="location-outline" size={14} color={Colors.primary} />
-              {selectedAddress ? (
-                <>
-                  <Text style={cartS.addressTypeText} numberOfLines={1}>
-                    {String(selectedAddress.label || "home").toUpperCase()}
-                  </Text>
-                  <Text style={cartS.addressText} numberOfLines={1}>
-                    {formatDeliveryAddress(selectedAddress)}
-                  </Text>
-                </>
-              ) : (
-                <Text style={cartS.addressMissing} numberOfLines={1}>
-                  Add delivery address
-                </Text>
+              style={{ flex: 1 }}
+              onPress={onClose}
+              activeOpacity={1}
+            />
+          </Animated.View>
+          <Animated.View
+            style={[cartS.sidebar, { transform: [{ translateX: slide }] }]}
+          >
+            <View style={cartS.header}>
+              <TouchableOpacity onPress={onClose} style={cartS.backBtn}>
+                <Ionicons name="arrow-back" size={16} color={T.muted} />
+              </TouchableOpacity>
+              <Text style={cartS.title}>Cart</Text>
+              {cart.length > 0 && (
+                <View style={cartS.badge}>
+                  <Text style={cartS.badgeTxt}>{cart.length}</Text>
+                </View>
               )}
-              <Text style={cartS.changeAddressText}>
-                {selectedAddress ? "Manage" : "Add"}
-              </Text>
-            </TouchableOpacity>
-
-            <View style={cartS.walletStrip}>
-              <View
-                style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
-              >
-                <Ionicons
-                  name="wallet-outline"
-                  size={12}
-                  color={canAfford ? T.green : T.orange}
-                />
-                <Text style={cartS.walletLabel}>Wallet</Text>
-              </View>
-              <Text
-                style={[
-                  cartS.walletBal,
-                  { color: canAfford ? T.green : T.orange },
-                ]}
-              >
-                ₹{walletBalance.toFixed(2)}
-              </Text>
             </View>
 
-            <View style={cartS.divider} />
+            <ScrollView
+              style={cartS.contentScroll}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={cartS.contentScrollInner}
+            >
+              <TouchableOpacity
+                style={cartS.addressCard}
+                activeOpacity={0.86}
+                onPress={onAddAddress}
+              >
+                <Ionicons name="location-outline" size={14} color={Colors.primary} />
+                {selectedAddress ? (
+                  <>
+                    <Text style={cartS.addressTypeText} numberOfLines={1}>
+                      {String(selectedAddress.label || "home").toUpperCase()}
+                    </Text>
+                    <Text style={cartS.addressText} numberOfLines={1}>
+                      {formatDeliveryAddress(selectedAddress)}
+                    </Text>
+                  </>
+                ) : (
+                  <Text style={cartS.addressMissing} numberOfLines={1}>
+                    Add delivery address
+                  </Text>
+                )}
+                <Text style={cartS.changeAddressText}>
+                  {selectedAddress ? "Manage" : "Add"}
+                </Text>
+              </TouchableOpacity>
 
-            {cart.length === 0 ? (
-              <View style={cartS.empty}>
-                <Ionicons name="cart-outline" size={36} color={T.faint} />
-                <Text style={cartS.emptyTxt}>Cart is empty</Text>
-              </View>
-            ) : (
-              <View>
-                {cart.map((item) => {
-                  const theme = getCategoryTheme(item.product.category);
-                  return (
-                    <View key={item.id} style={cartS.item}>
-                      <View style={[cartS.icon, { backgroundColor: theme.bg }]}>
-                        <Ionicons
-                          name={theme.icon as any}
-                          size={14}
-                          color={theme.accent}
-                        />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={cartS.itemName} numberOfLines={2}>
-                          {item.product.name}
-                        </Text>
-                        <Text style={cartS.itemPrice}>
-                          ₹{(item.product.price * item.quantity).toFixed(2)}
-                        </Text>
-                      </View>
-                      <View style={cartS.qtyRow}>
-                        <TouchableOpacity
-                          style={cartS.qtyBtn}
-                          onPress={() =>
-                            item.quantity > 1
-                              ? onUpdateQty(item.id, item.quantity - 1)
-                              : onRemove(item.id)
-                          }
-                        >
-                          <Ionicons
-                            name={
-                              item.quantity === 1 ? "trash-outline" : "remove"
-                            }
-                            size={11}
-                            color={item.quantity === 1 ? T.red : T.text}
-                          />
-                        </TouchableOpacity>
-                        <Text style={cartS.qtyVal}>{item.quantity}</Text>
-                        <TouchableOpacity
-                          style={[
-                            cartS.qtyBtn,
-                            { backgroundColor: theme.accent },
-                          ]}
-                          onPress={() => {
-                            const m = item.product.stock ?? 0;
-                            if (item.quantity >= m) {
-                              alert(`Only ${m} available`);
-                              return;
-                            }
-                            onUpdateQty(item.id, item.quantity + 1);
-                          }}
-                        >
-                          <Ionicons name="add" size={11} color="#fff" />
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  );
-                })}
-              </View>
-            )}
-          </ScrollView>
-
-          {cart.length > 0 && (
-            <View style={cartS.footer}>
-              <View style={cartS.divider} />
-              <View style={cartS.totalRow}>
-                <Text style={cartS.totalLabel}>Total</Text>
+              <View style={cartS.walletStrip}>
+                <View
+                  style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+                >
+                  <Ionicons
+                    name="wallet-outline"
+                    size={12}
+                    color={canAfford ? T.green : T.orange}
+                  />
+                  <Text style={cartS.walletLabel}>Wallet</Text>
+                </View>
                 <Text
                   style={[
-                    cartS.totalVal,
-                    { color: canAfford ? T.text : T.orange },
+                    cartS.walletBal,
+                    { color: canAfford ? T.green : T.orange },
                   ]}
                 >
-                  ₹{cartTotal.toFixed(2)}
+                  ₹{walletBalance.toFixed(2)}
                 </Text>
               </View>
+
+              <View style={cartS.divider} />
+
+              {cart.length === 0 ? (
+                <View style={cartS.empty}>
+                  <Ionicons name="cart-outline" size={36} color={T.faint} />
+                  <Text style={cartS.emptyTxt}>Cart is empty</Text>
+                </View>
+              ) : (
+                <View>
+                  {cart.map((item) => {
+                    const theme = getCategoryTheme(item.product.category);
+                    return (
+                      <View key={item.id} style={cartS.item}>
+                        <View style={[cartS.icon, { backgroundColor: theme.bg }]}>
+                          <Ionicons
+                            name={theme.icon as any}
+                            size={14}
+                            color={theme.accent}
+                          />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={cartS.itemName} numberOfLines={2}>
+                            {item.product.name}
+                          </Text>
+                          <Text style={cartS.itemPrice}>
+                            ₹{(item.product.price * item.quantity).toFixed(2)}
+                          </Text>
+                        </View>
+                        <View style={cartS.qtyRow}>
+                          <TouchableOpacity
+                            style={cartS.qtyBtn}
+                            onPress={() =>
+                              item.quantity > 1
+                                ? onUpdateQty(item.id, item.quantity - 1)
+                                : onRemove(item.id)
+                            }
+                          >
+                            <Ionicons
+                              name={
+                                item.quantity === 1 ? "trash-outline" : "remove"
+                              }
+                              size={11}
+                              color={item.quantity === 1 ? T.red : T.text}
+                            />
+                          </TouchableOpacity>
+                          <Text style={cartS.qtyVal}>{item.quantity}</Text>
+                          <TouchableOpacity
+                            style={[
+                              cartS.qtyBtn,
+                              { backgroundColor: theme.accent },
+                            ]}
+                            onPress={() => {
+                              const m = item.product.stock ?? 0;
+                              if (item.quantity >= m) {
+                                alert(`Only ${m} available`);
+                                return;
+                              }
+                              onUpdateQty(item.id, item.quantity + 1);
+                            }}
+                          >
+                            <Ionicons name="add" size={11} color="#fff" />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+            </ScrollView>
+
+            {cart.length > 0 && (
+              <View style={cartS.footer}>
+                <View style={cartS.divider} />
+                <View style={cartS.totalRow}>
+                  <Text style={cartS.totalLabel}>Total</Text>
+                  <Text
+                    style={[
+                      cartS.totalVal,
+                      { color: canAfford ? T.text : T.orange },
+                    ]}
+                  >
+                    ₹{cartTotal.toFixed(2)}
+                  </Text>
+                </View>
                 <PaymentMethodSelector
                   value={paymentMethod}
                   onChange={setPaymentMethod}
@@ -3252,95 +3266,136 @@ function CartSheet({
                   total={cartTotal}
                   enabledMethods={paymentMethods}
                 />
-              {paymentMethod === "wallet" && !canAfford && (
-                <View style={cartS.lowBal}>
-                  <Ionicons name="warning-outline" size={11} color={T.orange} />
-                  <Text style={cartS.lowBalTxt}>
-                    Insufficient balance. Recharge to order.
-                  </Text>
+                {paymentMethod === "wallet" && !canAfford && (
+                  <View style={cartS.lowBal}>
+                    <Ionicons name="warning-outline" size={11} color={T.orange} />
+                    <Text style={cartS.lowBalTxt}>
+                      Insufficient balance. Recharge to order.
+                    </Text>
+                    <TouchableOpacity
+                      style={cartS.addMoneyBtn}
+                      onPress={() => {
+                        onClose();
+                        router.push("/(customer)/wallet" as any);
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="add-circle-outline" size={13} color="#fff" />
+                      <Text style={cartS.addMoneyTxt}>Add Money</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+                <Button
+                  title={
+                    submitting
+                      ? "Placing Order…"
+                      : `Place Order · ₹${cartTotal.toFixed(2)}`
+                  }
+                  onPress={() => setConfirmOrderVisible(true)}
+                  loading={submitting}
+                  disabled={!canPlace}
+                />
+              </View>
+            )}
+          </Animated.View>
+          {addressPickerVisible && (
+            <View style={cartS.pickerOverlay}>
+              <View style={cartS.pickerSheet}>
+                <View style={cartS.pickerHeader}>
+                  <Text style={cartS.pickerTitle}>Choose Delivery Address</Text>
                   <TouchableOpacity
-                    style={cartS.addMoneyBtn}
-                    onPress={() => {
-                      onClose();
-                      router.push("/(customer)/wallet" as any);
-                    }}
-                    activeOpacity={0.8}
+                    style={cartS.pickerClose}
+                    onPress={() => setAddressPickerVisible(false)}
                   >
-                    <Ionicons name="add-circle-outline" size={13} color="#fff" />
-                    <Text style={cartS.addMoneyTxt}>Add Money</Text>
+                    <Ionicons name="close" size={16} color={T.muted} />
                   </TouchableOpacity>
                 </View>
-              )}
-              <Button
-                title={
-                  submitting
-                    ? "Placing Order…"
-                    : `Place Order · ₹${cartTotal.toFixed(2)}`
-                }
-                onPress={() => onPlaceOrder(paymentMethod)}
-                loading={submitting}
-                disabled={!canPlace}
-              />
+                <ScrollView showsVerticalScrollIndicator={false}>
+                  {addresses.map((address) => {
+                    const active = selectedAddress?.id === address.id;
+                    return (
+                      <TouchableOpacity
+                        key={address.id || formatDeliveryAddress(address)}
+                        style={[
+                          cartS.pickerAddress,
+                          active && cartS.pickerAddressActive,
+                        ]}
+                        onPress={() => {
+                          onSelectAddress(address);
+                          setAddressPickerVisible(false);
+                        }}
+                      >
+                        <View style={cartS.pickerAddressTop}>
+                          <Text style={cartS.pickerAddressLabel}>
+                            {String(address.label || "home").toUpperCase()}
+                          </Text>
+                          {active && (
+                            <Ionicons name="checkmark-circle" size={18} color={Colors.primary} />
+                          )}
+                        </View>
+                        <Text style={cartS.pickerAddressText}>
+                          {formatDeliveryAddress(address)}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                  <TouchableOpacity
+                    style={cartS.newAddressBtn}
+                    onPress={() => {
+                      setAddressPickerVisible(false);
+                      onAddAddress();
+                    }}
+                  >
+                    <Ionicons name="add-circle-outline" size={18} color="#fff" />
+                    <Text style={cartS.newAddressText}>New Address</Text>
+                  </TouchableOpacity>
+                </ScrollView>
+              </View>
             </View>
           )}
-        </Animated.View>
-        {addressPickerVisible && (
-          <View style={cartS.pickerOverlay}>
-            <View style={cartS.pickerSheet}>
-              <View style={cartS.pickerHeader}>
-                <Text style={cartS.pickerTitle}>Choose Delivery Address</Text>
-                <TouchableOpacity
-                  style={cartS.pickerClose}
-                  onPress={() => setAddressPickerVisible(false)}
-                >
-                  <Ionicons name="close" size={16} color={T.muted} />
-                </TouchableOpacity>
-              </View>
-              <ScrollView showsVerticalScrollIndicator={false}>
-                {addresses.map((address) => {
-                  const active = selectedAddress?.id === address.id;
-                  return (
-                    <TouchableOpacity
-                      key={address.id || formatDeliveryAddress(address)}
-                      style={[
-                        cartS.pickerAddress,
-                        active && cartS.pickerAddressActive,
-                      ]}
-                      onPress={() => {
-                        onSelectAddress(address);
-                        setAddressPickerVisible(false);
-                      }}
-                    >
-                      <View style={cartS.pickerAddressTop}>
-                        <Text style={cartS.pickerAddressLabel}>
-                          {String(address.label || "home").toUpperCase()}
-                        </Text>
-                        {active && (
-                          <Ionicons name="checkmark-circle" size={18} color={Colors.primary} />
-                        )}
-                      </View>
-                      <Text style={cartS.pickerAddressText}>
-                        {formatDeliveryAddress(address)}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-                <TouchableOpacity
-                  style={cartS.newAddressBtn}
-                  onPress={() => {
-                    setAddressPickerVisible(false);
-                    onAddAddress();
-                  }}
-                >
-                  <Ionicons name="add-circle-outline" size={18} color="#fff" />
-                  <Text style={cartS.newAddressText}>New Address</Text>
-                </TouchableOpacity>
-              </ScrollView>
+        </View>
+      </Modal>
+
+      <Modal visible={confirmOrderVisible} transparent animationType="fade">
+        <View style={mBase.overlay}>
+          <AnimCard visible={confirmOrderVisible}>
+            <View
+              style={[
+                mBase.iconRing,
+                { borderColor: Colors.primary + "30", backgroundColor: Colors.primary + "12" },
+              ]}
+            >
+              <Ionicons name="bag-check-outline" size={30} color={Colors.primary} />
             </View>
-          </View>
-        )}
-      </View>
-    </Modal>
+            <Text style={mBase.title}>Place this order</Text>
+            <Text style={mBase.sub}>
+              Total ₹{cartTotal.toFixed(2)} for {cart.length} item{cart.length > 1 ? "s" : ""}.{"\n"}
+              Add more products or confirm your order.
+            </Text>
+            <View style={confirmS.row}>
+              <TouchableOpacity
+                style={[confirmS.halfBtn, { backgroundColor: "#2563EB" }]}
+                onPress={() => {
+                  setConfirmOrderVisible(false);
+                  onClose();
+                }}
+              >
+                <Text style={mBase.btnTxt}>Add More</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[confirmS.halfBtn, { backgroundColor: T.green }]}
+                onPress={() => {
+                  setConfirmOrderVisible(false);
+                  onPlaceOrder(paymentMethod);
+                }}
+              >
+                <Text style={mBase.btnTxt}>Place Order</Text>
+              </TouchableOpacity>
+            </View>
+          </AnimCard>
+        </View>
+      </Modal>
+    </>
   );
 }
 const cartS = StyleSheet.create({
@@ -4094,32 +4149,32 @@ export default function CatalogScreen() {
     );
   }, [products, getProductId]);
 
-useEffect(() => {
-  if (!isFocused) return;
-  void fetchData().catch(() => undefined);
-}, [isFocused, fetchData]);
+  useEffect(() => {
+    if (!isFocused) return;
+    void fetchData().catch(() => undefined);
+  }, [isFocused, fetchData]);
 
-useEffect(() => {
-  if (!isFocused) return;
-  void fetchPaymentMethods().catch(() => undefined);
-  const sub = AppState.addEventListener("change", (state) => {
-    if (state === "active") void fetchPaymentMethods().catch(() => undefined);
-  });
-  return () => {
-    sub.remove();
-  };
-}, [isFocused, fetchPaymentMethods]);
+  useEffect(() => {
+    if (!isFocused) return;
+    void fetchPaymentMethods().catch(() => undefined);
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") void fetchPaymentMethods().catch(() => undefined);
+    });
+    return () => {
+      sub.remove();
+    };
+  }, [isFocused, fetchPaymentMethods]);
 
-useEffect(() => {
-  if (!isFocused) return;
-  void fetchDeliveryWindows().catch(() => undefined);
-  const sub = AppState.addEventListener("change", (state) => {
-    if (state === "active") void fetchDeliveryWindows().catch(() => undefined);
-  });
-  return () => {
-    sub.remove();
-  };
-}, [isFocused, fetchDeliveryWindows]);
+  useEffect(() => {
+    if (!isFocused) return;
+    void fetchDeliveryWindows().catch(() => undefined);
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") void fetchDeliveryWindows().catch(() => undefined);
+    });
+    return () => {
+      sub.remove();
+    };
+  }, [isFocused, fetchDeliveryWindows]);
 
   useEffect(() => {
     if (!addToCartProduct) return;
@@ -4946,3 +5001,4 @@ const mainS = StyleSheet.create({
   empty: { alignItems: "center", paddingTop: 70, gap: 8 },
   emptyTxt: { fontSize: 13, color: T.faint, fontWeight: "500" },
 });
+// add pop-up to confirm order placement - 02-09-26

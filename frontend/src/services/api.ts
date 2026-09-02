@@ -27,8 +27,22 @@ export interface InvoiceTemplateSettings {
   footer_note?: string;
   terms?: string;
   primary_color?: string;
+  logo_base64?: string;
   show_payment_details?: boolean;
   show_terms?: boolean;
+}
+
+export interface StatementTemplateSettings {
+  business_name: string;
+  tagline?: string;
+  address?: string;
+  phone?: string;
+  email?: string;
+  footer_note?: string;
+  primary_color?: string;
+  logo_base64?: string;
+  show_summary?: boolean;
+  show_footer?: boolean;
 }
 
 export interface OrderCutoffRule {
@@ -150,12 +164,12 @@ export interface AdminNotificationItem {
   admin_id?: string;
   event?: string;
   category:
-    | "order"
-    | "subscription"
-    | "wallet"
-    | "vacation"
-    | "general"
-    | string;
+  | "order"
+  | "subscription"
+  | "wallet"
+  | "vacation"
+  | "general"
+  | string;
   title: string;
   body: string;
   data?: Record<string, any>;
@@ -423,6 +437,7 @@ export interface FeedStockOperationResult {
 
 //farm sale phone intefaces by golu
 export interface FarmSaleCreate {
+  customer_id?: string;
   customer_name: string;
   product_name: string;
   quantity: number;
@@ -440,6 +455,7 @@ export interface FarmSale {
   admin_id: string;
   worker_id: string;
   worker_name: string;
+  customer_id?: string;
   customer_name: string;
   product_name: string;
   quantity: number;
@@ -708,15 +724,15 @@ class ApiService {
 
   //for fetch admin response for rider by golu
   async getAssignedAdmin() {
-  return this.request<{
-    admin_id: string;
-    name: string;
-    business_name?: string;
-    email?: string;
-    phone?: string;
-    address?: any;
-  }>("/auth/assigned-admin");
-}
+    return this.request<{
+      admin_id: string;
+      name: string;
+      business_name?: string;
+      email?: string;
+      phone?: string;
+      address?: any;
+    }>("/auth/assigned-admin");
+  }
 
   // New API to get admin details by referral code (for registration flow)
   async getAdminByReferral(referralCode: string) {
@@ -840,6 +856,51 @@ class ApiService {
       method: "PUT",
       body: JSON.stringify(data),
     });
+  }
+
+  async getStatementTemplate() {
+    try {
+      return await this.request<StatementTemplateSettings>(
+        "/invoices/admin/statement-template",
+      );
+    } catch (error: any) {
+      if (error?.status === 404) {
+        return this.request<StatementTemplateSettings>(
+          "/wallet/statement-template",
+        );
+      }
+      throw error;
+    }
+  }
+
+  async saveStatementTemplate(data: StatementTemplateSettings) {
+    try {
+      return await this.request<StatementTemplateSettings>(
+        "/invoices/admin/statement-template",
+        {
+          method: "PUT",
+          body: JSON.stringify(data),
+        },
+      );
+    } catch (error: any) {
+      if (error?.status === 404) {
+        return this.request<StatementTemplateSettings>(
+          "/wallet/statement-template",
+          {
+            method: "PUT",
+            body: JSON.stringify(data),
+          },
+        );
+      }
+      throw error;
+    }
+  }
+
+  async getCurrentWalletStatementTemplate() {
+    return this.request<StatementTemplateSettings>(
+      "/wallet/statement-template/current",
+      { silentErrorLog: true },
+    );
   }
 
   async getCatalogOrderCutoffs(adminId?: string) {
@@ -1035,7 +1096,7 @@ class ApiService {
     return this.request<any[]>("/subscriptions");
   }
 
-async getSubscriptionHistory() {
+  async getSubscriptionHistory() {
     return this.request<any[]>("/subscriptions/history");
   }
 
@@ -1222,6 +1283,18 @@ async getSubscriptionHistory() {
 
   async getWalletTransactions() {
     return this.request<any[]>("/wallet/transactions");
+  }
+
+  async downloadWalletStatement(params: {
+    start_date: string;
+    end_date: string;
+  }) {
+    const query = new URLSearchParams();
+    query.append("start_date", params.start_date);
+    query.append("end_date", params.end_date);
+    return this.request<InvoiceDownloadPayload>(
+      `/wallet/statement/download?${query.toString()}`,
+    );
   }
 
   async rechargeWallet(amount: number) {
@@ -1841,16 +1914,16 @@ async getSubscriptionHistory() {
   }
 
   async adminSetHealth(
-  cowId: string,
-  status: string,
-  cowName?: string,
-  cowTag?: string,
-) {
-  return this.request<any>(`/admin/health/${cowId}`, {
-    method: "PUT",
-    body: JSON.stringify({ status, cow_name: cowName, cow_tag: cowTag }),
-  });
-}
+    cowId: string,
+    status: string,
+    cowName?: string,
+    cowTag?: string,
+  ) {
+    return this.request<any>(`/admin/health/${cowId}`, {
+      method: "PUT",
+      body: JSON.stringify({ status, cow_name: cowName, cow_tag: cowTag }),
+    });
+  }
 
   async getFeedLogs(date: string, shift: "morning" | "evening") {
     return this.request<any[]>(`/worker/feed?date=${date}&shift=${shift}`);
@@ -2353,12 +2426,12 @@ async getSubscriptionHistory() {
         const trimmed = text.trim();
         const data = trimmed
           ? (() => {
-              try {
-                return JSON.parse(trimmed);
-              } catch {
-                return null;
-              }
-            })()
+            try {
+              return JSON.parse(trimmed);
+            } catch {
+              return null;
+            }
+          })()
           : null;
 
         if (response.ok && data) return data;
@@ -2370,9 +2443,9 @@ async getSubscriptionHistory() {
 
         throw new Error(
           (data &&
-          typeof data === "object" &&
-          "detail" in data &&
-          typeof data.detail === "string"
+            typeof data === "object" &&
+            "detail" in data &&
+            typeof data.detail === "string"
             ? data.detail
             : trimmed) || "Failed to fetch worker points",
         );
@@ -2581,6 +2654,16 @@ async getSubscriptionHistory() {
   async workerLogout() {
     await AsyncStorage.removeItem("worker_token");
     await AsyncStorage.removeItem("worker_data");
+  }
+  async workerGetMe() {
+    const token = await AsyncStorage.getItem("worker_token");
+    const response = await fetch(`${API_BASE}/api/worker/auth/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await response.json();
+    if (!response.ok)
+      throw new Error(data.detail || "Failed to fetch worker profile");
+    return data; // includes farm_name, name, email, etc.
   }
 
   async checkDuplicate(
@@ -3723,6 +3806,7 @@ async updateVetMedicalRecord(
   async adminUpdateFarmSale(
     saleId: string,
     data: Partial<{
+      customer_id: string;
       customer_name: string;
       product_name: string;
       quantity: number;
@@ -3941,7 +4025,7 @@ async updateVetMedicalRecord(
     });
   }
 
-    async workerGetProducts(category?: string) {
+  async workerGetProducts(category?: string) {
     const token = await AsyncStorage.getItem("worker_token");
     const query = category ? `?category=${encodeURIComponent(category)}` : "";
     const response = await fetch(`${API_BASE}/api/worker/products${query}`, {

@@ -23,7 +23,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import Constants from "expo-constants";
 import * as Sharing from "expo-sharing";
-import { api } from "../../src/services/api";
+import { Calendar } from "react-native-calendars";
+import { api, StatementTemplateSettings } from "../../src/services/api";
 import { Colors } from "../../src/constants/colors";
 import LoadingScreen from "../../src/components/LoadingScreen";
 import Button from "../../src/components/Button";
@@ -34,6 +35,38 @@ const quickAmounts = [100, 200, 500, 1000];
 const MIN_AMOUNT = 100;
 const MAX_AMOUNT = 99999;
 type RechargeMode = "online" | "manual";
+type StatementRange = "1m" | "3m" | "6m" | "custom";
+type StatementDateTarget = "start" | "end";
+
+function toDateKey(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function addMonths(date: Date, months: number): Date {
+  const next = new Date(date);
+  next.setMonth(next.getMonth() + months);
+  return next;
+}
+
+function getStatementRangeDates(range: StatementRange, start: string, end: string) {
+  const today = new Date();
+  if (range === "custom") {
+    return { startDate: start, endDate: end };
+  }
+  const months = range === "1m" ? 1 : range === "3m" ? 3 : 6;
+  return {
+    startDate: toDateKey(addMonths(today, -months)),
+    endDate: toDateKey(today),
+  };
+}
+
+function statementLogoUri(value?: string) {
+  if (!value) return "";
+  return value.startsWith("data:image") ? value : `data:image/jpeg;base64,${value}`;
+}
 
 function isExpoGo(): boolean {
   return Constants.appOwnership === "expo";
@@ -54,31 +87,47 @@ function getRazorpayContact(phone?: string): string | undefined {
 
 function getFileCacheDir(): string {
   try {
-    const FS = require("expo-file-system");
+    const FS = require("expo-file-system/legacy");
     return (
       FS.cacheDirectory ??
       FS.documentDirectory ??
-      FS.Dirs?.Cache ??
-      FS.Dirs?.Document ??
       ""
     );
   } catch {
-    return "";
+    try {
+      const FS = require("expo-file-system");
+      const dir =
+        FS.cacheDirectory ??
+        FS.documentDirectory ??
+        FS.Paths?.cache?.uri ??
+        FS.Paths?.document?.uri ??
+        "";
+      return dir && !String(dir).endsWith("/") ? `${dir}/` : dir;
+    } catch {
+      return "";
+    }
   }
 }
 
 async function writeBase64File(uri: string, base64: string) {
-  const FS = require("expo-file-system");
-  if (typeof FS.writeAsStringAsync === "function") {
-    await FS.writeAsStringAsync(uri, base64, {
-      encoding: FS.EncodingType?.Base64 ?? "base64",
-    });
-    return;
+  try {
+    const FS = require("expo-file-system/legacy");
+    if (typeof FS.writeAsStringAsync === "function") {
+      await FS.writeAsStringAsync(uri, base64, {
+        encoding: FS.EncodingType?.Base64 ?? "base64",
+      });
+      return;
+    }
+  } catch {
+    // Fallback to the new Expo FileSystem API below.
   }
+  const FS = require("expo-file-system");
   if (typeof FS.File === "function") {
     const file = new FS.File(uri);
     await file.write(base64, { encoding: "base64" });
+    return;
   }
+  throw new Error("FileSystem write API is not available");
 }
 
 // ─── Limit Toast ─────────────────────────────────────────────────────────────
@@ -528,6 +577,19 @@ export default function WalletScreen() {
   const [paymentQr, setPaymentQr] = useState<any>(null);
   const [qrPreviewVisible, setQrPreviewVisible] = useState(false);
   const [downloadingQr, setDownloadingQr] = useState(false);
+  const [statementModal, setStatementModal] = useState(false);
+  const [statementRange, setStatementRange] = useState<StatementRange>("1m");
+  const [statementStartDate, setStatementStartDate] = useState(() =>
+    toDateKey(addMonths(new Date(), -1)),
+  );
+  const [statementEndDate, setStatementEndDate] = useState(() =>
+    toDateKey(new Date()),
+  );
+  const [statementDateTarget, setStatementDateTarget] =
+    useState<StatementDateTarget>("start");
+  const [downloadingStatement, setDownloadingStatement] = useState(false);
+  const [statementTemplate, setStatementTemplate] =
+    useState<StatementTemplateSettings | null>(null);
   const [rechargeModal, setRechargeModal] = useState(false);
   const [rechargeAmount, setRechargeAmount] = useState("");
   const [reference, setReference] = useState("");
@@ -570,6 +632,14 @@ export default function WalletScreen() {
       .then(setPaymentQr)
       .catch(() => setPaymentQr(null));
   }, [rechargeModal, manualQrEnabled]);
+
+  useEffect(() => {
+    if (!statementModal) return;
+    api
+      .getCurrentWalletStatementTemplate()
+      .then(setStatementTemplate)
+      .catch(() => setStatementTemplate(null));
+  }, [statementModal]);
 
   const triggerShake = () => {
     shakeAnim.setValue(0);
@@ -869,6 +939,60 @@ export default function WalletScreen() {
     }
   };
 
+  const closeStatementModal = () => {
+    setStatementModal(false);
+    setStatementDateTarget("start");
+  };
+
+  const downloadStatement = async () => {
+    const { startDate, endDate } = getStatementRangeDates(
+      statementRange,
+      statementStartDate,
+      statementEndDate,
+    );
+    if (!startDate || !endDate) {
+      Alert.alert("Select date range", "Please select both start and end date.");
+      return;
+    }
+    if (startDate > endDate) {
+      Alert.alert("Invalid date range", "Start date cannot be after end date.");
+      return;
+    }
+    const dir = getFileCacheDir();
+    if (!dir) {
+      Alert.alert("Storage unavailable", "Could not prepare the statement file.");
+      return;
+    }
+    setDownloadingStatement(true);
+    try {
+      const payload = await api.downloadWalletStatement({
+        start_date: startDate,
+        end_date: endDate,
+      });
+      const filename =
+        payload.filename ||
+        `wallet-statement-${startDate}-${endDate}.pdf`;
+      const fileUri = `${dir}${filename}`;
+      await writeBase64File(fileUri, payload.base64);
+      closeStatementModal();
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(fileUri, {
+          mimeType: payload.mime_type || "application/pdf",
+          dialogTitle: "Download Wallet Statement",
+        });
+      } else {
+        Alert.alert("Statement ready", `Saved as ${filename}`);
+      }
+    } catch (error: any) {
+      Alert.alert(
+        "Could not download statement",
+        error?.message || "Please try again.",
+      );
+    } finally {
+      setDownloadingStatement(false);
+    }
+  };
+
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
     return date.toLocaleDateString("en-IN", {
@@ -916,6 +1040,41 @@ export default function WalletScreen() {
   ].sort(
     (a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime(),
   );
+  const activeStatementRange = getStatementRangeDates(
+    statementRange,
+    statementStartDate,
+    statementEndDate,
+  );
+  const statementMarkedDates =
+    statementRange === "custom"
+      ? {
+          ...(statementStartDate
+            ? {
+                [statementStartDate]: {
+                  selected: true,
+                  startingDay: true,
+                  color: Colors.primary,
+                  textColor: "#fff",
+                },
+              }
+            : {}),
+          ...(statementEndDate
+            ? {
+                [statementEndDate]: {
+                  selected: true,
+                  endingDay: true,
+                  color: Colors.primary,
+                  textColor: "#fff",
+                },
+              }
+            : {}),
+        }
+      : {};
+  const statementLogo = statementLogoUri(statementTemplate?.logo_base64);
+  const statementBrandName =
+    statementTemplate?.business_name || "Gau Satva Wallet";
+  const statementBrandSub =
+    statementTemplate?.tagline || "Wallet statement";
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
@@ -1016,8 +1175,18 @@ export default function WalletScreen() {
 
         {/* ── Transactions ── */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Transaction History</Text>
-          <Text style={styles.sectionSub}>{historyItems.length} records</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.sectionTitle}>Transaction History</Text>
+            <Text style={styles.sectionSub}>{historyItems.length} records</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.statementBtn}
+            onPress={() => setStatementModal(true)}
+            activeOpacity={0.86}
+          >
+            <Ionicons name="download-outline" size={15} color={Colors.primary} />
+            <Text style={styles.statementBtnText}>Statement</Text>
+          </TouchableOpacity>
         </View>
         {historyItems.length === 0 ? (
           <View style={styles.emptyState}>
@@ -1437,6 +1606,183 @@ export default function WalletScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
+      <Modal
+        visible={statementModal}
+        animationType="slide"
+        transparent
+        onRequestClose={closeStatementModal}
+      >
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={closeStatementModal}
+          />
+          <View style={styles.modalSheet}>
+            <View style={styles.dragHandle} />
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>Wallet Statement</Text>
+                <Text style={styles.statementPeriodText}>
+                  {activeStatementRange.startDate} to {activeStatementRange.endDate}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.closeBtn}
+                onPress={closeStatementModal}
+              >
+                <Ionicons name="close" size={16} color="#666" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.statementSheetContent}
+            >
+              <View style={styles.statementOptions}>
+                {[
+                  { key: "1m" as StatementRange, label: "1 Month" },
+                  { key: "3m" as StatementRange, label: "3 Months" },
+                  { key: "6m" as StatementRange, label: "6 Months" },
+                  { key: "custom" as StatementRange, label: "Custom" },
+                ].map((option) => {
+                  const active = statementRange === option.key;
+                  return (
+                    <TouchableOpacity
+                      key={option.key}
+                      style={[
+                        styles.statementChip,
+                        active && styles.statementChipActive,
+                      ]}
+                      onPress={() => setStatementRange(option.key)}
+                      activeOpacity={0.86}
+                    >
+                      <Text
+                        style={[
+                          styles.statementChipText,
+                          active && styles.statementChipTextActive,
+                        ]}
+                      >
+                        {option.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {statementRange === "custom" && (
+                <View style={styles.customDateBox}>
+                  <View style={styles.datePickRow}>
+                    <TouchableOpacity
+                      style={[
+                        styles.datePickCard,
+                        statementDateTarget === "start" &&
+                          styles.datePickCardActive,
+                      ]}
+                      onPress={() => setStatementDateTarget("start")}
+                    >
+                      <Text style={styles.datePickLabel}>From</Text>
+                      <Text style={styles.datePickValue}>
+                        {statementStartDate || "Select date"}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.datePickCard,
+                        statementDateTarget === "end" &&
+                          styles.datePickCardActive,
+                      ]}
+                      onPress={() => setStatementDateTarget("end")}
+                    >
+                      <Text style={styles.datePickLabel}>To</Text>
+                      <Text style={styles.datePickValue}>
+                        {statementEndDate || "Select date"}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                  <Calendar
+                    maxDate={toDateKey(new Date())}
+                    markedDates={statementMarkedDates}
+                    markingType="period"
+                    onDayPress={(day: any) => {
+                      if (statementDateTarget === "start") {
+                        setStatementStartDate(day.dateString);
+                        setStatementDateTarget("end");
+                      } else {
+                        setStatementEndDate(day.dateString);
+                      }
+                    }}
+                    theme={{
+                      todayTextColor: Colors.primary,
+                      selectedDayBackgroundColor: Colors.primary,
+                      arrowColor: Colors.primary,
+                      textDayFontWeight: "600",
+                      textMonthFontWeight: "900",
+                    }}
+                  />
+                </View>
+              )}
+
+              <View style={styles.statementBrandCard}>
+                <View
+                  style={[
+                    styles.statementBrandLogo,
+                    {
+                      borderColor:
+                        statementTemplate?.primary_color || Colors.primary,
+                    },
+                  ]}
+                >
+                  {statementLogo ? (
+                    <Image source={{ uri: statementLogo }} style={styles.statementBrandImage} />
+                  ) : (
+                    <Ionicons name="business-outline" size={23} color={Colors.primary} />
+                  )}
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.statementBrandName} numberOfLines={1}>
+                    {statementBrandName}
+                  </Text>
+                  <Text style={styles.statementBrandSub} numberOfLines={1}>
+                    {statementBrandSub}
+                  </Text>
+                  <Text style={styles.statementBrandMeta} numberOfLines={2}>
+                    {[statementTemplate?.phone, statementTemplate?.email]
+                      .filter(Boolean)
+                      .join(" · ") || "Template details will appear on PDF."}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.statementInfoBox}>
+                <Ionicons name="document-text-outline" size={19} color={Colors.primary} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.statementInfoTitle}>PDF statement</Text>
+                  <Text style={styles.statementInfoText}>
+                    Includes credits, debits, transaction dates, descriptions and running balance.
+                  </Text>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                style={[
+                  styles.statementDownloadBtn,
+                  downloadingStatement && styles.statementDownloadBtnDisabled,
+                ]}
+                onPress={downloadStatement}
+                disabled={downloadingStatement}
+                activeOpacity={0.86}
+              >
+                <Ionicons name="download-outline" size={18} color="#fff" />
+                <Text style={styles.statementDownloadText}>
+                  {downloadingStatement ? "Preparing PDF..." : "Download Statement"}
+                </Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
       {/* ── Success Modal ── */}
       <SuccessModal
         visible={successVisible}
@@ -1615,13 +1961,29 @@ const styles = StyleSheet.create({
 
   section: {
     flexDirection: "row",
-    alignItems: "baseline",
+    alignItems: "center",
     paddingHorizontal: 20,
     marginBottom: 12,
     gap: 8,
   },
   sectionTitle: { fontSize: 17, fontWeight: "800", color: "#1A1A1A" },
   sectionSub: { fontSize: 12, color: "#bbb", fontWeight: "500" },
+  statementBtn: {
+    minHeight: 34,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 11,
+    borderRadius: 12,
+    backgroundColor: "#FFF7F2",
+    borderWidth: 1,
+    borderColor: Colors.primary + "28",
+  },
+  statementBtnText: {
+    fontSize: 12,
+    fontWeight: "900",
+    color: Colors.primary,
+  },
 
   txList: { paddingHorizontal: 20, gap: 10 },
   txCard: {
@@ -1715,6 +2077,12 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   modalTitle: { fontSize: 20, fontWeight: "800", color: "#1A1A1A" },
+  statementPeriodText: {
+    fontSize: 11.5,
+    color: "#8A8A8A",
+    fontWeight: "700",
+    marginTop: 3,
+  },
   closeBtn: {
     width: 32,
     height: 32,
@@ -1964,4 +2332,122 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   downloadText: { fontSize: 15, fontWeight: "900", color: "#fff" },
+  statementSheetContent: { paddingBottom: 24 },
+  statementOptions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 14,
+  },
+  statementChip: {
+    minHeight: 38,
+    paddingHorizontal: 13,
+    borderRadius: 13,
+    backgroundColor: "#F5F5F5",
+    borderWidth: 1,
+    borderColor: "#ECECEC",
+    justifyContent: "center",
+  },
+  statementChipActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  statementChipText: { fontSize: 12, fontWeight: "900", color: "#777" },
+  statementChipTextActive: { color: "#fff" },
+  customDateBox: {
+    backgroundColor: "#FAFAFA",
+    borderRadius: 18,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: "#EFEFEF",
+    marginBottom: 14,
+  },
+  datePickRow: { flexDirection: "row", gap: 8, marginBottom: 10 },
+  datePickCard: {
+    flex: 1,
+    minHeight: 56,
+    borderRadius: 14,
+    backgroundColor: "#fff",
+    borderWidth: 1.5,
+    borderColor: "#EFEFEF",
+    paddingHorizontal: 12,
+    justifyContent: "center",
+  },
+  datePickCardActive: {
+    borderColor: Colors.primary,
+    backgroundColor: "#FFF7F2",
+  },
+  datePickLabel: {
+    fontSize: 10,
+    fontWeight: "900",
+    color: "#999",
+    textTransform: "uppercase",
+    marginBottom: 3,
+  },
+  datePickValue: { fontSize: 13, fontWeight: "900", color: "#1A1A1A" },
+  statementBrandCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.primary + "22",
+    padding: 12,
+    marginBottom: 14,
+  },
+  statementBrandLogo: {
+    width: 54,
+    height: 54,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    backgroundColor: "#FFF7F2",
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  statementBrandImage: { width: "100%", height: "100%" },
+  statementBrandName: { fontSize: 14.5, fontWeight: "900", color: "#1A1A1A" },
+  statementBrandSub: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: "#777",
+    marginTop: 2,
+  },
+  statementBrandMeta: {
+    fontSize: 10.5,
+    fontWeight: "600",
+    color: "#888",
+    marginTop: 4,
+    lineHeight: 14,
+  },
+  statementInfoBox: {
+    flexDirection: "row",
+    gap: 10,
+    backgroundColor: "#FFF7F2",
+    borderRadius: 16,
+    padding: 13,
+    borderWidth: 1,
+    borderColor: Colors.primary + "22",
+    marginBottom: 14,
+  },
+  statementInfoTitle: { fontSize: 13.5, fontWeight: "900", color: "#1A1A1A" },
+  statementInfoText: {
+    fontSize: 11.5,
+    color: "#777",
+    fontWeight: "600",
+    lineHeight: 16,
+    marginTop: 2,
+  },
+  statementDownloadBtn: {
+    minHeight: 50,
+    borderRadius: 16,
+    backgroundColor: Colors.primary,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  statementDownloadBtnDisabled: { opacity: 0.65 },
+  statementDownloadText: { fontSize: 15, fontWeight: "900", color: "#fff" },
 });

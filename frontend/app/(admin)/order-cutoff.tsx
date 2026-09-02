@@ -4,7 +4,6 @@ import {
   Alert,
   BackHandler,
   Modal,
-  Platform,
   RefreshControl,
   SafeAreaView,
   ScrollView,
@@ -13,7 +12,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import DateTimePicker from "@react-native-community/datetimepicker";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
@@ -49,6 +47,7 @@ type CutoffRule = {
 type Scope = "all" | "product";
 type ScheduleType = "daily" | "weekly" | "custom";
 type TimeTarget = "start" | "end";
+type TimeDraft = { hour: number; minute: string; period: "AM" | "PM" };
 
 const DAYS = [
   { value: 0, label: "Mon" },
@@ -59,6 +58,8 @@ const DAYS = [
   { value: 5, label: "Sat" },
   { value: 6, label: "Sun" },
 ];
+const HOURS = Array.from({ length: 12 }, (_, index) => index + 1);
+const MINUTES = ["00", "05", "10", "15", "20", "25", "30", "35", "40", "45", "50", "55"];
 
 const toTimeLabel = (value: string) => {
   const [h, m] = String(value || "20:00").split(":").map(Number);
@@ -71,15 +72,23 @@ const toTimeLabel = (value: string) => {
   });
 };
 
-const timeToDate = (value: string) => {
-  const [h, m] = String(value || "20:00").split(":").map(Number);
-  const date = new Date();
-  date.setHours(h || 0, m || 0, 0, 0);
-  return date;
+const toTimeDraft = (value: string): TimeDraft => {
+  const [rawHour, rawMinute] = String(value || "20:00").split(":").map(Number);
+  const hour24 = Number.isFinite(rawHour) ? rawHour : 20;
+  const minute = Number.isFinite(rawMinute) ? rawMinute : 0;
+  const roundedMinute = Math.min(55, Math.round(minute / 5) * 5);
+  return {
+    hour: hour24 % 12 || 12,
+    minute: String(roundedMinute).padStart(2, "0"),
+    period: hour24 >= 12 ? "PM" : "AM",
+  };
 };
 
-const dateToTime = (date: Date) =>
-  `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+const timeDraftToValue = (draft: TimeDraft) => {
+  let hour = draft.hour % 12;
+  if (draft.period === "PM") hour += 12;
+  return `${String(hour).padStart(2, "0")}:${draft.minute}`;
+};
 
 const ruleStart = (rule: CutoffRule) => rule.start_time || rule.cutoff_time || "18:00";
 const ruleEnd = (rule: CutoffRule) => rule.end_time || rule.cutoff_time || "20:00";
@@ -108,6 +117,7 @@ export default function AdminOrderCutoffScreen() {
   const [isActive, setIsActive] = useState(true);
   const [timePickerVisible, setTimePickerVisible] = useState(false);
   const [timeTarget, setTimeTarget] = useState<TimeTarget>("start");
+  const [timeDraft, setTimeDraft] = useState<TimeDraft>(() => toTimeDraft("18:00"));
   const [editSheetVisible, setEditSheetVisible] = useState(false);
 
   const goBackToSettings = useCallback(() => {
@@ -172,6 +182,7 @@ export default function AdminOrderCutoffScreen() {
   const resetForm = () => {
     setEditing(null);
     setEditSheetVisible(false);
+    setTimePickerVisible(false);
     setScope("all");
     setProductId("");
     setStartTime("18:00");
@@ -182,6 +193,7 @@ export default function AdminOrderCutoffScreen() {
   };
 
   const startEdit = (rule: CutoffRule) => {
+    setTimePickerVisible(false);
     setEditing(rule);
     setScope(rule.product_id ? "product" : "all");
     setProductId(rule.product_id || "");
@@ -195,7 +207,97 @@ export default function AdminOrderCutoffScreen() {
 
   const openTimePicker = (target: TimeTarget) => {
     setTimeTarget(target);
+    setTimeDraft(toTimeDraft(target === "start" ? startTime : endTime));
     setTimePickerVisible(true);
+  };
+
+  const closeTimePicker = () => {
+    setTimePickerVisible(false);
+  };
+
+  const confirmTimePicker = () => {
+    const value = timeDraftToValue(timeDraft);
+    if (timeTarget === "start") {
+      setStartTime(value);
+    } else {
+      setEndTime(value);
+    }
+    closeTimePicker();
+  };
+
+  const renderInlineTimePicker = () => {
+    if (!timePickerVisible) return null;
+    return (
+      <View style={s.inlineTimePicker}>
+        <View style={s.pickerHeader}>
+          <View>
+            <Text style={s.pickerTitle}>
+              Select Cut-off {timeTarget === "start" ? "Start" : "End"} Time
+            </Text>
+            <Text style={s.pickerSub}>{toTimeLabel(timeDraftToValue(timeDraft))}</Text>
+          </View>
+          <TouchableOpacity style={s.closeBtn} onPress={closeTimePicker}>
+            <Ionicons name="close" size={18} color={C.dark} />
+          </TouchableOpacity>
+        </View>
+
+        <Text style={s.pickerSectionLabel}>Hour</Text>
+        <View style={s.pickerGrid}>
+          {HOURS.map((hour) => {
+            const active = timeDraft.hour === hour;
+            return (
+              <TouchableOpacity
+                key={hour}
+                style={[s.pickerChip, active && s.pickerChipActive]}
+                onPress={() => setTimeDraft((current) => ({ ...current, hour }))}
+              >
+                <Text style={[s.pickerChipText, active && s.pickerChipTextActive]}>{hour}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        <Text style={s.pickerSectionLabel}>Minute</Text>
+        <View style={s.pickerGrid}>
+          {MINUTES.map((minute) => {
+            const active = timeDraft.minute === minute;
+            return (
+              <TouchableOpacity
+                key={minute}
+                style={[s.pickerChip, active && s.pickerChipActive]}
+                onPress={() => setTimeDraft((current) => ({ ...current, minute }))}
+              >
+                <Text style={[s.pickerChipText, active && s.pickerChipTextActive]}>{minute}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        <View style={s.periodRow}>
+          {(["AM", "PM"] as const).map((period) => {
+            const active = timeDraft.period === period;
+            return (
+              <TouchableOpacity
+                key={period}
+                style={[s.periodBtn, active && s.pickerChipActive]}
+                onPress={() => setTimeDraft((current) => ({ ...current, period }))}
+              >
+                <Text style={[s.pickerChipText, active && s.pickerChipTextActive]}>{period}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        <View style={s.pickerActions}>
+          <TouchableOpacity style={s.pickerCancel} onPress={closeTimePicker}>
+            <Text style={s.pickerCancelText}>Cancel</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={s.pickerConfirm} onPress={confirmTimePicker}>
+            <Text style={s.pickerConfirmText}>Apply Time</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
   };
 
   const toggleDay = (day: number) => {
@@ -386,6 +488,7 @@ export default function AdminOrderCutoffScreen() {
                 <Text style={s.timeHint}>{endTime}</Text>
               </TouchableOpacity>
             </View>
+            {renderInlineTimePicker()}
 
             <Text style={s.label}>Schedule</Text>
             <View style={s.segment}>
@@ -573,6 +676,7 @@ export default function AdminOrderCutoffScreen() {
                   <Text style={s.timeHint}>{endTime}</Text>
                 </TouchableOpacity>
               </View>
+              {renderInlineTimePicker()}
 
               <Text style={s.label}>Schedule</Text>
               <View style={s.segment}>
@@ -638,36 +742,6 @@ export default function AdminOrderCutoffScreen() {
         </View>
       </Modal>
 
-      {timePickerVisible && (
-        <Modal transparent animationType="fade" visible={timePickerVisible}>
-          <View style={s.modalOverlay}>
-            <View style={s.timeSheet}>
-              <Text style={s.cardTitle}>Select Cut-off {timeTarget === "start" ? "Start" : "End"} Time</Text>
-              <DateTimePicker
-                mode="time"
-                value={timeToDate(timeTarget === "start" ? startTime : endTime)}
-                display={Platform.OS === "ios" ? "spinner" : "default"}
-                onChange={(event, date) => {
-                  if (Platform.OS !== "ios") setTimePickerVisible(false);
-                  if (date) {
-                    const value = dateToTime(date);
-                    if (timeTarget === "start") {
-                      setStartTime(value);
-                    } else {
-                      setEndTime(value);
-                    }
-                  }
-                }}
-              />
-              {Platform.OS === "ios" ? (
-                <TouchableOpacity style={s.saveBtn} onPress={() => setTimePickerVisible(false)}>
-                  <Text style={s.saveText}>Done</Text>
-                </TouchableOpacity>
-              ) : null}
-            </View>
-          </View>
-        </Modal>
-      )}
     </SafeAreaView>
   );
 }
@@ -857,7 +931,24 @@ const s = StyleSheet.create({
   emptyTitle: { marginTop: 8, fontSize: 15, fontWeight: "900", color: C.text },
   emptySub: { marginTop: 4, textAlign: "center", fontSize: 12, fontWeight: "600", color: C.muted },
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "center", padding: 18 },
-  timeSheet: { backgroundColor: C.card, borderRadius: 22, padding: 18 },
+  timeSheet: { backgroundColor: C.card, borderRadius: 22, padding: 18, maxHeight: "88%" },
+  inlineTimePicker: { marginTop: 10, padding: 14, borderRadius: 18, backgroundColor: "#FFF8F0", borderWidth: 1, borderColor: C.border },
+  pickerHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12 },
+  pickerTitle: { fontSize: 16, fontWeight: "900", color: C.text },
+  pickerSub: { marginTop: 3, fontSize: 13, fontWeight: "800", color: C.dark },
+  pickerSectionLabel: { marginTop: 12, marginBottom: 8, fontSize: 11, fontWeight: "900", color: C.muted, textTransform: "uppercase" },
+  pickerGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  pickerChip: { width: 48, height: 40, borderRadius: 12, borderWidth: 1, borderColor: C.border, backgroundColor: "#FFFDFB", alignItems: "center", justifyContent: "center" },
+  pickerChipActive: { backgroundColor: C.dark, borderColor: C.dark },
+  pickerChipText: { fontSize: 13, fontWeight: "900", color: C.dark },
+  pickerChipTextActive: { color: "#fff" },
+  periodRow: { flexDirection: "row", gap: 10, marginTop: 14 },
+  periodBtn: { flex: 1, minHeight: 42, borderRadius: 13, borderWidth: 1, borderColor: C.border, backgroundColor: "#FFFDFB", alignItems: "center", justifyContent: "center" },
+  pickerActions: { flexDirection: "row", gap: 10, marginTop: 16 },
+  pickerCancel: { flex: 1, minHeight: 46, borderRadius: 15, backgroundColor: "#FFF3E8", alignItems: "center", justifyContent: "center" },
+  pickerConfirm: { flex: 1.35, minHeight: 46, borderRadius: 15, backgroundColor: C.dark, alignItems: "center", justifyContent: "center" },
+  pickerCancelText: { fontSize: 14, fontWeight: "900", color: C.dark },
+  pickerConfirmText: { fontSize: 14, fontWeight: "900", color: "#fff" },
   sheetOverlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.35)" },
   sheetBackdrop: { ...StyleSheet.absoluteFillObject },
   editSheet: {

@@ -19,7 +19,7 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
 import { useAuth } from "../../src/contexts/AuthContext";
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { api, FarmSale, PaymentMethod } from "../../src/services/api";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -38,6 +38,29 @@ function fmtShortDate(dateStr: string): string {
 }
 
 const UNIT_OPTIONS = ["kg", "L", "pcs"] as const;
+
+// ─── Customer directory (built from this farm's own sale history) ────────────
+// Workers don't have access to the admin's customer/CRM list, so the
+// "existing customer" dropdown is built from customer names already used in
+// past farm sale entries — same UX pattern as the product picker below.
+
+interface SimpleCustomer {
+  id: string | null;
+  name: string;
+}
+
+function buildCustomerDirectoryFromSales(sales: FarmSale[]): SimpleCustomer[] {
+  const map = new Map<string, SimpleCustomer>();
+  sales.forEach((s) => {
+    const custId = (s as any).customer_id as string | undefined;
+    const key = custId || s.customer_name.trim().toLowerCase();
+    if (!key) return;
+    if (!map.has(key)) {
+      map.set(key, { id: custId ?? null, name: s.customer_name });
+    }
+  });
+  return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
 
 // ─── Modern Alert (unchanged logic) ──────────────────────────────────────────
 
@@ -431,6 +454,181 @@ const ns = StyleSheet.create({
   stepperDivider: { height: 1, backgroundColor: "#e5e7eb" },
 });
 
+// ─── Customer Picker Modal (select an existing customer from sale history, or add new) ─
+
+function CustomerPickerModal({
+  visible,
+  customers,
+  onSelect,
+  onClose,
+}: {
+  visible: boolean;
+  customers: SimpleCustomer[];
+  onSelect: (customer: { id: string | null; name: string }) => void;
+  onClose: () => void;
+}) {
+  const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    if (visible) setSearch("");
+  }, [visible]);
+
+  const filtered = customers.filter((c) =>
+    c.name.toLowerCase().includes(search.trim().toLowerCase()),
+  );
+  const trimmed = search.trim();
+  const exactMatch = customers.some(
+    (c) => c.name.toLowerCase() === trimmed.toLowerCase(),
+  );
+  const showAddNew = trimmed.length > 0 && !exactMatch;
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <TouchableOpacity activeOpacity={1} style={cp.overlay} onPress={onClose}>
+        <TouchableOpacity activeOpacity={1} style={cp.sheet}>
+          <View style={cp.header}>
+            <Text style={cp.title}>Select Customer</Text>
+            <TouchableOpacity onPress={onClose} hitSlop={10}>
+              <Ionicons name="close" size={20} color="#6b7280" />
+            </TouchableOpacity>
+          </View>
+
+          <View style={cp.searchRow}>
+            <Ionicons name="search-outline" size={16} color="#9ca3af" />
+            <TextInput
+              style={cp.searchInput}
+              value={search}
+              onChangeText={setSearch}
+              placeholder="Search or type new customer name"
+              placeholderTextColor="#9ca3af"
+              autoFocus
+            />
+          </View>
+
+          <ScrollView style={{ maxHeight: 340 }} keyboardShouldPersistTaps="handled">
+            {showAddNew && (
+              <TouchableOpacity
+                style={cp.addNewItem}
+                onPress={() => {
+                  onSelect({ id: null, name: trimmed });
+                  onClose();
+                }}
+              >
+                <Ionicons name="add-circle" size={18} color="#4f46e5" />
+                <View style={{ flex: 1 }}>
+                  <Text style={cp.addNewText}>Add "{trimmed}" as new customer</Text>
+                  <Text style={cp.addNewSub}>Not in your sales list yet</Text>
+                </View>
+              </TouchableOpacity>
+            )}
+
+            {filtered.length === 0 && !showAddNew ? (
+              <View style={cp.emptyBox}>
+                <Ionicons name="people-outline" size={26} color="#d1d5db" />
+                <Text style={cp.emptyText}>No customers found</Text>
+              </View>
+            ) : (
+              filtered.map((c) => (
+                <TouchableOpacity
+                  key={c.id ?? c.name}
+                  style={cp.item}
+                  onPress={() => {
+                    onSelect({ id: c.id, name: c.name });
+                    onClose();
+                  }}
+                >
+                  <View style={cp.itemAvatar}>
+                    <Text style={cp.itemAvatarText}>
+                      {c.name.slice(0, 2).toUpperCase()}
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={cp.itemName}>{c.name}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))
+            )}
+          </ScrollView>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
+  );
+}
+
+const cp = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(15,23,42,0.35)",
+    justifyContent: "center",
+    paddingHorizontal: 18,
+  },
+  sheet: {
+    backgroundColor: "#fff",
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    padding: 16,
+    maxHeight: "80%",
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  title: { fontSize: 16, fontWeight: "800", color: "#111827" },
+  searchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#f9fafb",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 10,
+  },
+  searchInput: { flex: 1, fontSize: 14, color: "#111827" },
+  emptyBox: { paddingVertical: 30, alignItems: "center", gap: 6 },
+  emptyText: { fontSize: 13, color: "#9ca3af", fontWeight: "600" },
+  addNewItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "#eef2ff",
+    borderWidth: 1,
+    borderColor: "#c7d2fe",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    marginBottom: 8,
+  },
+  addNewText: { fontSize: 13, fontWeight: "800", color: "#4f46e5" },
+  addNewSub: { fontSize: 11, color: "#6366f1", marginTop: 1 },
+  item: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#f1f5f9",
+    marginBottom: 8,
+  },
+  itemAvatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    backgroundColor: "#eef2ff",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  itemAvatarText: { fontSize: 12, fontWeight: "800", color: "#4f46e5" },
+  itemName: { fontSize: 13.5, fontWeight: "700", color: "#111827" },
+});
+
 // ─── Receipt Viewer Modal (unchanged logic) ──────────────────────────────────
 
 function ReceiptViewerModal({
@@ -589,7 +787,7 @@ function FarmSaleScreenInner() {
   const [saving, setSaving] = useState(false);
 
   const [myWorkerId, setMyWorkerId] = useState<string | null>(null);
-  const [farmName, setFarmName] = useState<string>("GreenField Co-op");
+  const [farmName, setFarmName] = useState<string>("Farm");
 
   const [deleteTarget, setDeleteTarget] = useState<FarmSale | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -600,7 +798,9 @@ function FarmSaleScreenInner() {
   const { config: alertConfig, show: showAlert, hide: hideAlert } = useModernAlert();
 
   // Form state
+  const [customerId, setCustomerId] = useState<string | null>(null);
   const [customerName, setCustomerName] = useState("");
+  const [customerPickerVisible, setCustomerPickerVisible] = useState(false);
   const [productName, setProductName] = useState("");
   const [quantity, setQuantity] = useState("");
   const [unit, setUnit] = useState<string>("kg");
@@ -643,15 +843,32 @@ function FarmSaleScreenInner() {
           const w = JSON.parse(raw);
           setMyWorkerId(w.id ?? null);
           if (w.farm_name) setFarmName(w.farm_name);
-        } catch {}
+        } catch { }
       }
     });
+
+    // Always refresh with the latest farm name from the server (instead of
+    // trusting a possibly-stale cached value) so the header shows the
+    // farm's actual current name.
+    api
+      .workerGetMe()
+      .then((res) => {
+        if (res?.farm_name) setFarmName(res.farm_name);
+      })
+      .catch(() => { });
   }, []);
 
   const onRefresh = () => {
     setRefreshing(true);
     fetchAll();
   };
+
+  // ── Customer directory built from this farm's sale history ──
+
+  const customerDirectory = useMemo(
+    () => buildCustomerDirectoryFromSales(allSales),
+    [allSales],
+  );
 
   // ── Filter chips + search (client-side only, UI only) ──
 
@@ -687,6 +904,7 @@ function FarmSaleScreenInner() {
 
   const resetForm = () => {
     setEditingId(null);
+    setCustomerId(null);
     setCustomerName("");
     setProductName("");
     setQuantity("");
@@ -709,6 +927,7 @@ function FarmSaleScreenInner() {
 
   const openEditSale = (sale: FarmSale) => {
     setEditingId(sale.id);
+    setCustomerId((sale as any).customer_id ?? null);
     setCustomerName(sale.customer_name);
     setProductName(sale.product_name);
     setQuantity(String(sale.quantity));
@@ -750,7 +969,7 @@ function FarmSaleScreenInner() {
     };
   }, [paymentMethod]);
 
-   const fetchProducts = useCallback(async () => {
+  const fetchProducts = useCallback(async () => {
     setProductsLoading(true);
     try {
       const data = await api.workerGetProducts();
@@ -768,7 +987,7 @@ function FarmSaleScreenInner() {
 
   const selectProduct = (p: any) => {
     setProductName(p.name ?? "");
-    if (p.price != null) setPricePerUnit(String(p.price));
+    // if (p.price != null) setPricePerUnit(String(p.price));
     if (p.unit && (UNIT_OPTIONS as readonly string[]).includes(p.unit)) {
       setUnit(p.unit);
     }
@@ -808,6 +1027,7 @@ function FarmSaleScreenInner() {
     try {
       const paymentConfirmedFinal = paymentMethod === "cash" ? true : paymentConfirmed;
       const payload = {
+        customer_id: customerId || undefined,
         customer_name: customerName.trim(),
         product_name: productName.trim(),
         quantity: parseFloat(quantity),
@@ -892,7 +1112,17 @@ function FarmSaleScreenInner() {
         onClose={() => setViewerVisible(false)}
       />
 
-            <Modal
+      <CustomerPickerModal
+        visible={customerPickerVisible}
+        customers={customerDirectory}
+        onSelect={(c) => {
+          setCustomerName(c.name);
+          setCustomerId(c.id);
+        }}
+        onClose={() => setCustomerPickerVisible(false)}
+      />
+
+      <Modal
         visible={productPickerVisible}
         animationType="slide"
         transparent
@@ -1048,46 +1278,38 @@ function FarmSaleScreenInner() {
                   <Text style={styles.formTitle}>{editingId ? "Edit Sale" : "New Sale"}</Text>
                   <Text style={styles.formSubtitle}>Quickly add a sale record</Text>
                 </View>
-                <View style={styles.formActions}>
-                  <TouchableOpacity style={styles.cancelBtn} onPress={closeForm}>
-                    <Text style={styles.cancelBtnText}>Cancel</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.saveBtn, (!canSave || saving) && { opacity: 0.6 }]}
-                    onPress={handleSave}
-                    disabled={!canSave || saving}
-                  >
-                    {saving ? (
-                      <ActivityIndicator size="small" color="#000" />
-                    ) : (
-                      <Text style={styles.saveBtnText}>Save</Text>
-                    )}
-                  </TouchableOpacity>
-                </View>
               </View>
 
-              <TextInput
+              <TouchableOpacity
                 style={styles.inputField}
-                placeholder="Customer name (e.g., Aarav Patel)"
-                placeholderTextColor="#9ca3af"
-                value={customerName}
-                onChangeText={setCustomerName}
-              />
-          <TouchableOpacity
-  style={styles.inputField}
-  onPress={() => setProductPickerVisible(true)}
-  activeOpacity={0.7}
->
-  <Text
-    style={[
-      styles.inputFieldText,
-      !productName && styles.inputFieldPlaceholder,
-    ]}
-    numberOfLines={1}
-  >
-    {productName || "Select product"}
-  </Text>
-</TouchableOpacity>
+                onPress={() => setCustomerPickerVisible(true)}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[
+                    styles.inputFieldText,
+                    !customerName && styles.inputFieldPlaceholder,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {customerName || "Select or add customer"}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.inputField}
+                onPress={() => setProductPickerVisible(true)}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[
+                    styles.inputFieldText,
+                    !productName && styles.inputFieldPlaceholder,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {productName || "Select product"}
+                </Text>
+              </TouchableOpacity>
 
               <View style={styles.row}>
                 <View style={{ flex: 1 }}>
@@ -1186,6 +1408,23 @@ function FarmSaleScreenInner() {
                   ) : null}
                 </View>
               )}
+
+              <View style={styles.formActionsRow}>
+                <TouchableOpacity style={styles.cancelBtn} onPress={closeForm}>
+                  <Text style={styles.cancelBtnText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.saveBtn, (!canSave || saving) && { opacity: 0.6 }]}
+                  onPress={handleSave}
+                  disabled={!canSave || saving}
+                >
+                  {saving ? (
+                    <ActivityIndicator size="small" color="#000" />
+                  ) : (
+                    <Text style={styles.saveBtnText}>Save</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
 
               <View style={styles.receiptUploadRow}>
                 <TouchableOpacity
@@ -1393,26 +1632,34 @@ const styles = StyleSheet.create({
   },
   formTitle: { fontSize: 16, fontWeight: "bold", color: "#111827" },
   formSubtitle: { fontSize: 11, color: "#6b7280", marginTop: 2 },
-  formActions: { flexDirection: "row", gap: 8 },
+  formActionsRow: {
+    flexDirection: "row",
+    gap: 10,
+    borderTopWidth: 1,
+    borderTopColor: "#f3f4f6",
+    paddingTop: 16,
+    marginTop: 4,
+    marginBottom: 4,
+  },
   cancelBtn: {
+    flex: 1,
     borderWidth: 1,
     borderColor: "#d1d5db",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: "center",
     justifyContent: "center",
   },
-  cancelBtnText: { fontSize: 12, fontWeight: "bold", color: "#111827" },
+  cancelBtnText: { fontSize: 13, fontWeight: "bold", color: "#111827" },
   saveBtn: {
+    flex: 1.4,
     backgroundColor: "#4ade80",
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 6,
+    borderRadius: 10,
+    paddingVertical: 12,
     justifyContent: "center",
-    minWidth: 56,
     alignItems: "center",
   },
-  saveBtnText: { fontSize: 12, fontWeight: "bold", color: "#000" },
+  saveBtnText: { fontSize: 13, fontWeight: "bold", color: "#000" },
 
   inputField: {
     borderWidth: 1,
@@ -1424,7 +1671,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     color: "#111827",
   },
-    inputFieldText: {
+  inputFieldText: {
     fontSize: 13,
     color: "#111827",
     lineHeight: 44 - 2, // vertically centers within the 44px inputField height
