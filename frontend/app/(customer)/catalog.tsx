@@ -58,6 +58,8 @@ const GRID_GAP = 12;
 const CARD_WIDTH = Math.floor((SCREEN_WIDTH - GRID_PADDING * 2 - GRID_GAP) / 2);
 const NEW_BANNER_WIDTH = SCREEN_WIDTH - 40;
 const DAIRY_CATEGORIES = ["milk", "dairy"];
+const resolveProductId = (product: any) =>
+  product?.id || product?._id || product?.product_id || null;
 const NEWLY_ADDED_SLIDES = [
   {
     id: "new-1",
@@ -934,19 +936,6 @@ const mBase = StyleSheet.create({
     alignItems: "center",
   },
   btnTxt: { fontSize: 15, fontWeight: "700", color: "#fff" },
-});
-const confirmS = StyleSheet.create({
-  row: {
-    flexDirection: "row",
-    width: "100%",
-    gap: 10,
-  },
-  halfBtn: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: T.radius.md,
-    alignItems: "center",
-  },
 });
 // ─── Subscription Sheet ─────────────────────────────────────────────────────
 function SubscriptionSheet({
@@ -1956,10 +1945,18 @@ function SubscribeModal({
     setSubmitting(true);
     try {
       let paymentId: string | undefined;
+      const productId = resolveProductId(product);
+      if (!productId) {
+        Alert.alert(
+          "Product unavailable",
+          "This product could not be identified. Please refresh and try again.",
+        );
+        return;
+      }
       const payload: Parameters<typeof api.createSubscription>[0] = {
         items: [
           {
-            product_id: product.id,
+            product_id: productId,
             quantity: qty,
             price: unitPrice,
             amount: unitPrice * qty,
@@ -3053,7 +3050,6 @@ function CartSheet({
   const router = useRouter();
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("wallet");
   const [addressPickerVisible, setAddressPickerVisible] = useState(false);
-  const [confirmOrderVisible, setConfirmOrderVisible] = useState(false);
   const slide = useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const overlay = useRef(new Animated.Value(0)).current;
 
@@ -3095,8 +3091,37 @@ function CartSheet({
 
   const cartTotal = cart.reduce((s, i) => s + i.product.price * i.quantity, 0);
   const canAfford = walletBalance >= cartTotal;
-  const canPlace = paymentMethod !== "wallet" || canAfford;
   if (!visible) return null;
+
+  const handleConfirmOrderPress = () => {
+    console.log("[Cart] confirm place order", {
+      paymentMethod,
+      itemCount: cart.length,
+      cartTotal,
+      walletBalance,
+    });
+    onPlaceOrder(paymentMethod);
+  };
+
+  const requestPlaceOrder = () => {
+    console.log("[Cart] place order tapped", {
+      paymentMethod,
+      itemCount: cart.length,
+      cartTotal,
+      walletBalance,
+    });
+    Alert.alert(
+      "Place this order",
+      `Total ₹${cartTotal.toFixed(2)} for ${cart.length} item${cart.length > 1 ? "s" : ""}.`,
+      [
+        { text: "Add More", style: "cancel" },
+        {
+          text: "Place Order",
+          onPress: handleConfirmOrderPress,
+        },
+      ],
+    );
+  };
 
   return (
     <>
@@ -3132,7 +3157,13 @@ function CartSheet({
               <TouchableOpacity
                 style={cartS.addressCard}
                 activeOpacity={0.86}
-                onPress={onAddAddress}
+                onPress={() => {
+                  if (addresses.length > 0) {
+                    setAddressPickerVisible(true);
+                  } else {
+                    onAddAddress();
+                  }
+                }}
               >
                 <Ionicons name="location-outline" size={14} color={Colors.primary} />
                 {selectedAddress ? (
@@ -3150,7 +3181,7 @@ function CartSheet({
                   </Text>
                 )}
                 <Text style={cartS.changeAddressText}>
-                  {selectedAddress ? "Manage" : "Add"}
+                  {selectedAddress ? "Change" : "Add"}
                 </Text>
               </TouchableOpacity>
 
@@ -3291,9 +3322,9 @@ function CartSheet({
                       ? "Placing Order…"
                       : `Place Order · ₹${cartTotal.toFixed(2)}`
                   }
-                  onPress={() => setConfirmOrderVisible(true)}
+                  onPress={requestPlaceOrder}
                   loading={submitting}
-                  disabled={!canPlace}
+                  disabled={submitting}
                 />
               </View>
             )}
@@ -3353,46 +3384,6 @@ function CartSheet({
               </View>
             </View>
           )}
-        </View>
-      </Modal>
-
-      <Modal visible={confirmOrderVisible} transparent animationType="fade">
-        <View style={mBase.overlay}>
-          <AnimCard visible={confirmOrderVisible}>
-            <View
-              style={[
-                mBase.iconRing,
-                { borderColor: Colors.primary + "30", backgroundColor: Colors.primary + "12" },
-              ]}
-            >
-              <Ionicons name="bag-check-outline" size={30} color={Colors.primary} />
-            </View>
-            <Text style={mBase.title}>Place this order</Text>
-            <Text style={mBase.sub}>
-              Total ₹{cartTotal.toFixed(2)} for {cart.length} item{cart.length > 1 ? "s" : ""}.{"\n"}
-              Add more products or confirm your order.
-            </Text>
-            <View style={confirmS.row}>
-              <TouchableOpacity
-                style={[confirmS.halfBtn, { backgroundColor: "#2563EB" }]}
-                onPress={() => {
-                  setConfirmOrderVisible(false);
-                  onClose();
-                }}
-              >
-                <Text style={mBase.btnTxt}>Add More</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[confirmS.halfBtn, { backgroundColor: T.green }]}
-                onPress={() => {
-                  setConfirmOrderVisible(false);
-                  onPlaceOrder(paymentMethod);
-                }}
-              >
-                <Text style={mBase.btnTxt}>Place Order</Text>
-              </TouchableOpacity>
-            </View>
-          </AnimCard>
         </View>
       </Modal>
     </>
@@ -4041,19 +4032,23 @@ export default function CatalogScreen() {
       ...item,
       is_default: item.id === address.id,
     }));
-    setSelectedAddressId(address.id);
-    updateUser({
-      address,
-      addresses: nextBook,
-    } as any);
     try {
       await api.updateProfile({
         address: { ...address, is_default: true },
         addresses: nextBook,
       });
+      setSelectedAddressId(address.id);
+      updateUser({
+        address: { ...address, is_default: true },
+        addresses: nextBook,
+      } as any);
+      return true;
     } catch {
-      // The local selection still keeps checkout usable; backend validation
-      // will catch any stale profile update before payment starts.
+      Alert.alert(
+        "Address update failed",
+        "Could not save this delivery address. Please check your connection and try again.",
+      );
+      return false;
     }
   };
 
@@ -4089,9 +4084,7 @@ export default function CatalogScreen() {
     setLinkedAdminId(id ?? null);
   }, [user]);
 
-  const getProductId = useCallback((product: any) => {
-    return product?.id || product?._id || product?.product_id || null;
-  }, []);
+  const getProductId = useCallback(resolveProductId, []);
 
   const fetchData = useCallback(async () => {
     try {
@@ -4182,8 +4175,12 @@ export default function CatalogScreen() {
       const p = JSON.parse(decodeURIComponent(String(addToCartProduct)));
       if (!p) return;
       const qty = Number(addToCartQty) || 1;
+      const productId = getProductId(p);
+      if (!productId) return;
       setCart((prev) => {
-        const existingIndex = prev.findIndex((item) => item.product.id === p.id);
+        const existingIndex = prev.findIndex(
+          (item) => getProductId(item.product) === productId,
+        );
         if (existingIndex > -1) {
           const updated = [...prev];
           updated[existingIndex].quantity += qty;
@@ -4192,7 +4189,7 @@ export default function CatalogScreen() {
         return [
           ...prev,
           {
-            id: `${p.id}_${Date.now()}`,
+            id: `${productId}_${Date.now()}`,
             product: p,
             quantity: qty,
             pattern: "buy_once",
@@ -4203,7 +4200,7 @@ export default function CatalogScreen() {
       showToast(p.name, false);
       setTimeout(() => setCartVisible(true), 400);
     } catch { }
-  }, [addToCartProduct]);
+  }, [addToCartProduct, addToCartQty, getProductId]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -4243,7 +4240,14 @@ export default function CatalogScreen() {
 
     setCart((prev) => {
       // Check if product is already in the cart
-      const existingIndex = prev.findIndex((item) => item.product.id === p.id);
+      const productId = getProductId(p);
+      if (!productId) {
+        Alert.alert("Product unavailable", "This product could not be added. Please refresh and try again.");
+        return prev;
+      }
+      const existingIndex = prev.findIndex(
+        (item) => getProductId(item.product) === productId,
+      );
 
       if (existingIndex > -1) {
         const updatedCart = [...prev];
@@ -4261,7 +4265,7 @@ export default function CatalogScreen() {
         return [
           ...prev,
           {
-            id: `${p.id}_${Date.now()}`,
+            id: `${productId}_${Date.now()}`,
             product: p,
             quantity: 1,
             pattern: "buy_once",
@@ -4317,7 +4321,14 @@ export default function CatalogScreen() {
 
     // --- REPLACE SETCART WITH THIS SAFE VERSION ---
     setCart((prev) => {
-      const existingIndex = prev.findIndex((item) => item.product.id === quickAddProduct.id);
+      const productId = getProductId(quickAddProduct);
+      if (!productId) {
+        Alert.alert("Product unavailable", "This product could not be added. Please refresh and try again.");
+        return prev;
+      }
+      const existingIndex = prev.findIndex(
+        (item) => getProductId(item.product) === productId,
+      );
 
       if (existingIndex > -1) {
         const updatedCart = [...prev];
@@ -4334,7 +4345,7 @@ export default function CatalogScreen() {
         return [
           ...prev,
           {
-            id: `${quickAddProduct.id}_${Date.now()}`,
+            id: `${productId}_${Date.now()}`,
             product: quickAddProduct,
             quantity: qty,
             pattern: "buy_once",
@@ -4371,6 +4382,12 @@ export default function CatalogScreen() {
 
   // ── FIXED: All cart items go as ONE buy_once subscription
   const handlePlaceOrder = async (paymentMethod: PaymentMethod) => {
+    console.log("[Cart] handlePlaceOrder started", {
+      paymentMethod,
+      itemCount: cart.length,
+      cartTotal,
+      selectedAddressId: selectedAddress?.id ?? null,
+    });
     const blockedItem = cart.find((item) => {
       const rule = getOrderCutoffForProduct(item.product, orderCutoffs);
       return Boolean(rule && isOrderCutoffPassed(rule));
@@ -4409,7 +4426,8 @@ export default function CatalogScreen() {
       return;
     }
     if (selectedAddress?.id && selectedAddress.id !== (user?.address as any)?.id) {
-      await handleSelectDeliveryAddress(selectedAddress);
+      const saved = await handleSelectDeliveryAddress(selectedAddress);
+      if (!saved) return;
     }
     if (paymentMethod === "wallet" && walletBalance < cartTotal) {
       setWalletErrorVisible(true);
@@ -4426,13 +4444,24 @@ export default function CatalogScreen() {
     const placedCount = cart.length;
     try {
       let paymentId: string | undefined;
-      const payload: Parameters<typeof api.createSubscription>[0] = {
-        items: cart.map((item) => ({
-          product_id: item.product.id,
+      const orderItems = cart.map((item) => {
+        const productId = getProductId(item.product);
+        return {
+          product_id: productId,
           quantity: item.quantity,
           price: item.product.price,
           amount: item.product.price * item.quantity,
-        })),
+        };
+      });
+      if (orderItems.some((item) => !item.product_id)) {
+        Alert.alert(
+          "Product unavailable",
+          "One or more cart products could not be identified. Please refresh and add them again.",
+        );
+        return;
+      }
+      const payload: Parameters<typeof api.createSubscription>[0] = {
+        items: orderItems as Parameters<typeof api.createSubscription>[0]["items"],
         pattern: "buy_once",
         custom_days: null,
         start_date: tomorrow,
