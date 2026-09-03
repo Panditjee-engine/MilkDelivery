@@ -205,6 +205,7 @@ export default function ProductDetailsScreen() {
 
   const handleBuySubmit = async () => {
     if (!product || !productId) return;
+
     const latestCutoff = getOrderCutoffForProduct(product, orderCutoffs);
     if (latestCutoff && isOrderCutoffPassed(latestCutoff)) {
       Alert.alert(
@@ -214,17 +215,34 @@ export default function ProductDetailsScreen() {
       );
       return;
     }
+
+    const stock = product.stock ?? Infinity;
+
+    // ── BUY ONCE = just add to cart, don't place order here ──
+    if (pattern === "buy_once") {
+      if (quantity > stock) {
+        setFeedback(`Only ${stock} item available.`);
+        setFeedbackType(null);
+        return;
+      }
+      setBuySheetVisible(false);
+      router.push({
+        pathname: "/(customer)/catalog",
+        params: {
+          addToCartProduct: encodeURIComponent(JSON.stringify(product)),
+          addToCartQty: String(quantity),
+        },
+      } as any);
+      return;
+    }
+
+    // ── Subscription patterns (daily/alternate/custom) keep old flow ──
     if (pattern === "custom" && customDays.length === 0) {
       setFeedback("Please choose at least one custom delivery day.");
       setFeedbackType(null);
       return;
     }
-    const stock = product.stock ?? Infinity;
-    if (pattern === "buy_once" && quantity > stock) {
-      setFeedback(`Only ${stock} item available.`);
-      setFeedbackType(null);
-      return;
-    }
+
     setSubmitting(true);
     setFeedback("");
     setFeedbackType(null);
@@ -244,18 +262,17 @@ export default function ProductDetailsScreen() {
         pattern,
         custom_days: pattern === "custom" ? customDays : null,
         start_date: startDate,
-        end_date: pattern === "buy_once" ? startDate : null,
+        end_date: null,
         delivery_slot: "morning",
       });
-      setFeedback(pattern === "buy_once" ? "Added successfully." : "Subscription activated.");
+      setFeedback("Subscription activated.");
       setFeedbackType(null);
       setTimeout(() => setBuySheetVisible(false), 700);
     } catch (error: any) {
       if (isCutoffError(error)) {
         Alert.alert(
           "Order cut-off time passed",
-          error?.message ||
-            "Please place this order before the product cut-off time.",
+          error?.message || "Please place this order before the product cut-off time.",
           [{ text: "Got it" }],
         );
         setBuySheetVisible(false);

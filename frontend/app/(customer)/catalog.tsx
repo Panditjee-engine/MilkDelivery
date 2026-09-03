@@ -2988,7 +2988,7 @@ function PaymentMethodSelector({
 }
 
 const payS = StyleSheet.create({
-  wrap: { marginTop: 14, marginBottom:5, gap: 10 },
+  wrap: { marginTop: 14, marginBottom: 5, gap: 10 },
   label: { fontSize: 12, fontWeight: "800", color: T.text },
   grid: { gap: 8 },
   option: {
@@ -3114,7 +3114,14 @@ function CartSheet({
       "Place this order",
       `Total ₹${cartTotal.toFixed(2)} for ${cart.length} item${cart.length > 1 ? "s" : ""}.`,
       [
-        { text: "Add More", style: "cancel" },
+        {
+          text: "Add More",
+          style: "cancel",
+          onPress: () => {
+            onClose();
+            router.push("/(customer)/catalog" as any);
+          },
+        },
         {
           text: "Place Order",
           onPress: handleConfirmOrderPress,
