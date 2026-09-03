@@ -52,7 +52,15 @@ interface Summary {
 function dateStr(offset = 0) {
   const d = new Date();
   d.setDate(d.getDate() - offset);
-  return d.toISOString().split("T")[0];
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function parseLocalDate(isoStr: string) {
+  const [y, m, d] = isoStr.split("-").map(Number);
+  return new Date(y, m - 1, d);
 }
 
 const cowImg = require("../../../assets/images/gir-cow.png");
@@ -74,7 +82,7 @@ const todayLabel = new Date().toLocaleDateString("en-IN", {
 function formatDateLabel(isoStr: string) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const target = new Date(isoStr);
+  const target = parseLocalDate(isoStr);
   target.setHours(0, 0, 0, 0);
   const diff = Math.round((today.getTime() - target.getTime()) / 86400000);
   if (diff === 0) return "Today";
@@ -86,7 +94,7 @@ function formatDateLabel(isoStr: string) {
 }
 
 function formatFullDateLabel(isoStr: string) {
-  return new Date(isoStr).toLocaleDateString("en-IN", {
+  return parseLocalDate(isoStr).toLocaleDateString("en-IN", {
     weekday: "long",
     day: "numeric",
     month: "long",
