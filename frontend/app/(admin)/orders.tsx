@@ -27,6 +27,7 @@ import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { api } from "../../src/services/api";
+import StarRating from "../../src/components/StarRating";
 import LoadingScreen from "../../src/components/LoadingScreen";
 
 if (
@@ -895,34 +896,34 @@ function SubscriptionDetailModal({
                 {/* Customer */}
                 {(subscription.customer_name ||
                   subscription.customer_phone) && (
-                  <View style={sm.section}>
-                    <Text style={sm.sectionLabel}>CUSTOMER</Text>
-                    <View style={sm.infoRow}>
-                      <View style={sm.infoIcon}>
-                        <Ionicons name="person" size={13} color="#FF9675" />
-                      </View>
-                      <View>
-                        {subscription.customer_name && (
-                          <Text style={sm.infoMain}>
-                            {subscription.customer_name}
-                          </Text>
-                        )}
-                        {subscription.customer_phone && (
-                          <View style={sm.phoneRow}>
-                            <Ionicons
-                              name="call-outline"
-                              size={11}
-                              color="#8B6854"
-                            />
-                            <Text style={sm.phoneText}>
-                              {subscription.customer_phone}
+                    <View style={sm.section}>
+                      <Text style={sm.sectionLabel}>CUSTOMER</Text>
+                      <View style={sm.infoRow}>
+                        <View style={sm.infoIcon}>
+                          <Ionicons name="person" size={13} color="#FF9675" />
+                        </View>
+                        <View>
+                          {subscription.customer_name && (
+                            <Text style={sm.infoMain}>
+                              {subscription.customer_name}
                             </Text>
-                          </View>
-                        )}
+                          )}
+                          {subscription.customer_phone && (
+                            <View style={sm.phoneRow}>
+                              <Ionicons
+                                name="call-outline"
+                                size={11}
+                                color="#8B6854"
+                              />
+                              <Text style={sm.phoneText}>
+                                {subscription.customer_phone}
+                              </Text>
+                            </View>
+                          )}
+                        </View>
                       </View>
                     </View>
-                  </View>
-                )}
+                  )}
 
                 {/* Schedule */}
                 <View style={sm.section}>
@@ -1586,6 +1587,16 @@ export default function AdminOrdersScreen() {
     new Set(),
   );
 
+  const [orderFeedback, setOrderFeedback] = useState<Record<string, Record<string, any>>>({});
+
+  const loadOrderFeedback = async (orderId: string) => {
+    if (orderFeedback[orderId]) return;
+    try {
+      const data = await api.getAdminOrderFeedback(orderId);
+      setOrderFeedback((prev) => ({ ...prev, [orderId]: data }));
+    } catch { }
+  };
+
   const [filter, setFilter] =
     useState<(typeof ORDER_FILTERS)[number]>("ACTIVE");
   const [dateFilter, setDateFilter] =
@@ -1651,28 +1662,28 @@ export default function AdminOrdersScreen() {
   }, [params.tab]);
 
   // ── Fetch orders
-const fetchOrders = useCallback(async () => {
-  try {
-    const date =
-      dateFilter === "TODAY"
-        ? getLocalDateKey()
-        : dateFilter === "TOMORROW"
-          ? getTomorrowDateKey()
-          : undefined;
-    const [ordersData, productsData] = await Promise.all([
-      api.getAllOrders(undefined, date),
-      api.getProducts(),
-    ]);
+  const fetchOrders = useCallback(async () => {
+    try {
+      const date =
+        dateFilter === "TODAY"
+          ? getLocalDateKey()
+          : dateFilter === "TOMORROW"
+            ? getTomorrowDateKey()
+            : undefined;
+      const [ordersData, productsData] = await Promise.all([
+        api.getAllOrders(undefined, date),
+        api.getProducts(),
+      ]);
 
-    setAllOrders(ordersData);       // backend already returns buy_once only
-    setProducts(productsData);
-  } catch (e: any) {
-    console.error("[AdminOrders] fetchOrders FAILED:", e?.message ?? e);
-  } finally {
-    setOrdersLoading(false);
-    setOrdersRefreshing(false);
-  }
-}, [currentAdmin, dateFilter, customStartDate, customEndDate]);
+      setAllOrders(ordersData);       // backend already returns buy_once only
+      setProducts(productsData);
+    } catch (e: any) {
+      console.error("[AdminOrders] fetchOrders FAILED:", e?.message ?? e);
+    } finally {
+      setOrdersLoading(false);
+      setOrdersRefreshing(false);
+    }
+  }, [currentAdmin, dateFilter, customStartDate, customEndDate]);
 
   // ── Fetch subscriptions
   const fetchSubscriptions = useCallback(async () => {
@@ -1703,7 +1714,7 @@ const fetchOrders = useCallback(async () => {
 
       const [customers, adminCustomers] = await Promise.all([
         api.getAllUsers("customer").catch(() => []),
-        api.getAdminCustomers({ limit: 1000 }).catch(() => []),
+        api.getAdminCustomers({ limit: 200 }).catch(() => []),
       ]);
       const customerMap = new Map<string, any>();
       (Array.isArray(customers) ? customers : []).forEach((customer) => {
@@ -1755,11 +1766,11 @@ const fetchOrders = useCallback(async () => {
         });
         return userVacation
           ? {
-              ...sub,
-              on_vacation_today: true,
-              vacation_start_date: userVacation.start_date,
-              vacation_end_date: userVacation.end_date,
-            }
+            ...sub,
+            on_vacation_today: true,
+            vacation_start_date: userVacation.start_date,
+            vacation_end_date: userVacation.end_date,
+          }
           : { ...sub, on_vacation_today: false };
       });
 
@@ -1794,24 +1805,24 @@ const fetchOrders = useCallback(async () => {
 
   // ── Fetch on tab/focus change
   // ── Fetch on tab/focus change (no polling — manual refresh via pull-to-refresh)
-useEffect(() => {
-  if (!isFocused || globalLoading || !currentAdmin) return;
+  useEffect(() => {
+    if (!isFocused || globalLoading || !currentAdmin) return;
 
-  if (activeTab === "orders") {
-    setOrdersLoading(true);
-    fetchOrders();
-  } else {
-    setSubsLoading(true);
-    fetchSubscriptions();
-  }
-}, [
-  activeTab,
-  isFocused,
-  globalLoading,
-  currentAdmin,
-  fetchOrders,
-  fetchSubscriptions,
-]);
+    if (activeTab === "orders") {
+      setOrdersLoading(true);
+      fetchOrders();
+    } else {
+      setSubsLoading(true);
+      fetchSubscriptions();
+    }
+  }, [
+    activeTab,
+    isFocused,
+    globalLoading,
+    currentAdmin,
+    fetchOrders,
+    fetchSubscriptions,
+  ]);
 
   const onOrdersRefresh = useCallback(() => {
     setOrdersRefreshing(true);
@@ -1827,7 +1838,12 @@ useEffect(() => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setExpandedOrderIds((prev) => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+        loadOrderFeedback(id);
+      }
       return next;
     });
   };
@@ -1953,13 +1969,13 @@ useEffect(() => {
         dateFilter === "ALL" ||
         (dateFilter === "CUSTOM"
           ? (!customStartDate ||
-              getOrderDateKey(order.delivery_date) >= customStartDate) &&
-            (!customEndDate ||
-              getOrderDateKey(order.delivery_date) <= customEndDate)
+            getOrderDateKey(order.delivery_date) >= customStartDate) &&
+          (!customEndDate ||
+            getOrderDateKey(order.delivery_date) <= customEndDate)
           : getOrderDateKey(order.delivery_date) ===
-            (dateFilter === "TODAY"
-              ? getLocalDateKey()
-              : getTomorrowDateKey()));
+          (dateFilter === "TODAY"
+            ? getLocalDateKey()
+            : getTomorrowDateKey()));
       return statusMatch && customerMatch && productMatch && dateMatch;
     });
   }, [
@@ -1988,9 +2004,9 @@ useEffect(() => {
       (dateFilter === "CUSTOM"
         ? subscriptionOverlapsRange(s, customStartDate, customEndDate)
         : shouldSubscriptionDeliverOn(
-            s,
-            dateFilter === "TODAY" ? getLocalDateKey() : getTomorrowDateKey(),
-          ));
+          s,
+          dateFilter === "TODAY" ? getLocalDateKey() : getTomorrowDateKey(),
+        ));
     return statusMatch && customerMatch && dateMatch;
   });
 
@@ -2524,6 +2540,23 @@ useEffect(() => {
               ))}
             </View>
 
+            {delivered && orderFeedback[item.id] && Object.keys(orderFeedback[item.id]).length > 0 && (
+              <>
+                <View style={styles.divider} />
+                <Text style={styles.colLabel}>CUSTOMER FEEDBACK</Text>
+                {Object.values(orderFeedback[item.id]).map((fb: any) => (
+                  <View key={fb.id} style={{ marginBottom: 8 }}>
+                    <StarRating value={fb.rating} readOnly size={14} />
+                    {fb.comment ? (
+                      <Text style={{ fontSize: 12, color: "#8B6854", marginTop: 3 }}>
+                        {fb.comment}
+                      </Text>
+                    ) : null}
+                  </View>
+                ))}
+              </>
+            )}
+
             {address ? (
               <>
                 <View style={styles.divider} />
@@ -2673,23 +2706,23 @@ useEffect(() => {
           )}
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-  <TouchableOpacity
-    style={styles.headerNotificationBtn}
-    onPress={() =>
-      router.push({
-        pathname: "/(admin)/notification",
-        params: { from: "orders", tab: activeTab },
-      } as any)
-    }
-    activeOpacity={0.82}
-  >
-    <Ionicons name="notifications-outline" size={19} color="#BB6B3F" />
-  </TouchableOpacity>
-  <TouchableOpacity
-    style={styles.headerFilterBtn}
-    onPress={() => setFilterSheetVisible(true)}
-    activeOpacity={0.82}
-  >
+          <TouchableOpacity
+            style={styles.headerNotificationBtn}
+            onPress={() =>
+              router.push({
+                pathname: "/(admin)/notification",
+                params: { from: "orders", tab: activeTab },
+              } as any)
+            }
+            activeOpacity={0.82}
+          >
+            <Ionicons name="notifications-outline" size={19} color="#BB6B3F" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.headerFilterBtn}
+            onPress={() => setFilterSheetVisible(true)}
+            activeOpacity={0.82}
+          >
             <Ionicons name="options-outline" size={19} color="#BB6B3F" />
             {activeFilterCount ? (
               <View style={styles.filterCountDot}>
@@ -2788,8 +2821,8 @@ useEffect(() => {
             onPress={() =>
               activeTab === "orders"
                 ? setSelectedOrders(
-                    selectableTodayOrders.map((item) => item.id),
-                  )
+                  selectableTodayOrders.map((item) => item.id),
+                )
                 : setSelectedSubs(selectableTodaySubs.map((item) => item.id))
             }
             disabled={todaySelectableCount === 0 || bulkLoading}
@@ -2887,8 +2920,8 @@ useEffect(() => {
                   <Text style={styles.emptyTitle}>No orders found</Text>
                   <Text style={styles.emptyDesc}>
                     {filter !== "ALL" ||
-                    dateFilter !== "ALL" ||
-                    selectedCustomer !== "ALL"
+                      dateFilter !== "ALL" ||
+                      selectedCustomer !== "ALL"
                       ? "Try changing customer, product or date filter."
                       : "One-time orders placed by your customers will appear here."}
                   </Text>
@@ -2982,8 +3015,8 @@ useEffect(() => {
                               {item.subscriptions} subs ·{" "}
                               {formatBaseMetric(
                                 item.quantity *
-                                  (parseUnitDescriptor(item.unit)?.packSize ||
-                                    1),
+                                (parseUnitDescriptor(item.unit)?.packSize ||
+                                  1),
                                 parseUnitDescriptor(item.unit)?.kind,
                               )}
                             </Text>
@@ -3001,8 +3034,8 @@ useEffect(() => {
                   <Text style={styles.emptyTitle}>No subscriptions found</Text>
                   <Text style={styles.emptyDesc}>
                     {subFilter !== "ALL" ||
-                    dateFilter !== "ALL" ||
-                    selectedCustomer !== "ALL"
+                      dateFilter !== "ALL" ||
+                      selectedCustomer !== "ALL"
                       ? "Try changing customer, status or date filter."
                       : "Recurring subscriptions (daily, alternate, custom) appear here."}
                   </Text>
@@ -3187,8 +3220,8 @@ useEffect(() => {
                         datePickerTarget === "start"
                           ? customStartDate || getLocalDateKey()
                           : customEndDate ||
-                              customStartDate ||
-                              getLocalDateKey(),
+                          customStartDate ||
+                          getLocalDateKey(),
                       )}
                       mode="date"
                       display={Platform.OS === "ios" ? "inline" : "default"}
@@ -3850,15 +3883,15 @@ const styles = StyleSheet.create({
     position: "relative",
   },
   headerNotificationBtn: {
-  width: 44,
-  height: 44,
-  borderRadius: 14,
-  backgroundColor: "#FFF3DC",
-  borderWidth: 1.5,
-  borderColor: "#FFE1CC",
-  alignItems: "center",
-  justifyContent: "center",
-},
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: "#FFF3DC",
+    borderWidth: 1.5,
+    borderColor: "#FFE1CC",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   filterCountDot: {
     position: "absolute",
     top: -5,

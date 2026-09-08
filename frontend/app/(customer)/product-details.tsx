@@ -17,6 +17,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { api } from "../../src/services/api";
 import { Colors } from "../../src/constants/colors";
 import { hasCompleteDeliveryAddress } from "../../src/utils/address";
+import StarRating from "../../src/components/StarRating";
 import {
   getOrderCutoffBadgeText,
   getOrderCutoffBlockedMessage,
@@ -94,6 +95,7 @@ export default function ProductDetailsScreen() {
   const [feedback, setFeedback] = useState("");
   const [feedbackType, setFeedbackType] = useState<"address" | "balance" | null>(null);
   const [orderCutoffs, setOrderCutoffs] = useState<OrderCutoffRule[]>([]);
+  const [feedbackSummary, setFeedbackSummary] = useState<any>(null);
   const productId = params.id?.toString() || product?.id || product?._id;
   const cutoffRule = getOrderCutoffForProduct(product, orderCutoffs);
   const cutoffText = getOrderCutoffBadgeText(cutoffRule);
@@ -144,6 +146,11 @@ export default function ProductDetailsScreen() {
       clearInterval(interval);
     };
   }, [product?.admin_id]);
+
+  useEffect(() => {
+    if (!productId) return;
+    api.getCatalogProductFeedback(productId).then(setFeedbackSummary).catch(() => { });
+  }, [productId]);
 
   const theme = useMemo(() => getTheme(product?.category), [product?.category]);
   const isUnavailable = !product?.is_available || (product?.stock ?? 1) === 0;
@@ -378,6 +385,50 @@ export default function ProductDetailsScreen() {
             <View style={s.section}>
               <Text style={s.sectionTitle}>Description</Text>
               <Text style={s.description}>{product.description}</Text>
+              <View style={s.section}>
+                <Text style={s.sectionTitle}>Ratings & Reviews</Text>
+                {feedbackSummary?.total_reviews > 0 ? (
+                  <>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                      <Text style={{ fontSize: 22, fontWeight: "900", color: "#111827" }}>
+                        {feedbackSummary.average_rating.toFixed(1)}
+                      </Text>
+                      <View>
+                        <StarRating value={Math.round(feedbackSummary.average_rating)} readOnly size={16} />
+                        <Text style={{ fontSize: 12, color: "#6B7280", fontWeight: "700", marginTop: 2 }}>
+                          {feedbackSummary.total_reviews} review{feedbackSummary.total_reviews > 1 ? "s" : ""}
+                        </Text>
+                      </View>
+                    </View>
+                    {feedbackSummary.feedback.slice(0, 10).map((fb: any) => (
+                      <View
+                        key={fb.id}
+                        style={{
+                          paddingVertical: 10,
+                          borderTopWidth: 1,
+                          borderTopColor: "#F0F2F5",
+                        }}
+                      >
+                        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                          <Text style={{ fontSize: 13, fontWeight: "800", color: "#111827" }}>
+                            {fb.customer_name || "Customer"}
+                          </Text>
+                          <StarRating value={fb.rating} readOnly size={13} />
+                        </View>
+                        {fb.comment ? (
+                          <Text style={{ fontSize: 13, color: "#6B7280", marginTop: 4, lineHeight: 18 }}>
+                            {fb.comment}
+                          </Text>
+                        ) : null}
+                      </View>
+                    ))}
+                  </>
+                ) : (
+                  <Text style={{ fontSize: 13, color: "#9CA3AF", fontWeight: "600" }}>
+                    No reviews yet for this product.
+                  </Text>
+                )}
+              </View>
             </View>
           ) : null}
         </View>

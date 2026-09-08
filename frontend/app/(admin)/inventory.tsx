@@ -10,6 +10,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
+  FlatList, 
   RefreshControl,
   TouchableOpacity,
   TextInput,
@@ -29,6 +30,7 @@ import * as ImagePicker from "expo-image-picker";
 import { useFocusEffect, useRouter } from "expo-router";
 import SwipeToConfirm from "../../src/components/SwipeToConfirm";
 import { api } from "../../src/services/api";
+import AdminFeedbackModal from "../../src/components/productfeedback";
 import LoadingScreen from "../../src/components/LoadingScreen";
 import { useAuth } from "../../src/contexts/AuthContext";
 import {
@@ -451,16 +453,27 @@ export default function InventoryScreen() {
   } | null>(null);
   const [showEditSuccessTick, setShowEditSuccessTick] = useState(false);
   const [orderCutoffs, setOrderCutoffs] = useState<OrderCutoffRule[]>([]);
+  const [feedbackModalProduct, setFeedbackModalProduct] = useState<{ id: string; name: string } | null>(null);
+  const [feedbackMap, setFeedbackMap] = useState<Record<string, { average_rating: number; total_reviews: number }>>({});
 
   // ── Fetch Data
   const fetchData = useCallback(async () => {
     try {
-      const [data, cutoffs] = await Promise.all([
+      const [data, cutoffs, feedbackSummaries] = await Promise.all([
         api.getProducts(),
         api.getAdminOrderCutoffs().catch(() => []),
+        api.getAdminFeedbackSummary().catch(() => []),
       ]);
       setProducts(data);
       setOrderCutoffs(cutoffs || []);
+      const map: Record<string, { average_rating: number; total_reviews: number }> = {};
+      (feedbackSummaries || []).forEach((item: any) => {
+        map[item.product_id] = {
+          average_rating: item.average_rating,
+          total_reviews: item.total_reviews,
+        };
+      });
+      setFeedbackMap(map);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -1224,6 +1237,8 @@ export default function InventoryScreen() {
       Boolean,
     ) as string[];
     const hasMrp = p.mrp && p.mrp > p.price;
+    const selectedFeedback = feedbackMap[selectedProductId];
+    const selectedFeedbackTotal = selectedFeedback?.total_reviews ?? 0;
 
     return (
       <ScrollView
@@ -1259,7 +1274,20 @@ export default function InventoryScreen() {
         )}
 
         <View style={styles.detailSection}>
-          <Text style={styles.detailName}>{p.name}</Text>
+          <View style={styles.detailNameRow}>
+            <Text style={[styles.detailName, { flex: 1 }]}>{p.name}</Text>
+            <TouchableOpacity
+              style={styles.detailFeedbackBtn}
+              onPress={() => setFeedbackModalProduct({ id: selectedProductId, name: p.name })}
+            >
+              <Ionicons name="star" size={14} color="#F59E0B" />
+              <Text style={styles.detailFeedbackBtnText}>
+                {selectedFeedbackTotal > 0 && selectedFeedback
+                  ? selectedFeedback.average_rating.toFixed(1)
+                  : "Feedback"}
+              </Text>
+            </TouchableOpacity>
+          </View>
           <View style={styles.detailPriceRow}>
             <Text style={styles.detailPrice}>₹{p.price}</Text>
             {hasMrp && <Text style={styles.detailMrp}>₹{p.mrp}</Text>}
@@ -1397,55 +1425,55 @@ export default function InventoryScreen() {
           p.customer_care ||
           p.seller_name ||
           p.shelf_life) && (
-          <View style={styles.detailSection}>
-            <Text style={styles.detailSectionTitle}>
-              <Ionicons
-                name="information-circle-outline"
-                size={14}
-                color={C.dark}
-              />{" "}
-              Information
-            </Text>
-            {p.description ? (
-              <View style={styles.infoBlock}>
-                <Text style={styles.infoLabel}>Description</Text>
-                <Text style={styles.infoValueMultiline}>{p.description}</Text>
-              </View>
-            ) : null}
-            {p.shelf_life ? (
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Shelf Life</Text>
-                <Text style={styles.infoValue}>{p.shelf_life}</Text>
-              </View>
-            ) : null}
-            {p.seller_name ? (
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Seller</Text>
-                <Text style={styles.infoValue}>{p.seller_name}</Text>
-              </View>
-            ) : null}
-            {p.seller_address ? (
-              <View style={styles.infoBlock}>
-                <Text style={styles.infoLabel}>Seller Address</Text>
-                <Text style={styles.infoValueMultiline}>
-                  {p.seller_address}
-                </Text>
-              </View>
-            ) : null}
-            {p.customer_care ? (
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Customer Care</Text>
-                <Text style={styles.infoValue}>{p.customer_care}</Text>
-              </View>
-            ) : null}
-            {p.disclaimer ? (
-              <View style={styles.infoBlock}>
-                <Text style={styles.infoLabel}>Disclaimer</Text>
-                <Text style={styles.infoValueMultiline}>{p.disclaimer}</Text>
-              </View>
-            ) : null}
-          </View>
-        )}
+            <View style={styles.detailSection}>
+              <Text style={styles.detailSectionTitle}>
+                <Ionicons
+                  name="information-circle-outline"
+                  size={14}
+                  color={C.dark}
+                />{" "}
+                Information
+              </Text>
+              {p.description ? (
+                <View style={styles.infoBlock}>
+                  <Text style={styles.infoLabel}>Description</Text>
+                  <Text style={styles.infoValueMultiline}>{p.description}</Text>
+                </View>
+              ) : null}
+              {p.shelf_life ? (
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Shelf Life</Text>
+                  <Text style={styles.infoValue}>{p.shelf_life}</Text>
+                </View>
+              ) : null}
+              {p.seller_name ? (
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Seller</Text>
+                  <Text style={styles.infoValue}>{p.seller_name}</Text>
+                </View>
+              ) : null}
+              {p.seller_address ? (
+                <View style={styles.infoBlock}>
+                  <Text style={styles.infoLabel}>Seller Address</Text>
+                  <Text style={styles.infoValueMultiline}>
+                    {p.seller_address}
+                  </Text>
+                </View>
+              ) : null}
+              {p.customer_care ? (
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Customer Care</Text>
+                  <Text style={styles.infoValue}>{p.customer_care}</Text>
+                </View>
+              ) : null}
+              {p.disclaimer ? (
+                <View style={styles.infoBlock}>
+                  <Text style={styles.infoLabel}>Disclaimer</Text>
+                  <Text style={styles.infoValueMultiline}>{p.disclaimer}</Text>
+                </View>
+              ) : null}
+            </View>
+          )}
 
         {isAdmin && (
           <View style={styles.detailActions}>
@@ -1534,68 +1562,68 @@ export default function InventoryScreen() {
         <Snackbar {...snackbar} />
       </View>
 
-{/* ── Header ── */}
-<View style={styles.header}>
-  {showSearch ? (
-    <View style={styles.headerSearchWrap}>
-      <Ionicons name="search-outline" size={18} color={C.textMuted} />
-      <TextInput
-        style={styles.headerSearchInput}
-        placeholder="Search products..."
-        placeholderTextColor={C.textLight}
-        value={searchQuery}
-        onChangeText={setSearchQuery}
-        autoFocus
-      />
-      {searchQuery.length > 0 && (
-        <TouchableOpacity onPress={() => setSearchQuery("")}>
-          <Ionicons name="close-circle" size={17} color={C.textLight} />
-        </TouchableOpacity>
-      )}
-    </View>
-  ) : (
-    <View>
-      <Text style={styles.title}>Inventory</Text>
-      <Text style={styles.subtitle}>
-        {products.length} products · {available} available
-      </Text>
-    </View>
-  )}
+      {/* ── Header ── */}
+      <View style={styles.header}>
+        {showSearch ? (
+          <View style={styles.headerSearchWrap}>
+            <Ionicons name="search-outline" size={18} color={C.textMuted} />
+            <TextInput
+              style={styles.headerSearchInput}
+              placeholder="Search products..."
+              placeholderTextColor={C.textLight}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              autoFocus
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery("")}>
+                <Ionicons name="close-circle" size={17} color={C.textLight} />
+              </TouchableOpacity>
+            )}
+          </View>
+        ) : (
+          <View>
+            <Text style={styles.title}>Inventory</Text>
+            <Text style={styles.subtitle}>
+              {products.length} products · {available} available
+            </Text>
+          </View>
+        )}
 
-  <View style={{ flexDirection: "row", gap: 8 }}>
-    <TouchableOpacity
-      style={[styles.iconBtn, showSearch && styles.iconBtnActive]}
-      onPress={() => {
-        if (showSearch) setSearchQuery("");
-        setShowSearch((v) => !v);
-      }}
-    >
-      <Ionicons
-        name={showSearch ? "close" : "search-outline"}
-        size={20}
-        color={showSearch ? C.white : C.dark}
-      />
-    </TouchableOpacity>
-    {isAdmin && !showSearch && (
-      <>
-        <TouchableOpacity
-          style={[styles.addBtn, styles.priceBtn]}
-          onPress={() => router.push("/(admin)/price-update" as any)}
-          accessibilityRole="button"
-          accessibilityLabel="Update product prices"
-        >
-          <Text style={styles.priceBtnText}>₹</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.addBtn}
-          onPress={() => setAddModal(true)}
-        >
-          <Ionicons name="add" size={22} color={C.white} />
-        </TouchableOpacity>
-      </>
-    )}
-  </View>
-</View>
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          <TouchableOpacity
+            style={[styles.iconBtn, showSearch && styles.iconBtnActive]}
+            onPress={() => {
+              if (showSearch) setSearchQuery("");
+              setShowSearch((v) => !v);
+            }}
+          >
+            <Ionicons
+              name={showSearch ? "close" : "search-outline"}
+              size={20}
+              color={showSearch ? C.white : C.dark}
+            />
+          </TouchableOpacity>
+          {isAdmin && !showSearch && (
+            <>
+              <TouchableOpacity
+                style={[styles.addBtn, styles.priceBtn]}
+                onPress={() => router.push("/(admin)/price-update" as any)}
+                accessibilityRole="button"
+                accessibilityLabel="Update product prices"
+              >
+                <Text style={styles.priceBtnText}>₹</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.addBtn}
+                onPress={() => setAddModal(true)}
+              >
+                <Ionicons name="add" size={22} color={C.white} />
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
+      </View>
 
       {/* ── Summary Strip ── */}
       <View style={styles.summaryStrip}>
@@ -1647,7 +1675,9 @@ export default function InventoryScreen() {
       </TouchableOpacity>
 
       {/* ── Product List ── */}
-      <ScrollView
+       <FlatList
+        data={filteredProducts}
+        keyExtractor={(item) => getProductId(item) || item.name}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -1658,8 +1688,7 @@ export default function InventoryScreen() {
           />
         }
         contentContainerStyle={styles.listContent}
-      >
-        {filteredProducts.length === 0 ? (
+        ListEmptyComponent={
           <View style={styles.emptyState}>
             <View style={styles.emptyIconWrap}>
               <Ionicons
@@ -1677,145 +1706,161 @@ export default function InventoryScreen() {
                 : "Tap + to add your first product"}
             </Text>
           </View>
-        ) : (
-          products.map((product) => {
-            const cutoffRule = getOrderCutoffForProduct(product, orderCutoffs);
-            const cutoffText = getOrderCutoffBadgeText(cutoffRule);
-            const cutoffPassed = isOrderCutoffPassed(cutoffRule);
-            const deliveryText = getDeliveryWindowBadgeText(
-              getDeliveryWindowForProduct(product),
-            );
-            return (
+        }
+        ListFooterComponent={<View style={{ height: 20 }} />}
+        renderItem={({ item: product }) => {
+          const cutoffRule = getOrderCutoffForProduct(product, orderCutoffs);
+          const cutoffText = getOrderCutoffBadgeText(cutoffRule);
+          const cutoffPassed = isOrderCutoffPassed(cutoffRule);
+          const deliveryText = getDeliveryWindowBadgeText(
+            getDeliveryWindowForProduct(product),
+          );
+          return (
             <TouchableOpacity
-              key={product.id}
               style={styles.productCard}
               activeOpacity={0.7}
               onPress={() => openDetail(product)}
             >
-              {product.image ? (
-                <Image
-                  source={{ uri: product.image }}
-                  style={styles.productImage}
-                />
-              ) : (
-                <View style={styles.imagePlaceholder}>
-                  <Ionicons name="cube-outline" size={22} color={C.textLight} />
-                </View>
-              )}
+                {product.image ? (
+                  <Image
+                    source={{ uri: product.image }}
+                    style={styles.productImage}
+                  />
+                ) : (
+                  <View style={styles.imagePlaceholder}>
+                    <Ionicons name="cube-outline" size={22} color={C.textLight} />
+                  </View>
+                )}
 
-              <View style={styles.productInfo}>
-                <Text style={styles.productName} numberOfLines={1}>
-                  {product.name}
-                </Text>
-                <View style={styles.productPriceRow}>
-                  <Text style={styles.productPrice}>₹{product.price}</Text>
-                  {product.mrp && product.mrp > product.price && (
-                    <Text style={styles.productMrp}>₹{product.mrp}</Text>
-                  )}
-                </View>
-                <Text style={styles.productMeta}>
-                  {product.unit || product.category
-                    ? [product.unit, product.category]
+                <View style={styles.productInfo}>
+                  <Text style={styles.productName} numberOfLines={1}>
+                    {product.name}
+                  </Text>
+                  <View style={styles.productPriceRow}>
+                    <Text style={styles.productPrice}>₹{product.price}</Text>
+                    {product.mrp && product.mrp > product.price && (
+                      <Text style={styles.productMrp}>₹{product.mrp}</Text>
+                    )}
+                  </View>
+                  <Text style={styles.productMeta}>
+                    {product.unit || product.category
+                      ? [product.unit, product.category]
                         .filter(Boolean)
                         .join(" · ")
-                    : "Details pending"}
-                </Text>
-                {cutoffText ? (
+                      : "Details pending"}
+                  </Text>
+                  {cutoffText ? (
+                    <View
+                      style={[
+                        styles.cutoffMiniBadge,
+                        cutoffPassed && styles.cutoffMiniBadgeBlocked,
+                      ]}
+                    >
+                      <Ionicons
+                        name={cutoffPassed ? "alert-circle-outline" : "time-outline"}
+                        size={10}
+                        color={cutoffPassed ? "#DC2626" : "#B45309"}
+                      />
+                      <Text
+                        style={[
+                          styles.cutoffMiniText,
+                          cutoffPassed && styles.cutoffMiniTextBlocked,
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {cutoffText}
+                      </Text>
+                    </View>
+                  ) : null}
+                  {deliveryText ? (
+                    <View style={styles.deliveryMiniBadge}>
+                      <Ionicons name="bicycle-outline" size={10} color="#16A34A" />
+                      <Text style={styles.deliveryMiniText} numberOfLines={1}>
+                        {deliveryText}
+                      </Text>
+                    </View>
+                  ) : null}
                   <View
                     style={[
-                      styles.cutoffMiniBadge,
-                      cutoffPassed && styles.cutoffMiniBadgeBlocked,
+                      styles.statusPill,
+                      {
+                        backgroundColor: product.is_available
+                          ? C.successBg
+                          : "#FFF0F0",
+                      },
                     ]}
                   >
-                    <Ionicons
-                      name={cutoffPassed ? "alert-circle-outline" : "time-outline"}
-                      size={10}
-                      color={cutoffPassed ? "#DC2626" : "#B45309"}
+                    <View
+                      style={[
+                        styles.statusDot,
+                        {
+                          backgroundColor: product.is_available
+                            ? C.success
+                            : "#FF6B6B",
+                        },
+                      ]}
                     />
                     <Text
                       style={[
-                        styles.cutoffMiniText,
-                        cutoffPassed && styles.cutoffMiniTextBlocked,
+                        styles.statusText,
+                        { color: product.is_available ? "#16A34A" : "#DC2626" },
                       ]}
-                      numberOfLines={1}
                     >
-                      {cutoffText}
+                      {product.is_available ? "Available" : "Unavailable"}
                     </Text>
                   </View>
-                ) : null}
-                {deliveryText ? (
-                  <View style={styles.deliveryMiniBadge}>
-                    <Ionicons name="bicycle-outline" size={10} color="#16A34A" />
-                    <Text style={styles.deliveryMiniText} numberOfLines={1}>
-                      {deliveryText}
-                    </Text>
-                  </View>
-                ) : null}
+                </View>
+
                 <View
-                  style={[
-                    styles.statusPill,
-                    {
-                      backgroundColor: product.is_available
-                        ? C.successBg
-                        : "#FFF0F0",
-                    },
-                  ]}
-                >
+                  style={{ alignItems: "center" }}>
                   <View
                     style={[
-                      styles.statusDot,
-                      {
-                        backgroundColor: product.is_available
-                          ? C.success
-                          : "#FF6B6B",
-                      },
-                    ]}
-                  />
-                  <Text
-                    style={[
-                      styles.statusText,
-                      { color: product.is_available ? "#16A34A" : "#DC2626" },
+                      styles.stockBadge,
+                      product.stock <= 5 &&
+                      product.stock > 0 && { backgroundColor: "#FFF8E1" },
+                      product.stock === 0 && { backgroundColor: "#FFF0F0" },
                     ]}
                   >
-                    {product.is_available ? "Available" : "Unavailable"}
-                  </Text>
+                    <Text
+                      style={[
+                        styles.stockVal,
+                        product.stock <= 5 &&
+                        product.stock > 0 && { color: "#F59E0B" },
+                        product.stock === 0 && { color: "#DC2626" },
+                      ]}
+                    >
+                      {product.stock}
+                    </Text>
+                    <Text style={styles.stockLabel}>stock</Text>
+                  </View>
+
+                  {(() => {
+                    const productFeedback = product.id
+                      ? feedbackMap[product.id]
+                      : undefined;
+                    const totalReviews = productFeedback?.total_reviews ?? 0;
+
+                    return totalReviews > 0 && productFeedback ? (
+                      <View style={styles.ratingMiniBadge}>
+                        <Ionicons name="star" size={10} color="#F59E0B" />
+                        <Text style={styles.ratingMiniText}>
+                          {productFeedback.average_rating.toFixed(1)}
+                        </Text>
+                      </View>
+                    ) : null;
+                  })()}
                 </View>
-              </View>
 
-              <View
-                style={[
-                  styles.stockBadge,
-                  product.stock <= 5 &&
-                    product.stock > 0 && { backgroundColor: "#FFF8E1" },
-                  product.stock === 0 && { backgroundColor: "#FFF0F0" },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.stockVal,
-                    product.stock <= 5 &&
-                      product.stock > 0 && { color: "#F59E0B" },
-                    product.stock === 0 && { color: "#DC2626" },
-                  ]}
-                >
-                  {product.stock}
-                </Text>
-                <Text style={styles.stockLabel}>stock</Text>
-              </View>
-
-              <Ionicons
-                name="chevron-forward"
-                size={16}
-                color={C.textLight}
-                style={{ marginLeft: 4 }}
-              />
-            </TouchableOpacity>
-            );
-          })
-        )}
-        <View style={{ height: 20 }} />
-      </ScrollView>
-
+                <Ionicons
+                  name="chevron-forward"
+                  size={16}
+                  color={C.textLight}
+                  style={{ marginLeft: 4 }}
+                />
+                </TouchableOpacity>
+          );
+        }}
+      />
       {/* ── ADD PRODUCT MODAL (Tabbed) ── */}
       <Modal visible={addModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
@@ -1943,6 +1988,12 @@ export default function InventoryScreen() {
           </View>
         </View>
       </Modal>
+      <AdminFeedbackModal
+        visible={!!feedbackModalProduct}
+        productId={feedbackModalProduct?.id || null}
+        productName={feedbackModalProduct?.name}
+        onClose={() => setFeedbackModalProduct(null)}
+      />
     </SafeAreaView>
   );
 }
@@ -2166,9 +2217,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: C.card,
-    borderRadius: 16,
-    padding: 12,
-    marginBottom: 10,
+    borderRadius: 14,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginBottom: 8,
     gap: 10,
     shadowColor: C.dark,
     shadowOpacity: 0.05,
@@ -2176,11 +2228,11 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     elevation: 1,
   },
-  productImage: { width: 56, height: 56, borderRadius: 14 },
+  productImage: { width: 44, height: 44, borderRadius: 12 },
   imagePlaceholder: {
-    width: 56,
-    height: 56,
-    borderRadius: 14,
+    width: 44,
+    height: 44,
+    borderRadius: 12,
     backgroundColor: C.chipBg,
     justifyContent: "center",
     alignItems: "center",
@@ -2269,6 +2321,19 @@ const styles = StyleSheet.create({
   },
   stockVal: { fontSize: 16, fontWeight: "800", color: C.dark },
   stockLabel: { fontSize: 9, color: C.textMuted, fontWeight: "600" },
+
+  // ── Product review / rating mini badge (in product card)
+  ratingMiniBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+    marginTop: 4,
+  },
+  ratingMiniText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#B45309",
+  },
 
   // ── Empty State
   emptyState: { alignItems: "center", paddingTop: 80, gap: 8 },
@@ -2587,12 +2652,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: C.border,
   },
-  detailName: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: C.text,
-    marginBottom: 6,
-  },
+
   detailPriceRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -2677,6 +2737,11 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: C.dark,
     marginBottom: 12,
+  },
+  detailName: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: C.text,
   },
   infoRow: {
     flexDirection: "row",
@@ -2768,35 +2833,71 @@ const styles = StyleSheet.create({
   actionDisabled: { opacity: 0.55 },
   detailSmallBtnText: { fontSize: 13, fontWeight: "600" },
   headerSearchWrap: {
-  flex: 1,
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: C.card,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: C.border,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginRight: 10,
+  },
+  headerSearchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: C.text,
+  },
+  iconBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: C.card,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  iconBtnActive: {
+    backgroundColor: C.dark,
+    borderColor: C.dark,
+  },
+
+  feedbackBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: C.card,
+    paddingVertical: 14,
+    borderRadius: 14,
+    gap: 8,
+    borderWidth: 1.5,
+    borderColor: C.border,
+  },
+  feedbackBtnText: { fontSize: 15, fontWeight: "700", color: C.dark },
+
+  detailNameRow: {
   flexDirection: "row",
   alignItems: "center",
   gap: 8,
-  backgroundColor: C.card,
-  borderRadius: 14,
-  borderWidth: 1,
-  borderColor: C.border,
-  paddingHorizontal: 14,
-  paddingVertical: 10,
-  marginRight: 10,
+  marginBottom: 6,
 },
-headerSearchInput: {
-  flex: 1,
-  fontSize: 14,
-  color: C.text,
-},
-iconBtn: {
-  width: 44,
-  height: 44,
-  borderRadius: 14,
-  backgroundColor: C.card,
-  justifyContent: "center",
+detailFeedbackBtn: {
+  flexDirection: "row",
   alignItems: "center",
+  gap: 4,
+  backgroundColor: "#FEF3C7",
+  paddingHorizontal: 10,
+  paddingVertical: 6,
+  borderRadius: 20,
   borderWidth: 1,
-  borderColor: C.border,
+  borderColor: "#FDE68A",
 },
-iconBtnActive: {
-  backgroundColor: C.dark,
-  borderColor: C.dark,
+detailFeedbackBtnText: {
+  fontSize: 12,
+  fontWeight: "800",
+  color: "#B45309",
 },
 });
