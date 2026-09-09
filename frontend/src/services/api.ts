@@ -552,6 +552,28 @@ export interface LeaseUpdate {
   location_address?: string;
 }
 
+export interface ProductFeedback {
+  id: string;
+  admin_id?: string;
+  product_id: string;
+  product_name?: string;
+  order_id: string;
+  user_id: string;
+  customer_name?: string;
+  rating: number;
+  comment?: string;
+  created_at: string;
+  updated_at?: string | null;
+}
+
+export interface ProductFeedbackSummary {
+  product_id: string;
+  product_name?: string;
+  average_rating: number;
+  total_reviews: number;
+  feedback: ProductFeedback[];
+}
+
 class ApiService {
   private token: string | null = null;
 
@@ -1100,6 +1122,18 @@ class ApiService {
     return this.request<any[]>("/subscriptions/history");
   }
 
+  async getSubscriptionCalendar(subscriptionId: string) {
+    return this.request<Array<{
+      order_id: string;
+      delivery_date: string;
+      status: string;
+      product_id: string;
+      product_name?: string;
+      rated: boolean;
+      rating?: number | null;
+    }>>(`/orders/subscription/${subscriptionId}/calendar`);
+  }
+
   async downloadOrderInvoice(orderId: string) {
     return this.request<InvoiceDownloadPayload>(
       `/invoices/order/${orderId}/download`,
@@ -1253,12 +1287,14 @@ class ApiService {
 
   // Per-date order status for a subscription — used to render the
   // delivery calendar (checkmark on delivered dates) in the admin app. by goluu
-  async getAdminSubscriptionOrders(
-    subscriptionId: string,
-  ): Promise<{ delivery_date: string; status: string }[]> {
-    return this.request<{ delivery_date: string; status: string }[]>(
-      `/admin/orders/subscription/${subscriptionId}`,
-    );
+  async getAdminSubscriptionOrders(subscriptionId: string): Promise<Array<{
+    order_id: string;
+    delivery_date: string;
+    status: string;
+    has_feedback: boolean;
+    rating: number | null;
+  }>> {
+    return this.request(`/admin/orders/subscription/${subscriptionId}`);
   }
 
   async getVacations() {
@@ -3135,89 +3171,89 @@ class ApiService {
     return result;
   }
 
-async getVetMedicalRecords() {
-  const token = await AsyncStorage.getItem("vet_token");
-  const response = await fetch(`${API_BASE}/api/vet/medical`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  const data = await response.json();
-  if (!response.ok)
-    throw new Error(data.detail || "Failed to fetch medical records");
-  return data;
-}
+  async getVetMedicalRecords() {
+    const token = await AsyncStorage.getItem("vet_token");
+    const response = await fetch(`${API_BASE}/api/vet/medical`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await response.json();
+    if (!response.ok)
+      throw new Error(data.detail || "Failed to fetch medical records");
+    return data;
+  }
 
-async createVetMedicalRecord(data: {
-  cowSrNo: string;
-  cowName?: string;
-  cowAge?: string;
-  currentStatus?: string;
-  lastVaccinationDate?: string;
-  nextVaccinationDate?: string;
-  vaccinationName?: string;
-  lastIssueName?: string;
-  lastIssueDate?: string;
-  currentIssueName?: string;
-  currentIssueDate?: string;
-  treatmentGiven?: string;
-  doctorName?: string;
-  medicineName?: string;
-  notes?: string;
-  lastDewormingDate?: string;
-  nextDewormingDate?: string;
-  dewormingMedicine?: string;
-}) {
-  const token = await AsyncStorage.getItem("vet_token");
-  const response = await fetch(`${API_BASE}/api/vet/medical`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(data),
-  });
-  const result = await response.json();
-  if (!response.ok)
-    throw new Error(result.detail || "Failed to save medical record");
-  return result;
-}
-
-async updateVetMedicalRecord(
-  id: string,
-  data: Partial<{
+  async createVetMedicalRecord(data: {
     cowSrNo: string;
-    cowName: string;
-    cowAge: string;
-    currentStatus: string;
-    lastVaccinationDate: string;
-    nextVaccinationDate: string;
-    vaccinationName: string;
-    lastIssueName: string;
-    lastIssueDate: string;
-    currentIssueName: string;
-    currentIssueDate: string;
-    treatmentGiven: string;
-    doctorName: string;
-    medicineName: string;
-    notes: string;
-    lastDewormingDate: string;
-    nextDewormingDate: string;
-    dewormingMedicine: string;
-  }>,
-) {
-  const token = await AsyncStorage.getItem("vet_token");
-  const response = await fetch(`${API_BASE}/api/vet/medical/${id}`, {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(data),
-  });
-  const result = await response.json();
-  if (!response.ok)
-    throw new Error(result.detail || "Failed to update medical record");
-  return result;
-}
+    cowName?: string;
+    cowAge?: string;
+    currentStatus?: string;
+    lastVaccinationDate?: string;
+    nextVaccinationDate?: string;
+    vaccinationName?: string;
+    lastIssueName?: string;
+    lastIssueDate?: string;
+    currentIssueName?: string;
+    currentIssueDate?: string;
+    treatmentGiven?: string;
+    doctorName?: string;
+    medicineName?: string;
+    notes?: string;
+    lastDewormingDate?: string;
+    nextDewormingDate?: string;
+    dewormingMedicine?: string;
+  }) {
+    const token = await AsyncStorage.getItem("vet_token");
+    const response = await fetch(`${API_BASE}/api/vet/medical`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(data),
+    });
+    const result = await response.json();
+    if (!response.ok)
+      throw new Error(result.detail || "Failed to save medical record");
+    return result;
+  }
+
+  async updateVetMedicalRecord(
+    id: string,
+    data: Partial<{
+      cowSrNo: string;
+      cowName: string;
+      cowAge: string;
+      currentStatus: string;
+      lastVaccinationDate: string;
+      nextVaccinationDate: string;
+      vaccinationName: string;
+      lastIssueName: string;
+      lastIssueDate: string;
+      currentIssueName: string;
+      currentIssueDate: string;
+      treatmentGiven: string;
+      doctorName: string;
+      medicineName: string;
+      notes: string;
+      lastDewormingDate: string;
+      nextDewormingDate: string;
+      dewormingMedicine: string;
+    }>,
+  ) {
+    const token = await AsyncStorage.getItem("vet_token");
+    const response = await fetch(`${API_BASE}/api/vet/medical/${id}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(data),
+    });
+    const result = await response.json();
+    if (!response.ok)
+      throw new Error(result.detail || "Failed to update medical record");
+    return result;
+  }
 
   async vetGetCows() {
     const token = await AsyncStorage.getItem("vet_token");
@@ -4216,6 +4252,54 @@ async vetDeleteInsemination(id: string) {
     if (!response.ok)
       throw new Error(data.detail || "Failed to fetch product");
     return data;
+  }
+
+  //customers feedback
+
+  async submitProductFeedback(data: {
+    order_id: string;
+    product_id: string;
+    rating: number;
+    comment?: string;
+  }) {
+    return this.request<ProductFeedback>("/feedback", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getMyOrderFeedback(orderId: string) {
+    return this.request<Record<string, ProductFeedback>>(
+      `/feedback/order/${orderId}`,
+      { silentErrorLog: true },
+    );
+  }
+
+  async getCatalogProductFeedback(productId: string) {
+    return this.request<ProductFeedbackSummary>(
+      `/catalog/products/${productId}/feedback`,
+      { silentErrorLog: true },
+    );
+  }
+
+  async getAdminProductFeedback(productId: string) {
+    return this.request<ProductFeedbackSummary>(
+      `/admin/products/${productId}/feedback`,
+    );
+  }
+
+  async getAdminFeedbackSummary() {
+    return this.request<ProductFeedbackSummary[]>(
+      "/admin/feedback/summary",
+      { silentErrorLog: true },
+    );
+  }
+
+  async getAdminOrderFeedback(orderId: string) {
+    return this.request<Record<string, ProductFeedback>>(
+      `/admin/feedback/order/${orderId}`,
+      { silentErrorLog: true },
+    );
   }
 
   // Logout

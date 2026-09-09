@@ -24,6 +24,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { api } from "../../src/services/api";
 import { Colors } from "../../src/constants/colors";
 import LoadingScreen from "../../src/components/LoadingScreen";
+import OrderItemFeedback from "../../src/components/OrderItemFeedback";
 
 if (
   Platform.OS === "android" &&
@@ -859,6 +860,36 @@ function OrderCard({
                   </View>
                 ))}
               </View>
+            </>
+          )}
+
+          {order.status === "delivered" && (
+            <>
+              <View style={cd.sectionLabel}>
+                <Ionicons name="star-outline" size={11} color="#9CA3AF" />
+                <Text style={cd.sectionLabelTxt}>Rate Your Order</Text>
+              </View>
+              {order.items?.length > 0 ? (
+                order.items.map((item, idx) => (
+                  <OrderItemFeedback
+                    key={item.product_id || idx}
+                    orderId={order.id}
+                    productId={item.product_id}
+                    productName={
+                      item.product_name ||
+                      item.name ||
+                      productMap[item.product_id]?.name ||
+                      "Product"
+                    }
+                  />
+                ))
+              ) : order.product?.id ? (
+                <OrderItemFeedback
+                  orderId={order.id}
+                  productId={order.product.id}
+                  productName={order.product.name || "Product"}
+                />
+              ) : null}
             </>
           )}
 

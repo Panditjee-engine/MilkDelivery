@@ -29,6 +29,7 @@ import Svg, {
 import { useRouter } from "expo-router";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { api } from "../../src/services/api";
+import AdminFeedbackModal from "../../src/components/productfeedback";
 import LoadingScreen from "../../src/components/LoadingScreen";
 import { useIsFocused } from "@react-navigation/native";
 
@@ -121,10 +122,10 @@ const getItemQuantity = (item: any) => {
   const value = Number.parseFloat(
     String(
       item?.quantity ??
-        item?.total_quantity ??
-        item?.qty ??
-        item?.count ??
-        "",
+      item?.total_quantity ??
+      item?.qty ??
+      item?.count ??
+      "",
     ),
   );
   return Number.isFinite(value) && value > 0 ? value : 1;
@@ -318,10 +319,10 @@ const isMilkItem = (item: any, products: any[]) => {
   const unit = getItemUnit(item, products).toLowerCase();
   const category = String(
     meta?.category ||
-      meta?.category_name ||
-      item?.category ||
-      item?.category_name ||
-      "",
+    meta?.category_name ||
+    item?.category ||
+    item?.category_name ||
+    "",
   ).toLowerCase();
   const text = `${name} ${category} ${unit}`;
   if (isNonMilkProductText(text)) return false;
@@ -1206,19 +1207,18 @@ export default function AdminDashboard() {
   const [customers, setCustomers] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
   const [subscriptions, setSubscriptions] = useState<any[]>([]);
-  const [pendingRechargeRequests, setPendingRechargeRequests] = useState<any[]>(
-    [],
-  );
+  const [pendingRechargeRequests, setPendingRechargeRequests] = useState<any[]>([]);
+  const [feedbackSummaries, setFeedbackSummaries] = useState<any[]>([]);
+  const [selectedFeedbackProduct, setSelectedFeedbackProduct] = useState<{ id: string; name: string } | null>(null);
   const [notificationSummary, setNotificationSummary] = useState<{
     unread: number;
     read: number;
     total: number;
   }>({ unread: 0, read: 0, total: 0 });
   const [modalType, setModalType] = useState<ModalType>(null);
-  const [deliveredProductsExpanded, setDeliveredProductsExpanded] =
-    useState(true);
-  const [tomorrowQuantityExpanded, setTomorrowQuantityExpanded] =
-    useState(true);
+  const [deliveredProductsExpanded, setDeliveredProductsExpanded] =useState(true);
+  const [feedbackExpanded, setFeedbackExpanded] = useState(true);
+  const [tomorrowQuantityExpanded, setTomorrowQuantityExpanded] =useState(true);
   const isFocused = useIsFocused();
   const fetchingRef = useRef(false);
 
@@ -1244,6 +1244,7 @@ export default function AdminDashboard() {
           api.getAdminRechargeRequests("pending").catch(() => []),
           api.getAdminNotificationSummary().catch(() => null),
         ]);
+      api.getAdminFeedbackSummary().then(setFeedbackSummaries).catch(() => setFeedbackSummaries([]));
       if (dashboardData.status === "fulfilled") setStats(dashboardData.value);
       if (productsData.status === "fulfilled" && Array.isArray(productsData.value)) {
         setProducts(productsData.value);
@@ -1285,10 +1286,10 @@ export default function AdminDashboard() {
     }
   };
 
-useEffect(() => {
-  if (!isFocused) return;
-  fetchData();
-}, [isFocused]);
+  useEffect(() => {
+    if (!isFocused) return;
+    fetchData();
+  }, [isFocused]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -1523,24 +1524,24 @@ useEffect(() => {
           </View>
         </View>
 
-<TouchableOpacity
-  style={styles.todayOrderCard}
-  activeOpacity={0.82}
-  onPress={() => Linking.openURL("https://gausatv.com/admin-dashboard")}
->
-  <View style={styles.todayOrderLeft}>
-    <View style={styles.todayOrderIcon}>
-      <Ionicons name="globe-outline" size={22} color={C.dark} />
-    </View>
-    <View style={{ flex: 1 }}>
-      <Text style={styles.todayOrderTitle}>Open Web Dashboard</Text>
-      <Text style={styles.todayOrderSub}>
-        Access more tools and reports on cockpit
-      </Text>
-    </View>
-  </View>
-  <Ionicons name="open-outline" size={18} color={C.dark} />
-</TouchableOpacity>
+        <TouchableOpacity
+          style={styles.todayOrderCard}
+          activeOpacity={0.82}
+          onPress={() => Linking.openURL("https://gausatv.com/admin-dashboard")}
+        >
+          <View style={styles.todayOrderLeft}>
+            <View style={styles.todayOrderIcon}>
+              <Ionicons name="globe-outline" size={22} color={C.dark} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.todayOrderTitle}>Open Web Dashboard</Text>
+              <Text style={styles.todayOrderSub}>
+                Access more tools and reports on cockpit
+              </Text>
+            </View>
+          </View>
+          <Ionicons name="open-outline" size={18} color={C.dark} />
+        </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.todayOrderCard}
@@ -1564,6 +1565,75 @@ useEffect(() => {
           </View>
           <Ionicons name="chevron-forward" size={18} color={C.dark} />
         </TouchableOpacity>
+
+                 {/* feedback summary card */}
+        <View style={styles.deliveredProductCard}>
+          <TouchableOpacity
+            style={styles.deliveredProductHeader}
+            activeOpacity={0.78}
+            onPress={() => setFeedbackExpanded((value) => !value)}
+          >
+            <View style={styles.deliveredProductTitleRow}>
+              <View style={[styles.deliveredProductIcon, { backgroundColor: "#F59E0B" }]}>
+                <Ionicons name="star" size={18} color="#fff" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.deliveredProductTitle}>Customer Feedback</Text>
+                <Text style={styles.deliveredProductSub}>
+                  Ratings & reviews by product
+                </Text>
+              </View>
+            </View>
+            <View style={[styles.deliveredTotalPill, { backgroundColor: "#FEF3C7" }]}>
+              <Text style={[styles.deliveredTotalValue, { color: "#B45309" }]}>
+                {feedbackSummaries.length}
+              </Text>
+              <Text style={[styles.deliveredTotalLabel, { color: "#B45309" }]}>Products</Text>
+            </View>
+            <Ionicons
+              name={feedbackExpanded ? "chevron-up" : "chevron-down"}
+              size={17}
+              color="#B45309"
+            />
+          </TouchableOpacity>
+
+          {feedbackExpanded ? (
+            feedbackSummaries.length > 0 ? (
+              <View style={{ gap: 7, marginTop: 10 }}>
+                {feedbackSummaries.map((item) => (
+                  <TouchableOpacity
+                    key={item.product_id}
+                    style={styles.deliveredProductRow}
+                    activeOpacity={0.75}
+                    onPress={() =>
+                      setSelectedFeedbackProduct({ id: item.product_id, name: item.product_name })
+                    }
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.deliveredProductName} numberOfLines={1}>
+                        {item.product_name || "Product"}
+                      </Text>
+                      <Text style={styles.deliveredProductBreakup}>
+                        {item.total_reviews} review{item.total_reviews > 1 ? "s" : ""}
+                      </Text>
+                    </View>
+                    <Text style={[styles.deliveredProductQty, { color: "#B45309" }]}>
+                      ★ {item.average_rating.toFixed(1)}
+                    </Text>
+                    <Ionicons name="chevron-forward" size={16} color={C.textLight} />
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ) : (
+              <View style={styles.deliveredEmptyBox}>
+                <Ionicons name="star-outline" size={18} color={C.textLight} />
+                <Text style={styles.deliveredEmptyText}>No customer feedback yet.</Text>
+              </View>
+            )
+          ) : null}
+        </View>
+
+        {/* ── Delivered Products Card ── */}
 
         <View style={styles.deliveredProductCard}>
           <TouchableOpacity
@@ -2137,7 +2207,7 @@ useEffect(() => {
                   style={[
                     styles.productRow,
                     i < Math.min(products.length, 4) - 1 &&
-                      styles.productRowBorder,
+                    styles.productRowBorder,
                   ]}
                 >
                   <View style={styles.productDot} />
@@ -2194,6 +2264,13 @@ useEffect(() => {
         customers={customers}
         orders={todayOrders}
         onClose={() => setModalType(null)}
+      />
+
+      <AdminFeedbackModal
+        visible={!!selectedFeedbackProduct}
+        productId={selectedFeedbackProduct?.id || null}
+        productName={selectedFeedbackProduct?.name}
+        onClose={() => setSelectedFeedbackProduct(null)}
       />
     </SafeAreaView>
   );
@@ -3086,3 +3163,4 @@ const styles = StyleSheet.create({
   heatCell: { width: 21, height: 21, borderRadius: 7 },
   heatLabel: { fontSize: 7, color: C.textMuted, fontWeight: "800" },
 });
+// feedback

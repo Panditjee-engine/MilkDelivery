@@ -27,6 +27,7 @@ import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { api } from "../../src/services/api";
+import StarRating from "../../src/components/StarRating";
 import LoadingScreen from "../../src/components/LoadingScreen";
 
 if (
@@ -400,7 +401,7 @@ const subscriptionProductTitle = (
   return items.length > 1 ? `${first} +${items.length - 1} more` : first;
 };
 
-// ─── Date Helpers 
+// ─── Date Helpers
 
 const getLocalDateKey = (date = new Date()) => {
   const y = date.getFullYear();
@@ -479,7 +480,8 @@ const isWalletSubscription = (sub: Subscription) =>
 
 const getSubscriptionWalletBlock = (sub: Subscription) => {
   if (!isWalletSubscription(sub)) return null;
-  if (sub.wallet_balance === undefined || sub.wallet_balance === null) return null;
+  if (sub.wallet_balance === undefined || sub.wallet_balance === null)
+    return null;
   const due = subscriptionDeliveryAmount(sub);
   const balance = Number(sub.wallet_balance ?? 0);
   if (Number.isFinite(balance) && due > 0 && balance < due) {
@@ -764,9 +766,16 @@ function SubscriptionDetailModal({
   const slideAnim = useRef(new Animated.Value(400)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
 
-  type OrderRecord = { delivery_date: string; status: string };
+  type OrderRecord = {
+    order_id: string;
+    delivery_date: string;
+    status: string;
+    has_feedback?: boolean;
+    rating?: number | null;
+  };
   const [orderRecords, setOrderRecords] = useState<OrderRecord[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
+  const [feedbackOrderId, setFeedbackOrderId] = useState<string | null>(null);
 
   useEffect(() => {
     if (visible && subscription?.id) {
@@ -810,6 +819,14 @@ function SubscriptionDetailModal({
     return map;
   }, [orderRecords]);
 
+  const orderRecordByDate = useMemo(() => {
+    const map: Record<string, OrderRecord> = {};
+    orderRecords.forEach((o) => {
+      map[o.delivery_date] = o;
+    });
+    return map;
+  }, [orderRecords]);
+
   const scheduleDates = useMemo(
     () => (subscription ? getSubscriptionDeliveryDates(subscription) : []),
     [subscription],
@@ -844,333 +861,474 @@ function SubscriptionDetailModal({
   const bg = patternBg[subscription.pattern] ?? "#F5EDE8";
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="none"
-      onRequestClose={onDismiss}
-      statusBarTranslucent
-    >
-      <Animated.View style={[sm.overlay, { opacity: opacityAnim }]}>
-        <Animated.View
-          style={[sm.sheet, { transform: [{ translateY: slideAnim }] }]}
-        >
-          <View style={sm.header}>
-            <View style={sm.headerLeft}>
-              <View style={[sm.patternBadge, { backgroundColor: bg }]}>
-                <Ionicons
-                  name={
-                    subscription.pattern === "daily"
-                      ? "repeat"
-                      : subscription.pattern === "buy_once"
-                        ? "cart"
-                        : "calendar"
-                  }
-                  size={14}
-                  color={color}
-                />
-                <Text style={[sm.patternText, { color }]}>
-                  {patternLabel[subscription.pattern] ?? subscription.pattern}
+    <>
+      <Modal
+        visible={visible}
+        transparent
+        animationType="none"
+        onRequestClose={onDismiss}
+        statusBarTranslucent
+      >
+        <Animated.View style={[sm.overlay, { opacity: opacityAnim }]}>
+          <Animated.View
+            style={[sm.sheet, { transform: [{ translateY: slideAnim }] }]}
+          >
+            <View style={sm.header}>
+              <View style={sm.headerLeft}>
+                <View style={[sm.patternBadge, { backgroundColor: bg }]}>
+                  <Ionicons
+                    name={
+                      subscription.pattern === "daily"
+                        ? "repeat"
+                        : subscription.pattern === "buy_once"
+                          ? "cart"
+                          : "calendar"
+                    }
+                    size={14}
+                    color={color}
+                  />
+                  <Text style={[sm.patternText, { color }]}>
+                    {patternLabel[subscription.pattern] ?? subscription.pattern}
+                  </Text>
+                </View>
+                <Text style={sm.subId}>
+                  #{subscription.id.slice(-6).toUpperCase()}
                 </Text>
               </View>
-              <Text style={sm.subId}>
-                #{subscription.id.slice(-6).toUpperCase()}
-              </Text>
+              <TouchableOpacity
+                style={sm.closeBtn}
+                onPress={onDismiss}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="close" size={20} color="#8B6854" />
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity
-              style={sm.closeBtn}
-              onPress={onDismiss}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="close" size={20} color="#8B6854" />
-            </TouchableOpacity>
-          </View>
 
-          <FlatList
-            data={[subscription]}
-            keyExtractor={(item) => item.id}
-            showsVerticalScrollIndicator={false}
-            renderItem={() => (
-              <View style={sm.body}>
-                {/* Customer */}
-                {(subscription.customer_name ||
-                  subscription.customer_phone) && (
-                  <View style={sm.section}>
-                    <Text style={sm.sectionLabel}>CUSTOMER</Text>
-                    <View style={sm.infoRow}>
-                      <View style={sm.infoIcon}>
-                        <Ionicons name="person" size={13} color="#FF9675" />
+            <FlatList
+              data={[subscription]}
+              keyExtractor={(item) => item.id}
+              showsVerticalScrollIndicator={false}
+              renderItem={() => (
+                <View style={sm.body}>
+                  {/* Customer */}
+                  {(subscription.customer_name ||
+                    subscription.customer_phone) && (
+                    <View style={sm.section}>
+                      <Text style={sm.sectionLabel}>CUSTOMER</Text>
+                      <View style={sm.infoRow}>
+                        <View style={sm.infoIcon}>
+                          <Ionicons name="person" size={13} color="#FF9675" />
+                        </View>
+                        <View>
+                          {subscription.customer_name && (
+                            <Text style={sm.infoMain}>
+                              {subscription.customer_name}
+                            </Text>
+                          )}
+                          {subscription.customer_phone && (
+                            <View style={sm.phoneRow}>
+                              <Ionicons
+                                name="call-outline"
+                                size={11}
+                                color="#8B6854"
+                              />
+                              <Text style={sm.phoneText}>
+                                {subscription.customer_phone}
+                              </Text>
+                            </View>
+                          )}
+                        </View>
                       </View>
-                      <View>
-                        {subscription.customer_name && (
-                          <Text style={sm.infoMain}>
-                            {subscription.customer_name}
-                          </Text>
-                        )}
-                        {subscription.customer_phone && (
-                          <View style={sm.phoneRow}>
-                            <Ionicons
-                              name="call-outline"
-                              size={11}
-                              color="#8B6854"
-                            />
-                            <Text style={sm.phoneText}>
-                              {subscription.customer_phone}
+                    </View>
+                  )}
+
+                  {/* Schedule */}
+                  <View style={sm.section}>
+                    <Text style={sm.sectionLabel}>SCHEDULE</Text>
+                    <View style={sm.scheduleGrid}>
+                      {subscription.start_date && (
+                        <View style={sm.scheduleItem}>
+                          <Ionicons
+                            name="play-circle-outline"
+                            size={13}
+                            color="#8B6854"
+                          />
+                          <View>
+                            <Text style={sm.scheduleKey}>Start</Text>
+                            <Text style={sm.scheduleVal}>
+                              {subscription.start_date}
                             </Text>
                           </View>
-                        )}
+                        </View>
+                      )}
+                      {subscription.end_date && (
+                        <View style={sm.scheduleItem}>
+                          <Ionicons
+                            name="stop-circle-outline"
+                            size={13}
+                            color="#8B6854"
+                          />
+                          <View>
+                            <Text style={sm.scheduleKey}>End</Text>
+                            <Text style={sm.scheduleVal}>
+                              {subscription.end_date}
+                            </Text>
+                          </View>
+                        </View>
+                      )}
+                      {subscription.delivery_slot && (
+                        <View style={sm.scheduleItem}>
+                          <Ionicons
+                            name="time-outline"
+                            size={13}
+                            color="#8B6854"
+                          />
+                          <View>
+                            <Text style={sm.scheduleKey}>Slot</Text>
+                            <Text style={sm.scheduleVal}>
+                              {subscription.delivery_slot}
+                            </Text>
+                          </View>
+                        </View>
+                      )}
+                    </View>
+                    {subscription.pattern === "custom" &&
+                      subscription.custom_days &&
+                      subscription.custom_days.length > 0 && (
+                        <View style={sm.daysRow}>
+                          {DAY_NAMES.map((d, i) => {
+                            const active =
+                              subscription.custom_days!.includes(i);
+                            return (
+                              <View
+                                key={i}
+                                style={[sm.dayChip, active && sm.dayChipActive]}
+                              >
+                                <Text
+                                  style={[
+                                    sm.dayChipText,
+                                    active && sm.dayChipTextActive,
+                                  ]}
+                                >
+                                  {d}
+                                </Text>
+                              </View>
+                            );
+                          })}
+                        </View>
+                      )}
+                  </View>
+
+                  {/* Items */}
+                  <View style={sm.section}>
+                    <Text style={sm.sectionLabel}>ITEMS</Text>
+                    <View style={sm.itemsCard}>
+                      {subscription.items?.map((item, i) => {
+                        const name = getSubscriptionItemName(
+                          item,
+                          productNames,
+                          products,
+                        );
+                        return (
+                          <View
+                            key={i}
+                            style={[sm.itemRow, i > 0 && sm.itemRowBorder]}
+                          >
+                            <View style={sm.itemDot} />
+                            <View style={sm.itemNameWrap}>
+                              <Text style={sm.itemName} numberOfLines={2}>
+                                {name}
+                              </Text>
+                              <Text style={sm.itemUnitPrice}>
+                                {formatSubscriptionItemQuantity(
+                                  item,
+                                  productNames,
+                                  products,
+                                )}
+                              </Text>
+                            </View>
+                            <View style={sm.itemRight}>
+                              <View style={sm.itemQtyBadge}>
+                                <Text style={sm.itemQty}>×{item.quantity}</Text>
+                              </View>
+                              <Text style={sm.itemPrice}>₹{item.amount}</Text>
+                            </View>
+                          </View>
+                        );
+                      })}
+                      <View style={sm.totalRow}>
+                        <Text style={sm.totalLabel}>Total</Text>
+                        <Text style={sm.totalVal}>
+                          ₹{subscription.total_amount ?? 0}
+                        </Text>
                       </View>
                     </View>
                   </View>
-                )}
 
-                {/* Schedule */}
-                <View style={sm.section}>
-                  <Text style={sm.sectionLabel}>SCHEDULE</Text>
-                  <View style={sm.scheduleGrid}>
-                    {subscription.start_date && (
-                      <View style={sm.scheduleItem}>
-                        <Ionicons
-                          name="play-circle-outline"
-                          size={13}
-                          color="#8B6854"
-                        />
-                        <View>
-                          <Text style={sm.scheduleKey}>Start</Text>
-                          <Text style={sm.scheduleVal}>
-                            {subscription.start_date}
+                  {/* Delivery Calendar — one row per scheduled delivery date */}
+                  <View style={sm.section}>
+                    <Text style={sm.sectionLabel}>
+                      DELIVERY CALENDAR{" "}
+                      {ordersLoading
+                        ? "· loading…"
+                        : `· ${scheduleDates.length} dates`}
+                    </Text>
+                    <View style={sm.itemsCard}>
+                      {scheduleDates.length === 0 ? (
+                        <View style={{ padding: 14 }}>
+                          <Text style={{ fontSize: 12, color: "#8B6854" }}>
+                            No scheduled dates found.
                           </Text>
                         </View>
-                      </View>
-                    )}
-                    {subscription.end_date && (
-                      <View style={sm.scheduleItem}>
-                        <Ionicons
-                          name="stop-circle-outline"
-                          size={13}
-                          color="#8B6854"
-                        />
-                        <View>
-                          <Text style={sm.scheduleKey}>End</Text>
-                          <Text style={sm.scheduleVal}>
-                            {subscription.end_date}
-                          </Text>
-                        </View>
-                      </View>
-                    )}
-                    {subscription.delivery_slot && (
-                      <View style={sm.scheduleItem}>
-                        <Ionicons
-                          name="time-outline"
-                          size={13}
-                          color="#8B6854"
-                        />
-                        <View>
-                          <Text style={sm.scheduleKey}>Slot</Text>
-                          <Text style={sm.scheduleVal}>
-                            {subscription.delivery_slot}
-                          </Text>
-                        </View>
-                      </View>
-                    )}
-                  </View>
-                  {subscription.pattern === "custom" &&
-                    subscription.custom_days &&
-                    subscription.custom_days.length > 0 && (
-                      <View style={sm.daysRow}>
-                        {DAY_NAMES.map((d, i) => {
-                          const active = subscription.custom_days!.includes(i);
+                      ) : (
+                        scheduleDates.map((dateKey, i) => {
+                          const record = orderRecordByDate[dateKey];
+                          const status = (
+                            orderStatusByDate[dateKey] || ""
+                          ).toLowerCase();
+                          const isDelivered = status === "delivered";
+                          const isCancelled =
+                            status === "cancelled" || status === "skipped";
+                          const today = getLocalDateKey();
+                          const isFuture = dateKey > today;
+
+                          const icon = isDelivered
+                            ? "checkmark-circle"
+                            : isCancelled
+                              ? "close-circle"
+                              : isFuture
+                                ? "ellipse-outline"
+                                : "time-outline";
+                          const iconColor = isDelivered
+                            ? "#16A34A"
+                            : isCancelled
+                              ? "#FF5C5C"
+                              : isFuture
+                                ? "#C9A882"
+                                : "#FFBF55";
+                          const label = isDelivered
+                            ? "Delivered"
+                            : isCancelled
+                              ? status === "skipped"
+                                ? "Skipped"
+                                : "Cancelled"
+                              : isFuture
+                                ? "Upcoming"
+                                : "Pending";
+
                           return (
                             <View
-                              key={i}
-                              style={[sm.dayChip, active && sm.dayChipActive]}
+                              key={dateKey}
+                              style={[sm.itemRow, i > 0 && sm.itemRowBorder]}
                             >
+                              <Ionicons
+                                name={icon as any}
+                                size={16}
+                                color={iconColor}
+                                style={{ marginRight: 10 }}
+                              />
+                              <View style={{ flex: 1 }}>
+                                <Text style={sm.itemName}>{dateKey}</Text>
+                              </View>
+                              {record?.has_feedback && (
+                                <TouchableOpacity
+                                  onPress={() =>
+                                    setFeedbackOrderId(record.order_id)
+                                  }
+                                  style={sm.feedbackStarBtn}
+                                  hitSlop={{
+                                    top: 8,
+                                    bottom: 8,
+                                    left: 8,
+                                    right: 8,
+                                  }}
+                                >
+                                  <Ionicons
+                                    name="star"
+                                    size={14}
+                                    color="#f59e0b"
+                                  />
+                                </TouchableOpacity>
+                              )}
                               <Text
-                                style={[
-                                  sm.dayChipText,
-                                  active && sm.dayChipTextActive,
-                                ]}
+                                style={{
+                                  fontSize: 11,
+                                  fontWeight: "700",
+                                  color: iconColor,
+                                }}
                               >
-                                {d}
+                                {label}
                               </Text>
                             </View>
                           );
-                        })}
-                      </View>
-                    )}
-                </View>
-
-                {/* Items */}
-                <View style={sm.section}>
-                  <Text style={sm.sectionLabel}>ITEMS</Text>
-                  <View style={sm.itemsCard}>
-                    {subscription.items?.map((item, i) => {
-                      const name = getSubscriptionItemName(
-                        item,
-                        productNames,
-                        products,
-                      );
-                      return (
-                        <View
-                          key={i}
-                          style={[sm.itemRow, i > 0 && sm.itemRowBorder]}
-                        >
-                          <View style={sm.itemDot} />
-                          <View style={sm.itemNameWrap}>
-                            <Text style={sm.itemName} numberOfLines={2}>
-                              {name}
-                            </Text>
-                            <Text style={sm.itemUnitPrice}>
-                              {formatSubscriptionItemQuantity(
-                                item,
-                                productNames,
-                                products,
-                              )}
-                            </Text>
-                          </View>
-                          <View style={sm.itemRight}>
-                            <View style={sm.itemQtyBadge}>
-                              <Text style={sm.itemQty}>×{item.quantity}</Text>
-                            </View>
-                            <Text style={sm.itemPrice}>₹{item.amount}</Text>
-                          </View>
-                        </View>
-                      );
-                    })}
-                    <View style={sm.totalRow}>
-                      <Text style={sm.totalLabel}>Total</Text>
-                      <Text style={sm.totalVal}>
-                        ₹{subscription.total_amount ?? 0}
-                      </Text>
+                        })
+                      )}
                     </View>
                   </View>
-                </View>
 
-                {/* Delivery Calendar — one row per scheduled delivery date */}
-                <View style={sm.section}>
-                  <Text style={sm.sectionLabel}>
-                    DELIVERY CALENDAR{" "}
-                    {ordersLoading
-                      ? "· loading…"
-                      : `· ${scheduleDates.length} dates`}
-                  </Text>
-                  <View style={sm.itemsCard}>
-                    {scheduleDates.length === 0 ? (
-                      <View style={{ padding: 14 }}>
-                        <Text style={{ fontSize: 12, color: "#8B6854" }}>
-                          No scheduled dates found.
-                        </Text>
-                      </View>
-                    ) : (
-                      scheduleDates.map((dateKey, i) => {
-                        const status = (
-                          orderStatusByDate[dateKey] || ""
-                        ).toLowerCase();
-                        const isDelivered = status === "delivered";
-                        const isCancelled =
-                          status === "cancelled" || status === "skipped";
-                        const today = getLocalDateKey();
-                        const isFuture = dateKey > today;
-
-                        const icon = isDelivered
-                          ? "checkmark-circle"
-                          : isCancelled
-                            ? "close-circle"
-                            : isFuture
-                              ? "ellipse-outline"
-                              : "time-outline";
-                        const iconColor = isDelivered
-                          ? "#16A34A"
-                          : isCancelled
-                            ? "#FF5C5C"
-                            : isFuture
-                              ? "#C9A882"
-                              : "#FFBF55";
-                        const label = isDelivered
-                          ? "Delivered"
-                          : isCancelled
-                            ? status === "skipped"
-                              ? "Skipped"
-                              : "Cancelled"
-                            : isFuture
-                              ? "Upcoming"
-                              : "Pending";
-
-                        return (
-                          <View
-                            key={dateKey}
-                            style={[sm.itemRow, i > 0 && sm.itemRowBorder]}
-                          >
-                            <Ionicons
-                              name={icon as any}
-                              size={16}
-                              color={iconColor}
-                              style={{ marginRight: 10 }}
-                            />
-                            <View style={{ flex: 1 }}>
-                              <Text style={sm.itemName}>{dateKey}</Text>
-                            </View>
-                            <Text
-                              style={{
-                                fontSize: 11,
-                                fontWeight: "700",
-                                color: iconColor,
-                              }}
-                            >
-                              {label}
-                            </Text>
-                          </View>
-                        );
-                      })
-                    )}
-                  </View>
-                </View>
-
-                {/* Status */}
-                <View
-                  style={[
-                    sm.statusBanner,
-                    {
-                      backgroundColor: isSubscriptionActive(subscription)
-                        ? "#F0FFF4"
-                        : "#FFF0F0",
-                    },
-                  ]}
-                >
-                  <Ionicons
-                    name={
-                      subscription.is_active
-                        ? "checkmark-circle"
-                        : "close-circle"
-                    }
-                    size={16}
-                    color={
-                      isSubscriptionActive(subscription) ? "#22C55E" : "#FF5C5C"
-                    }
-                  />
-                  <Text
+                  {/* Status */}
+                  <View
                     style={[
-                      sm.statusText,
+                      sm.statusBanner,
                       {
-                        color: isSubscriptionActive(subscription)
-                          ? "#16A34A"
-                          : "#FF5C5C",
+                        backgroundColor: isSubscriptionActive(subscription)
+                          ? "#F0FFF4"
+                          : "#FFF0F0",
                       },
                     ]}
                   >
-                    {isSubscriptionActive(subscription)
-                      ? "Active Subscription"
-                      : "Inactive"}
-                  </Text>
+                    <Ionicons
+                      name={
+                        subscription.is_active
+                          ? "checkmark-circle"
+                          : "close-circle"
+                      }
+                      size={16}
+                      color={
+                        isSubscriptionActive(subscription)
+                          ? "#22C55E"
+                          : "#FF5C5C"
+                      }
+                    />
+                    <Text
+                      style={[
+                        sm.statusText,
+                        {
+                          color: isSubscriptionActive(subscription)
+                            ? "#16A34A"
+                            : "#FF5C5C",
+                        },
+                      ]}
+                    >
+                      {isSubscriptionActive(subscription)
+                        ? "Active Subscription"
+                        : "Inactive"}
+                    </Text>
+                  </View>
                 </View>
-              </View>
-            )}
-          />
+              )}
+            />
+          </Animated.View>
         </Animated.View>
-      </Animated.View>
+      </Modal>
+      <FeedbackViewModal
+        visible={!!feedbackOrderId}
+        orderId={feedbackOrderId}
+        onClose={() => setFeedbackOrderId(null)}
+      />
+    </>
+  );
+}
+
+// ─── Feedback View Modal
+
+function FeedbackViewModal({
+  visible,
+  orderId,
+  onClose,
+}: {
+  visible: boolean;
+  orderId: string | null;
+  onClose: () => void;
+}) {
+  const [loading, setLoading] = useState(false);
+  const [feedback, setFeedback] = useState<Record<string, any>>({});
+
+  useEffect(() => {
+    if (visible && orderId) {
+      setLoading(true);
+      api
+        .getAdminOrderFeedback(orderId)
+        .then((data) => setFeedback(data || {}))
+        .catch(() => setFeedback({}))
+        .finally(() => setLoading(false));
+    }
+  }, [visible, orderId]);
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <View style={fm.overlay}>
+        <View style={fm.card}>
+          <View style={fm.header}>
+            <Text style={fm.title}>Customer Feedback</Text>
+            <TouchableOpacity onPress={onClose} style={fm.closeBtn}>
+              <Ionicons name="close" size={16} color="#666" />
+            </TouchableOpacity>
+          </View>
+          {loading ? (
+            <ActivityIndicator
+              size="small"
+              color="#FF9675"
+              style={{ marginVertical: 20 }}
+            />
+          ) : Object.keys(feedback).length === 0 ? (
+            <Text style={fm.empty}>No feedback for this delivery yet.</Text>
+          ) : (
+            Object.values(feedback).map((fb: any) => (
+              <View key={fb.id} style={fm.feedbackItem}>
+                <StarRating value={fb.rating} readOnly size={18} />
+                {fb.comment ? (
+                  <Text style={fm.comment}>{fb.comment}</Text>
+                ) : null}
+              </View>
+            ))
+          )}
+        </View>
+      </View>
     </Modal>
   );
 }
+
+const fm = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+  },
+  card: {
+    backgroundColor: "#fff",
+    borderRadius: 18,
+    padding: 18,
+    width: "100%",
+    maxWidth: 360,
+  },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  title: { fontSize: 15, fontWeight: "800", color: "#1A1A1A" },
+  closeBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: "#F5EDE8",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  empty: {
+    fontSize: 12,
+    color: "#8B6854",
+    textAlign: "center",
+    paddingVertical: 12,
+  },
+  feedbackItem: {
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: "#FFF0E8",
+  },
+  comment: { fontSize: 12, color: "#8B6854", marginTop: 6 },
+});
+
+// ─── Subscription Row
 
 // ─── Subscription Row
 
@@ -1586,6 +1744,18 @@ export default function AdminOrdersScreen() {
     new Set(),
   );
 
+  const [orderFeedback, setOrderFeedback] = useState<
+    Record<string, Record<string, any>>
+  >({});
+
+  const loadOrderFeedback = async (orderId: string) => {
+    if (orderFeedback[orderId]) return;
+    try {
+      const data = await api.getAdminOrderFeedback(orderId);
+      setOrderFeedback((prev) => ({ ...prev, [orderId]: data }));
+    } catch {}
+  };
+
   const [filter, setFilter] =
     useState<(typeof ORDER_FILTERS)[number]>("ACTIVE");
   const [dateFilter, setDateFilter] =
@@ -1651,28 +1821,28 @@ export default function AdminOrdersScreen() {
   }, [params.tab]);
 
   // ── Fetch orders
-const fetchOrders = useCallback(async () => {
-  try {
-    const date =
-      dateFilter === "TODAY"
-        ? getLocalDateKey()
-        : dateFilter === "TOMORROW"
-          ? getTomorrowDateKey()
-          : undefined;
-    const [ordersData, productsData] = await Promise.all([
-      api.getAllOrders(undefined, date),
-      api.getProducts(),
-    ]);
+  const fetchOrders = useCallback(async () => {
+    try {
+      const date =
+        dateFilter === "TODAY"
+          ? getLocalDateKey()
+          : dateFilter === "TOMORROW"
+            ? getTomorrowDateKey()
+            : undefined;
+      const [ordersData, productsData] = await Promise.all([
+        api.getAllOrders(undefined, date),
+        api.getProducts(),
+      ]);
 
-    setAllOrders(ordersData);       // backend already returns buy_once only
-    setProducts(productsData);
-  } catch (e: any) {
-    console.error("[AdminOrders] fetchOrders FAILED:", e?.message ?? e);
-  } finally {
-    setOrdersLoading(false);
-    setOrdersRefreshing(false);
-  }
-}, [currentAdmin, dateFilter, customStartDate, customEndDate]);
+      setAllOrders(ordersData); // backend already returns buy_once only
+      setProducts(productsData);
+    } catch (e: any) {
+      console.error("[AdminOrders] fetchOrders FAILED:", e?.message ?? e);
+    } finally {
+      setOrdersLoading(false);
+      setOrdersRefreshing(false);
+    }
+  }, [currentAdmin, dateFilter, customStartDate, customEndDate]);
 
   // ── Fetch subscriptions
   const fetchSubscriptions = useCallback(async () => {
@@ -1703,7 +1873,7 @@ const fetchOrders = useCallback(async () => {
 
       const [customers, adminCustomers] = await Promise.all([
         api.getAllUsers("customer").catch(() => []),
-        api.getAdminCustomers({ limit: 1000 }).catch(() => []),
+        api.getAdminCustomers({ limit: 200 }).catch(() => []),
       ]);
       const customerMap = new Map<string, any>();
       (Array.isArray(customers) ? customers : []).forEach((customer) => {
@@ -1711,17 +1881,19 @@ const fetchOrders = useCallback(async () => {
           .filter(Boolean)
           .forEach((key) => customerMap.set(String(key), customer));
       });
-      (Array.isArray(adminCustomers) ? adminCustomers : []).forEach((customer) => {
-        [
-          customer.id,
-          customer._id,
-          customer.linked_user_id,
-          customer.phone,
-          customer.name,
-        ]
-          .filter(Boolean)
-          .forEach((key) => customerMap.set(String(key), customer));
-      });
+      (Array.isArray(adminCustomers) ? adminCustomers : []).forEach(
+        (customer) => {
+          [
+            customer.id,
+            customer._id,
+            customer.linked_user_id,
+            customer.phone,
+            customer.name,
+          ]
+            .filter(Boolean)
+            .forEach((key) => customerMap.set(String(key), customer));
+        },
+      );
 
       const withAddress = recurring.map((sub) => {
         const customer =
@@ -1794,24 +1966,24 @@ const fetchOrders = useCallback(async () => {
 
   // ── Fetch on tab/focus change
   // ── Fetch on tab/focus change (no polling — manual refresh via pull-to-refresh)
-useEffect(() => {
-  if (!isFocused || globalLoading || !currentAdmin) return;
+  useEffect(() => {
+    if (!isFocused || globalLoading || !currentAdmin) return;
 
-  if (activeTab === "orders") {
-    setOrdersLoading(true);
-    fetchOrders();
-  } else {
-    setSubsLoading(true);
-    fetchSubscriptions();
-  }
-}, [
-  activeTab,
-  isFocused,
-  globalLoading,
-  currentAdmin,
-  fetchOrders,
-  fetchSubscriptions,
-]);
+    if (activeTab === "orders") {
+      setOrdersLoading(true);
+      fetchOrders();
+    } else {
+      setSubsLoading(true);
+      fetchSubscriptions();
+    }
+  }, [
+    activeTab,
+    isFocused,
+    globalLoading,
+    currentAdmin,
+    fetchOrders,
+    fetchSubscriptions,
+  ]);
 
   const onOrdersRefresh = useCallback(() => {
     setOrdersRefreshing(true);
@@ -1827,7 +1999,12 @@ useEffect(() => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setExpandedOrderIds((prev) => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+        loadOrderFeedback(id);
+      }
       return next;
     });
   };
@@ -2524,6 +2701,31 @@ useEffect(() => {
               ))}
             </View>
 
+            {delivered &&
+              orderFeedback[item.id] &&
+              Object.keys(orderFeedback[item.id]).length > 0 && (
+                <>
+                  <View style={styles.divider} />
+                  <Text style={styles.colLabel}>CUSTOMER FEEDBACK</Text>
+                  {Object.values(orderFeedback[item.id]).map((fb: any) => (
+                    <View key={fb.id} style={{ marginBottom: 8 }}>
+                      <StarRating value={fb.rating} readOnly size={14} />
+                      {fb.comment ? (
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            color: "#8B6854",
+                            marginTop: 3,
+                          }}
+                        >
+                          {fb.comment}
+                        </Text>
+                      ) : null}
+                    </View>
+                  ))}
+                </>
+              )}
+
             {address ? (
               <>
                 <View style={styles.divider} />
@@ -2673,23 +2875,23 @@ useEffect(() => {
           )}
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-  <TouchableOpacity
-    style={styles.headerNotificationBtn}
-    onPress={() =>
-      router.push({
-        pathname: "/(admin)/notification",
-        params: { from: "orders", tab: activeTab },
-      } as any)
-    }
-    activeOpacity={0.82}
-  >
-    <Ionicons name="notifications-outline" size={19} color="#BB6B3F" />
-  </TouchableOpacity>
-  <TouchableOpacity
-    style={styles.headerFilterBtn}
-    onPress={() => setFilterSheetVisible(true)}
-    activeOpacity={0.82}
-  >
+          <TouchableOpacity
+            style={styles.headerNotificationBtn}
+            onPress={() =>
+              router.push({
+                pathname: "/(admin)/notification",
+                params: { from: "orders", tab: activeTab },
+              } as any)
+            }
+            activeOpacity={0.82}
+          >
+            <Ionicons name="notifications-outline" size={19} color="#BB6B3F" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.headerFilterBtn}
+            onPress={() => setFilterSheetVisible(true)}
+            activeOpacity={0.82}
+          >
             <Ionicons name="options-outline" size={19} color="#BB6B3F" />
             {activeFilterCount ? (
               <View style={styles.filterCountDot}>
@@ -3445,6 +3647,7 @@ const sm = StyleSheet.create({
     backgroundColor: "#FF9675",
     marginRight: 10,
   },
+  feedbackStarBtn: { marginRight: 8 },
   itemNameWrap: { flex: 1 },
   itemName: { fontSize: 13, fontWeight: "600", color: "#1A1A1A" },
   itemUnitPrice: { fontSize: 11, color: "#8B6854", marginTop: 2 },
@@ -3850,15 +4053,15 @@ const styles = StyleSheet.create({
     position: "relative",
   },
   headerNotificationBtn: {
-  width: 44,
-  height: 44,
-  borderRadius: 14,
-  backgroundColor: "#FFF3DC",
-  borderWidth: 1.5,
-  borderColor: "#FFE1CC",
-  alignItems: "center",
-  justifyContent: "center",
-},
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: "#FFF3DC",
+    borderWidth: 1.5,
+    borderColor: "#FFE1CC",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   filterCountDot: {
     position: "absolute",
     top: -5,
@@ -4531,4 +4734,4 @@ const styles = StyleSheet.create({
     color: "#92400e",
   },
 });
-//for confirmation -- 27 august
+//for confirmation -- 9 september
