@@ -81,6 +81,12 @@ interface Subscription {
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
+const getItemsLabel = (items: SubItem[]): string => {
+  if (!items.length) return "Product";
+  const first = items[0].product_name || items[0].name || "Product";
+  return items.length > 1 ? `${first} +${items.length - 1} more` : first;
+};
+
 const getPattern = (s: any): string =>
   String(s?.pattern ?? s?.subscription_type ?? s?.frequency ?? "")
     .toLowerCase()
@@ -975,12 +981,10 @@ function SubCard({
               </>
             ) : context === "today" ? (
               <>
-                <Ionicons
-                  name="calendar-outline"
-                  size={12}
-                  color={C.textMuted}
-                />
-                <Text style={styles.quickRowText}>Delivery: {dateLabel}</Text>
+                <Ionicons name="cube-outline" size={12} color={C.textMuted} />
+                <Text style={styles.quickRowText} numberOfLines={1}>
+                  {getItemsLabel(items)}
+                </Text>
               </>
             ) : (
               <>

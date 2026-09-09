@@ -3276,6 +3276,173 @@ async updateVetMedicalRecord(
     return data;
   }
 
+  async getVetInseminations() {
+  const token = await AsyncStorage.getItem("vet_token");
+  const response = await fetch(`${API_BASE}/api/vet/insemination`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await response.json();
+  if (!response.ok)
+    throw new Error(data.detail || "Failed to fetch insemination records");
+  return data;
+}
+
+async vetCreateInsemination(data: {
+  cowSrNo: string;
+  cowName?: string;
+  inseminationDate: string;
+  aiDate?: string;
+  pregnancyStatus?: boolean;
+  pdDone?: boolean;
+  pregnancyStatusDate?: string;
+  doctorName?: string;
+  actualCalvingDate?: string;
+  heatAfterCalvingDate?: string;
+  sire?: string;
+  lastCalvingDate?: string;
+  lastCalvingCalfGender?: string;
+}) {
+  const token = await AsyncStorage.getItem("vet_token");
+  const response = await fetch(`${API_BASE}/api/vet/insemination`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+  const result = await response.json();
+  if (!response.ok)
+    throw new Error(result.detail || "Failed to save insemination record");
+  return result;
+}
+
+async vetUpdateInsemination(
+  id: string,
+  data: Partial<{
+    cowSrNo: string;
+    cowName: string;
+    inseminationDate: string;
+    aiDate: string;
+    pregnancyStatus: boolean;
+    pdDone: boolean;
+    pregnancyStatusDate: string;
+    doctorName: string;
+    actualCalvingDate: string;
+    heatAfterCalvingDate: string;
+    sire: string;
+    lastCalvingDate: string;
+    lastCalvingCalfGender: string;
+  }>,
+) {
+  const token = await AsyncStorage.getItem("vet_token");
+  const response = await fetch(`${API_BASE}/api/vet/insemination/${id}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+  const result = await response.json();
+  if (!response.ok)
+    throw new Error(result.detail || "Failed to update insemination record");
+  return result;
+}
+
+async vetDeleteInsemination(id: string) {
+  const token = await AsyncStorage.getItem("vet_token");
+  const response = await fetch(`${API_BASE}/api/vet/insemination/${id}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const result = await response.json();
+  if (!response.ok)
+    throw new Error(result.detail || "Failed to delete insemination record");
+  return result;
+}
+
+  // ── Vet Semen Records ────────────────────────────────
+
+  async vetGetSemenRecords(search?: string) {
+    const token = await AsyncStorage.getItem("vet_token");
+    const query = search ? `?search=${encodeURIComponent(search)}` : "";
+    const response = await fetch(`${API_BASE}/api/vet/semen${query}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await response.json();
+    if (!response.ok)
+      throw new Error(data.detail || "Failed to fetch semen records");
+    return data;
+  }
+
+  async vetCreateSemenRecord(data: {
+    bullSrNo: string;
+    bullName?: string;
+    breed?: string;
+    femalCalves: number;
+    maleCalves: number;
+    damaged: number;
+    conceptionCount: number;
+    totalDoses: number;
+    notes?: string;
+  }) {
+    const token = await AsyncStorage.getItem("vet_token");
+    const response = await fetch(`${API_BASE}/api/vet/semen`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(data),
+    });
+    const result = await response.json();
+    if (!response.ok)
+      throw new Error(result.detail || "Failed to save semen record");
+    return result;
+  }
+
+  async vetUpdateSemenRecord(
+    id: string,
+    data: Partial<{
+      bullSrNo: string;
+      bullName: string;
+      breed: string;
+      femalCalves: number;
+      maleCalves: number;
+      damaged: number;
+      conceptionCount: number;
+      totalDoses: number;
+      notes: string;
+    }>,
+  ) {
+    const token = await AsyncStorage.getItem("vet_token");
+    const response = await fetch(`${API_BASE}/api/vet/semen/${id}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(data),
+    });
+    const result = await response.json();
+    if (!response.ok)
+      throw new Error(result.detail || "Failed to update semen record");
+    return result;
+  }
+
+  async vetDeleteSemenRecord(id: string) {
+    const token = await AsyncStorage.getItem("vet_token");
+    const response = await fetch(`${API_BASE}/api/vet/semen/${id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const result = await response.json();
+    if (!response.ok)
+      throw new Error(result.detail || "Failed to delete semen record");
+    return result;
+  }
+
   async updateMedicineRecord(
     recordId: string,
     data: Partial<{

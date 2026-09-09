@@ -258,6 +258,7 @@ type FormData = {
   seller_name: string;
   seller_address: string;
   shelf_life: string;
+  quantityValue: string;
 };
 
 const EMPTY_FORM: FormData = {
@@ -278,6 +279,7 @@ const EMPTY_FORM: FormData = {
   seller_name: "",
   seller_address: "",
   shelf_life: "",
+  quantityValue: "",
 };
 
 const CATEGORIES = [
@@ -534,7 +536,6 @@ export default function InventoryScreen() {
     return missing;
   }, [formData]);
 
-  // ── Add Product
   const handleAddProduct = async () => {
     try {
       const images: string[] = [];
@@ -546,7 +547,10 @@ export default function InventoryScreen() {
         category: formData.category
           ? formData.category.toLowerCase()
           : undefined,
-        unit: formData.unit || undefined,
+        unit:
+          formData.quantityValue.trim() && formData.unit
+            ? `${formData.quantityValue.trim()} ${formData.unit}`
+            : formData.unit || undefined,
         price: Number(formData.price),
         mrp: formData.mrp ? Number(formData.mrp) : Number(formData.price),
         stock: formData.stock.trim() ? Number(formData.stock) : 0,
@@ -581,11 +585,16 @@ export default function InventoryScreen() {
   };
 
   // ── Open Product Detail
-  const openDetail = (product: Product) => {
-    setSelectedProduct({ ...product, id: getProductId(product) || product.id });
-    setIsEditing(false);
-    setDetailModal(true);
-    setEditTab(0);
+const openDetail = (product: Product) => {
+  setSelectedProduct({ ...product, id: getProductId(product) || product.id });
+  setIsEditing(false);
+  setDetailModal(true);
+  setEditTab(0);
+
+  // Split "500 ml" back into quantityValue="500" and unit="ml"
+  const unitMatch = (product.unit || "").trim().match(/^([\d.]+)\s*(\D+)$/);
+  const parsedQuantity = unitMatch ? unitMatch[1] : "";
+  const parsedUnit = unitMatch ? unitMatch[2].trim() : (product.unit || "");
     setEditForm({
       name: product.name || "",
       category: product.category || "",
@@ -604,13 +613,14 @@ export default function InventoryScreen() {
       seller_name: product.seller_name || "",
       seller_address: product.seller_address || "",
       shelf_life: product.shelf_life || "",
+      quantityValue: parsedQuantity,
     });
   };
 
   // ── Stock Increment / Decrement
   const adjustStock = async (delta: number) => {
     const currentProduct = selectedProduct;
-    const productId = getProductId(currentProduct);
+    const productId = getProductId(currentProduct); 
     if (!productId || stockUpdating) {
       if (!productId)
         showSnackbar("Product id missing. Please refresh inventory.", "error");
@@ -1004,7 +1014,7 @@ export default function InventoryScreen() {
             </TouchableOpacity>
           </ScrollView>
 
-          {showCustomCat && (
+                   {showCustomCat && (
             <View style={styles.customCatRow}>
               <TextInput
                 style={[styles.input, { flex: 1, marginBottom: 0 }]}
@@ -1033,6 +1043,39 @@ export default function InventoryScreen() {
               </TouchableOpacity>
             </View>
           )}
+
+          {/* ── Quantity: numeric amount, unit chips below ── */}
+          <Text style={styles.fieldLabel}>Quantity</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="e.g. 500"
+            placeholderTextColor={C.textLight}
+            keyboardType="numeric"
+            value={data.quantityValue}
+            onChangeText={(v) => update("quantityValue", v)}
+          />
+
+          <View style={styles.unitGrid}>
+            {UNITS.map((u) => (
+              <TouchableOpacity
+                key={u}
+                style={[
+                  styles.unitChip,
+                  data.unit === u && styles.unitChipActive,
+                ]}
+                onPress={() => update("unit", data.unit === u ? "" : u)}
+              >
+                <Text
+                  style={[
+                    styles.unitChipText,
+                    data.unit === u && styles.unitChipTextActive,
+                  ]}
+                >
+                  {u}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
 
           <Text style={styles.fieldLabel}>Stock (optional)</Text>
           <TextInput
@@ -1314,7 +1357,9 @@ export default function InventoryScreen() {
               ]}
             >
               <Ionicons
-                name={detailCutoffPassed ? "alert-circle-outline" : "time-outline"}
+                name={
+                  detailCutoffPassed ? "alert-circle-outline" : "time-outline"
+                }
                 size={14}
                 color={detailCutoffPassed ? "#DC2626" : "#B45309"}
               />
@@ -1331,7 +1376,9 @@ export default function InventoryScreen() {
           {detailDeliveryText ? (
             <View style={styles.deliveryNotice}>
               <Ionicons name="bicycle-outline" size={14} color="#16A34A" />
-              <Text style={styles.deliveryNoticeText}>{detailDeliveryText}</Text>
+              <Text style={styles.deliveryNoticeText}>
+                {detailDeliveryText}
+              </Text>
             </View>
           ) : null}
         </View>
@@ -1534,68 +1581,68 @@ export default function InventoryScreen() {
         <Snackbar {...snackbar} />
       </View>
 
-{/* ── Header ── */}
-<View style={styles.header}>
-  {showSearch ? (
-    <View style={styles.headerSearchWrap}>
-      <Ionicons name="search-outline" size={18} color={C.textMuted} />
-      <TextInput
-        style={styles.headerSearchInput}
-        placeholder="Search products..."
-        placeholderTextColor={C.textLight}
-        value={searchQuery}
-        onChangeText={setSearchQuery}
-        autoFocus
-      />
-      {searchQuery.length > 0 && (
-        <TouchableOpacity onPress={() => setSearchQuery("")}>
-          <Ionicons name="close-circle" size={17} color={C.textLight} />
-        </TouchableOpacity>
-      )}
-    </View>
-  ) : (
-    <View>
-      <Text style={styles.title}>Inventory</Text>
-      <Text style={styles.subtitle}>
-        {products.length} products · {available} available
-      </Text>
-    </View>
-  )}
+      {/* ── Header ── */}
+      <View style={styles.header}>
+        {showSearch ? (
+          <View style={styles.headerSearchWrap}>
+            <Ionicons name="search-outline" size={18} color={C.textMuted} />
+            <TextInput
+              style={styles.headerSearchInput}
+              placeholder="Search products..."
+              placeholderTextColor={C.textLight}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              autoFocus
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery("")}>
+                <Ionicons name="close-circle" size={17} color={C.textLight} />
+              </TouchableOpacity>
+            )}
+          </View>
+        ) : (
+          <View>
+            <Text style={styles.title}>Inventory</Text>
+            <Text style={styles.subtitle}>
+              {products.length} products · {available} available
+            </Text>
+          </View>
+        )}
 
-  <View style={{ flexDirection: "row", gap: 8 }}>
-    <TouchableOpacity
-      style={[styles.iconBtn, showSearch && styles.iconBtnActive]}
-      onPress={() => {
-        if (showSearch) setSearchQuery("");
-        setShowSearch((v) => !v);
-      }}
-    >
-      <Ionicons
-        name={showSearch ? "close" : "search-outline"}
-        size={20}
-        color={showSearch ? C.white : C.dark}
-      />
-    </TouchableOpacity>
-    {isAdmin && !showSearch && (
-      <>
-        <TouchableOpacity
-          style={[styles.addBtn, styles.priceBtn]}
-          onPress={() => router.push("/(admin)/price-update" as any)}
-          accessibilityRole="button"
-          accessibilityLabel="Update product prices"
-        >
-          <Text style={styles.priceBtnText}>₹</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.addBtn}
-          onPress={() => setAddModal(true)}
-        >
-          <Ionicons name="add" size={22} color={C.white} />
-        </TouchableOpacity>
-      </>
-    )}
-  </View>
-</View>
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          <TouchableOpacity
+            style={[styles.iconBtn, showSearch && styles.iconBtnActive]}
+            onPress={() => {
+              if (showSearch) setSearchQuery("");
+              setShowSearch((v) => !v);
+            }}
+          >
+            <Ionicons
+              name={showSearch ? "close" : "search-outline"}
+              size={20}
+              color={showSearch ? C.white : C.dark}
+            />
+          </TouchableOpacity>
+          {isAdmin && !showSearch && (
+            <>
+              <TouchableOpacity
+                style={[styles.addBtn, styles.priceBtn]}
+                onPress={() => router.push("/(admin)/price-update" as any)}
+                accessibilityRole="button"
+                accessibilityLabel="Update product prices"
+              >
+                <Text style={styles.priceBtnText}>₹</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.addBtn}
+                onPress={() => setAddModal(true)}
+              >
+                <Ionicons name="add" size={22} color={C.white} />
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
+      </View>
 
       {/* ── Summary Strip ── */}
       <View style={styles.summaryStrip}>
@@ -1678,7 +1725,7 @@ export default function InventoryScreen() {
             </Text>
           </View>
         ) : (
-          products.map((product) => {
+          filteredProducts.map((product) => {
             const cutoffRule = getOrderCutoffForProduct(product, orderCutoffs);
             const cutoffText = getOrderCutoffBadgeText(cutoffRule);
             const cutoffPassed = isOrderCutoffPassed(cutoffRule);
@@ -1686,130 +1733,140 @@ export default function InventoryScreen() {
               getDeliveryWindowForProduct(product),
             );
             return (
-            <TouchableOpacity
-              key={product.id}
-              style={styles.productCard}
-              activeOpacity={0.7}
-              onPress={() => openDetail(product)}
-            >
-              {product.image ? (
-                <Image
-                  source={{ uri: product.image }}
-                  style={styles.productImage}
-                />
-              ) : (
-                <View style={styles.imagePlaceholder}>
-                  <Ionicons name="cube-outline" size={22} color={C.textLight} />
-                </View>
-              )}
+              <TouchableOpacity
+                key={product.id}
+                style={styles.productCard}
+                activeOpacity={0.7}
+                onPress={() => openDetail(product)}
+              >
+                {product.image ? (
+                  <Image
+                    source={{ uri: product.image }}
+                    style={styles.productImage}
+                  />
+                ) : (
+                  <View style={styles.imagePlaceholder}>
+                    <Ionicons
+                      name="cube-outline"
+                      size={22}
+                      color={C.textLight}
+                    />
+                  </View>
+                )}
 
-              <View style={styles.productInfo}>
-                <Text style={styles.productName} numberOfLines={1}>
-                  {product.name}
-                </Text>
-                <View style={styles.productPriceRow}>
-                  <Text style={styles.productPrice}>₹{product.price}</Text>
-                  {product.mrp && product.mrp > product.price && (
-                    <Text style={styles.productMrp}>₹{product.mrp}</Text>
-                  )}
-                </View>
-                <Text style={styles.productMeta}>
-                  {product.unit || product.category
-                    ? [product.unit, product.category]
-                        .filter(Boolean)
-                        .join(" · ")
-                    : "Details pending"}
-                </Text>
-                {cutoffText ? (
+                <View style={styles.productInfo}>
+                  <Text style={styles.productName} numberOfLines={1}>
+                    {product.name}
+                  </Text>
+                  <View style={styles.productPriceRow}>
+                    <Text style={styles.productPrice}>₹{product.price}</Text>
+                    {product.mrp && product.mrp > product.price && (
+                      <Text style={styles.productMrp}>₹{product.mrp}</Text>
+                    )}
+                  </View>
+                  <Text style={styles.productMeta}>
+                    {product.unit || product.category
+                      ? [product.unit, product.category]
+                          .filter(Boolean)
+                          .join(" · ")
+                      : "Details pending"}
+                  </Text>
+                  {cutoffText ? (
+                    <View
+                      style={[
+                        styles.cutoffMiniBadge,
+                        cutoffPassed && styles.cutoffMiniBadgeBlocked,
+                      ]}
+                    >
+                      <Ionicons
+                        name={
+                          cutoffPassed ? "alert-circle-outline" : "time-outline"
+                        }
+                        size={10}
+                        color={cutoffPassed ? "#DC2626" : "#B45309"}
+                      />
+                      <Text
+                        style={[
+                          styles.cutoffMiniText,
+                          cutoffPassed && styles.cutoffMiniTextBlocked,
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {cutoffText}
+                      </Text>
+                    </View>
+                  ) : null}
+                  {deliveryText ? (
+                    <View style={styles.deliveryMiniBadge}>
+                      <Ionicons
+                        name="bicycle-outline"
+                        size={10}
+                        color="#16A34A"
+                      />
+                      <Text style={styles.deliveryMiniText} numberOfLines={1}>
+                        {deliveryText}
+                      </Text>
+                    </View>
+                  ) : null}
                   <View
                     style={[
-                      styles.cutoffMiniBadge,
-                      cutoffPassed && styles.cutoffMiniBadgeBlocked,
+                      styles.statusPill,
+                      {
+                        backgroundColor: product.is_available
+                          ? C.successBg
+                          : "#FFF0F0",
+                      },
                     ]}
                   >
-                    <Ionicons
-                      name={cutoffPassed ? "alert-circle-outline" : "time-outline"}
-                      size={10}
-                      color={cutoffPassed ? "#DC2626" : "#B45309"}
+                    <View
+                      style={[
+                        styles.statusDot,
+                        {
+                          backgroundColor: product.is_available
+                            ? C.success
+                            : "#FF6B6B",
+                        },
+                      ]}
                     />
                     <Text
                       style={[
-                        styles.cutoffMiniText,
-                        cutoffPassed && styles.cutoffMiniTextBlocked,
+                        styles.statusText,
+                        { color: product.is_available ? "#16A34A" : "#DC2626" },
                       ]}
-                      numberOfLines={1}
                     >
-                      {cutoffText}
+                      {product.is_available ? "Available" : "Unavailable"}
                     </Text>
                   </View>
-                ) : null}
-                {deliveryText ? (
-                  <View style={styles.deliveryMiniBadge}>
-                    <Ionicons name="bicycle-outline" size={10} color="#16A34A" />
-                    <Text style={styles.deliveryMiniText} numberOfLines={1}>
-                      {deliveryText}
-                    </Text>
-                  </View>
-                ) : null}
+                </View>
+
                 <View
                   style={[
-                    styles.statusPill,
-                    {
-                      backgroundColor: product.is_available
-                        ? C.successBg
-                        : "#FFF0F0",
-                    },
+                    styles.stockBadge,
+                    product.stock <= 5 &&
+                      product.stock > 0 && { backgroundColor: "#FFF8E1" },
+                    product.stock === 0 && { backgroundColor: "#FFF0F0" },
                   ]}
                 >
-                  <View
-                    style={[
-                      styles.statusDot,
-                      {
-                        backgroundColor: product.is_available
-                          ? C.success
-                          : "#FF6B6B",
-                      },
-                    ]}
-                  />
                   <Text
                     style={[
-                      styles.statusText,
-                      { color: product.is_available ? "#16A34A" : "#DC2626" },
+                      styles.stockVal,
+                      product.stock <= 5 &&
+                        product.stock > 0 && { color: "#F59E0B" },
+                      product.stock === 0 && { color: "#DC2626" },
                     ]}
                   >
-                    {product.is_available ? "Available" : "Unavailable"}
+                    {product.stock}
                   </Text>
+                  <Text style={styles.stockLabel}>stock</Text>
                 </View>
-              </View>
 
-              <View
-                style={[
-                  styles.stockBadge,
-                  product.stock <= 5 &&
-                    product.stock > 0 && { backgroundColor: "#FFF8E1" },
-                  product.stock === 0 && { backgroundColor: "#FFF0F0" },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.stockVal,
-                    product.stock <= 5 &&
-                      product.stock > 0 && { color: "#F59E0B" },
-                    product.stock === 0 && { color: "#DC2626" },
-                  ]}
-                >
-                  {product.stock}
-                </Text>
-                <Text style={styles.stockLabel}>stock</Text>
-              </View>
-
-              <Ionicons
-                name="chevron-forward"
-                size={16}
-                color={C.textLight}
-                style={{ marginLeft: 4 }}
-              />
-            </TouchableOpacity>
+                <Ionicons
+                  name="chevron-forward"
+                  size={16}
+                  color={C.textLight}
+                  style={{ marginLeft: 4 }}
+                />
+              </TouchableOpacity>
             );
           })
         )}
@@ -2768,35 +2825,35 @@ const styles = StyleSheet.create({
   actionDisabled: { opacity: 0.55 },
   detailSmallBtnText: { fontSize: 13, fontWeight: "600" },
   headerSearchWrap: {
-  flex: 1,
-  flexDirection: "row",
-  alignItems: "center",
-  gap: 8,
-  backgroundColor: C.card,
-  borderRadius: 14,
-  borderWidth: 1,
-  borderColor: C.border,
-  paddingHorizontal: 14,
-  paddingVertical: 10,
-  marginRight: 10,
-},
-headerSearchInput: {
-  flex: 1,
-  fontSize: 14,
-  color: C.text,
-},
-iconBtn: {
-  width: 44,
-  height: 44,
-  borderRadius: 14,
-  backgroundColor: C.card,
-  justifyContent: "center",
-  alignItems: "center",
-  borderWidth: 1,
-  borderColor: C.border,
-},
-iconBtnActive: {
-  backgroundColor: C.dark,
-  borderColor: C.dark,
-},
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: C.card,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: C.border,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginRight: 10,
+  },
+  headerSearchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: C.text,
+  },
+  iconBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: C.card,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  iconBtnActive: {
+    backgroundColor: C.dark,
+    borderColor: C.dark,
+  },
 });
