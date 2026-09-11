@@ -550,6 +550,23 @@ export default function RegisterScreen() {
     "idle" | "checking" | "valid" | "invalid"
   >(qrReferralCode ? "checking" : "idle");
   const [referralAdminName, setReferralAdminName] = useState("");
+  const [referralOptions, setReferralOptions] = useState<Array<{ admin_id: string; admin_name: string; referral_code: string; is_default: boolean }>>([]);
+  const [referralOpen, setReferralOpen] = useState(false);
+  const [directoryError, setDirectoryError] = useState(false);
+  const loadReferralDirectory = () => {
+    setDirectoryError(false);
+    api.getReferralDirectory().then(rows => {
+      setReferralOptions(rows);
+      const defaultFarm = rows.find(row => row.is_default);
+      if (!qrReferralCode && defaultFarm) {
+        setReferralCode(current => current || defaultFarm.referral_code);
+        setReferralAdminId(current => current || defaultFarm.admin_id);
+        setReferralAdminName(current => current || defaultFarm.admin_name);
+        setReferralStatus("valid");
+      }
+    }).catch(() => setDirectoryError(true));
+  };
+  useEffect(() => { loadReferralDirectory(); }, []);
   const referralTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [phoneErr, setPhoneErr] = useState("");
@@ -1386,15 +1403,10 @@ export default function RegisterScreen() {
                             color={C.primary}
                           />
                         </View>
-                        <TextInput
-                          style={s.referralInput}
-                          placeholder="Referral Code (e.g. RAM247)"
-                          placeholderTextColor={C.textLight}
-                          value={referralCode}
-                          onChangeText={handleReferralCodeChange}
-                          autoCapitalize="characters"
-                          maxLength={6}
-                        />
+                        <TouchableOpacity style={[s.referralInput, { flexDirection: "row", alignItems: "center", minHeight: 44 }]} accessibilityRole="button" accessibilityState={{ expanded: referralOpen }} onPress={() => setReferralOpen(!referralOpen)}>
+                          <Text style={{ flex: 1, color: C.text }}>{referralCode ? `${referralAdminName || "Farm"} · ${referralCode}` : "Select referral farm"}</Text>
+                          <Ionicons name={referralOpen ? "chevron-up" : "chevron-down"} size={18} color={C.primary} />
+                        </TouchableOpacity>
                         {referralStatus === "checking" && (
                           <ActivityIndicator size="small" color={C.primary} />
                         )}
@@ -1414,6 +1426,11 @@ export default function RegisterScreen() {
                         )}
                       </View>
 
+                      {directoryError && <TouchableOpacity onPress={loadReferralDirectory}><Text style={{ color: C.error, padding: 8 }}>Could not load farms. Tap to retry.</Text></TouchableOpacity>}
+                      {referralOpen && <ScrollView nestedScrollEnabled style={{ maxHeight: 220, backgroundColor: "white" }} keyboardShouldPersistTaps="handled">
+                        {referralOptions.map(option => <TouchableOpacity key={option.admin_id} style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: "#eee" }} onPress={() => { setReferralCode(option.referral_code); setReferralAdminId(option.admin_id); setReferralAdminName(option.admin_name); setReferralStatus("valid"); setReferralOpen(false); }}><Text style={{ color: C.text }}>{option.admin_name} · {option.referral_code}{option.is_default ? " (Default)" : ""}</Text></TouchableOpacity>)}
+                        {!referralOptions.length && !directoryError && <Text style={{ padding: 12 }}>No referral farms available.</Text>}
+                      </ScrollView>}
                       {referralStatus === "valid" && referralAdminName ? (
                         <View style={s.referralBanner}>
                           <Ionicons
@@ -1488,7 +1505,7 @@ export default function RegisterScreen() {
                   )}
 
                   <FloatInput
-                    label="Password"
+                    label="Set Password"
                     value={password}
                     onChangeText={handlePasswordChange}
                     secureTextEntry={!showPass}
@@ -1545,7 +1562,7 @@ export default function RegisterScreen() {
                   )}
 
                   <FloatInput
-                    label="Confirm Password"
+                    label="Confirm Set Password"
                     value={confirmPassword}
                     onChangeText={handleConfirmChange}
                     secureTextEntry={!showPass}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -11,14 +11,17 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
+  AppState,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { useIsFocused } from "@react-navigation/native";
 import * as Sharing from "expo-sharing";
 import { Calendar } from "react-native-calendars";
 import { api, StatementTemplateSettings } from "../../src/services/api";
 import LoadingScreen from "../../src/components/LoadingScreen";
+import WalletHistoryFilter, { defaultHistoryFilter, matchesWalletHistory } from "../../src/components/WalletHistoryFilter";
 
 // ── Palette 
 const C = {
@@ -566,13 +569,17 @@ function WithdrawModal({
 // ── Main Screen 
 export default function AdminWalletScreen() {
   const router = useRouter();
+  const focused = useIsFocused();
+  const withdrawalAttempt = useRef<{ amount: number; id: string } | null>(null);
+  const withdrawalBusy = useRef(false);
+  const fetching = useRef(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [balance, setBalance] = useState(0);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [withdrawals, setWithdrawals] = useState<any[]>([]);
   const [orders, setOrders] = useState<AdminOrder[]>([]);
-  const [filter, setFilter] = useState<"ALL" | "credit" | "debit">("ALL");
+  const [historyFilter, setHistoryFilter] = useState(defaultHistoryFilter);
   const [bankAccount, setBankAccount] = useState<BankAccount | null>(null);
   const [showBank, setShowBank] = useState(false);
   const [showWithdraw, setShowWithdraw] = useState(false);
@@ -593,6 +600,8 @@ export default function AdminWalletScreen() {
   const { cfg: alertCfg, show: showAlert, dismiss: dismissAlert } = useAlert();
 
   const fetchData = async () => {
+    if (fetching.current) return;
+    fetching.current = true;
     try {
       const [walletData, txData, bankData, withdrawalData, ordersData] = await Promise.all([
         api.getWallet(),
@@ -609,14 +618,23 @@ export default function AdminWalletScreen() {
     } catch (e) {
       console.error("Error fetching wallet:", e);
     } finally {
+      fetching.current = false;
       setLoading(false);
       setRefreshing(false);
     }
   };
 
   useEffect(() => {
+    if (!focused) return;
     fetchData();
-  }, []);
+    const timer = setInterval(() => {
+      if (AppState.currentState === "active") fetchData();
+    }, 15000);
+    const listener = AppState.addEventListener("change", (state) => {
+      if (state === "active") fetchData();
+    });
+    return () => { clearInterval(timer); listener.remove(); };
+  }, [focused]);
 
   useEffect(() => {
     if (!statementModal) return;
@@ -736,12 +754,18 @@ export default function AdminWalletScreen() {
   };
 
   const handleWithdrawSubmit = async (amount: number) => {
+    if (withdrawalBusy.current) return;
+    withdrawalBusy.current = true;
     try {
-      await api.requestWithdrawal(amount);
+      if (!withdrawalAttempt.current || withdrawalAttempt.current.amount !== amount) {
+        withdrawalAttempt.current = { amount, id: `settlement-${Date.now()}-${Math.random().toString(36).slice(2)}` };
+      }
+      await api.requestWithdrawal(amount, withdrawalAttempt.current.id);
+      withdrawalAttempt.current = null;
       setShowWithdraw(false);
       showAlert(
         "Request Submitted!",
-        `₹${amount.toFixed(0)} withdrawal request received. Amount will be credited to your bank account within 24 hours.`,
+        `₹${amount.toFixed(0)} settlement request sent to SuperAdmin. The amount is reserved while your request is reviewed.`,
         undefined,
         "checkmark-circle",
         C.dark,
@@ -755,6 +779,8 @@ export default function AdminWalletScreen() {
         "alert-circle-outline",
         C.primary,
       );
+    } finally {
+      withdrawalBusy.current = false;
     }
   };
 
@@ -854,10 +880,7 @@ export default function AdminWalletScreen() {
     })
     .reduce((s, order) => s + Number(order.total_amount || 0), 0);
 
-  const filteredTx =
-    filter === "ALL"
-      ? transactions
-      : transactions.filter((t) => t.type === filter);
+  const filteredTx = transactions.filter((t) => matchesWalletHistory(t, historyFilter));
   const activeStatementRange = getStatementRangeDates(
     statementRange,
     statementStartDate,
@@ -904,7 +927,7 @@ export default function AdminWalletScreen() {
   const totalWithdrawn = withdrawals
     .filter((w) => ["completed", "approved"].includes(w.status?.toLowerCase()))
     .reduce((s, w) => s + w.amount, 0);
-  const availableForSettlement = Math.max(paidAmount - totalRefunded - totalWithdrawn, 0);
+  const availableForSettlement = Math.max(balance, 0);
 
   return (
     <SafeAreaView style={s.container} edges={["top"]}>
@@ -1091,7 +1114,7 @@ export default function AdminWalletScreen() {
             )}
 
             {/* Withdrawal cards */}
-            {[...withdrawals].reverse().map((w, i) => {
+            {withdrawals.map((w, i) => {
               const meta = statusMeta(w.status);
               return (
                 <View key={w.id ?? i} style={s.withdrawCard}>
@@ -1113,26 +1136,30 @@ export default function AdminWalletScreen() {
 
                   {/* Info */}
                   <View style={s.withdrawInfo}>
-                    <Text style={s.withdrawTitle}>Withdrawal Request</Text>
+                    <Text style={s.withdrawTitle}>Settlement Request</Text>
                     <Text style={s.withdrawDate}>{formatDate(w.created_at)}</Text>
-                    {(w.bank_name || w.account_last4) && (
+                    {(w.bank_account?.bankName || w.bank_name || w.account_last4) && (
                       <Text style={s.withdrawBank}>
-                        {w.bank_name ?? ""}
-                        {w.account_last4 ? `  ••••${w.account_last4}` : ""}
+                        {w.bank_account?.bankName || w.bank_name || ""}
+                        {(w.bank_account?.accountNumber || w.account_last4)
+                          ? `  ••••${String(w.bank_account?.accountNumber || w.account_last4).slice(-4)}`
+                          : ""}
                       </Text>
                     )}
-                    {w.remarks ? (
-                      <Text style={s.withdrawRemarks} numberOfLines={1}>
-                        {w.remarks}
+                    {(w.note || w.remarks) ? (
+                      <Text style={s.withdrawRemarks}>
+                        {w.note || w.remarks}
                       </Text>
                     ) : null}
+                    {w.reference ? <Text style={s.withdrawRemarks}>Transfer reference: {w.reference}</Text> : null}
                   </View>
 
                   {/* Amount + Badge */}
                   <View style={s.withdrawRight}>
                     <Text style={[s.withdrawAmt, { color: meta.color }]}>
-                      -₹{w.amount}
+                      ₹{w.amount}
                     </Text>
+                    {w.status === "rejected" ? <Text style={s.withdrawDate}>Returned to wallet</Text> : null}
                     <View
                       style={[s.statusBadge, { backgroundColor: meta.bg }]}
                     >
@@ -1197,24 +1224,7 @@ export default function AdminWalletScreen() {
               <Ionicons name="download-outline" size={14} color={C.dark} />
               <Text style={s.statementBtnTxt}>Statement</Text>
             </TouchableOpacity>
-            <View style={s.filterRow}>
-              {(["ALL", "credit", "debit"] as const).map((f) => (
-                <TouchableOpacity
-                  key={f}
-                  style={[s.filterChip, filter === f && s.filterChipActive]}
-                  onPress={() => setFilter(f)}
-                >
-                  <Text
-                    style={[
-                      s.filterChipTxt,
-                      filter === f && s.filterChipTxtActive,
-                    ]}
-                  >
-                    {f === "ALL" ? "All" : f === "credit" ? "Earned" : "Refunds"}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+            <WalletHistoryFilter value={historyFilter} onChange={setHistoryFilter} />
           </View>
         </View>
 
@@ -1223,9 +1233,9 @@ export default function AdminWalletScreen() {
             <View style={s.emptyIcon}>
               <Ionicons name="receipt-outline" size={32} color={C.accent} />
             </View>
-            <Text style={s.emptyTitle}>No transactions yet</Text>
+            <Text style={s.emptyTitle}>No matching transactions</Text>
             <Text style={s.emptyDesc}>
-              Earnings appear here when orders are delivered
+              Try changing your filters or date period.
             </Text>
           </View>
         ) : (
@@ -1989,7 +1999,7 @@ const s = StyleSheet.create({
   },
   txTitle: { fontSize: 16, fontWeight: "800", color: C.text },
   txSub: { fontSize: 12, color: C.accent, marginTop: 2 },
-  txTools: { alignItems: "flex-end", gap: 8 },
+  txTools: { flexDirection: "row", alignItems: "center", gap: 8 },
   statementBtn: {
     minHeight: 32,
     flexDirection: "row",

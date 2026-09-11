@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import RecordSearch, { matchesRecordSearch } from "../../src/components/RecordSearch";
 import {
   View,
   Text,
@@ -365,6 +366,7 @@ export default function MySubscriptionsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
+  const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState<"active" | "past">("active");
 
   const [editingSub, setEditingSub] = useState<Subscription | null>(null);
@@ -417,7 +419,10 @@ export default function MySubscriptionsScreen() {
 
   const activeSubs = subscriptions.filter(isSubscriptionActive);
   const pastSubs = subscriptions.filter((s) => !isSubscriptionActive(s));
-  const displaySubs = activeTab === "active" ? activeSubs : pastSubs;
+  const displaySubs = (activeTab === "active" ? activeSubs : pastSubs).filter(sub => matchesRecordSearch(search, [
+    sub.id, sub.product?.name, sub.pattern, sub.status,
+    ...(sub.items || []).flatMap(item => [item.product_name, item.product?.name]),
+  ]));
 
   const openEdit = (sub: Subscription) => {
     setEditingSub(sub);
@@ -530,6 +535,7 @@ export default function MySubscriptionsScreen() {
       </View>
 
       {/* ── Tabs ── */}
+      <RecordSearch value={search} onChange={setSearch} placeholder="Search product, subscription ID or plan" />
       <View style={S.tabRow}>
         {(["active", "past"] as const).map((tab) => (
           <TouchableOpacity
@@ -549,6 +555,8 @@ export default function MySubscriptionsScreen() {
       {/* ── List ── */}
       <ScrollView
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
@@ -560,12 +568,12 @@ export default function MySubscriptionsScreen() {
               <Ionicons name="repeat-outline" size={32} color="#ccc" />
             </View>
             <Text style={S.emptyTitle}>
-              {activeTab === "active"
+              {search.trim() ? "No matching subscriptions" : activeTab === "active"
                 ? "No active subscriptions"
                 : "No past subscriptions"}
             </Text>
             <Text style={S.emptyBody}>
-              {activeTab === "active"
+              {search.trim() ? "Try another search or switch tabs." : activeTab === "active"
                 ? "Subscribe to a product with Daily, Alternate, or Custom delivery."
                 : "Expired or cancelled subscriptions will appear here."}
             </Text>

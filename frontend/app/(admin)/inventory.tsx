@@ -836,13 +836,14 @@ const openDetail = (product: Product) => {
   };
 
   const filteredProducts = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return products;
+    const terms = searchQuery.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if (!terms.length) return products;
     return products.filter((p) => {
-      const name = (p.name || "").toLowerCase();
-      const category = (p.category || "").toLowerCase();
-      const unit = (p.unit || "").toLowerCase();
-      return name.includes(q) || category.includes(q) || unit.includes(q);
+      const searchableText = [p.name, p.category, p.unit]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return terms.every((term) => searchableText.includes(term));
     });
   }, [products, searchQuery]);
 
@@ -1609,33 +1610,36 @@ const openDetail = (product: Product) => {
         <Snackbar {...snackbar} />
       </View>
 
-      {/* ── Header ── */}
-      <View style={styles.header}>
-        {showSearch ? (
-          <View style={styles.headerSearchWrap}>
-            <Ionicons name="search-outline" size={18} color={C.textMuted} />
-            <TextInput
-              style={styles.headerSearchInput}
-              placeholder="Search products..."
-              placeholderTextColor={C.textLight}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              autoFocus
-            />
-            {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchQuery("")}>
-                <Ionicons name="close-circle" size={17} color={C.textLight} />
-              </TouchableOpacity>
-            )}
-          </View>
-        ) : (
-          <View>
-            <Text style={styles.title}>Inventory</Text>
-            <Text style={styles.subtitle}>
-              {products.length} products · {available} available
-            </Text>
-          </View>
-        )}
+{/* ── Header ── */}
+<View style={styles.header}>
+  {showSearch ? (
+    <View style={styles.headerSearchWrap}>
+      <Ionicons name="search-outline" size={18} color={C.textMuted} />
+      <TextInput
+        style={styles.headerSearchInput}
+        placeholder="Search products..."
+        placeholderTextColor={C.textLight}
+        value={searchQuery}
+        onChangeText={setSearchQuery}
+        autoFocus
+        autoCorrect={false}
+        autoCapitalize="none"
+        returnKeyType="search"
+      />
+      {searchQuery.length > 0 && (
+        <TouchableOpacity onPress={() => setSearchQuery("")} hitSlop={10} accessibilityLabel="Clear product search" accessibilityRole="button">
+          <Ionicons name="close-circle" size={17} color={C.textLight} />
+        </TouchableOpacity>
+      )}
+    </View>
+  ) : (
+    <View>
+      <Text style={styles.title}>Inventory</Text>
+      <Text style={styles.subtitle}>
+        {products.length} products · {available} available
+      </Text>
+    </View>
+  )}
 
         <View style={{ flexDirection: "row", gap: 8 }}>
           <TouchableOpacity
@@ -1726,6 +1730,8 @@ const openDetail = (product: Product) => {
         data={filteredProducts}
         keyExtractor={(item) => getProductId(item) || item.name}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -1735,7 +1741,13 @@ const openDetail = (product: Product) => {
           />
         }
         contentContainerStyle={styles.listContent}
-        ListEmptyComponent={
+      >
+        {searchQuery.trim() ? (
+          <Text style={styles.orderSummarySub} accessibilityLiveRegion="polite">
+            {filteredProducts.length} {filteredProducts.length === 1 ? "product" : "products"} found
+          </Text>
+        ) : null}
+        {filteredProducts.length === 0 ? (
           <View style={styles.emptyState}>
             <View style={styles.emptyIconWrap}>
               <Ionicons
@@ -1753,16 +1765,15 @@ const openDetail = (product: Product) => {
                 : "Tap + to add your first product"}
             </Text>
           </View>
-        }
-        ListFooterComponent={<View style={{ height: 20 }} />}
-        renderItem={({ item: product }) => {
-          const cutoffRule = getOrderCutoffForProduct(product, orderCutoffs);
-          const cutoffText = getOrderCutoffBadgeText(cutoffRule);
-          const cutoffPassed = isOrderCutoffPassed(cutoffRule);
-          const deliveryText = getDeliveryWindowBadgeText(
-            getDeliveryWindowForProduct(product),
-          );
-          return (
+        ) : (
+          filteredProducts.map((product) => {
+            const cutoffRule = getOrderCutoffForProduct(product, orderCutoffs);
+            const cutoffText = getOrderCutoffBadgeText(cutoffRule);
+            const cutoffPassed = isOrderCutoffPassed(cutoffRule);
+            const deliveryText = getDeliveryWindowBadgeText(
+              getDeliveryWindowForProduct(product),
+            );
+            return (
             <TouchableOpacity
               style={styles.productCard}
               activeOpacity={0.7}

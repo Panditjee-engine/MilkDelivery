@@ -575,6 +575,18 @@ export interface ProductFeedbackSummary {
 }
 
 class ApiService {
+  async getReferralDirectory(): Promise<Array<{ admin_id: string; admin_name: string; referral_code: string; is_default: boolean }>> {
+    return this.request("/admin/referral-directory");
+  }
+  async getProductSearchHistory(): Promise<string[]> {
+    return this.request("/catalog/search-history");
+  }
+  async recordProductSearch(query: string) {
+    return this.request("/catalog/search-history", { method: "POST", body: JSON.stringify({ query }) });
+  }
+  async clearProductSearchHistory() {
+    return this.request("/catalog/search-history", { method: "DELETE" });
+  }
   private token: string | null = null;
 
   async init() {
@@ -2817,7 +2829,7 @@ class ApiService {
 
   // ── Withdrawal ───────────────────────────────────────────
 
-  async requestWithdrawal(amount: number) {
+  async requestWithdrawal(amount: number, requestId?: string) {
     return this.request<{
       message: string;
       withdrawal_id: string;
@@ -2825,7 +2837,7 @@ class ApiService {
       status: string;
     }>("/wallet/withdraw", {
       method: "POST",
-      body: JSON.stringify({ amount }),
+      body: JSON.stringify({ amount, request_id: requestId }),
     });
   }
 

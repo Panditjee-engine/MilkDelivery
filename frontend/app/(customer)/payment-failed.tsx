@@ -4,6 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { Colors } from "../../src/constants/colors";
+import { paymentFailureMessage } from "../../src/utils/paymentMessage";
 
 function money(value?: string | string[]) {
   const raw = Array.isArray(value) ? value[0] : value;
@@ -16,7 +17,7 @@ function money(value?: string | string[]) {
 
 export default function PaymentFailedScreen() {
   const params = useLocalSearchParams<{ amount?: string; reason?: string }>();
-  const reason = Array.isArray(params.reason) ? params.reason[0] : params.reason;
+  const reason = paymentFailureMessage(params.reason);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -27,7 +28,7 @@ export default function PaymentFailedScreen() {
 
         <Text style={styles.title}>Payment Failed</Text>
         <Text style={styles.subtitle}>
-          Your wallet was not charged. You can try again safely.
+          Please review the payment status below before trying again.
         </Text>
 
         <View style={styles.summary}>
