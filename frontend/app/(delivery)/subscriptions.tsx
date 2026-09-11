@@ -1010,13 +1010,14 @@ function SubCard({
       {/* Expanded detail */}
       {isExpanded && (
         <View style={styles.expandedBody}>
-          <View style={styles.itemsBox}>
+                   <View style={styles.itemsBox}>
             {items.map((item, i) => (
               <View key={i} style={styles.itemRow}>
                 <View style={styles.itemDot} />
                 <Text style={styles.itemName} numberOfLines={1}>
                   {item.product_name || item.name || "Product"}
                 </Text>
+                <Text style={styles.itemQty}>× {item.quantity}</Text>
               </View>
             ))}
           </View>

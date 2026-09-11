@@ -2417,6 +2417,7 @@ class ApiService {
     cow_tag: string;
     status: string;
     date: string;
+    note?: string;
   }) {
     const token = await AsyncStorage.getItem("worker_token");
     const response = await fetch(`${API_BASE}/api/worker/health`, {
