@@ -639,10 +639,19 @@ class ApiService {
         console.log("BODY:", text);
       }
 
-      let message = text || "Request failed";
+       let message = text || "Request failed";
       try {
         const errJson = JSON.parse(text);
-        message = errJson.detail || errJson.message || text || "Request failed";
+        if (Array.isArray(errJson.detail)) {
+          message = errJson.detail
+            .map((d: any) => {
+              const field = Array.isArray(d.loc) ? d.loc[d.loc.length - 1] : "field";
+              return `${field}: ${d.msg}`;
+            })
+            .join("; ");
+        } else {
+          message = errJson.detail || errJson.message || text || "Request failed";
+        }
       } catch {
         // Keep the raw text when the backend does not return JSON.
       }

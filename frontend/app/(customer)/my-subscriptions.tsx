@@ -1549,6 +1549,10 @@ function RateProductModal({
   if (!day) return null;
 
   const submit = async () => {
+    if (!day.order_id || !day.product_id) {
+      Alert.alert("Error", "This delivery can't be rated right now.");
+      return;
+    }
     setSaving(true);
     try {
       await api.submitProductFeedback({
@@ -1657,7 +1661,7 @@ function DeliveryCalendarModal({
   const nextMo = () => (mo === 11 ? (setMo(0), setYr((y) => y + 1)) : setMo((m) => m + 1));
 
   const onDayPress = (info: CalendarDayInfo) => {
-    if (info.status === "delivered") setRateDay(info);
+    if (info.status === "delivered" && info.product_id) setRateDay(info);
   };
 
   return (
