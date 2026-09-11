@@ -280,17 +280,17 @@ function formatAddress(address?: CustomerAddress) {
   // Online/app customers use tower+flat+floor+area instead of line1/line2
   const isOnlineShape = !address.line1 && (address.tower || address.flat || address.area);
 
- if (isOnlineShape) {
-  const firstLine = [address.flat, address.tower].filter(Boolean).join(", ");
-  const lines = [
-    firstLine,
-    address.area,
-    address.landmark ? `Near ${address.landmark}` : "",
-    [address.city, address.state].filter(Boolean).join(", "),
-    address.pincode,
-  ].filter(Boolean);
-  return lines.length ? lines.join("\n") : "No address added";
-}
+  if (isOnlineShape) {
+    const firstLine = [address.flat, address.tower].filter(Boolean).join(", ");
+    const lines = [
+      firstLine,
+      address.area,
+      address.landmark ? `Near ${address.landmark}` : "",
+      [address.city, address.state].filter(Boolean).join(", "),
+      address.pincode,
+    ].filter(Boolean);
+    return lines.length ? lines.join("\n") : "No address added";
+  }
 
   const firstLine = [address.line1, address.line2, address.landmark]
     .filter(Boolean)
@@ -769,7 +769,11 @@ function CustomerFormBody({
     setForm((prev) => ({ ...prev, [key]: value as never }));
 
   return (
-    <ScrollView showsVerticalScrollIndicator={false}>
+    <ScrollView
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={{ paddingBottom: 60 }}   // 👈 add this
+      keyboardShouldPersistTaps="handled"              // 👈 add this too
+    >
       <SectionTitle icon="person-outline" title="Customer Info" />
       <InputField label="Name" value={form.name} onChangeText={setField("name")} />
       <InputField
@@ -848,6 +852,7 @@ function CustomerFormBody({
           thumbColor={form.is_active ? "#16a34a" : "#f3f4f6"}
         />
       </View>
+      <View style={{ height: 40 }} /> 
     </ScrollView>
   );
 }
@@ -909,7 +914,8 @@ function CustomerDetailModal({
       <View style={modalS.overlay}>
         <KeyboardAvoidingView
           style={{ width: "100%" }}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={Platform.OS === "android" ? 20 : 0}
         >
           <View style={modalS.sheet}>
             <View style={modalS.handle} />

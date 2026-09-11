@@ -10,7 +10,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  FlatList, 
+  FlatList,
   RefreshControl,
   TouchableOpacity,
   TextInput,
@@ -20,6 +20,8 @@ import {
   Animated,
   Easing,
   Dimensions,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import {
   SafeAreaView,
@@ -1675,7 +1677,7 @@ export default function InventoryScreen() {
       </TouchableOpacity>
 
       {/* ── Product List ── */}
-       <FlatList
+      <FlatList
         data={filteredProducts}
         keyExtractor={(item) => getProductId(item) || item.name}
         showsVerticalScrollIndicator={false}
@@ -1721,272 +1723,283 @@ export default function InventoryScreen() {
               activeOpacity={0.7}
               onPress={() => openDetail(product)}
             >
-                {product.image ? (
-                  <Image
-                    source={{ uri: product.image }}
-                    style={styles.productImage}
-                  />
-                ) : (
-                  <View style={styles.imagePlaceholder}>
-                    <Ionicons name="cube-outline" size={22} color={C.textLight} />
-                  </View>
-                )}
+              {product.image ? (
+                <Image
+                  source={{ uri: product.image }}
+                  style={styles.productImage}
+                />
+              ) : (
+                <View style={styles.imagePlaceholder}>
+                  <Ionicons name="cube-outline" size={22} color={C.textLight} />
+                </View>
+              )}
 
-                <View style={styles.productInfo}>
-                  <Text style={styles.productName} numberOfLines={1}>
-                    {product.name}
-                  </Text>
-                  <View style={styles.productPriceRow}>
-                    <Text style={styles.productPrice}>₹{product.price}</Text>
-                    {product.mrp && product.mrp > product.price && (
-                      <Text style={styles.productMrp}>₹{product.mrp}</Text>
-                    )}
-                  </View>
-                  <Text style={styles.productMeta}>
-                    {product.unit || product.category
-                      ? [product.unit, product.category]
-                        .filter(Boolean)
-                        .join(" · ")
-                      : "Details pending"}
-                  </Text>
-                  {cutoffText ? (
-                    <View
-                      style={[
-                        styles.cutoffMiniBadge,
-                        cutoffPassed && styles.cutoffMiniBadgeBlocked,
-                      ]}
-                    >
-                      <Ionicons
-                        name={cutoffPassed ? "alert-circle-outline" : "time-outline"}
-                        size={10}
-                        color={cutoffPassed ? "#DC2626" : "#B45309"}
-                      />
-                      <Text
-                        style={[
-                          styles.cutoffMiniText,
-                          cutoffPassed && styles.cutoffMiniTextBlocked,
-                        ]}
-                        numberOfLines={1}
-                      >
-                        {cutoffText}
-                      </Text>
-                    </View>
-                  ) : null}
-                  {deliveryText ? (
-                    <View style={styles.deliveryMiniBadge}>
-                      <Ionicons name="bicycle-outline" size={10} color="#16A34A" />
-                      <Text style={styles.deliveryMiniText} numberOfLines={1}>
-                        {deliveryText}
-                      </Text>
-                    </View>
-                  ) : null}
+              <View style={styles.productInfo}>
+                <Text style={styles.productName} numberOfLines={1}>
+                  {product.name}
+                </Text>
+                <View style={styles.productPriceRow}>
+                  <Text style={styles.productPrice}>₹{product.price}</Text>
+                  {product.mrp && product.mrp > product.price && (
+                    <Text style={styles.productMrp}>₹{product.mrp}</Text>
+                  )}
+                </View>
+                <Text style={styles.productMeta}>
+                  {product.unit || product.category
+                    ? [product.unit, product.category]
+                      .filter(Boolean)
+                      .join(" · ")
+                    : "Details pending"}
+                </Text>
+                {cutoffText ? (
                   <View
                     style={[
-                      styles.statusPill,
-                      {
-                        backgroundColor: product.is_available
-                          ? C.successBg
-                          : "#FFF0F0",
-                      },
+                      styles.cutoffMiniBadge,
+                      cutoffPassed && styles.cutoffMiniBadgeBlocked,
                     ]}
                   >
-                    <View
-                      style={[
-                        styles.statusDot,
-                        {
-                          backgroundColor: product.is_available
-                            ? C.success
-                            : "#FF6B6B",
-                        },
-                      ]}
+                    <Ionicons
+                      name={cutoffPassed ? "alert-circle-outline" : "time-outline"}
+                      size={10}
+                      color={cutoffPassed ? "#DC2626" : "#B45309"}
                     />
                     <Text
                       style={[
-                        styles.statusText,
-                        { color: product.is_available ? "#16A34A" : "#DC2626" },
+                        styles.cutoffMiniText,
+                        cutoffPassed && styles.cutoffMiniTextBlocked,
                       ]}
+                      numberOfLines={1}
                     >
-                      {product.is_available ? "Available" : "Unavailable"}
+                      {cutoffText}
                     </Text>
                   </View>
-                </View>
-
+                ) : null}
+                {deliveryText ? (
+                  <View style={styles.deliveryMiniBadge}>
+                    <Ionicons name="bicycle-outline" size={10} color="#16A34A" />
+                    <Text style={styles.deliveryMiniText} numberOfLines={1}>
+                      {deliveryText}
+                    </Text>
+                  </View>
+                ) : null}
                 <View
-                  style={{ alignItems: "center" }}>
+                  style={[
+                    styles.statusPill,
+                    {
+                      backgroundColor: product.is_available
+                        ? C.successBg
+                        : "#FFF0F0",
+                    },
+                  ]}
+                >
                   <View
                     style={[
-                      styles.stockBadge,
-                      product.stock <= 5 &&
-                      product.stock > 0 && { backgroundColor: "#FFF8E1" },
-                      product.stock === 0 && { backgroundColor: "#FFF0F0" },
+                      styles.statusDot,
+                      {
+                        backgroundColor: product.is_available
+                          ? C.success
+                          : "#FF6B6B",
+                      },
+                    ]}
+                  />
+                  <Text
+                    style={[
+                      styles.statusText,
+                      { color: product.is_available ? "#16A34A" : "#DC2626" },
                     ]}
                   >
-                    <Text
-                      style={[
-                        styles.stockVal,
-                        product.stock <= 5 &&
-                        product.stock > 0 && { color: "#F59E0B" },
-                        product.stock === 0 && { color: "#DC2626" },
-                      ]}
-                    >
-                      {product.stock}
-                    </Text>
-                    <Text style={styles.stockLabel}>stock</Text>
-                  </View>
+                    {product.is_available ? "Available" : "Unavailable"}
+                  </Text>
+                </View>
+              </View>
 
-                  {(() => {
-                    const productFeedback = product.id
-                      ? feedbackMap[product.id]
-                      : undefined;
-                    const totalReviews = productFeedback?.total_reviews ?? 0;
-
-                    return totalReviews > 0 && productFeedback ? (
-                      <View style={styles.ratingMiniBadge}>
-                        <Ionicons name="star" size={10} color="#F59E0B" />
-                        <Text style={styles.ratingMiniText}>
-                          {productFeedback.average_rating.toFixed(1)}
-                        </Text>
-                      </View>
-                    ) : null;
-                  })()}
+              <View
+                style={{ alignItems: "center" }}>
+                <View
+                  style={[
+                    styles.stockBadge,
+                    product.stock <= 5 &&
+                    product.stock > 0 && { backgroundColor: "#FFF8E1" },
+                    product.stock === 0 && { backgroundColor: "#FFF0F0" },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.stockVal,
+                      product.stock <= 5 &&
+                      product.stock > 0 && { color: "#F59E0B" },
+                      product.stock === 0 && { color: "#DC2626" },
+                    ]}
+                  >
+                    {product.stock}
+                  </Text>
+                  <Text style={styles.stockLabel}>stock</Text>
                 </View>
 
-                <Ionicons
-                  name="chevron-forward"
-                  size={16}
-                  color={C.textLight}
-                  style={{ marginLeft: 4 }}
-                />
-                </TouchableOpacity>
+                {(() => {
+                  const productFeedback = product.id
+                    ? feedbackMap[product.id]
+                    : undefined;
+                  const totalReviews = productFeedback?.total_reviews ?? 0;
+
+                  return totalReviews > 0 && productFeedback ? (
+                    <View style={styles.ratingMiniBadge}>
+                      <Ionicons name="star" size={10} color="#F59E0B" />
+                      <Text style={styles.ratingMiniText}>
+                        {productFeedback.average_rating.toFixed(1)}
+                      </Text>
+                    </View>
+                  ) : null;
+                })()}
+              </View>
+
+              <Ionicons
+                name="chevron-forward"
+                size={16}
+                color={C.textLight}
+                style={{ marginLeft: 4 }}
+              />
+            </TouchableOpacity>
           );
         }}
       />
       {/* ── ADD PRODUCT MODAL (Tabbed) ── */}
       <Modal visible={addModal} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalSheet}>
-            <View style={styles.dragHandle} />
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalSheet}>
+              <View style={styles.dragHandle} />
 
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add Product</Text>
-              <TouchableOpacity style={styles.closeBtn} onPress={resetAddModal}>
-                <Ionicons name="close" size={16} color={C.deep} />
-              </TouchableOpacity>
-            </View>
-
-            {renderTabBar(TABS, activeTab, setActiveTab)}
-
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingBottom: 20 }}
-              keyboardShouldPersistTaps="handled"
-            >
-              {renderFormTab(activeTab, formData, updateForm)}
-
-              <View style={{ height: 16 }} />
-
-              {isFormValid && missingFieldsHint.length > 0 && (
-                <View style={styles.hintBanner}>
-                  <Ionicons
-                    name="information-circle-outline"
-                    size={16}
-                    color={C.dark}
-                  />
-                  <Text style={styles.hintBannerText}>
-                    You can add {missingFieldsHint.join(", ")} later by editing
-                    this product.
-                  </Text>
-                </View>
-              )}
-
-              {isFormValid && (
-                <View style={styles.swipeWrapper}>
-                  <SwipeToConfirm
-                    text="Swipe to Add Product"
-                    disabled={!isFormValid}
-                    onSwipeSuccess={handleAddProduct}
-                  />
-                </View>
-              )}
-
-              <TouchableOpacity
-                style={styles.cancelBtn}
-                onPress={resetAddModal}
-              >
-                <Text style={styles.cancelBtnText}>Cancel</Text>
-              </TouchableOpacity>
-            </ScrollView>
-
-            <SuccessTick visible={showSuccessTick} onDone={onTickDone} />
-          </View>
-        </View>
-      </Modal>
-
-      {/* ── PRODUCT DETAIL / EDIT MODAL ── */}
-      <Modal visible={detailModal} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalSheet, { maxHeight: "95%" }]}>
-            <View style={styles.dragHandle} />
-
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                {isEditing ? "Edit Product" : "Product Details"}
-              </Text>
-              <View style={{ flexDirection: "row", gap: 8 }}>
-                {isEditing && (
-                  <TouchableOpacity
-                    style={[styles.closeBtn, { backgroundColor: C.successBg }]}
-                    onPress={() => setIsEditing(false)}
-                  >
-                    <Ionicons name="eye-outline" size={16} color={C.success} />
-                  </TouchableOpacity>
-                )}
-                <TouchableOpacity
-                  style={styles.closeBtn}
-                  onPress={resetDetailModal}
-                >
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Add Product</Text>
+                <TouchableOpacity style={styles.closeBtn} onPress={resetAddModal}>
                   <Ionicons name="close" size={16} color={C.deep} />
                 </TouchableOpacity>
               </View>
-            </View>
 
-            {isEditing ? (
-              <>
-                {renderTabBar(TABS, editTab, setEditTab)}
-                <ScrollView
-                  showsVerticalScrollIndicator={false}
-                  contentContainerStyle={{ paddingBottom: 20 }}
-                  keyboardShouldPersistTaps="handled"
-                >
-                  {renderFormTab(editTab, editForm, updateEditForm)}
+              {renderTabBar(TABS, activeTab, setActiveTab)}
 
-                  <View style={{ height: 16 }} />
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: 40 }}
+                keyboardShouldPersistTaps="handled"
+              >
+                {renderFormTab(activeTab, formData, updateForm)}
 
+                <View style={{ height: 100 }} />
+
+                {isFormValid && missingFieldsHint.length > 0 && (
+                  <View style={styles.hintBanner}>
+                    <Ionicons
+                      name="information-circle-outline"
+                      size={16}
+                      color={C.dark}
+                    />
+                    <Text style={styles.hintBannerText}>
+                      You can add {missingFieldsHint.join(", ")} later by editing
+                      this product.
+                    </Text>
+                  </View>
+                )}
+
+                {isFormValid && (
                   <View style={styles.swipeWrapper}>
                     <SwipeToConfirm
-                      text="Swipe to Save Changes"
-                      onSwipeSuccess={handleSaveEdit}
+                      text="Swipe to Add Product"
+                      disabled={!isFormValid}
+                      onSwipeSuccess={handleAddProduct}
                     />
                   </View>
+                )}
 
-                  <TouchableOpacity
-                    style={styles.cancelBtn}
-                    onPress={() => setIsEditing(false)}
-                  >
-                    <Text style={styles.cancelBtnText}>Cancel Editing</Text>
-                  </TouchableOpacity>
-                </ScrollView>
-              </>
-            ) : (
-              renderProductDetail()
-            )}
+                <TouchableOpacity
+                  style={styles.cancelBtn}
+                  onPress={resetAddModal}
+                >
+                  <Text style={styles.cancelBtnText}>Cancel</Text>
+                </TouchableOpacity>
+              </ScrollView>
 
-            <SuccessTick
-              visible={showEditSuccessTick}
-              onDone={onEditTickDone}
-            />
+              <SuccessTick visible={showSuccessTick} onDone={onTickDone} />
+            </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
+      </Modal>
+      {/* ── PRODUCT DETAIL / EDIT MODAL ── */}
+      <Modal visible={detailModal} transparent animationType="slide">
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalSheet, { maxHeight: "95%" }]}>
+              <View style={styles.dragHandle} />
+
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>
+                  {isEditing ? "Edit Product" : "Product Details"}
+                </Text>
+                <View style={{ flexDirection: "row", gap: 8 }}>
+                  {isEditing && (
+                    <TouchableOpacity
+                      style={[styles.closeBtn, { backgroundColor: C.successBg }]}
+                      onPress={() => setIsEditing(false)}
+                    >
+                      <Ionicons name="eye-outline" size={16} color={C.success} />
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity
+                    style={styles.closeBtn}
+                    onPress={resetDetailModal}
+                  >
+                    <Ionicons name="close" size={16} color={C.deep} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {isEditing ? (
+                <>
+                  {renderTabBar(TABS, editTab, setEditTab)}
+                  <ScrollView
+                    showsVerticalScrollIndicator={false}
+                    contentContainerStyle={{ paddingBottom: 20 }}
+                    keyboardShouldPersistTaps="handled"
+                  >
+                    {renderFormTab(editTab, editForm, updateEditForm)}
+
+                    <View style={{ height: 16 }} />
+
+                    <View style={styles.swipeWrapper}>
+                      <SwipeToConfirm
+                        text="Swipe to Save Changes"
+                        onSwipeSuccess={handleSaveEdit}
+                      />
+                    </View>
+
+                    <TouchableOpacity
+                      style={styles.cancelBtn}
+                      onPress={() => setIsEditing(false)}
+                    >
+                      <Text style={styles.cancelBtnText}>Cancel Editing</Text>
+                    </TouchableOpacity>
+                  </ScrollView>
+                </>
+              ) : (
+                renderProductDetail()
+              )}
+
+              <SuccessTick
+                visible={showEditSuccessTick}
+                onDone={onEditTickDone}
+              />
+            </View>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
       <AdminFeedbackModal
         visible={!!feedbackModalProduct}
@@ -1994,7 +2007,7 @@ export default function InventoryScreen() {
         productName={feedbackModalProduct?.name}
         onClose={() => setFeedbackModalProduct(null)}
       />
-    </SafeAreaView>
+    </SafeAreaView >
   );
 }
 
@@ -2879,25 +2892,25 @@ const styles = StyleSheet.create({
   feedbackBtnText: { fontSize: 15, fontWeight: "700", color: C.dark },
 
   detailNameRow: {
-  flexDirection: "row",
-  alignItems: "center",
-  gap: 8,
-  marginBottom: 6,
-},
-detailFeedbackBtn: {
-  flexDirection: "row",
-  alignItems: "center",
-  gap: 4,
-  backgroundColor: "#FEF3C7",
-  paddingHorizontal: 10,
-  paddingVertical: 6,
-  borderRadius: 20,
-  borderWidth: 1,
-  borderColor: "#FDE68A",
-},
-detailFeedbackBtnText: {
-  fontSize: 12,
-  fontWeight: "800",
-  color: "#B45309",
-},
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 6,
+  },
+  detailFeedbackBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#FEF3C7",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+  },
+  detailFeedbackBtnText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#B45309",
+  },
 });
