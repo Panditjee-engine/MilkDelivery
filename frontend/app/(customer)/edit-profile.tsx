@@ -26,6 +26,7 @@ export default function EditProfileScreen() {
   const [password, setPassword] = useState("");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [deleteExpanded, setDeleteExpanded] = useState(false);
 
   const saveProfile = async () => {
     if (!name.trim()) {
@@ -141,17 +142,17 @@ export default function EditProfileScreen() {
           </View>
 
           <View style={[styles.card, styles.dangerCard]}>
-            <View style={styles.cardHeader}>
+            <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", gap: 10, minHeight: 44 }} accessibilityRole="button" accessibilityState={{ expanded: deleteExpanded }} disabled={deleting} onPress={() => { setDeleteExpanded(!deleteExpanded); setPassword(""); }}>
               <View style={[styles.iconBox, styles.dangerIconBox]}>
                 <Ionicons name="trash-outline" size={18} color="#DC2626" />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.dangerTitle}>Delete Account</Text>
-                <Text style={styles.dangerText}>
-                  This option is permanent. Enter your password only if you want to delete your account.
-                </Text>
               </View>
-            </View>
+              <Ionicons name={deleteExpanded ? "chevron-up" : "chevron-down"} size={18} color="#991B1B" />
+            </TouchableOpacity>
+            {deleteExpanded && <View style={{ paddingTop: 12 }}>
+            <Text style={styles.dangerText}>Permanently delete your account. This cannot be undone.</Text>
             <Input
               label="Password"
               placeholder="Enter password"
@@ -170,6 +171,7 @@ export default function EditProfileScreen() {
                 {deleting ? "Deleting..." : "Delete Account"}
               </Text>
             </TouchableOpacity>
+            </View>}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -246,11 +248,13 @@ const styles = StyleSheet.create({
   },
   cardTitle: { fontSize: 16, fontWeight: "900", color: "#1F2937" },
   dangerCard: {
+    padding: 10,
+    borderRadius: 8,
     marginTop: 8,
     borderColor: "#FECACA",
     backgroundColor: "#FFF7F7",
   },
-  dangerIconBox: { backgroundColor: "#FEE2E2" },
+  dangerIconBox: { width: 32, height: 32, borderRadius: 8, backgroundColor: "#FEE2E2" },
   dangerTitle: { fontSize: 15, fontWeight: "900", color: "#991B1B" },
   dangerText: {
     marginTop: 3,

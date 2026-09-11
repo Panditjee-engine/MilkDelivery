@@ -813,13 +813,14 @@ export default function InventoryScreen() {
   };
 
   const filteredProducts = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return products;
+    const terms = searchQuery.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if (!terms.length) return products;
     return products.filter((p) => {
-      const name = (p.name || "").toLowerCase();
-      const category = (p.category || "").toLowerCase();
-      const unit = (p.unit || "").toLowerCase();
-      return name.includes(q) || category.includes(q) || unit.includes(q);
+      const searchableText = [p.name, p.category, p.unit]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return terms.every((term) => searchableText.includes(term));
     });
   }, [products, searchQuery]);
 
@@ -1546,9 +1547,12 @@ export default function InventoryScreen() {
         value={searchQuery}
         onChangeText={setSearchQuery}
         autoFocus
+        autoCorrect={false}
+        autoCapitalize="none"
+        returnKeyType="search"
       />
       {searchQuery.length > 0 && (
-        <TouchableOpacity onPress={() => setSearchQuery("")}>
+        <TouchableOpacity onPress={() => setSearchQuery("")} hitSlop={10} accessibilityLabel="Clear product search" accessibilityRole="button">
           <Ionicons name="close-circle" size={17} color={C.textLight} />
         </TouchableOpacity>
       )}
@@ -1649,6 +1653,8 @@ export default function InventoryScreen() {
       {/* ── Product List ── */}
       <ScrollView
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -1659,6 +1665,11 @@ export default function InventoryScreen() {
         }
         contentContainerStyle={styles.listContent}
       >
+        {searchQuery.trim() ? (
+          <Text style={styles.orderSummarySub} accessibilityLiveRegion="polite">
+            {filteredProducts.length} {filteredProducts.length === 1 ? "product" : "products"} found
+          </Text>
+        ) : null}
         {filteredProducts.length === 0 ? (
           <View style={styles.emptyState}>
             <View style={styles.emptyIconWrap}>
@@ -1678,7 +1689,7 @@ export default function InventoryScreen() {
             </Text>
           </View>
         ) : (
-          products.map((product) => {
+          filteredProducts.map((product) => {
             const cutoffRule = getOrderCutoffForProduct(product, orderCutoffs);
             const cutoffText = getOrderCutoffBadgeText(cutoffRule);
             const cutoffPassed = isOrderCutoffPassed(cutoffRule);

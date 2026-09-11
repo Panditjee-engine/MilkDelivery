@@ -1,4 +1,3 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
 import { useIsFocused } from "@react-navigation/native";
 import { useRouter } from "expo-router";
@@ -24,7 +23,6 @@ import { useAuth } from "../../src/contexts/AuthContext";
 import { api } from "../../src/services/api";
 import { hasCompleteDeliveryAddress } from "../../src/utils/address";
 
-const RECENT_SEARCH_KEY = "customer_recent_product_searches";
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const GRID_GAP = 12;
 const CARD_WIDTH = (SCREEN_WIDTH - 40 - GRID_GAP) / 2;
@@ -145,11 +143,11 @@ export default function ProductSearchScreen() {
       const [productData, categoryData, recentRaw] = await Promise.all([
         api.getCatalogProducts(adminId || undefined),
         api.getCategories(),
-        AsyncStorage.getItem(RECENT_SEARCH_KEY),
+        api.getProductSearchHistory().catch(() => []),
       ]);
       setProducts(Array.isArray(productData) ? productData : []);
       setCategories(Array.isArray(categoryData) ? categoryData : []);
-      setRecentSearches(recentRaw ? JSON.parse(recentRaw) : []);
+      setRecentSearches(Array.isArray(recentRaw) ? recentRaw : []);
     } catch (error) {
       console.error("Product search load failed:", error);
     } finally {
@@ -164,11 +162,17 @@ export default function ProductSearchScreen() {
 
   const saveRecentSearch = async (text: string) => {
     const value = text.trim();
-    if (!value) return;
+    if (value.length < 2) return;
     const next = [value, ...recentSearches.filter((item) => item.toLowerCase() !== value.toLowerCase())].slice(0, 8);
     setRecentSearches(next);
-    await AsyncStorage.setItem(RECENT_SEARCH_KEY, JSON.stringify(next));
+    await api.recordProductSearch(value).catch(() => {});
   };
+
+  useEffect(() => {
+    if (!isFocused || !user?.id || query.trim().length < 2) return;
+    const timer = setTimeout(() => { void saveRecentSearch(query); }, 1200);
+    return () => clearTimeout(timer);
+  }, [query, isFocused, user?.id]);
 
   const filteredProducts = useMemo(() => {
     const text = query.trim().toLowerCase();
@@ -183,7 +187,7 @@ export default function ProductSearchScreen() {
         .filter(Boolean)
         .join(" ")
         .toLowerCase();
-      return haystack.includes(text);
+      return text.split(/\s+/).every((term) => haystack.includes(term));
     });
   }, [products, query]);
 
@@ -325,7 +329,7 @@ export default function ProductSearchScreen() {
             style={s.searchInput}
             returnKeyType="search"
             autoFocus
-            onSubmitEditing={() => saveRecentSearch(query)}
+            maxLength={120}
           />
           {query ? (
             <TouchableOpacity onPress={() => setQuery("")}>
@@ -341,8 +345,12 @@ export default function ProductSearchScreen() {
           {recentSearches.length > 0 && (
             <TouchableOpacity
               onPress={async () => {
-                setRecentSearches([]);
-                await AsyncStorage.removeItem(RECENT_SEARCH_KEY);
+                try {
+                  await api.clearProductSearchHistory();
+                  setRecentSearches([]);
+                } catch {
+                  setFeedback("Could not clear recent searches. Please try again.");
+                }
               }}
             >
               <Text style={s.clearText}>Clear</Text>

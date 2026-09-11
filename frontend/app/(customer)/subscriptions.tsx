@@ -1,6 +1,7 @@
 // orders.tsx — fixed: cancel now uses DELETE /orders/{order_id} directly
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import RecordSearch, { matchesRecordSearch } from "../../src/components/RecordSearch";
 import {
   View,
   Text,
@@ -1322,6 +1323,7 @@ export default function OrdersScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [search, setSearch] = useState("");
   const [productMap, setProductMap] = useState<ProductMap>({});
   const [cancelOrder, setCancelOrder] = useState<Order | null>(null);
   const [cancelModal, setCancelModal] = useState(false);
@@ -1446,11 +1448,15 @@ export default function OrdersScreen() {
     }
   };
 
-  const active = orders.filter(
+  const searchedOrders = orders.filter(order => matchesRecordSearch(search, [
+    order.id, order.status, order.product_name,
+    ...(order.items || []).flatMap(item => [item.product_name, item.name, productMap[item.product_id]?.name]),
+  ]));
+  const active = searchedOrders.filter(
     (o) => !["delivered", "cancelled", "skipped"].includes(o.status),
   );
-  const delivered = orders.filter((o) => o.status === "delivered");
-  const cancelled = orders.filter((o) =>
+  const delivered = searchedOrders.filter((o) => o.status === "delivered");
+  const cancelled = searchedOrders.filter((o) =>
     ["cancelled", "skipped"].includes(o.status),
   );
 
@@ -1512,6 +1518,7 @@ export default function OrdersScreen() {
 
       {/* Summary pills */}
       <SummaryBar orders={orders} />
+      <RecordSearch value={search} onChange={setSearch} placeholder="Search product, order ID or status" />
 
       {/* List */}
       {orders.length === 0 ? (
@@ -1530,6 +1537,9 @@ export default function OrdersScreen() {
       ) : (
         <FlatList
           data={listData}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          ListEmptyComponent={<Text style={{ padding: 24, textAlign: "center", color: "#6B7280" }}>No orders match your search.</Text>}
           keyExtractor={(item) => item.key}
           contentContainerStyle={sc.listContent}
           showsVerticalScrollIndicator={false}

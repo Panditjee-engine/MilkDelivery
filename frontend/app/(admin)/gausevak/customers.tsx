@@ -68,7 +68,7 @@ type SortOption =
   | "active_first"
   | "linked_first"
   | "recent_first";
-type FilterOption = "all" | "active" | "inactive" | "linked" | "unlinked";
+type FilterOption = "all" | "active" | "inactive" | "linked" | "unlinked" | "recent" | "pending" | "assigned" | "unassigned";
 type ToastVariant = "success" | "error" | "info";
 const FILTER_CHIP_WIDTHS: Record<FilterOption, number> = {
   all: 54,
@@ -76,7 +76,38 @@ const FILTER_CHIP_WIDTHS: Record<FilterOption, number> = {
   inactive: 88,
   linked: 76,
   unlinked: 78,
+  recent: 160,
+  pending: 132,
+  assigned: 100,
+  unassigned: 116,
 };
+const FILTER_LABELS: Record<FilterOption, string> = {
+  all: "All", active: "Active", inactive: "Inactive", linked: "Linked",
+  unlinked: "Offline", recent: "Added in Last 7 Days", pending: "Pending Claims",
+  assigned: "Assigned", unassigned: "Unassigned",
+};
+
+function customerCreatedTime(customer: Customer): number {
+  const value = Date.parse(customer.created_at || "");
+  return Number.isFinite(value) ? value : 0;
+}
+
+function matchesCustomerFilter(customer: Customer, filter: FilterOption): boolean {
+  switch (filter) {
+    case "active": return customer.is_active;
+    case "inactive": return !customer.is_active;
+    case "linked": return isLinkedCustomer(customer);
+    case "unlinked": return !isLinkedCustomer(customer);
+    case "pending": return String(customer.claim_status || "").toLowerCase() === "pending";
+    case "assigned": return Boolean(customer.delivery_partner_id);
+    case "unassigned": return !customer.delivery_partner_id;
+    case "recent": {
+      const time = customerCreatedTime(customer);
+      return time > 0 && time >= Date.now() - 7 * 86400000 && time <= Date.now();
+    }
+    default: return true;
+  }
+}
 
 const DEFAULT_ZONES = [
   "Zone A",
@@ -1202,23 +1233,9 @@ export default function CustomersScreen() {
   const visibleCustomers = useMemo(() => {
     return [...customers]
       .filter((customer) => {
-        const q = search.toLowerCase();
-        const matchesSearch =
-          customer.name.toLowerCase().includes(q) ||
-          (customer.phone ?? "").toLowerCase().includes(q) ||
-          (customer.zone ?? "").toLowerCase().includes(q);
-        const linked = isLinkedCustomer(customer);
-        const matchesFilter =
-          filter === "all"
-            ? true
-            : filter === "active"
-              ? customer.is_active
-              : filter === "inactive"
-                ? !customer.is_active
-                : filter === "linked"
-                  ? linked
-                  : !linked;
-        return matchesSearch && matchesFilter;
+        const terms = search.trim().toLowerCase().split(/\s+/).filter(Boolean);
+        const text = [customer.name, customer.phone, customer.email, customer.zone].filter(Boolean).join(" ").toLowerCase();
+        return terms.every((term) => text.includes(term)) && matchesCustomerFilter(customer, filter);
       })
       .sort((a, b) => {
         if (sortBy === "name_asc") return a.name.localeCompare(b.name);
@@ -1239,7 +1256,7 @@ export default function CustomersScreen() {
               ? -1
               : 1;
         }
-        return new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime();
+        return customerCreatedTime(b) - customerCreatedTime(a) || a.name.localeCompare(b.name);
       });
   }, [customers, search, filter, sortBy]);
 
@@ -1251,7 +1268,7 @@ export default function CustomersScreen() {
     name_desc: { label: "Name Z-A", icon: "text-outline" },
     active_first: { label: "Active First", icon: "checkmark-circle-outline" },
     linked_first: { label: "Linked First", icon: "link-outline" },
-    recent_first: { label: "Recent First", icon: "time-outline" },
+    recent_first: { label: "Recently Added", icon: "time-outline" },
   };
 
   const handleBack = () => {
@@ -1433,22 +1450,22 @@ export default function CustomersScreen() {
 
       {!loading && customers.length > 0 && (
         <View style={styles.statsBar}>
-          <View style={styles.statChip}>
+          <TouchableOpacity style={styles.statChip} onPress={() => setFilter("all")} accessibilityRole="button">
             <Ionicons name="people" size={13} color="#2d6a4f" />
-            <Text style={styles.statChipText}>{visibleCustomers.length} Customers</Text>
-          </View>
-          <View style={[styles.statChip, { backgroundColor: "#dcfce7" }]}>
+            <Text style={styles.statChipText}>{customers.length} Customers</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.statChip, { backgroundColor: "#dcfce7" }]} onPress={() => setFilter("active")} accessibilityRole="button">
             <View style={[styles.statusDot, { backgroundColor: "#16a34a" }]} />
             <Text style={[styles.statChipText, { color: "#16a34a" }]}>
               {totalActive} Active
             </Text>
-          </View>
-          <View style={[styles.statChip, { backgroundColor: "#dbeafe" }]}>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.statChip, { backgroundColor: "#dbeafe" }]} onPress={() => setFilter("linked")} accessibilityRole="button">
             <View style={[styles.statusDot, { backgroundColor: "#2563eb" }]} />
             <Text style={[styles.statChipText, { color: "#2563eb" }]}>
               {totalLinked} Linked
             </Text>
-          </View>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -1456,10 +1473,12 @@ export default function CustomersScreen() {
         <Ionicons name="search-outline" size={15} color="#7ca9d4" />
         <TextInput
           style={styles.searchInput}
-          placeholder="Search customer, phone or zone..."
+          placeholder="Search name, phone, email or zone..."
           placeholderTextColor="#8aa7c2"
           value={search}
           onChangeText={setSearch}
+          autoCorrect={false}
+          autoCapitalize="none"
         />
         {search.length > 0 && (
           <TouchableOpacity onPress={() => setSearch("")}>
@@ -1473,7 +1492,7 @@ export default function CustomersScreen() {
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.filterRow}
       >
-        {(["all", "active", "inactive", "linked", "unlinked"] as const).map((option) => {
+        {(Object.keys(FILTER_LABELS) as FilterOption[]).map((option) => {
           const active = filter === option;
           return (
             <TouchableOpacity
@@ -1483,7 +1502,12 @@ export default function CustomersScreen() {
                 { width: FILTER_CHIP_WIDTHS[option] },
                 active && styles.filterChipActive,
               ]}
-              onPress={() => setFilter(option)}
+              onPress={() => {
+                setFilter(option);
+                if (option === "recent") setSortBy("recent_first");
+              }}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
             >
               <Text
                 style={[
@@ -1491,15 +1515,7 @@ export default function CustomersScreen() {
                   active && styles.filterChipTextActive,
                 ]}
               >
-                {option === "all"
-                  ? "All"
-                  : option === "active"
-                    ? "Active"
-                    : option === "inactive"
-                      ? "Inactive"
-                      : option === "linked"
-                        ? "Linked"
-                        : "Offline"}
+                {FILTER_LABELS[option]}
               </Text>
             </TouchableOpacity>
           );
@@ -1518,7 +1534,7 @@ export default function CustomersScreen() {
           </LinearGradient>
           <Text style={styles.emptyTitle}>No Customers Found</Text>
           <Text style={styles.emptySubtitle}>
-            Create your first customer record to get started
+            {customers.length ? "No customers match your search and filters." : "Create your first customer record to get started"}
           </Text>
           <TouchableOpacity
             style={styles.emptyBtn}

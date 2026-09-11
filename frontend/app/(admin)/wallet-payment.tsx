@@ -213,6 +213,14 @@ export default function WalletPaymentScreen() {
           <Text style={s.title}>Wallet Payment</Text>
           <Text style={s.subtitle}>Payment QR and recharge requests</Text>
         </View>
+        <TouchableOpacity
+          style={s.backBtn}
+          onPress={() => router.push("/(admin)/wallet")}
+          accessibilityRole="button"
+          accessibilityLabel="Open wallet and settlement requests"
+        >
+          <Ionicons name="wallet-outline" size={22} color={C.dark} />
+        </TouchableOpacity>
       </View>
 
       <KeyboardAvoidingView

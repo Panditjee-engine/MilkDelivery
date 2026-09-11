@@ -4,6 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { Colors } from "../../src/constants/colors";
+import { safePaymentId } from "../../src/utils/paymentMessage";
 
 function money(value?: string | string[]) {
   const raw = Array.isArray(value) ? value[0] : value;
@@ -20,6 +21,7 @@ export default function PaymentSuccessScreen() {
     balance?: string;
     paymentId?: string;
   }>();
+  const paymentId = safePaymentId(params.paymentId);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -43,12 +45,12 @@ export default function PaymentSuccessScreen() {
             <Text style={styles.label}>Wallet balance</Text>
             <Text style={styles.value}>{money(params.balance)}</Text>
           </View>
-          {params.paymentId ? (
+          {paymentId ? (
             <>
               <View style={styles.divider} />
               <View style={styles.idBlock}>
                 <Text style={styles.label}>Payment ID</Text>
-                <Text style={styles.paymentId}>{params.paymentId}</Text>
+                <Text style={styles.paymentId}>{paymentId}</Text>
               </View>
             </>
           ) : null}
