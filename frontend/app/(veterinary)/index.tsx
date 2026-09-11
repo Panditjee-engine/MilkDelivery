@@ -8,6 +8,7 @@ import {
   Platform,
   Animated,
   Modal,
+  ScrollView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -15,18 +16,18 @@ import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { api } from "../../src/services/api";
 
-// ── Palette 
+// ── Palette
 
 const C = {
-  primary:   "#FF9675",
+  primary: "#FF9675",
   secondary: "#FF9675",
-  accent:    "#8B6854",
-  light:     "#8B6854",
-  dark:      "#BB6B3F",
-  deep:      "#8B6854",
-  bg:        "#FFF8EF",
-  card:      "#FFE8D6",
-  text:      "#3D1F0A",
+  accent: "#8B6854",
+  light: "#8B6854",
+  dark: "#BB6B3F",
+  deep: "#8B6854",
+  bg: "#FFF8EF",
+  card: "#FFE8D6",
+  text: "#3D1F0A",
   textMuted: "#A07850",
   textLight: "#C9A882",
 };
@@ -34,39 +35,57 @@ const C = {
 const IS_IOS = Platform.OS === "ios";
 const STATUS_BAR_HEIGHT = IS_IOS ? 0 : (StatusBar.currentHeight ?? 0);
 
-// ── Menu Config 
+// ── Menu Config
 
 const MENU_CARDS = [
   {
-    route:       "/(veterinary)/cow",
-    icon:        "paw-outline" as const,
-    iconBg:      ["#FF9675", "#BB6B3F"] as [string, string],
-    title:       "Animals",
-    subtitle:    "All animals under your care",
-    arrowColor:  C.dark,
-    arrowBg:     C.card,
+    route: "/(veterinary)/cow",
+    icon: "paw-outline" as const,
+    iconBg: ["#FF9675", "#BB6B3F"] as [string, string],
+    title: "Animals",
+    subtitle: "All animals under your care",
+    arrowColor: C.dark,
+    arrowBg: C.card,
   },
   {
-    route:       "/(veterinary)/medical",
-    icon:        "medkit-outline" as const,
-    iconBg:      ["#E8956D", "#9B5B3A"] as [string, string],
-    title:       "Medical Records",
-    subtitle:    "Medicine, Insemination & Semen",
-    arrowColor:  C.accent,
-    arrowBg:     "#FFF0E8",
+    route: "/(veterinary)/medical",
+    icon: "medkit-outline" as const,
+    iconBg: ["#E8956D", "#9B5B3A"] as [string, string],
+    title: "Medical Records",
+    subtitle: "Medicine, Treatments & Vaccinations",
+    arrowColor: C.accent,
+    arrowBg: "#FFF0E8",
   },
   {
-    route:       "/(veterinary)/farm",
-    icon:        "leaf-outline" as const,
-    iconBg:      ["#FFAA80", "#C86B3F"] as [string, string],
-    title:       "Farm Records",
-    subtitle:    "Health, Feed & Milk",
-    arrowColor:  C.dark,
-    arrowBg:     C.card,
+    route: "/(veterinary)/insemination",
+    icon: "leaf-outline" as const,
+    iconBg: ["#FFAA80", "#C86B3F"] as [string, string],
+    title: "Insemination Records",
+    subtitle: "Breeding & Reproduction",
+    arrowColor: C.dark,
+    arrowBg: C.card,
+  },
+  {
+    route: "/(veterinary)/semen",
+    icon: "leaf-outline" as const,
+    iconBg: ["#FFAA80", "#C86B3F"] as [string, string],
+    title: "Semen Records",
+    subtitle: "Breeding & Reproduction",
+    arrowColor: C.dark,
+    arrowBg: C.card,
+  },
+  {
+    route: "/(veterinary)/farm",
+    icon: "leaf-outline" as const,
+    iconBg: ["#FFAA80", "#C86B3F"] as [string, string],
+    title: "Farm Records",
+    subtitle: "Health, Feed & Milk",
+    arrowColor: C.dark,
+    arrowBg: C.card,
   },
 ];
 
-// ── Custom Alert Modal 
+// ── Custom Alert Modal
 
 function LogoutAlert({
   visible,
@@ -77,14 +96,23 @@ function LogoutAlert({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
-  const scaleAnim   = useRef(new Animated.Value(0.88)).current;
+  const scaleAnim = useRef(new Animated.Value(0.88)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (visible) {
       Animated.parallel([
-        Animated.spring(scaleAnim,   { toValue: 1, useNativeDriver: true, damping: 14, stiffness: 200 }),
-        Animated.timing(opacityAnim, { toValue: 1, duration: 180, useNativeDriver: true }),
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          useNativeDriver: true,
+          damping: 14,
+          stiffness: 200,
+        }),
+        Animated.timing(opacityAnim, {
+          toValue: 1,
+          duration: 180,
+          useNativeDriver: true,
+        }),
       ]).start();
     } else {
       scaleAnim.setValue(0.88);
@@ -95,25 +123,44 @@ function LogoutAlert({
   return (
     <Modal visible={visible} transparent animationType="none">
       <View style={al.overlay}>
-        <Animated.View style={[al.box, { opacity: opacityAnim, transform: [{ scale: scaleAnim }] }]}>
+        <Animated.View
+          style={[
+            al.box,
+            { opacity: opacityAnim, transform: [{ scale: scaleAnim }] },
+          ]}
+        >
           {/* Icon */}
           <View style={al.iconWrap}>
-            <LinearGradient colors={["#FF9675", "#BB6B3F"]} style={al.iconCircle}>
+            <LinearGradient
+              colors={["#FF9675", "#BB6B3F"]}
+              style={al.iconCircle}
+            >
               <Ionicons name="log-out-outline" size={28} color="#fff" />
             </LinearGradient>
           </View>
 
           <Text style={al.title}>Log Out?</Text>
-          <Text style={al.subtitle}>You'll need to sign in again to access your veterinary dashboard.</Text>
+          <Text style={al.subtitle}>
+            You'll need to sign in again to access your veterinary dashboard.
+          </Text>
 
           <View style={al.divider} />
 
           <View style={al.btnRow}>
-            <TouchableOpacity style={al.cancelBtn} onPress={onCancel} activeOpacity={0.8}>
+            <TouchableOpacity
+              style={al.cancelBtn}
+              onPress={onCancel}
+              activeOpacity={0.8}
+            >
               <Text style={al.cancelText}>Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={onConfirm} activeOpacity={0.8}>
-              <LinearGradient colors={["#FF9675", "#BB6B3F"]} style={al.confirmBtn} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+              <LinearGradient
+                colors={["#FF9675", "#BB6B3F"]}
+                style={al.confirmBtn}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+              >
                 <Ionicons name="log-out-outline" size={16} color="#fff" />
                 <Text style={al.confirmText}>Log Out</Text>
               </LinearGradient>
@@ -147,7 +194,7 @@ const al = StyleSheet.create({
     shadowOffset: { width: 0, height: 10 },
     elevation: 16,
   },
-  iconWrap:    { marginBottom: 16 },
+  iconWrap: { marginBottom: 16 },
   iconCircle: {
     width: 62,
     height: 62,
@@ -155,10 +202,21 @@ const al = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  title:    { fontSize: 19, fontWeight: "800", color: C.text, marginBottom: 8 },
-  subtitle: { fontSize: 14, color: C.textMuted, textAlign: "center", lineHeight: 20, marginBottom: 20 },
-  divider:  { height: 1, backgroundColor: "#F5D5BC", width: "100%", marginBottom: 18 },
-  btnRow:   { flexDirection: "row", gap: 12, width: "100%" },
+  title: { fontSize: 19, fontWeight: "800", color: C.text, marginBottom: 8 },
+  subtitle: {
+    fontSize: 14,
+    color: C.textMuted,
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: "#F5D5BC",
+    width: "100%",
+    marginBottom: 18,
+  },
+  btnRow: { flexDirection: "row", gap: 12, width: "100%" },
   cancelBtn: {
     flex: 1,
     paddingVertical: 13,
@@ -169,7 +227,7 @@ const al = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  cancelText:  { fontSize: 15, fontWeight: "700", color: C.textMuted },
+  cancelText: { fontSize: 15, fontWeight: "700", color: C.textMuted },
   confirmBtn: {
     flex: 1,
     flexDirection: "row",
@@ -182,35 +240,71 @@ const al = StyleSheet.create({
   confirmText: { fontSize: 15, fontWeight: "700", color: "#fff" },
 });
 
-// ── Menu Card 
+// ── Menu Card
 
-function MenuCard({ card, index, onPress }: { card: typeof MENU_CARDS[0]; index: number; onPress: () => void }) {
-  const opacity    = useRef(new Animated.Value(0)).current;
+function MenuCard({
+  card,
+  index,
+  onPress,
+}: {
+  card: (typeof MENU_CARDS)[0];
+  index: number;
+  onPress: () => void;
+}) {
+  const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(28)).current;
-  const scale      = useRef(new Animated.Value(1)).current;
+  const scale = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(opacity,    { toValue: 1, duration: 350, delay: index * 90, useNativeDriver: true }),
-      Animated.spring(translateY, { toValue: 0, delay: index * 90, tension: 75, friction: 11, useNativeDriver: true }),
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: 350,
+        delay: index * 90,
+        useNativeDriver: true,
+      }),
+      Animated.spring(translateY, {
+        toValue: 0,
+        delay: index * 90,
+        tension: 75,
+        friction: 11,
+        useNativeDriver: true,
+      }),
     ]).start();
   }, []);
 
   return (
-    <Animated.View style={[s.card, { opacity, transform: [{ translateY }, { scale }] }]}>
+    <Animated.View
+      style={[s.card, { opacity, transform: [{ translateY }, { scale }] }]}
+    >
       <TouchableOpacity
         activeOpacity={1}
         onPress={onPress}
         onPressIn={() =>
-          Animated.spring(scale, { toValue: 0.97, useNativeDriver: true, speed: 50, bounciness: 2 }).start()
+          Animated.spring(scale, {
+            toValue: 0.97,
+            useNativeDriver: true,
+            speed: 50,
+            bounciness: 2,
+          }).start()
         }
         onPressOut={() =>
-          Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 30, bounciness: 4 }).start()
+          Animated.spring(scale, {
+            toValue: 1,
+            useNativeDriver: true,
+            speed: 30,
+            bounciness: 4,
+          }).start()
         }
         style={s.cardTouchable}
       >
         {/* Icon */}
-        <LinearGradient colors={card.iconBg} style={s.cardIconBox} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+        <LinearGradient
+          colors={card.iconBg}
+          style={s.cardIconBox}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        >
           <Ionicons name={card.icon} size={26} color="#fff" />
         </LinearGradient>
 
@@ -233,7 +327,7 @@ function MenuCard({ card, index, onPress }: { card: typeof MENU_CARDS[0]; index:
 
 export default function VeterinaryDashboard() {
   const router = useRouter();
-  const [vetData, setVetData]         = useState<any>(null);
+  const [vetData, setVetData] = useState<any>(null);
   const [alertVisible, setAlertVisible] = useState(false);
 
   useEffect(() => {
@@ -244,7 +338,9 @@ export default function VeterinaryDashboard() {
 
   const handleLogout = async () => {
     try {
-      try { await api.vetLogout(); } catch (_) {}
+      try {
+        await api.vetLogout();
+      } catch (_) {}
       await AsyncStorage.multiRemove(["vet_data", "vet_token", "auth_token"]);
     } catch (_) {}
     setAlertVisible(false);
@@ -256,7 +352,12 @@ export default function VeterinaryDashboard() {
 
   // Initials from name
   const initials = vetData?.name
-    ? vetData.name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)
+    ? vetData.name
+        .split(" ")
+        .map((n: string) => n[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2)
     : "VT";
 
   return (
@@ -285,7 +386,11 @@ export default function VeterinaryDashboard() {
             <Ionicons name="medkit-outline" size={11} color={C.primary} />
             <Text style={s.headerBadgeText}>VETERINARY</Text>
           </View>
-          <TouchableOpacity style={s.logoutBtn} onPress={() => setAlertVisible(true)} activeOpacity={0.8}>
+          <TouchableOpacity
+            style={s.logoutBtn}
+            onPress={() => setAlertVisible(true)}
+            activeOpacity={0.8}
+          >
             <Ionicons name="log-out-outline" size={19} color="#EF4444" />
           </TouchableOpacity>
         </View>
@@ -312,7 +417,12 @@ export default function VeterinaryDashboard() {
       </LinearGradient>
 
       {/* ── Cards ── */}
-      <View style={s.cardsContainer}>
+      {/* ── Cards ── */}
+      <ScrollView
+        style={s.cardsContainer}
+        contentContainerStyle={s.cardsContent}
+        showsVerticalScrollIndicator={false}
+      >
         <Text style={s.sectionTitle}>Dashboard</Text>
         {MENU_CARDS.map((card, i) => (
           <MenuCard
@@ -322,12 +432,12 @@ export default function VeterinaryDashboard() {
             onPress={() => router.push(card.route as any)}
           />
         ))}
-      </View>
+      </ScrollView>
     </View>
   );
 }
 
-// ── Styles 
+// ── Styles
 
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: C.bg },
@@ -382,7 +492,12 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  vetInfo:    { flexDirection: "row", alignItems: "center", gap: 14, marginBottom: 16 },
+  vetInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    marginBottom: 16,
+  },
   vetAvatar: {
     width: 56,
     height: 56,
@@ -393,7 +508,12 @@ const s = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.25)",
   },
   vetInitials: { fontSize: 20, fontWeight: "800", color: "#fff" },
-  vetName:  { fontSize: 22, fontWeight: "800", color: "#FFF8EF", letterSpacing: -0.4 },
+  vetName: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#FFF8EF",
+    letterSpacing: -0.4,
+  },
   emailRow: { flexDirection: "row", alignItems: "center", gap: 4 },
   vetEmail: { fontSize: 12, color: C.textLight, fontWeight: "500" },
   onlinePill: {
@@ -408,11 +528,16 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,150,117,0.2)",
   },
-  onlineDot:      { width: 7, height: 7, borderRadius: 3.5, backgroundColor: C.primary },
+  onlineDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: C.primary,
+  },
   onlinePillText: { fontSize: 12, fontWeight: "600", color: C.primary },
 
   // Cards
-  cardsContainer: { flex: 1, paddingHorizontal: 20, paddingTop: 22, gap: 14 },
+  cardsContainer: { flex: 1 },
   sectionTitle: {
     fontSize: 11,
     fontWeight: "700",
@@ -445,8 +570,8 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  cardText:     { flex: 1, gap: 4 },
-  cardTitle:    { fontSize: 17, fontWeight: "800", color: C.text },
+  cardText: { flex: 1, gap: 4 },
+  cardTitle: { fontSize: 17, fontWeight: "800", color: C.text },
   cardSubtitle: { fontSize: 12, color: C.textMuted, fontWeight: "500" },
   cardArrow: {
     width: 34,
@@ -454,5 +579,11 @@ const s = StyleSheet.create({
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
+  },
+  cardsContent: {
+    paddingHorizontal: 20,
+    paddingTop: 22,
+    paddingBottom: 40,
+    gap: 14,
   },
 });

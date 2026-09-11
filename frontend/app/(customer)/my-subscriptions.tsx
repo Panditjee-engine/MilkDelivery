@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import RecordSearch, { matchesRecordSearch } from "../../src/components/RecordSearch";
 import {
   View,
   Text,
@@ -10,6 +11,7 @@ import {
   Animated,
   Alert,
   Platform,
+  TextInput,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -187,6 +189,26 @@ const SLOT_LABELS: Record<string, string> = {
   evening: "Evening (5–8 PM)",
 };
 
+type CalendarDayInfo = {
+  order_id: string;
+  delivery_date: string;
+  status: string;
+  product_id: string;
+  product_name?: string;
+  rated: boolean;
+  rating?: number | null;
+};
+
+const STATUS_COLORS: Record<string, string> = {
+  delivered: "#16a34a",
+  assigned: "#f59e0b",
+  out_for_delivery: "#f59e0b",
+  unassigned: "#9ca3af",
+  pending: "#9ca3af",
+  skipped: "#9ca3af",
+  cancelled: "#ef4444",
+};
+
 // ─── Mini Calendar
 
 const DAY_NAMES = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
@@ -344,10 +366,12 @@ export default function MySubscriptionsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
+  const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState<"active" | "past">("active");
 
   const [editingSub, setEditingSub] = useState<Subscription | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [calendarSub, setCalendarSub] = useState<Subscription | null>(null);
   const [editQty, setEditQty] = useState(1);
   const [editPattern, setEditPattern] = useState<
     "daily" | "alternate" | "custom"
@@ -395,7 +419,10 @@ export default function MySubscriptionsScreen() {
 
   const activeSubs = subscriptions.filter(isSubscriptionActive);
   const pastSubs = subscriptions.filter((s) => !isSubscriptionActive(s));
-  const displaySubs = activeTab === "active" ? activeSubs : pastSubs;
+  const displaySubs = (activeTab === "active" ? activeSubs : pastSubs).filter(sub => matchesRecordSearch(search, [
+    sub.id, sub.product?.name, sub.pattern, sub.status,
+    ...(sub.items || []).flatMap(item => [item.product_name, item.product?.name]),
+  ]));
 
   const openEdit = (sub: Subscription) => {
     setEditingSub(sub);
@@ -508,6 +535,7 @@ export default function MySubscriptionsScreen() {
       </View>
 
       {/* ── Tabs ── */}
+      <RecordSearch value={search} onChange={setSearch} placeholder="Search product, subscription ID or plan" />
       <View style={S.tabRow}>
         {(["active", "past"] as const).map((tab) => (
           <TouchableOpacity
@@ -527,6 +555,8 @@ export default function MySubscriptionsScreen() {
       {/* ── List ── */}
       <ScrollView
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
@@ -538,12 +568,12 @@ export default function MySubscriptionsScreen() {
               <Ionicons name="repeat-outline" size={32} color="#ccc" />
             </View>
             <Text style={S.emptyTitle}>
-              {activeTab === "active"
+              {search.trim() ? "No matching subscriptions" : activeTab === "active"
                 ? "No active subscriptions"
                 : "No past subscriptions"}
             </Text>
             <Text style={S.emptyBody}>
-              {activeTab === "active"
+              {search.trim() ? "Try another search or switch tabs." : activeTab === "active"
                 ? "Subscribe to a product with Daily, Alternate, or Custom delivery."
                 : "Expired or cancelled subscriptions will appear here."}
             </Text>
@@ -567,6 +597,7 @@ export default function MySubscriptionsScreen() {
               onCancel={confirmCancel}
               onDownloadInvoice={handleDownloadInvoice}
               downloadingInvoice={invoiceLoadingId === sub.id}
+              onOpenCalendar={setCalendarSub}
             />
           ))
         )}
@@ -594,6 +625,11 @@ export default function MySubscriptionsScreen() {
         onSave={saveEdit}
         onClose={() => setShowEditModal(false)}
       />
+      <DeliveryCalendarModal
+  visible={!!calendarSub}
+  sub={calendarSub}
+  onClose={() => setCalendarSub(null)}
+/>
     </SafeAreaView>
   );
 }
@@ -607,6 +643,7 @@ function SubscriptionCard({
   onCancel,
   onDownloadInvoice,
   downloadingInvoice,
+   onOpenCalendar,    
 }: {
   sub: Subscription;
   isActive: boolean;
@@ -614,6 +651,7 @@ function SubscriptionCard({
   onCancel: (s: Subscription) => void;
   onDownloadInvoice: (s: Subscription) => void;
   downloadingInvoice?: boolean;
+  onOpenCalendar: (s: Subscription) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const rot = useRef(new Animated.Value(0)).current;
@@ -689,6 +727,14 @@ function SubscriptionCard({
             </View>
           </View>
         </View>
+
+                <TouchableOpacity
+          style={C.calendarIconBtn}
+          onPress={() => onOpenCalendar(sub)}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Ionicons name="calendar-outline" size={18} color={Colors.primary} />
+        </TouchableOpacity>
 
         <Animated.View style={{ transform: [{ rotate: chevron }] }}>
           <Ionicons name="chevron-down" size={18} color="#bbb" />
@@ -848,6 +894,14 @@ const C = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 12,
+    backgroundColor: "#FFF4E8",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+    calendarIconBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
     backgroundColor: "#FFF4E8",
     justifyContent: "center",
     alignItems: "center",
@@ -1463,4 +1517,283 @@ const S = StyleSheet.create({
     borderRadius: 10,
   },
   browsBtnTxt: { color: "#fff", fontWeight: "700", fontSize: 13 },
+});
+
+// ─── Star Rating
+
+function StarRating({ value, onChange, size = 28 }: { value: number; onChange: (n: number) => void; size?: number }) {
+  return (
+    <View style={{ flexDirection: "row", gap: 6 }}>
+      {[1, 2, 3, 4, 5].map((n) => (
+        <TouchableOpacity key={n} onPress={() => onChange(n)}>
+          <Ionicons name={n <= value ? "star" : "star-outline"} size={size} color="#f59e0b" />
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+}
+
+// ─── Rate Product Modal
+
+function RateProductModal({
+  visible, day, onClose, onSubmitted,
+}: {
+  visible: boolean;
+  day: CalendarDayInfo | null;
+  onClose: () => void;
+  onSubmitted: () => void;
+}) {
+  const [rating, setRating] = useState(5);
+  const [comment, setComment] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (day) {
+      setRating(day.rating || 5);
+      setComment("");
+    }
+  }, [day?.order_id]);
+
+  if (!day) return null;
+
+  const submit = async () => {
+    if (!day.order_id || !day.product_id) {
+      Alert.alert("Error", "This delivery can't be rated right now.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await api.submitProductFeedback({
+        order_id: day.order_id,
+        product_id: day.product_id,
+        rating,
+        comment,
+      });
+      onSubmitted();
+      onClose();
+    } catch (e: any) {
+      Alert.alert("Error", e.message || "Failed to submit rating");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="fade">
+      <View style={R.overlay}>
+        <View style={R.card}>
+          <Text style={R.title}>{day.product_name || "Rate delivery"}</Text>
+          <Text style={R.date}>{formatDate(day.delivery_date)}</Text>
+          <View style={{ alignItems: "center", marginVertical: 16 }}>
+            <StarRating value={rating} onChange={setRating} />
+          </View>
+          <TextInput
+            style={R.input}
+            placeholder="Add a comment (optional)"
+            placeholderTextColor="#aaa"
+            value={comment}
+            onChangeText={setComment}
+            multiline
+          />
+          <View style={{ flexDirection: "row", gap: 10, marginTop: 16 }}>
+            <TouchableOpacity style={R.cancelBtn} onPress={onClose} disabled={saving}>
+              <Text style={R.cancelTxt}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[R.saveBtn, saving && { opacity: 0.6 }]}
+              onPress={submit}
+              disabled={saving}
+            >
+              <Text style={R.saveTxt}>
+                {saving ? "Saving…" : day.rated ? "Update Rating" : "Submit Rating"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+// ─── Delivery Calendar Modal
+
+function DeliveryCalendarModal({
+  visible, sub, onClose,
+}: {
+  visible: boolean;
+  sub: Subscription | null;
+  onClose: () => void;
+}) {
+  const [loading, setLoading] = useState(false);
+  const [days, setDays] = useState<CalendarDayInfo[]>([]);
+  const [yr, setYr] = useState(new Date().getFullYear());
+  const [mo, setMo] = useState(new Date().getMonth());
+  const [rateDay, setRateDay] = useState<CalendarDayInfo | null>(null);
+
+  const load = useCallback(async () => {
+    if (!sub) return;
+    setLoading(true);
+    try {
+      const data = await api.getSubscriptionCalendar(sub.id);
+      setDays(data || []);
+    } catch {
+      Alert.alert("Error", "Failed to load delivery calendar");
+    } finally {
+      setLoading(false);
+    }
+  }, [sub]);
+
+  useEffect(() => {
+    if (visible && sub) {
+      const init = new Date();
+      setYr(init.getFullYear());
+      setMo(init.getMonth());
+      load();
+    }
+  }, [visible, sub]);
+
+  if (!sub) return null;
+
+  const dayMap: Record<string, CalendarDayInfo> = {};
+  days.forEach((d) => (dayMap[d.delivery_date] = d));
+
+  const daysInMonth = new Date(yr, mo + 1, 0).getDate();
+  const firstDay = new Date(yr, mo, 1).getDay();
+  const cells: (number | null)[] = [];
+  for (let i = 0; i < firstDay; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+  const ds = (day: number) => dateToString(new Date(yr, mo, day));
+  const today = dateToString(new Date());
+
+  const prevMo = () => (mo === 0 ? (setMo(11), setYr((y) => y - 1)) : setMo((m) => m - 1));
+  const nextMo = () => (mo === 11 ? (setMo(0), setYr((y) => y + 1)) : setMo((m) => m + 1));
+
+  const onDayPress = (info: CalendarDayInfo) => {
+    if (info.status === "delivered" && info.product_id) setRateDay(info);
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide">
+      <View style={M.overlay}>
+        <TouchableOpacity style={{ flex: 1 }} onPress={onClose} activeOpacity={1} />
+        <View style={[M.sheet, { maxHeight: "85%" }]}>
+          <View style={M.handle} />
+          <View style={M.header}>
+            <View>
+              <Text style={M.title}>Delivery Calendar</Text>
+              <Text style={M.subtitle}>{getProductName(sub)}</Text>
+            </View>
+            <TouchableOpacity onPress={onClose} style={M.closeBtn}>
+              <Ionicons name="close" size={16} color="#666" />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={M.body} showsVerticalScrollIndicator={false}>
+            <View style={calS.header}>
+              <TouchableOpacity onPress={prevMo} style={calS.nav}>
+                <Ionicons name="chevron-back" size={14} color="#666" />
+              </TouchableOpacity>
+              <Text style={calS.title}>{FULL_MONTH_NAMES[mo]} {yr}</Text>
+              <TouchableOpacity onPress={nextMo} style={calS.nav}>
+                <Ionicons name="chevron-forward" size={14} color="#666" />
+              </TouchableOpacity>
+            </View>
+            <View style={calS.names}>
+              {DAY_NAMES.map((d) => (
+                <Text key={d} style={calS.dayName}>{d}</Text>
+              ))}
+            </View>
+
+            {loading ? (
+              <View style={{ paddingVertical: 40, alignItems: "center" }}>
+                <Text style={{ color: "#999" }}>Loading…</Text>
+              </View>
+            ) : (
+              <View style={calS.grid}>
+                {cells.map((day, i) => {
+                  if (!day) return <View key={`e-${i}`} style={calS.cell} />;
+                  const str = ds(day);
+                  const info = dayMap[str];
+                  const isToday = str === today;
+                  const color = info ? STATUS_COLORS[info.status] || "#ccc" : undefined;
+                  return (
+                    <TouchableOpacity
+                      key={`d-${day}`}
+                      style={calS.cell}
+                      onPress={() => info && onDayPress(info)}
+                      disabled={!info || info.status !== "delivered"}
+                      activeOpacity={info?.status === "delivered" ? 0.6 : 1}
+                    >
+                      <Text style={[calS.dayNum, isToday && { color: Colors.primary, fontWeight: "700" }]}>
+                        {day}
+                      </Text>
+                      {info && (
+                        <View style={[CAL.dot, { backgroundColor: color }]}>
+                          {info.status === "delivered" && (
+                            <Ionicons name={info.rated ? "star" : "checkmark"} size={7} color="#fff" />
+                          )}
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
+
+            <View style={CAL.legend}>
+              {[
+                { label: "Delivered", color: STATUS_COLORS.delivered },
+                { label: "Pending", color: STATUS_COLORS.pending },
+                { label: "Skipped", color: STATUS_COLORS.skipped },
+                { label: "Cancelled", color: STATUS_COLORS.cancelled },
+              ].map((l) => (
+                <View key={l.label} style={CAL.legendItem}>
+                  <View style={[CAL.legendDot, { backgroundColor: l.color }]} />
+                  <Text style={CAL.legendTxt}>{l.label}</Text>
+                </View>
+              ))}
+            </View>
+            <Text style={CAL.hint}>Tap a delivered date to rate that day's delivery.</Text>
+            <View style={{ height: 20 }} />
+          </ScrollView>
+        </View>
+      </View>
+
+      <RateProductModal
+        visible={!!rateDay}
+        day={rateDay}
+        onClose={() => setRateDay(null)}
+        onSubmitted={load}
+      />
+    </Modal>
+  );
+}
+
+const CAL = StyleSheet.create({
+  dot: {
+    width: 14, height: 14, borderRadius: 7,
+    position: "absolute", bottom: 2,
+    justifyContent: "center", alignItems: "center",
+  },
+  legend: { flexDirection: "row", flexWrap: "wrap", gap: 14, marginTop: 16, justifyContent: "center" },
+  legendItem: { flexDirection: "row", alignItems: "center", gap: 5 },
+  legendDot: { width: 8, height: 8, borderRadius: 4 },
+  legendTxt: { fontSize: 11, color: "#888", fontWeight: "600" },
+  hint: { fontSize: 11, color: "#aaa", textAlign: "center", marginTop: 10, fontStyle: "italic" },
+});
+
+const R = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", padding: 24 },
+  card: { backgroundColor: "#fff", borderRadius: 18, padding: 20, width: "100%" },
+  title: { fontSize: 16, fontWeight: "800", color: "#111", textAlign: "center" },
+  date: { fontSize: 12, color: "#999", textAlign: "center", marginTop: 2 },
+  input: {
+    borderWidth: 1, borderColor: "#ebebeb", borderRadius: 10, padding: 12,
+    fontSize: 13, color: "#111", minHeight: 70, textAlignVertical: "top",
+    backgroundColor: "#F8F9FA",
+  },
+  cancelBtn: { flex: 1, paddingVertical: 13, borderRadius: 12, backgroundColor: "#F5F5F3", alignItems: "center" },
+  cancelTxt: { fontSize: 14, fontWeight: "700", color: "#666" },
+  saveBtn: { flex: 2, paddingVertical: 13, borderRadius: 12, backgroundColor: Colors.primary, alignItems: "center" },
+  saveTxt: { fontSize: 14, fontWeight: "800", color: "#fff" },
 });

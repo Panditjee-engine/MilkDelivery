@@ -502,6 +502,19 @@ const buildTomorrowDeliverySummary = (
 
   return {
     dateKey,
+    deliveries: [
+      ...tomorrowOrders.map((record: any) => ({ record, source: "Order" })),
+      ...usedSubscriptions.map((record: any) => ({ record, source: "Subscription" })),
+    ].map(({ record, source }, index) => ({
+      id: `${source}-${record.id || record._id || index}`,
+      source,
+      customer: record.customer_name || record.user_name || record.customer?.name || record.user?.name || "Customer",
+      reference: String(record.order_number || record.id || record._id || "").slice(-8),
+      items: (record.items?.length ? record.items : [record]).map((item: any) => ({
+        name: getItemName(item, products),
+        quantity: formatPackedQuantity(getItemQuantity(item), getItemUnit(item, products)),
+      })),
+    })),
     milkBaseMl,
     milkTotal: formatBaseMetric(milkBaseMl, "volume"),
     gheeTotal: formatProductTotal(gheeSummary),
@@ -1799,43 +1812,35 @@ export default function AdminDashboard() {
           </View>
 
           {tomorrowQuantityExpanded ? (
-            tomorrowDelivery.topProducts.length > 0 ? (
-              <View style={styles.tomorrowProductRow}>
-                {tomorrowDelivery.topProducts.map((product) => (
-                  <View key={product.name} style={styles.tomorrowProductChip}>
+            tomorrowDelivery.deliveries.length > 0 ? (
+              <ScrollView
+                style={{ maxHeight: 320 }}
+                contentContainerStyle={styles.tomorrowProductRow}
+                nestedScrollEnabled
+                showsVerticalScrollIndicator
+              >
+                {tomorrowDelivery.deliveries.map((delivery) => (
+                  <View key={delivery.id} style={styles.tomorrowProductChip}>
                     <View style={styles.tomorrowProductTop}>
-                      <Text style={styles.tomorrowProductName} numberOfLines={1}>
-                        {product.name}
+                      <Text style={styles.tomorrowProductName}>
+                        {delivery.customer}
                       </Text>
-                      <Text style={styles.tomorrowProductQty}>
-                        {formatPackedQuantity(product.qty, product.unit)}
+                      <Text style={styles.tomorrowSourceLabel}>
+                        {delivery.source}
                       </Text>
                     </View>
-                    <View style={styles.tomorrowSourceRow}>
-                      <View style={styles.tomorrowSourcePill}>
-                        <Text style={styles.tomorrowSourceLabel}>Orders</Text>
-                        <Text style={styles.tomorrowSourceValue}>
-                          {formatSplitQuantity(
-                            product,
-                            product.orderQty,
-                            product.orderBase,
-                          )}
+                    {delivery.reference ? <Text style={styles.tomorrowSourceLabel}>#{delivery.reference}</Text> : null}
+                    {delivery.items.map((item: { name: string; quantity: string }, index: number) => (
+                      <View key={`${item.name}-${index}`} style={styles.tomorrowProductTop}>
+                        <Text style={styles.tomorrowProductName}>{item.name}</Text>
+                        <Text style={styles.tomorrowProductQty}>
+                          {item.quantity}
                         </Text>
                       </View>
-                      <View style={styles.tomorrowSourcePill}>
-                        <Text style={styles.tomorrowSourceLabel}>Subscriptions</Text>
-                        <Text style={styles.tomorrowSourceValue}>
-                          {formatSplitQuantity(
-                            product,
-                            product.subscriptionQty,
-                            product.subscriptionBase,
-                          )}
-                        </Text>
-                      </View>
-                    </View>
+                    ))}
                   </View>
                 ))}
-              </View>
+              </ScrollView>
             ) : (
               <Text style={styles.tomorrowEmptyText}>
                 No delivery quantity planned for tomorrow.
@@ -2006,14 +2011,14 @@ export default function AdminDashboard() {
         <View style={styles.chartGrid}>
           <View style={styles.chartHalf}>
             <SectionTitle
-              title="Line Trend"
+              title="Revenue"
               subtitle={`Today ${money(todayPaidRevenue)}`}
             />
             <LineTrend data={last7.map((d) => ({ label: d.label, value: d.revenue }))} />
           </View>
           <View style={styles.chartHalf}>
             <SectionTitle
-              title="Donut"
+              title="Order"
               subtitle={`${deliveredToday}/${totalOrdersToday} delivered`}
             />
             <DonutChart delivered={deliveredToday} pending={pending} />
@@ -2022,18 +2027,18 @@ export default function AdminDashboard() {
 
         <View style={styles.chartGrid}>
           <View style={styles.chartHalf}>
-            <SectionTitle title="Funnel" subtitle={`${paidOrders.length} paid orders`} />
+            <SectionTitle title="Status" subtitle={`${paidOrders.length} paid orders`} />
             <FunnelChart values={funnelData} />
           </View>
           <View style={styles.chartHalf}>
-            <SectionTitle title="Radar" subtitle={`${deliveryRate}% delivery score`} />
+            <SectionTitle title="Business" subtitle={`${deliveryRate}% delivery score`} />
             <RadarChart metrics={radarMetrics} />
           </View>
         </View>
 
         <View style={styles.chartCard}>
           <SectionTitle
-            title="Treemap"
+            title="Popular Products"
             subtitle={`${productRevenue.length} revenue products`}
           />
           {productRevenue.length ? (
@@ -2045,7 +2050,7 @@ export default function AdminDashboard() {
 
         <View style={styles.chartGrid}>
           <View style={styles.chartHalf}>
-            <SectionTitle title="Scatter" subtitle={`AOV ${money(avgOrderValue)}`} />
+            <SectionTitle title="Trend" subtitle={`AOV ${money(avgOrderValue)}`} />
             <ScatterChart data={scatterData} />
           </View>
           <View style={styles.chartHalf}>

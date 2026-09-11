@@ -12,6 +12,7 @@ import {
   Platform,
   UIManager,
   Image,
+  TextInput,
 } from "react-native";
 import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -52,6 +53,18 @@ interface HealthLog {
   status: string;
   date: string;
 }
+
+type HealthKey = "healthy" | "fever" | "upset_stomach" | "injury" | "other";
+
+type CowHealthEntry = {
+  status: HealthKey | null;
+  saving: HealthKey | null;
+  expanded: boolean;
+  otherText: string;
+  showOtherInput: boolean;
+};
+
+type CowHealthMap = Record<string, CowHealthEntry>;
 
 // Health options are now a function so labels translate dynamically
 function useHealthOptions() {
@@ -105,8 +118,6 @@ function useHealthOptions() {
   ] as const;
 }
 
-type HealthKey = "healthy" | "fever" | "upset_stomach" | "injury" | "other";
-
 function HealthIcon({
   icon,
   lib,
@@ -136,20 +147,18 @@ export default function HealthScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const [cowHealth, setCowHealth] = useState<
-    Record<
-      string,
-      {
-        status: HealthKey | null;
-        saving: HealthKey | null;
-        expanded: boolean;
-      }
-    >
-  >({});
+  const [cowHealth, setCowHealth] = useState<CowHealthMap>({});
 
-  const get = (id: string) =>
-    cowHealth[id] ?? { status: null, saving: null, expanded: true };
-  const patch = (id: string, p: Partial<ReturnType<typeof get>>) =>
+  const get = (id: string): CowHealthEntry =>
+    cowHealth[id] ?? {
+      status: null,
+      saving: null,
+      expanded: true,
+      otherText: "",
+      showOtherInput: false,
+    };
+
+  const patch = (id: string, p: Partial<CowHealthEntry>) =>
     setCowHealth((prev) => ({ ...prev, [id]: { ...get(id), ...p } }));
 
   // Reads the worker's own farm location fresh from AsyncStorage on every
@@ -190,19 +199,14 @@ export default function HealthScreen() {
       });
 
       setCowHealth(() => {
-        const next: Record<
-          string,
-          {
-            status: HealthKey | null;
-            saving: HealthKey | null;
-            expanded: boolean;
-          }
-        > = {};
+        const next: CowHealthMap = {};
         active.forEach((c) => {
           next[c.id] = {
             status: logMap[c.id] ?? null,
             saving: null,
             expanded: !logMap[c.id],
+            otherText: "",
+            showOtherInput: false,
           };
         });
         return next;
@@ -228,6 +232,15 @@ export default function HealthScreen() {
     const d = get(cow.id);
     if (d.saving) return;
 
+    if (optKey === "other") {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      patch(cow.id, {
+        showOtherInput: true,
+        otherText: d.status === "other" ? d.otherText : "",
+      });
+      return;
+    }
+
     if (d.status === optKey) {
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       patch(cow.id, { expanded: false });
@@ -243,12 +256,48 @@ export default function HealthScreen() {
         date: todayStr(),
       });
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-      patch(cow.id, { status: optKey, saving: null, expanded: false });
+      patch(cow.id, {
+        status: optKey,
+        saving: null,
+        expanded: false,
+        showOtherInput: false,
+      });
     } catch (err: any) {
       Alert.alert(t("noMilkQty"), err?.message ?? t("couldNotSave"));
       patch(cow.id, { saving: null });
     }
   };
+
+  const saveOtherHealth = async (cow: Cow) => {
+    const d = get(cow.id);
+    const text = d.otherText.trim();
+    if (!text) return;
+    patch(cow.id, { saving: "other" });
+    try {
+      await api.workerAddHealthLog({
+        cow_id: cow.id,
+        cow_name: cow.name,
+        cow_tag: cow.tag ?? cow.tag_id ?? "",
+        status: "other",
+        note: text,
+        date: todayStr(),
+      });
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      patch(cow.id, {
+        status: "other",
+        otherText: text,
+        saving: null,
+        expanded: false,
+        showOtherInput: false,
+      });
+    } catch (err: any) {
+      Alert.alert(t("noMilkQty"), err?.message ?? t("couldNotSave"));
+      patch(cow.id, { saving: null });
+    }
+  };
+
+  const cancelOtherInput = (cow: Cow) =>
+    patch(cow.id, { showOtherInput: false });
 
   const healthyCount = cows.filter(
     (c) => get(c.id).status === "healthy",
@@ -441,8 +490,11 @@ export default function HealthScreen() {
                     />
                     <Text
                       style={[s.statusBadgeTxt, { color: selectedOpt.color }]}
+                      numberOfLines={1}
                     >
-                      {selectedOpt.label}
+                      {selectedOpt.key === "other" && d.otherText
+                        ? d.otherText
+                        : selectedOpt.label}
                     </Text>
                   </View>
                   <Ionicons
@@ -474,6 +526,57 @@ export default function HealthScreen() {
                 )}
                 <View style={s.optGrid}>
                   {HEALTH_OPTIONS.map((opt) => {
+                    if (opt.key === "other" && d.showOtherInput) {
+                      return (
+                        <View key={opt.key} style={s.otherInputRow}>
+                          <HealthIcon
+                            icon={opt.icon}
+                            lib={opt.lib}
+                            color={opt.color}
+                            size={17}
+                          />
+                          <TextInput
+                            style={s.otherInput}
+                            placeholder="Please specify..."
+                            placeholderTextColor="#9ca3af"
+                            value={d.otherText}
+                            onChangeText={(txt) =>
+                              patch(cow.id, { otherText: txt })
+                            }
+                            autoFocus
+                            onSubmitEditing={() => saveOtherHealth(cow)}
+                            returnKeyType="done"
+                          />
+                          {d.saving === "other" ? (
+                            <ActivityIndicator size="small" color={opt.color} />
+                          ) : (
+                            <>
+                              <TouchableOpacity
+                                onPress={() => saveOtherHealth(cow)}
+                                hitSlop={8}
+                              >
+                                <Ionicons
+                                  name="checkmark-circle"
+                                  size={22}
+                                  color={opt.color}
+                                />
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                onPress={() => cancelOtherInput(cow)}
+                                hitSlop={8}
+                              >
+                                <Ionicons
+                                  name="close-circle"
+                                  size={22}
+                                  color="#9ca3af"
+                                />
+                              </TouchableOpacity>
+                            </>
+                          )}
+                        </View>
+                      );
+                    }
+
                     const isSelected = d.status === opt.key;
                     const isSaving = d.saving === opt.key;
                     return (
@@ -504,7 +607,9 @@ export default function HealthScreen() {
                             { color: isSelected ? opt.color : "#6b7280" },
                           ]}
                         >
-                          {opt.label}
+                          {opt.key === "other" && isSelected && d.otherText
+                            ? d.otherText
+                            : opt.label}
                         </Text>
                         {isSelected && (
                           <Ionicons
@@ -644,6 +749,23 @@ const s = StyleSheet.create({
   },
   updateHintTxt: { fontSize: 12, color: "#9ca3af", fontWeight: "600" },
   optGrid: { gap: 8 },
+  otherInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: "#ddd6fe",
+    backgroundColor: "#f5f3ff",
+  },
+  otherInput: {
+    flex: 1,
+    fontSize: 14,
+    color: "#111827",
+    paddingVertical: 4,
+  },
   optBtn: {
     flexDirection: "row",
     alignItems: "center",

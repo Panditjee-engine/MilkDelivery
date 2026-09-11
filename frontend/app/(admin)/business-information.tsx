@@ -67,6 +67,7 @@ export default function BusinessInformationScreen() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingLocation, setSavingLocation] = useState(false);
   const [deleteModal, setDeleteModal] = useState(false);
+  const [deleteExpanded, setDeleteExpanded] = useState(false);
   const [deletePassword, setDeletePassword] = useState("");
   const [deleting, setDeleting] = useState(false);
 
@@ -464,22 +465,28 @@ export default function BusinessInformationScreen() {
           ) : null}
         </View>
 
+        <View style={s.deleteCard}>
         <TouchableOpacity
-          style={s.deleteCard}
-          onPress={() => {
-            setDeletePassword("");
-            setDeleteModal(true);
-          }}
+          style={{ flexDirection: "row", alignItems: "center", gap: 10, minHeight: 44 }}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: deleteExpanded }}
+          onPress={() => setDeleteExpanded(!deleteExpanded)}
         >
           <View style={s.deleteIcon}>
             <Ionicons name="trash-outline" size={18} color={C.red} />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={s.deleteTitle}>Delete Account</Text>
-            <Text style={s.deleteSub}>Permanently remove this admin account</Text>
           </View>
-          <Ionicons name="chevron-forward" size={16} color="#FCA5A5" />
+          <Ionicons name={deleteExpanded ? "chevron-up" : "chevron-down"} size={18} color={C.red} />
         </TouchableOpacity>
+        {deleteExpanded && <View style={{ paddingTop: 12 }}>
+          <Text style={s.deleteSub}>Permanently remove this admin account. This cannot be undone.</Text>
+          <TouchableOpacity style={[s.deleteConfirmBtn, { marginTop: 12, minHeight: 44 }]} onPress={() => { setDeletePassword(""); setDeleteModal(true); }}>
+            <Text style={s.deleteConfirmTxt}>Delete Account</Text>
+          </TouchableOpacity>
+        </View>}
+        </View>
       </ScrollView>
 
       <Modal
@@ -701,19 +708,16 @@ const s = StyleSheet.create({
   },
   saveLocTxt: { fontSize: 13, fontWeight: "900", color: "#fff" },
   deleteCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
     backgroundColor: "#FFF5F5",
-    borderRadius: 20,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: "#FECACA",
-    padding: 14,
+    padding: 10,
   },
   deleteIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
+    width: 32,
+    height: 32,
+    borderRadius: 8,
     backgroundColor: "#FEE2E2",
     alignItems: "center",
     justifyContent: "center",

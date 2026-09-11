@@ -575,6 +575,18 @@ export interface ProductFeedbackSummary {
 }
 
 class ApiService {
+  async getReferralDirectory(): Promise<Array<{ admin_id: string; admin_name: string; referral_code: string; is_default: boolean }>> {
+    return this.request("/admin/referral-directory");
+  }
+  async getProductSearchHistory(): Promise<string[]> {
+    return this.request("/catalog/search-history");
+  }
+  async recordProductSearch(query: string) {
+    return this.request("/catalog/search-history", { method: "POST", body: JSON.stringify({ query }) });
+  }
+  async clearProductSearchHistory() {
+    return this.request("/catalog/search-history", { method: "DELETE" });
+  }
   private token: string | null = null;
 
   async init() {
@@ -639,10 +651,19 @@ class ApiService {
         console.log("BODY:", text);
       }
 
-      let message = text || "Request failed";
+       let message = text || "Request failed";
       try {
         const errJson = JSON.parse(text);
-        message = errJson.detail || errJson.message || text || "Request failed";
+        if (Array.isArray(errJson.detail)) {
+          message = errJson.detail
+            .map((d: any) => {
+              const field = Array.isArray(d.loc) ? d.loc[d.loc.length - 1] : "field";
+              return `${field}: ${d.msg}`;
+            })
+            .join("; ");
+        } else {
+          message = errJson.detail || errJson.message || text || "Request failed";
+        }
       } catch {
         // Keep the raw text when the backend does not return JSON.
       }
@@ -1122,6 +1143,18 @@ class ApiService {
     return this.request<any[]>("/subscriptions/history");
   }
 
+  async getSubscriptionCalendar(subscriptionId: string) {
+    return this.request<Array<{
+      order_id: string;
+      delivery_date: string;
+      status: string;
+      product_id: string;
+      product_name?: string;
+      rated: boolean;
+      rating?: number | null;
+    }>>(`/orders/subscription/${subscriptionId}/calendar`);
+  }
+
   async downloadOrderInvoice(orderId: string) {
     return this.request<InvoiceDownloadPayload>(
       `/invoices/order/${orderId}/download`,
@@ -1275,12 +1308,14 @@ class ApiService {
 
   // Per-date order status for a subscription — used to render the
   // delivery calendar (checkmark on delivered dates) in the admin app. by goluu
-  async getAdminSubscriptionOrders(
-    subscriptionId: string,
-  ): Promise<{ delivery_date: string; status: string }[]> {
-    return this.request<{ delivery_date: string; status: string }[]>(
-      `/admin/orders/subscription/${subscriptionId}`,
-    );
+  async getAdminSubscriptionOrders(subscriptionId: string): Promise<Array<{
+    order_id: string;
+    delivery_date: string;
+    status: string;
+    has_feedback: boolean;
+    rating: number | null;
+  }>> {
+    return this.request(`/admin/orders/subscription/${subscriptionId}`);
   }
 
   async getVacations() {
@@ -2382,6 +2417,7 @@ class ApiService {
     cow_tag: string;
     status: string;
     date: string;
+    note?: string;
   }) {
     const token = await AsyncStorage.getItem("worker_token");
     const response = await fetch(`${API_BASE}/api/worker/health`, {
@@ -2794,7 +2830,7 @@ class ApiService {
 
   // ── Withdrawal ───────────────────────────────────────────
 
-  async requestWithdrawal(amount: number) {
+  async requestWithdrawal(amount: number, requestId?: string) {
     return this.request<{
       message: string;
       withdrawal_id: string;
@@ -2802,7 +2838,7 @@ class ApiService {
       status: string;
     }>("/wallet/withdraw", {
       method: "POST",
-      body: JSON.stringify({ amount }),
+      body: JSON.stringify({ amount, request_id: requestId }),
     });
   }
 
@@ -3296,6 +3332,173 @@ class ApiService {
     if (!response.ok)
       throw new Error(data.detail || "Failed to fetch feed records");
     return data;
+  }
+
+  async getVetInseminations() {
+  const token = await AsyncStorage.getItem("vet_token");
+  const response = await fetch(`${API_BASE}/api/vet/insemination`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await response.json();
+  if (!response.ok)
+    throw new Error(data.detail || "Failed to fetch insemination records");
+  return data;
+}
+
+async vetCreateInsemination(data: {
+  cowSrNo: string;
+  cowName?: string;
+  inseminationDate: string;
+  aiDate?: string;
+  pregnancyStatus?: boolean;
+  pdDone?: boolean;
+  pregnancyStatusDate?: string;
+  doctorName?: string;
+  actualCalvingDate?: string;
+  heatAfterCalvingDate?: string;
+  sire?: string;
+  lastCalvingDate?: string;
+  lastCalvingCalfGender?: string;
+}) {
+  const token = await AsyncStorage.getItem("vet_token");
+  const response = await fetch(`${API_BASE}/api/vet/insemination`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+  const result = await response.json();
+  if (!response.ok)
+    throw new Error(result.detail || "Failed to save insemination record");
+  return result;
+}
+
+async vetUpdateInsemination(
+  id: string,
+  data: Partial<{
+    cowSrNo: string;
+    cowName: string;
+    inseminationDate: string;
+    aiDate: string;
+    pregnancyStatus: boolean;
+    pdDone: boolean;
+    pregnancyStatusDate: string;
+    doctorName: string;
+    actualCalvingDate: string;
+    heatAfterCalvingDate: string;
+    sire: string;
+    lastCalvingDate: string;
+    lastCalvingCalfGender: string;
+  }>,
+) {
+  const token = await AsyncStorage.getItem("vet_token");
+  const response = await fetch(`${API_BASE}/api/vet/insemination/${id}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+  const result = await response.json();
+  if (!response.ok)
+    throw new Error(result.detail || "Failed to update insemination record");
+  return result;
+}
+
+async vetDeleteInsemination(id: string) {
+  const token = await AsyncStorage.getItem("vet_token");
+  const response = await fetch(`${API_BASE}/api/vet/insemination/${id}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const result = await response.json();
+  if (!response.ok)
+    throw new Error(result.detail || "Failed to delete insemination record");
+  return result;
+}
+
+  // ── Vet Semen Records ────────────────────────────────
+
+  async vetGetSemenRecords(search?: string) {
+    const token = await AsyncStorage.getItem("vet_token");
+    const query = search ? `?search=${encodeURIComponent(search)}` : "";
+    const response = await fetch(`${API_BASE}/api/vet/semen${query}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await response.json();
+    if (!response.ok)
+      throw new Error(data.detail || "Failed to fetch semen records");
+    return data;
+  }
+
+  async vetCreateSemenRecord(data: {
+    bullSrNo: string;
+    bullName?: string;
+    breed?: string;
+    femalCalves: number;
+    maleCalves: number;
+    damaged: number;
+    conceptionCount: number;
+    totalDoses: number;
+    notes?: string;
+  }) {
+    const token = await AsyncStorage.getItem("vet_token");
+    const response = await fetch(`${API_BASE}/api/vet/semen`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(data),
+    });
+    const result = await response.json();
+    if (!response.ok)
+      throw new Error(result.detail || "Failed to save semen record");
+    return result;
+  }
+
+  async vetUpdateSemenRecord(
+    id: string,
+    data: Partial<{
+      bullSrNo: string;
+      bullName: string;
+      breed: string;
+      femalCalves: number;
+      maleCalves: number;
+      damaged: number;
+      conceptionCount: number;
+      totalDoses: number;
+      notes: string;
+    }>,
+  ) {
+    const token = await AsyncStorage.getItem("vet_token");
+    const response = await fetch(`${API_BASE}/api/vet/semen/${id}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(data),
+    });
+    const result = await response.json();
+    if (!response.ok)
+      throw new Error(result.detail || "Failed to update semen record");
+    return result;
+  }
+
+  async vetDeleteSemenRecord(id: string) {
+    const token = await AsyncStorage.getItem("vet_token");
+    const response = await fetch(`${API_BASE}/api/vet/semen/${id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const result = await response.json();
+    if (!response.ok)
+      throw new Error(result.detail || "Failed to delete semen record");
+    return result;
   }
 
   async updateMedicineRecord(

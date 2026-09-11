@@ -578,36 +578,38 @@ function VetCowSelector({
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
 
-const open = async () => {
-  setModalOpen(true);
-  setSearch("");
-  setLoading(true);
-  try {
-    const data = await api.vetGetCows();
-    const normalized = (Array.isArray(data) ? data : []).map((c: any) => ({
-      ...c,
-      tag: c.tag || c.tag_number || "",
-    }));
-    setAllCows(normalized);
-  } catch {
-    setAllCows([]);
-  } finally {
-    setLoading(false);
-  }
-};
+  const open = async () => {
+    setModalOpen(true);
+    setSearch("");
+    setLoading(true);
+    try {
+      const data = await api.vetGetCows();
+      const normalized = (Array.isArray(data) ? data : []).map((c: any) => ({
+        ...c,
+        tag: c.tag || c.tag_number || "",
+      }));
+      setAllCows(normalized);
+    } catch {
+      setAllCows([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const close = () => {
     setModalOpen(false);
     setSearch("");
   };
 
-const visible = allCows.filter((c) => {
-  if (c.isLeasedOut) return false;
-  const tag = c.tag || c.tag_number || "";
-  if (!search.trim()) return true;
-  const q = search.toLowerCase();
-  return tag.toLowerCase().includes(q) || (c.name || "").toLowerCase().includes(q);
-});
+  const visible = allCows.filter((c) => {
+    if (c.isLeasedOut) return false;
+    const tag = c.tag || c.tag_number || "";
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return (
+      tag.toLowerCase().includes(q) || (c.name || "").toLowerCase().includes(q)
+    );
+  });
 
   return (
     <>
@@ -721,7 +723,9 @@ const visible = allCows.filter((c) => {
                         )}
                       </View>
                       <View style={{ flex: 1 }}>
-                        <Text style={cs.cowTag}>{item.tag || item.tag_number}</Text>
+                        <Text style={cs.cowTag}>
+                          {item.tag || item.tag_number}
+                        </Text>
                         <Text style={cs.cowMeta}>
                           {item.name}
                           {item.breed ? ` · ${item.breed}` : ""}
@@ -1077,13 +1081,13 @@ function MedicalFormModal({
 
   const setF = (k: keyof MedicalForm) => (v: any) =>
     setForm((p) => ({ ...p, [k]: v }));
-const handleCowSelect = (c: VetCowOption) =>
-  setForm((p) => ({
-    ...p,
-    cowSrNo: c.tag || c.tag_number || "",
-    cowName: c.name || "",
-    cowAge: c.age || "",
-  }));
+  const handleCowSelect = (c: VetCowOption) =>
+    setForm((p) => ({
+      ...p,
+      cowSrNo: c.tag || c.tag_number || "",
+      cowName: c.name || "",
+      cowAge: c.age || "",
+    }));
   const handleCowClear = () =>
     setForm((p) => ({ ...p, cowSrNo: "", cowName: "", cowAge: "" }));
   const reset = () => {
@@ -1091,8 +1095,8 @@ const handleCowSelect = (c: VetCowOption) =>
     onClose();
   };
 
-const submit = async () => {
-  if (!(form.cowSrNo || "").trim()) {
+  const submit = async () => {
+    if (!(form.cowSrNo || "").trim()) {
       Alert.alert("Missing Field", "Please select a cow first.");
       return;
     }
@@ -1737,7 +1741,8 @@ export default function VetMedicalScreen() {
       ]);
       const lookup: Record<string, { type: string; photo?: string }> = {};
       for (const cow of cows as VetCowOption[]) {
-        const tag = typeof cow?.tag === "string" ? cow.tag.trim() : "";
+        const rawTag = cow?.tag || (cow as any)?.tag_number || "";
+        const tag = typeof rawTag === "string" ? rawTag.trim() : "";
         if (!tag) continue;
         lookup[tag] = { type: cow.type || "mature", photo: cow.photo };
       }
@@ -1747,7 +1752,7 @@ export default function VetMedicalScreen() {
         const cowKey = typeof r.cowSrNo === "string" ? r.cowSrNo.trim() : "";
         return {
           ...r,
-          cowType: cowKey ? lookup[cowKey]?.type ?? "mature" : "mature",
+          cowType: cowKey ? (lookup[cowKey]?.type ?? "mature") : "mature",
           cowPhoto: cowKey ? lookup[cowKey]?.photo : undefined,
         };
       });

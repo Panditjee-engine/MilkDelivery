@@ -354,8 +354,8 @@ function AnimalCard({
                 />
                 <Text style={[s.chipText, { color: "#dc2626" }]}>
                   Leased out
-                  {animal.leasedLocationLabel
-                    ? ` · ${animal.leasedLocationLabel}`
+                  {animal.leasedToFarmName
+                    ? ` · ${animal.leasedToFarmName}`
                     : ""}
                 </Text>
               </View>

@@ -81,6 +81,12 @@ interface Subscription {
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
+const getItemsLabel = (items: SubItem[]): string => {
+  if (!items.length) return "Product";
+  const first = items[0].product_name || items[0].name || "Product";
+  return items.length > 1 ? `${first} +${items.length - 1} more` : first;
+};
+
 const getPattern = (s: any): string =>
   String(s?.pattern ?? s?.subscription_type ?? s?.frequency ?? "")
     .toLowerCase()
@@ -116,8 +122,8 @@ const dateDiffDays = (aStr: string, bStr: string): number =>
 /** True only when TODAY exactly matches a scheduled delivery day for this subscription */
 const isDeliveryToday = (sub: any): boolean => {
   const tStr = todayStr();
-  const start = sub.start_date?.split?.("T")?.[0] ?? sub.start_date;
-  const end = sub.end_date?.split?.("T")?.[0] ?? sub.end_date;
+  const start = padDate(sub.start_date?.split?.("T")?.[0] ?? sub.start_date);
+  const end = padDate(sub.end_date?.split?.("T")?.[0] ?? sub.end_date);
   if (!start || tStr < start) return false;
   if (end && tStr > end) return false;
 
@@ -134,7 +140,7 @@ const isDeliveryToday = (sub: any): boolean => {
 };
 
 const isExpired = (sub: any): boolean => {
-  const end = sub.end_date?.split?.("T")?.[0] ?? sub.end_date;
+  const end = padDate(sub.end_date?.split?.("T")?.[0] ?? sub.end_date);
   return !!end && end < todayStr();
 };
 
@@ -246,16 +252,24 @@ const daysUntilEnd = (endDate?: string): number | null => {
   return Math.max(0, Math.ceil((end.getTime() - today.getTime()) / 86400000));
 };
 
+const padDate = (s?: string): string | undefined => {
+  if (!s) return s;
+  const [y, m, d] = s.split("-");
+  if (!y || !m || !d) return s;
+  return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+};
+
 function getNextDeliveryDate(sub: Subscription): string | null {
   const pattern = getPattern(sub);
-  const start = sub.start_date;
+  const start = padDate(sub.start_date);
+  const end = padDate(sub.end_date);
+  if (!start) return null; // no valid start date, nothing to compute
 
   for (let i = 1; i <= 7; i++) {
     const next = new Date();
     next.setDate(next.getDate() + i);
     const nextStr = next.toISOString().split("T")[0];
 
-    const end = sub.end_date;
     if (end && nextStr > end) break;
     if (nextStr < start) continue;
 
@@ -314,7 +328,9 @@ function buildCalendarTimeline(
   daysAfter = 4,
 ): string[] {
   const dates: string[] = [];
-  if (!sub.start_date) return dates;
+  const start = padDate(sub.start_date?.split("T")[0]);
+  const end = padDate(sub.end_date?.split("T")[0]);
+  if (!start) return dates;
 
   const baseDate = new Date();
   for (let i = -daysBefore; i <= daysAfter; i++) {
@@ -322,10 +338,7 @@ function buildCalendarTimeline(
     d.setDate(baseDate.getDate() + i);
     const dStr = d.toISOString().split("T")[0];
 
-    const start = sub.start_date?.split("T")[0];
-    const end = sub.end_date?.split("T")[0];
-
-    if (start && dStr < start) continue;
+    if (dStr < start) continue;
     if (end && dStr > end) continue;
 
     const jsDay = d.getDay();
@@ -975,12 +988,10 @@ function SubCard({
               </>
             ) : context === "today" ? (
               <>
-                <Ionicons
-                  name="calendar-outline"
-                  size={12}
-                  color={C.textMuted}
-                />
-                <Text style={styles.quickRowText}>Delivery: {dateLabel}</Text>
+                <Ionicons name="cube-outline" size={12} color={C.textMuted} />
+                <Text style={styles.quickRowText} numberOfLines={1}>
+                  {getItemsLabel(items)}
+                </Text>
               </>
             ) : (
               <>
@@ -999,13 +1010,14 @@ function SubCard({
       {/* Expanded detail */}
       {isExpanded && (
         <View style={styles.expandedBody}>
-          <View style={styles.itemsBox}>
+                   <View style={styles.itemsBox}>
             {items.map((item, i) => (
               <View key={i} style={styles.itemRow}>
                 <View style={styles.itemDot} />
                 <Text style={styles.itemName} numberOfLines={1}>
                   {item.product_name || item.name || "Product"}
                 </Text>
+                <Text style={styles.itemQty}>× {item.quantity}</Text>
               </View>
             ))}
           </View>

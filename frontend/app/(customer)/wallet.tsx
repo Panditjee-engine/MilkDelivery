@@ -25,6 +25,7 @@ import Constants from "expo-constants";
 import * as Sharing from "expo-sharing";
 import { Calendar } from "react-native-calendars";
 import { api, StatementTemplateSettings } from "../../src/services/api";
+import WalletHistoryFilter, { defaultHistoryFilter, matchesWalletHistory } from "../../src/components/WalletHistoryFilter";
 import { Colors } from "../../src/constants/colors";
 import LoadingScreen from "../../src/components/LoadingScreen";
 import Button from "../../src/components/Button";
@@ -573,6 +574,7 @@ export default function WalletScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [balance, setBalance] = useState(0);
   const [transactions, setTransactions] = useState<any[]>([]);
+  const [historyFilter, setHistoryFilter] = useState(defaultHistoryFilter);
   const [rechargeRequests, setRechargeRequests] = useState<any[]>([]);
   const [paymentQr, setPaymentQr] = useState<any>(null);
   const [qrPreviewVisible, setQrPreviewVisible] = useState(false);
@@ -1037,7 +1039,7 @@ export default function WalletScreen() {
       date: item.created_at,
       data: item,
     })),
-  ].sort(
+  ].filter(entry => matchesWalletHistory(entry.data, historyFilter, entry.kind === "request")).sort(
     (a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime(),
   );
   const activeStatementRange = getStatementRangeDates(
@@ -1187,15 +1189,16 @@ export default function WalletScreen() {
             <Ionicons name="download-outline" size={15} color={Colors.primary} />
             <Text style={styles.statementBtnText}>Statement</Text>
           </TouchableOpacity>
+          <WalletHistoryFilter value={historyFilter} onChange={setHistoryFilter} requests />
         </View>
         {historyItems.length === 0 ? (
           <View style={styles.emptyState}>
             <View style={styles.emptyIcon}>
               <Ionicons name="receipt-outline" size={32} color="#ccc" />
             </View>
-            <Text style={styles.emptyTitle}>No transactions yet</Text>
+            <Text style={styles.emptyTitle}>No matching transactions</Text>
             <Text style={styles.emptyDesc}>
-              Your transaction history will appear here
+              Try changing your filters or date period.
             </Text>
           </View>
         ) : (

@@ -59,6 +59,11 @@ function getCowImage(type?: string) {
   return cowImg;
 }
 
+function getAnimalSource(item: { photo?: string | null; type?: string }) {
+  if (item.photo) return { uri: item.photo };
+  return getCowImage(item.type);
+}
+
 // ── Constants
 const IS_IOS = Platform.OS === "ios";
 const STATUS_H = IS_IOS ? 0 : (StatusBar.currentHeight ?? 0);
@@ -101,6 +106,7 @@ interface AnimalRow {
   leasedToFarmName?: string | null;
   leasedLocationLabel?: string | null;
   leaseEndDate?: string | null;
+  photo?: string | null;
 }
 
 interface MilkEntryRow {
@@ -308,7 +314,7 @@ function HealthModal({
           <View style={hm.animalRow}>
             <View style={hm.avatar}>
               <Image
-                source={getCowImage(animal.type)}
+                source={getAnimalSource(animal)}
                 style={{ width: 32, height: 32, resizeMode: "contain" }}
               />
             </View>
@@ -693,7 +699,7 @@ function MilkFeedModal({
             <View style={hm.animalRow}>
               <View style={hm.avatar}>
                 <Image
-                  source={getCowImage(animal.type)}
+                  source={getAnimalSource(animal)}
                   style={{ width: 32, height: 32, resizeMode: "contain" }}
                 />
               </View>
@@ -908,11 +914,13 @@ function MilkFeedModal({
 // ── Detail Row
 function DR({
   icon,
+  image,
   label,
   value,
   valueColor,
 }: {
-  icon: any;
+  icon?: any;
+  image?: any;
   label: string;
   value?: string | number | null;
   valueColor?: string;
@@ -921,7 +929,14 @@ function DR({
   return (
     <View style={dr.row}>
       <View style={dr.iconBox}>
-        <Ionicons name={icon} size={11} color={C.primary} />
+        {image ? (
+          <Image
+            source={image}
+            style={{ width: 14, height: 14, resizeMode: "contain" }}
+          />
+        ) : (
+          <Ionicons name={icon} size={11} color={C.primary} />
+        )}
       </View>
       <Text style={dr.label}>{label}</Text>
       <Text style={[dr.value, valueColor ? { color: valueColor } : {}]}>
@@ -930,6 +945,7 @@ function DR({
     </View>
   );
 }
+
 const dr = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 5 },
   iconBox: {
@@ -1145,12 +1161,20 @@ function AnimalCard({
           <View
             style={[
               ac.avatar,
-              { borderColor: hCfg.border, backgroundColor: hCfg.bg },
+              {
+                borderColor: hCfg.border,
+                backgroundColor: hCfg.bg,
+                overflow: "hidden",
+              },
             ]}
           >
             <Image
-              source={getCowImage(item.type)}
-              style={{ width: 30, height: 30, resizeMode: "contain" }}
+              source={getAnimalSource(item)}
+              style={{
+                width: item.photo ? "100%" : 30,
+                height: item.photo ? "100%" : 30,
+                resizeMode: item.photo ? "cover" : "contain",
+              }}
             />
           </View>
 
@@ -1171,7 +1195,8 @@ function AnimalCard({
             <View style={[ac.chip, { backgroundColor: "#fef2f2" }]}>
               <Ionicons name="lock-closed-outline" size={10} color={C.sick} />
               <Text style={[ac.chipText, { color: C.sick }]}>
-                Leased out{item.leasedToFarmName ? ` · ${item.leasedToFarmName}` : ""}
+                Leased out
+                {item.leasedToFarmName ? ` · ${item.leasedToFarmName}` : ""}
               </Text>
             </View>
           ) : null}
@@ -1321,7 +1346,11 @@ function AnimalCard({
                   icon="information-circle-outline"
                   label="BASIC INFO"
                 />
-                <DR icon="paw-outline" label="Name" value={item.name} />
+                <DR
+                  image={getAnimalSource(item)}
+                  label="Name"
+                  value={item.name}
+                />
                 <DR
                   icon="pricetag-outline"
                   label="Tag No."
@@ -1365,9 +1394,24 @@ function AnimalCard({
                     </Text>
                   </View>
                   {item.isLeasedOut ? (
-                    <View style={[ac.editHealthBtn, { backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder }]}>
-                      <Ionicons name="lock-closed-outline" size={13} color={C.textMuted} />
-                      <Text style={[ac.editHealthText, { color: C.textMuted }]}>Locked (Leased Out)</Text>
+                    <View
+                      style={[
+                        ac.editHealthBtn,
+                        {
+                          backgroundColor: C.card,
+                          borderWidth: 1,
+                          borderColor: C.cardBorder,
+                        },
+                      ]}
+                    >
+                      <Ionicons
+                        name="lock-closed-outline"
+                        size={13}
+                        color={C.textMuted}
+                      />
+                      <Text style={[ac.editHealthText, { color: C.textMuted }]}>
+                        Locked (Leased Out)
+                      </Text>
                     </View>
                   ) : (
                     <TouchableOpacity
@@ -1878,6 +1922,7 @@ export default function FarmPage() {
           leasedToFarmName: c.leasedToFarmName ?? null,
           leasedLocationLabel: c.leasedLocationLabel ?? null,
           leaseEndDate: c.leaseEndDate ?? null,
+          photo: c.photo ?? null,
         };
       });
 
