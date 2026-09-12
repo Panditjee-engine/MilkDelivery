@@ -10,7 +10,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  FlatList,
+  FlatList, 
   RefreshControl,
   TouchableOpacity,
   TextInput,
@@ -20,8 +20,6 @@ import {
   Animated,
   Easing,
   Dimensions,
-  KeyboardAvoidingView,
-  Platform,
 } from "react-native";
 import {
   SafeAreaView,
@@ -1924,141 +1922,130 @@ const openDetail = (product: Product) => {
 />
       {/* ── ADD PRODUCT MODAL (Tabbed) ── */}
       <Modal visible={addModal} transparent animationType="slide">
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalSheet}>
-              <View style={styles.dragHandle} />
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <View style={styles.dragHandle} />
 
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Add Product</Text>
-                <TouchableOpacity style={styles.closeBtn} onPress={resetAddModal}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Add Product</Text>
+              <TouchableOpacity style={styles.closeBtn} onPress={resetAddModal}>
+                <Ionicons name="close" size={16} color={C.deep} />
+              </TouchableOpacity>
+            </View>
+
+            {renderTabBar(TABS, activeTab, setActiveTab)}
+
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: 20 }}
+              keyboardShouldPersistTaps="handled"
+            >
+              {renderFormTab(activeTab, formData, updateForm)}
+
+              <View style={{ height: 16 }} />
+
+              {isFormValid && missingFieldsHint.length > 0 && (
+                <View style={styles.hintBanner}>
+                  <Ionicons
+                    name="information-circle-outline"
+                    size={16}
+                    color={C.dark}
+                  />
+                  <Text style={styles.hintBannerText}>
+                    You can add {missingFieldsHint.join(", ")} later by editing
+                    this product.
+                  </Text>
+                </View>
+              )}
+
+              {isFormValid && (
+                <View style={styles.swipeWrapper}>
+                  <SwipeToConfirm
+                    text="Swipe to Add Product"
+                    disabled={!isFormValid}
+                    onSwipeSuccess={handleAddProduct}
+                  />
+                </View>
+              )}
+
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={resetAddModal}
+              >
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+            </ScrollView>
+
+            <SuccessTick visible={showSuccessTick} onDone={onTickDone} />
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── PRODUCT DETAIL / EDIT MODAL ── */}
+      <Modal visible={detailModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalSheet, { maxHeight: "95%" }]}>
+            <View style={styles.dragHandle} />
+
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {isEditing ? "Edit Product" : "Product Details"}
+              </Text>
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                {isEditing && (
+                  <TouchableOpacity
+                    style={[styles.closeBtn, { backgroundColor: C.successBg }]}
+                    onPress={() => setIsEditing(false)}
+                  >
+                    <Ionicons name="eye-outline" size={16} color={C.success} />
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={styles.closeBtn}
+                  onPress={resetDetailModal}
+                >
                   <Ionicons name="close" size={16} color={C.deep} />
                 </TouchableOpacity>
               </View>
+            </View>
 
-              {renderTabBar(TABS, activeTab, setActiveTab)}
+            {isEditing ? (
+              <>
+                {renderTabBar(TABS, editTab, setEditTab)}
+                <ScrollView
+                  showsVerticalScrollIndicator={false}
+                  contentContainerStyle={{ paddingBottom: 20 }}
+                  keyboardShouldPersistTaps="handled"
+                >
+                  {renderFormTab(editTab, editForm, updateEditForm)}
 
-              <ScrollView
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingBottom: 40 }}
-                keyboardShouldPersistTaps="handled"
-              >
-                {renderFormTab(activeTab, formData, updateForm)}
+                  <View style={{ height: 16 }} />
 
-                <View style={{ height: 100 }} />
-
-                {isFormValid && missingFieldsHint.length > 0 && (
-                  <View style={styles.hintBanner}>
-                    <Ionicons
-                      name="information-circle-outline"
-                      size={16}
-                      color={C.dark}
-                    />
-                    <Text style={styles.hintBannerText}>
-                      You can add {missingFieldsHint.join(", ")} later by editing
-                      this product.
-                    </Text>
-                  </View>
-                )}
-
-                {isFormValid && (
                   <View style={styles.swipeWrapper}>
                     <SwipeToConfirm
-                      text="Swipe to Add Product"
-                      disabled={!isFormValid}
-                      onSwipeSuccess={handleAddProduct}
+                      text="Swipe to Save Changes"
+                      onSwipeSuccess={handleSaveEdit}
                     />
                   </View>
-                )}
 
-                <TouchableOpacity
-                  style={styles.cancelBtn}
-                  onPress={resetAddModal}
-                >
-                  <Text style={styles.cancelBtnText}>Cancel</Text>
-                </TouchableOpacity>
-              </ScrollView>
-
-              <SuccessTick visible={showSuccessTick} onDone={onTickDone} />
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
-      {/* ── PRODUCT DETAIL / EDIT MODAL ── */}
-      <Modal visible={detailModal} transparent animationType="slide">
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={[styles.modalSheet, { maxHeight: "95%" }]}>
-              <View style={styles.dragHandle} />
-
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>
-                  {isEditing ? "Edit Product" : "Product Details"}
-                </Text>
-                <View style={{ flexDirection: "row", gap: 8 }}>
-                  {isEditing && (
-                    <TouchableOpacity
-                      style={[styles.closeBtn, { backgroundColor: C.successBg }]}
-                      onPress={() => setIsEditing(false)}
-                    >
-                      <Ionicons name="eye-outline" size={16} color={C.success} />
-                    </TouchableOpacity>
-                  )}
                   <TouchableOpacity
-                    style={styles.closeBtn}
-                    onPress={resetDetailModal}
+                    style={styles.cancelBtn}
+                    onPress={() => setIsEditing(false)}
                   >
-                    <Ionicons name="close" size={16} color={C.deep} />
+                    <Text style={styles.cancelBtnText}>Cancel Editing</Text>
                   </TouchableOpacity>
-                </View>
-              </View>
+                </ScrollView>
+              </>
+            ) : (
+              renderProductDetail()
+            )}
 
-              {isEditing ? (
-                <>
-                  {renderTabBar(TABS, editTab, setEditTab)}
-                  <ScrollView
-                    showsVerticalScrollIndicator={false}
-                    contentContainerStyle={{ paddingBottom: 20 }}
-                    keyboardShouldPersistTaps="handled"
-                  >
-                    {renderFormTab(editTab, editForm, updateEditForm)}
-
-                    <View style={{ height: 16 }} />
-
-                    <View style={styles.swipeWrapper}>
-                      <SwipeToConfirm
-                        text="Swipe to Save Changes"
-                        onSwipeSuccess={handleSaveEdit}
-                      />
-                    </View>
-
-                    <TouchableOpacity
-                      style={styles.cancelBtn}
-                      onPress={() => setIsEditing(false)}
-                    >
-                      <Text style={styles.cancelBtnText}>Cancel Editing</Text>
-                    </TouchableOpacity>
-                  </ScrollView>
-                </>
-              ) : (
-                renderProductDetail()
-              )}
-
-              <SuccessTick
-                visible={showEditSuccessTick}
-                onDone={onEditTickDone}
-              />
-            </View>
+            <SuccessTick
+              visible={showEditSuccessTick}
+              onDone={onEditTickDone}
+            />
           </View>
-        </KeyboardAvoidingView>
+        </View>
       </Modal>
       <AdminFeedbackModal
         visible={!!feedbackModalProduct}
@@ -2066,7 +2053,7 @@ const openDetail = (product: Product) => {
         productName={feedbackModalProduct?.name}
         onClose={() => setFeedbackModalProduct(null)}
       />
-    </SafeAreaView >
+    </SafeAreaView>
   );
 }
 
@@ -2951,25 +2938,25 @@ const styles = StyleSheet.create({
   feedbackBtnText: { fontSize: 15, fontWeight: "700", color: C.dark },
 
   detailNameRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 6,
-  },
-  detailFeedbackBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "#FEF3C7",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "#FDE68A",
-  },
-  detailFeedbackBtnText: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: "#B45309",
-  },
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 8,
+  marginBottom: 6,
+},
+detailFeedbackBtn: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 4,
+  backgroundColor: "#FEF3C7",
+  paddingHorizontal: 10,
+  paddingVertical: 6,
+  borderRadius: 20,
+  borderWidth: 1,
+  borderColor: "#FDE68A",
+},
+detailFeedbackBtnText: {
+  fontSize: 12,
+  fontWeight: "800",
+  color: "#B45309",
+},
 });
