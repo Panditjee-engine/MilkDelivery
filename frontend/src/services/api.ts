@@ -4324,6 +4324,25 @@ async vetDeleteInsemination(id: string) {
     );
   }
 
+  async uploadProfileImage(uri: string): Promise<{ url: string }> {
+  const filename = uri.split("/").pop() || `photo_${Date.now()}.jpg`;
+  const match = /\.(\w+)$/.exec(filename);
+  const type = match ? `image/${match[1] === "jpg" ? "jpeg" : match[1]}` : "image/jpeg";
+
+  const formData = new FormData();
+  formData.append("file", {
+    uri,
+    name: filename,
+    type,
+  } as any);
+
+  return this.requestFormData<{ url: string }>(
+    "/auth/profile/photo",
+    formData,
+    "POST",
+  );
+}
+
   // Logout
   logout = async () => {
     this.setToken(null);

@@ -360,6 +360,11 @@ interface CartItem {
 function isDairyProduct(p: any): boolean {
   return DAIRY_CATEGORIES.includes(p?.category?.toLowerCase());
 }
+
+function isProductUnavailable(p: any): boolean {
+  return !p?.is_available || (p?.stock ?? 0) === 0;
+}
+
 function categoryRank(category: string): number {
   const normalized = category?.toLowerCase();
   if (normalized === "milk") return 0;
@@ -3989,13 +3994,48 @@ export default function CatalogScreen() {
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
   const [selectedBannerSlide, setSelectedBannerSlide] = useState<CatalogSlide | null>(null);
   const [bannerModalVisible, setBannerModalVisible] = useState(false);
+
+// Collapsible header (hides on scroll down, reveals on scroll up)
+const [headerHeight, setHeaderHeight] = useState<number | null>(null);
+const headerAnim = useRef(new Animated.Value(1)).current;
+const lastScrollY = useRef(0);
+
+const animateHeader = useCallback(
+  (toValue: number) => {
+    Animated.timing(headerAnim, {
+      toValue,
+      duration: 200,
+      useNativeDriver: false,
+    }).start();
+  },
+  [headerAnim],
+);
+
+const handleCatalogScroll = useCallback(
+  (event: any) => {
+    const currentY = event.nativeEvent.contentOffset.y;
+    const diff = currentY - lastScrollY.current;
+    if (currentY <= 10) {
+      animateHeader(1); // always show near top
+    } else if (diff > 8) {
+      animateHeader(0); // scrolling down → hide
+    } else if (diff < -8) {
+      animateHeader(1); // scrolling up → show
+    }
+    lastScrollY.current = currentY;
+  },
+  [animateHeader],
+);
+
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const newSlidesScrollRef = useRef<ScrollView>(null);
   const activeNewSlideRef = useRef(0);
   const isFocused = useIsFocused();
-  const { addToCartProduct, addToCartQty } = useLocalSearchParams<{
+  const { addToCartProduct, addToCartQty, openSubscribeProduct, openSubscribeTs } = useLocalSearchParams<{
     addToCartProduct?: string;
     addToCartQty?: string;
+    openSubscribeProduct?: string;
+    openSubscribeTs?: string;
   }>();
 
   const tomorrow = useMemo(() => {
@@ -4208,6 +4248,17 @@ export default function CatalogScreen() {
       setTimeout(() => setCartVisible(true), 400);
     } catch { }
   }, [addToCartProduct, addToCartQty, getProductId]);
+
+  useEffect(() => {
+    if (!openSubscribeProduct) return;
+    try {
+      const p = JSON.parse(decodeURIComponent(String(openSubscribeProduct)));
+      if (!p) return;
+      setSubscribeProduct(p);
+      setSubscribeVisible(true);
+      router.setParams({ openSubscribeProduct: undefined, openSubscribeTs: undefined } as any);
+    } catch { }
+  }, [openSubscribeProduct, openSubscribeTs]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -4585,12 +4636,16 @@ export default function CatalogScreen() {
     setTimeout(() => setSelectedBannerSlide(null), 300);
   };
 
-  const grouped = useMemo(() => {
+    const grouped = useMemo(() => {
+    const sortByAvailability = (items: any[]) =>
+      [...items].sort(
+        (a, b) => Number(isProductUnavailable(a)) - Number(isProductUnavailable(b)),
+      );
     if (selectedCategory) {
       const label =
         categories.find((c) => c.value === selectedCategory)?.label ||
         selectedCategory;
-      return [{ value: selectedCategory, label, items: products }];
+      return [{ value: selectedCategory, label, items: sortByAvailability(products) }];
     }
     const map: Record<string, any[]> = {};
     products.forEach((p) => {
@@ -4602,7 +4657,7 @@ export default function CatalogScreen() {
       .map(([v, items]) => ({
         value: v,
         label: categories.find((c) => c.value === v)?.label || v,
-        items,
+        items: sortByAvailability(items),
       }))
       .sort((a, b) => {
         const rankDiff = categoryRank(a.value) - categoryRank(b.value);
@@ -4635,51 +4690,53 @@ export default function CatalogScreen() {
 
   if (loading) return <LoadingScreen />;
 
-  const ListHeader = (
-    <>
-      <View style={mainS.pageHeader}>
-        <View style={mainS.headerTop}>
-          <Text style={mainS.pageTitle}>Shop</Text>
-          <View style={mainS.headerBtns}>
-            <TouchableOpacity
-              style={mainS.iconBtn}
-              onPress={() => router.push("/(customer)/product-search" as any)}
-            >
-              <Ionicons name="search-outline" size={18} color="#111111" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={mainS.iconBtn}
-              onPress={() => setSubSheetVisible(true)}
-            >
-              <Ionicons name="repeat-outline" size={17} color={T.amber} />
-              {activeSubscriptions.length > 0 && (
-                <View style={[mainS.dot, { backgroundColor: T.amber }]}>
-                  <Text style={mainS.dotTxt}>{activeSubscriptions.length}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={mainS.iconBtn}
-              onPress={() => setCartVisible(true)}
-            >
-              <Ionicons name="cart-outline" size={19} color={Colors.primary} />
-              {cart.length > 0 && (
-                <View style={[mainS.dot, { backgroundColor: Colors.primary }]}>
-                  <Text style={mainS.dotTxt}>{cart.length}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
-        <View style={mainS.headerSub}>
-          <Text style={mainS.productCount}>{products.length} products</Text>
-          <View style={mainS.walletPill}>
-            <Ionicons name="wallet-outline" size={10} color={Colors.primary} />
-            <Text style={mainS.walletTxt}>₹{walletBalance.toFixed(2)}</Text>
-          </View>
+  const TopHeaderContent = (
+    <View style={mainS.pageHeader}>
+      <View style={mainS.headerTop}>
+        <Text style={mainS.pageTitle}>Shop</Text>
+        <View style={mainS.headerBtns}>
+          <TouchableOpacity
+            style={mainS.iconBtn}
+            onPress={() => router.push("/(customer)/product-search" as any)}
+          >
+            <Ionicons name="search-outline" size={18} color="#111111" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={mainS.iconBtn}
+            onPress={() => setSubSheetVisible(true)}
+          >
+            <Ionicons name="repeat-outline" size={17} color={T.amber} />
+            {activeSubscriptions.length > 0 && (
+              <View style={[mainS.dot, { backgroundColor: T.amber }]}>
+                <Text style={mainS.dotTxt}>{activeSubscriptions.length}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={mainS.iconBtn}
+            onPress={() => setCartVisible(true)}
+          >
+            <Ionicons name="cart-outline" size={19} color={Colors.primary} />
+            {cart.length > 0 && (
+              <View style={[mainS.dot, { backgroundColor: Colors.primary }]}>
+                <Text style={mainS.dotTxt}>{cart.length}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
         </View>
       </View>
+      <View style={mainS.headerSub}>
+        <Text style={mainS.productCount}>{products.length} products</Text>
+        <View style={mainS.walletPill}>
+          <Ionicons name="wallet-outline" size={10} color={Colors.primary} />
+          <Text style={mainS.walletTxt}>₹{walletBalance.toFixed(2)}</Text>
+        </View>
+      </View>
+    </View>
+  );
 
+  const ListHeader = (
+    <>
       <View style={mainS.newSection}>
         <ScrollView
           ref={newSlidesScrollRef}
@@ -4778,18 +4835,39 @@ export default function CatalogScreen() {
   );
 
   return (
-    <SafeAreaView style={mainS.container}>
+   <SafeAreaView style={mainS.container} edges={["top"]}>
+      <Animated.View
+        onLayout={(e) => {
+          const h = e.nativeEvent.layout.height;
+          if (h && headerHeight === null) setHeaderHeight(h);
+        }}
+        style={[
+          { overflow: "hidden" },
+          { opacity: headerAnim },
+          headerHeight !== null && {
+            height: headerAnim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [0, headerHeight],
+            }),
+          },
+        ]}
+      >
+        {TopHeaderContent}
+      </Animated.View>
+
       <FlatList
         data={grouped}
         keyExtractor={(i) => i.value}
         ListHeaderComponent={ListHeader}
+        onScroll={handleCatalogScroll}
+        scrollEventThrottle={16}
         ListEmptyComponent={
           <View style={mainS.empty}>
             <Ionicons name="cube-outline" size={32} color={T.faint} />
             <Text style={mainS.emptyTxt}>No products found</Text>
           </View>
         }
-        contentContainerStyle={{ paddingBottom: 120 }}
+       contentContainerStyle={{ paddingBottom: cart.length > 0 ? 100 : 24 }}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />

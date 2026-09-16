@@ -8,7 +8,9 @@ import {
   Modal,
   Animated,
   Dimensions,
+  Image,
 } from "react-native";
+import * as ImagePicker from "expo-image-picker";
 import { useIsFocused } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -20,6 +22,7 @@ import { Colors } from "../../src/constants/colors";
 import Button from "../../src/components/Button";
 import Input from "../../src/components/Input";
 import { APP_VERSION } from "../../src/services/useVersionCheck";
+import CropModal from "../../src/components/CropModal";
 
 import {
   formatDeliveryAddress,
@@ -140,7 +143,8 @@ function CustomAlert({
                 key={i}
                 style={[
                   alertStyles.actionBtn,
-                  action.style === "destructive" && alertStyles.actionDestructive,
+                  action.style === "destructive" &&
+                    alertStyles.actionDestructive,
                   action.style === "cancel" && alertStyles.actionCancel,
                   action.style === "default" && alertStyles.actionDefault,
                 ]}
@@ -152,7 +156,8 @@ function CustomAlert({
                 <Text
                   style={[
                     alertStyles.actionText,
-                    action.style === "destructive" && alertStyles.actionTextDestructive,
+                    action.style === "destructive" &&
+                      alertStyles.actionTextDestructive,
                     action.style === "cancel" && alertStyles.actionTextCancel,
                     action.style === "default" && alertStyles.actionTextDefault,
                   ]}
@@ -338,7 +343,7 @@ const toastStyles = StyleSheet.create({
 
 export default function ProfileScreen() {
   const { user, logout, updateUser } = useAuth();
-  const router = useRouter()
+  const router = useRouter();
 
   // Pure state storage for vacations to bypass backend API
   const params = useLocalSearchParams<{
@@ -360,14 +365,26 @@ export default function ProfileScreen() {
     normalizeAddressBook(user),
   );
   const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
-  const [editAddress, setEditAddress] = useState(() =>
-    normalizeAddressBook(user)[0] || emptyAddress(),
+  const [editAddress, setEditAddress] = useState(
+    () => normalizeAddressBook(user)[0] || emptyAddress(),
   );
   const [saving, setSaving] = useState(false);
   const [connectModal, setConnectModal] = useState(false);
   const [connectReferralCode, setConnectReferralCode] = useState("");
   const [connectingGaushala, setConnectingGaushala] = useState(false);
   const isFocused = useIsFocused();
+
+  const [profileImage, setProfileImage] = useState<string | null>(
+    (user as any)?.profile_image || null,
+  );
+  const [uploadingImage, setUploadingImage] = useState(false);
+
+  const [cropVisible, setCropVisible] = useState(false);
+  const [rawImageUri, setRawImageUri] = useState<string | null>(null);
+  const [rawImageSize, setRawImageSize] = useState<{
+    w: number;
+    h: number;
+  } | null>(null);
 
   useEffect(() => {
     if (!isFocused || params.openAddress !== "1") return;
@@ -378,7 +395,13 @@ export default function ProfileScreen() {
         returnTo: params.returnTo,
       },
     } as any);
-  }, [isFocused, params.openAddress, params.addressRequired, params.returnTo, user?.address]);
+  }, [
+    isFocused,
+    params.openAddress,
+    params.addressRequired,
+    params.returnTo,
+    user?.address,
+  ]);
 
   useEffect(() => {
     if (!isFocused) return;
@@ -405,7 +428,10 @@ export default function ProfileScreen() {
   const hideAlert = () =>
     setAlertConfig((prev) => ({ ...prev, visible: false }));
 
-  const showToast = (message: string, type: "success" | "error" = "success") => {
+  const showToast = (
+    message: string,
+    type: "success" | "error" = "success",
+  ) => {
     setToast({ visible: true, message, type });
     setTimeout(() => setToast((prev) => ({ ...prev, visible: false })), 2800);
   };
@@ -423,18 +449,18 @@ export default function ProfileScreen() {
     fetchData();
   }, [isFocused]);
 
-const fetchData = async () => {
-  try {
-    const [ordersData, vacationsData] = await Promise.all([
-      api.getCustomerOrders(),
-      api.getVacations().catch(() => []),
-    ]);
-    setOrders(ordersData || []);
-    setVacations(vacationsData || []);
-  } catch (error) {
-    console.error("Error fetching profile data:", error);
-  }
-};
+  const fetchData = async () => {
+    try {
+      const [ordersData, vacationsData] = await Promise.all([
+        api.getCustomerOrders(),
+        api.getVacations().catch(() => []),
+      ]);
+      setOrders(ordersData || []);
+      setVacations(vacationsData || []);
+    } catch (error) {
+      console.error("Error fetching profile data:", error);
+    }
+  };
 
   const toggleOrders = () => {
     const toValue = ordersExpanded ? 0 : 1;
@@ -463,6 +489,77 @@ const fetchData = async () => {
             router.replace("/");
           },
         },
+      ],
+    });
+  };
+
+  const pickImage = async (fromCamera: boolean) => {
+    try {
+      const permissionResult = fromCamera
+        ? await ImagePicker.requestCameraPermissionsAsync()
+        : await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+      if (!permissionResult.granted) {
+        showToast(
+          fromCamera
+            ? "Camera permission is required."
+            : "Gallery permission is required.",
+          "error",
+        );
+        return;
+      }
+
+      const result = fromCamera
+        ? await ImagePicker.launchCameraAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: false, // ← custom cropper handles this now
+            quality: 1,
+          })
+        : await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: false,
+            quality: 1,
+          });
+
+      if (result.canceled || !result.assets?.length) return;
+
+      const asset = result.assets[0];
+      setRawImageUri(asset.uri);
+      setRawImageSize({ w: asset.width, h: asset.height }); // ← add this
+      setCropVisible(true);
+    } catch (error: any) {
+      showToast(error?.message || "Could not open picker", "error");
+    }
+  };
+
+  const handleCropDone = async (croppedUri: string) => {
+    setCropVisible(false);
+    setUploadingImage(true);
+    setProfileImage(croppedUri);
+    try {
+      const uploaded = await api.uploadProfileImage(croppedUri);
+      updateUser({ profile_image: uploaded.url } as any);
+      setProfileImage(uploaded.url);
+      showToast("Profile photo updated", "success");
+    } catch (error: any) {
+      showToast(error?.message || "Could not update photo", "error");
+    } finally {
+      setUploadingImage(false);
+      setRawImageUri(null);
+    }
+  };
+
+  const handleChangePhoto = () => {
+    showAlert({
+      icon: "camera-outline",
+      iconColor: Colors.primary,
+      iconBg: Colors.primary + "10",
+      title: "Change Profile Photo",
+      message: "Choose a source for your new profile photo.",
+      actions: [
+        { text: "Camera", style: "default", onPress: () => pickImage(true) },
+        { text: "Gallery", style: "default", onPress: () => pickImage(false) },
+        { text: "Cancel", style: "cancel" },
       ],
     });
   };
@@ -522,68 +619,69 @@ const fetchData = async () => {
     }
   };
 
-const handleAddVacation = async () => {
-  if (!startDate || !endDate) {
+  const handleAddVacation = async () => {
+    if (!startDate || !endDate) {
+      showAlert({
+        icon: "calendar-outline",
+        iconColor: "#f59e0b",
+        iconBg: "#FFF9EC",
+        title: "Select Dates",
+        message: "Please pick both a start and end date for your vacation.",
+        actions: [{ text: "OK", style: "default" }],
+      });
+      return;
+    }
+    if (startDate > endDate) {
+      showAlert({
+        icon: "alert-circle-outline",
+        iconColor: "#EF4444",
+        iconBg: "#FEF2F2",
+        title: "Invalid Range",
+        message: "The end date must be after the start date.",
+        actions: [{ text: "Got it", style: "default" }],
+      });
+      return;
+    }
+
+    try {
+      const newVacation = await api.createVacation(startDate, endDate);
+      setVacations((prev) => [...prev, newVacation]);
+      setVacationModal(false);
+      setStartDate("");
+      setEndDate("");
+      setSelectingStart(true);
+      showToast("Vacation saved! Deliveries will be paused.", "success");
+    } catch (error: any) {
+      showToast(error?.message || "Could not save vacation", "error");
+    }
+  };
+
+  const handleDeleteVacation = (id: string) => {
     showAlert({
-      icon: "calendar-outline",
-      iconColor: "#f59e0b",
-      iconBg: "#FFF9EC",
-      title: "Select Dates",
-      message: "Please pick both a start and end date for your vacation.",
-      actions: [{ text: "OK", style: "default" }],
-    });
-    return;
-  }
-  if (startDate > endDate) {
-    showAlert({
-      icon: "alert-circle-outline",
+      icon: "trash-outline",
       iconColor: "#EF4444",
       iconBg: "#FEF2F2",
-      title: "Invalid Range",
-      message: "The end date must be after the start date.",
-      actions: [{ text: "Got it", style: "default" }],
-    });
-    return;
-  }
-
-  try {
-    const newVacation = await api.createVacation(startDate, endDate);
-    setVacations((prev) => [...prev, newVacation]);
-    setVacationModal(false);
-    setStartDate("");
-    setEndDate("");
-    setSelectingStart(true);
-    showToast("Vacation saved! Deliveries will be paused.", "success");
-  } catch (error: any) {
-    showToast(error?.message || "Could not save vacation", "error");
-  }
-};
-
-const handleDeleteVacation = (id: string) => {
-  showAlert({
-    icon: "trash-outline",
-    iconColor: "#EF4444",
-    iconBg: "#FEF2F2",
-    title: "Remove Vacation",
-    message: "This vacation period will be deleted and deliveries will resume.",
-    actions: [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await api.deleteVacation(id);
-            setVacations((prev) => prev.filter((v) => v.id !== id));
-            showToast("Vacation removed");
-          } catch (error: any) {
-            showToast(error?.message || "Could not remove vacation", "error");
-          }
+      title: "Remove Vacation",
+      message:
+        "This vacation period will be deleted and deliveries will resume.",
+      actions: [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await api.deleteVacation(id);
+              setVacations((prev) => prev.filter((v) => v.id !== id));
+              showToast("Vacation removed");
+            } catch (error: any) {
+              showToast(error?.message || "Could not remove vacation", "error");
+            }
+          },
         },
-      },
-    ],
-  });
-};
+      ],
+    });
+  };
 
   const openNewAddress = () => {
     const next = {
@@ -614,11 +712,17 @@ const handleDeleteVacation = (id: string) => {
           text: "Delete",
           style: "destructive",
           onPress: async () => {
-            const remaining = addressBook.filter((item) => item.id !== address.id);
-            if (remaining.length && !remaining.some((item) => item.is_default)) {
+            const remaining = addressBook.filter(
+              (item) => item.id !== address.id,
+            );
+            if (
+              remaining.length &&
+              !remaining.some((item) => item.is_default)
+            ) {
               remaining[0].is_default = true;
             }
-            const defaultAddress = remaining.find((item) => item.is_default) || remaining[0] || null;
+            const defaultAddress =
+              remaining.find((item) => item.is_default) || remaining[0] || null;
             setSaving(true);
             try {
               await api.updateProfile({
@@ -661,7 +765,10 @@ const handleDeleteVacation = (id: string) => {
     };
 
     if (!hasCompleteDeliveryAddress(normalizedAddress)) {
-      showToast("Flat, building/area, city and pincode are required for delivery.", "error");
+      showToast(
+        "Flat, building/area, city and pincode are required for delivery.",
+        "error",
+      );
       return;
     }
 
@@ -669,12 +776,16 @@ const handleDeleteVacation = (id: string) => {
     try {
       const nextBook = editingAddressId
         ? addressBook.map((address) =>
-          address.id === editingAddressId ? { ...address, ...normalizedAddress } : address,
-        )
+            address.id === editingAddressId
+              ? { ...address, ...normalizedAddress }
+              : address,
+          )
         : [...addressBook, normalizedAddress];
       const normalizedBook = nextBook.map((address) => ({
         ...address,
-        is_default: normalizedAddress.is_default ? address.id === normalizedAddress.id : address.is_default,
+        is_default: normalizedAddress.is_default
+          ? address.id === normalizedAddress.id
+          : address.is_default,
       }));
       if (!normalizedBook.some((address) => address.is_default)) {
         normalizedBook[normalizedBook.length - 1].is_default = true;
@@ -722,9 +833,17 @@ const handleDeleteVacation = (id: string) => {
   const getMarkedDates = () => {
     const marks: any = {};
     if (startDate)
-      marks[startDate] = { selected: true, startingDay: true, color: Colors.primary };
+      marks[startDate] = {
+        selected: true,
+        startingDay: true,
+        color: Colors.primary,
+      };
     if (endDate)
-      marks[endDate] = { selected: true, endingDay: true, color: Colors.primary };
+      marks[endDate] = {
+        selected: true,
+        endingDay: true,
+        color: Colors.primary,
+      };
     if (startDate && endDate) {
       let current = new Date(startDate);
       const end = new Date(endDate);
@@ -747,17 +866,53 @@ const handleDeleteVacation = (id: string) => {
   const statusConfig = (status: string) => {
     switch (status) {
       case "delivered":
-        return { color: "#16a34a", bg: "#F0FDF4", border: "#BBF7D0", label: "Delivered", icon: "checkmark-circle" };
+        return {
+          color: "#16a34a",
+          bg: "#F0FDF4",
+          border: "#BBF7D0",
+          label: "Delivered",
+          icon: "checkmark-circle",
+        };
       case "out_for_delivery":
-        return { color: "#d97706", bg: "#FFFBEB", border: "#FDE68A", label: "Out for Delivery", icon: "bicycle" };
+        return {
+          color: "#d97706",
+          bg: "#FFFBEB",
+          border: "#FDE68A",
+          label: "Out for Delivery",
+          icon: "bicycle",
+        };
       case "assigned":
-        return { color: "#2563EB", bg: "#EFF6FF", border: "#BFDBFE", label: "Rider Assigned", icon: "bicycle-outline" };
+        return {
+          color: "#2563EB",
+          bg: "#EFF6FF",
+          border: "#BFDBFE",
+          label: "Rider Assigned",
+          icon: "bicycle-outline",
+        };
       case "cancelled":
-        return { color: "#dc2626", bg: "#FEF2F2", border: "#FECACA", label: "Cancelled", icon: "close-circle" };
+        return {
+          color: "#dc2626",
+          bg: "#FEF2F2",
+          border: "#FECACA",
+          label: "Cancelled",
+          icon: "close-circle",
+        };
       case "skipped":
-        return { color: "#9CA3AF", bg: "#F3F4F6", border: "#E5E7EB", label: "Skipped", icon: "play-skip-forward-outline" };
+        return {
+          color: "#9CA3AF",
+          bg: "#F3F4F6",
+          border: "#E5E7EB",
+          label: "Skipped",
+          icon: "play-skip-forward-outline",
+        };
       default:
-        return { color: "#6366f1", bg: "#EEF2FF", border: "#C7D2FE", label: status?.replace(/_/g, " ") || "Pending", icon: "time" };
+        return {
+          color: "#6366f1",
+          bg: "#EEF2FF",
+          border: "#C7D2FE",
+          label: status?.replace(/_/g, " ") || "Pending",
+          icon: "time",
+        };
     }
   };
 
@@ -769,7 +924,11 @@ const handleDeleteVacation = (id: string) => {
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      <Toast visible={toast.visible} message={toast.message} type={toast.type} />
+      <Toast
+        visible={toast.visible}
+        message={toast.message}
+        type={toast.type}
+      />
       <CustomAlert config={alertConfig} onDismiss={hideAlert} />
 
       <ScrollView
@@ -779,16 +938,36 @@ const handleDeleteVacation = (id: string) => {
         {/* ── Hero ── */}
         <View style={styles.hero}>
           <View style={styles.heroBg} />
-          <View style={styles.avatarRing}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>
-                {user?.name?.charAt(0).toUpperCase() || "U"}
-              </Text>
+          <TouchableOpacity
+            style={styles.avatarRing}
+            activeOpacity={0.85}
+            onPress={handleChangePhoto}
+            disabled={uploadingImage}
+          >
+            <View style={styles.avatarClip}>
+              {profileImage ? (
+                <Image
+                  key={profileImage}
+                  source={{ uri: profileImage }}
+                  style={styles.avatarImage}
+                  resizeMode="cover"
+                />
+              ) : (
+                <View style={styles.avatar}>
+                  <Text style={styles.avatarText}>
+                    {user?.name?.charAt(0).toUpperCase() || "U"}
+                  </Text>
+                </View>
+              )}
             </View>
-            <View style={styles.avatarBadge}>
-              <Ionicons name="checkmark" size={10} color="#fff" />
+            <View style={styles.cameraBadge}>
+              <Ionicons
+                name={uploadingImage ? "hourglass-outline" : "camera"}
+                size={12}
+                color="#fff"
+              />
             </View>
-          </View>
+          </TouchableOpacity>
           <Text style={styles.userName}>{user?.name}</Text>
           <Text style={styles.userEmail}>{user?.email}</Text>
           {user?.phone && (
@@ -806,8 +985,6 @@ const handleDeleteVacation = (id: string) => {
           </TouchableOpacity>
         </View>
 
-       
-
         {/* ── Delivery Address ── */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
@@ -819,7 +996,11 @@ const handleDeleteVacation = (id: string) => {
               style={styles.addIconBtn}
               onPress={() => router.push("/address-book" as any)}
             >
-              <Ionicons name="chevron-forward" size={17} color={Colors.primary} />
+              <Ionicons
+                name="chevron-forward"
+                size={17}
+                color={Colors.primary}
+              />
             </TouchableOpacity>
           </View>
           {addressBook.length > 0 ? (
@@ -834,7 +1015,13 @@ const handleDeleteVacation = (id: string) => {
                   <View style={styles.addressTopRow}>
                     <View style={styles.addressTypeBadge}>
                       <Ionicons
-                        name={address?.label === "work" ? "briefcase-outline" : address?.label === "other" ? "location-outline" : "home-outline"}
+                        name={
+                          address?.label === "work"
+                            ? "briefcase-outline"
+                            : address?.label === "other"
+                              ? "location-outline"
+                              : "home-outline"
+                        }
                         size={13}
                         color={Colors.primary}
                       />
@@ -851,7 +1038,9 @@ const handleDeleteVacation = (id: string) => {
                   <Text style={styles.savedAddressText}>
                     {formatDeliveryAddress(address)}
                   </Text>
-                  <Text style={styles.savedAddressAction}>Tap to manage address</Text>
+                  <Text style={styles.savedAddressAction}>
+                    Tap to manage address
+                  </Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -865,9 +1054,15 @@ const handleDeleteVacation = (id: string) => {
                 } as any)
               }
             >
-              <Ionicons name="add-circle-outline" size={20} color={Colors.primary} />
+              <Ionicons
+                name="add-circle-outline"
+                size={20}
+                color={Colors.primary}
+              />
               <Text style={styles.emptyAddressText}>
-                {user?.address ? "Complete delivery address" : "Add delivery address"}
+                {user?.address
+                  ? "Complete delivery address"
+                  : "Add delivery address"}
               </Text>
             </TouchableOpacity>
           )}
@@ -932,8 +1127,14 @@ const handleDeleteVacation = (id: string) => {
                 <Text style={styles.expandBtnText}>
                   {ordersExpanded ? "Show less" : `+${orders.length - 3} more`}
                 </Text>
-                <Animated.View style={{ transform: [{ rotate: chevronRotate }] }}>
-                  <Ionicons name="chevron-down" size={14} color={Colors.primary} />
+                <Animated.View
+                  style={{ transform: [{ rotate: chevronRotate }] }}
+                >
+                  <Ionicons
+                    name="chevron-down"
+                    size={14}
+                    color={Colors.primary}
+                  />
                 </Animated.View>
               </TouchableOpacity>
             )}
@@ -947,7 +1148,8 @@ const handleDeleteVacation = (id: string) => {
                   order.product_name ||
                   order.product?.name ||
                   (order.items?.length > 0
-                    ? order.items[0]?.name || `Order #${String(order.id).slice(-4)}`
+                    ? order.items[0]?.name ||
+                      `Order #${String(order.id).slice(-4)}`
                     : `Order #${String(order.id).slice(-4)}`);
                 return (
                   <View
@@ -958,8 +1160,17 @@ const handleDeleteVacation = (id: string) => {
                     ]}
                   >
                     <View style={styles.orderLeft}>
-                      <View style={[styles.orderIconBox, { backgroundColor: sc.bg }]}>
-                        <Ionicons name={sc.icon as any} size={16} color={sc.color} />
+                      <View
+                        style={[
+                          styles.orderIconBox,
+                          { backgroundColor: sc.bg },
+                        ]}
+                      >
+                        <Ionicons
+                          name={sc.icon as any}
+                          size={16}
+                          color={sc.color}
+                        />
                       </View>
                       <View style={{ flex: 1 }}>
                         <Text style={styles.orderName} numberOfLines={1}>
@@ -1001,8 +1212,7 @@ const handleDeleteVacation = (id: string) => {
           )}
         </View>
 
-
-         {/* ── Connect with Gaushala ── */}
+        {/* ── Connect with Gaushala ── */}
         <TouchableOpacity
           style={[
             styles.card,
@@ -1010,7 +1220,9 @@ const handleDeleteVacation = (id: string) => {
             (user as any)?.admin_id && styles.connectCardLinked,
           ]}
           activeOpacity={0.88}
-          onPress={(user as any)?.admin_id ? undefined : handleOpenConnectGaushala}
+          onPress={
+            (user as any)?.admin_id ? undefined : handleOpenConnectGaushala
+          }
         >
           <View style={styles.cardHeader}>
             <View style={[styles.cardIconBox, { backgroundColor: "#ECFDF5" }]}>
@@ -1040,8 +1252,14 @@ const handleDeleteVacation = (id: string) => {
           </Text>
           {!(user as any)?.admin_id && (
             <View style={styles.connectActionRow}>
-              <Text style={styles.connectActionText}>Tap to enter referral code</Text>
-              <Ionicons name="chevron-forward" size={16} color={Colors.primary} />
+              <Text style={styles.connectActionText}>
+                Tap to enter referral code
+              </Text>
+              <Ionicons
+                name="chevron-forward"
+                size={16}
+                color={Colors.primary}
+              />
             </View>
           )}
         </TouchableOpacity>
@@ -1067,7 +1285,6 @@ const handleDeleteVacation = (id: string) => {
             style={{ marginLeft: "auto" }}
           />
         </TouchableOpacity>
-
       </ScrollView>
 
       {/* ── Vacation Modal ── */}
@@ -1103,7 +1320,10 @@ const handleDeleteVacation = (id: string) => {
                 <Ionicons name="arrow-forward" size={14} color="#ccc" />
               </View>
               <TouchableOpacity
-                style={[styles.dateTab, !selectingStart && styles.dateTabActive]}
+                style={[
+                  styles.dateTab,
+                  !selectingStart && styles.dateTabActive,
+                ]}
                 onPress={() => setSelectingStart(false)}
               >
                 <Text style={styles.dateTabLabel}>TO</Text>
@@ -1170,11 +1390,15 @@ const handleDeleteVacation = (id: string) => {
                 label="Referral Code"
                 placeholder="Example: RAM347"
                 value={connectReferralCode}
-                onChangeText={(text) => setConnectReferralCode(text.toUpperCase())}
+                onChangeText={(text) =>
+                  setConnectReferralCode(text.toUpperCase())
+                }
                 autoCapitalize="characters"
               />
               <Button
-                title={connectingGaushala ? "Connecting..." : "Connect Gaushala"}
+                title={
+                  connectingGaushala ? "Connecting..." : "Connect Gaushala"
+                }
                 onPress={handleConnectGaushala}
                 loading={connectingGaushala}
                 disabled={connectingGaushala}
@@ -1238,6 +1462,17 @@ const handleDeleteVacation = (id: string) => {
           </View>
         </View>
       </Modal>
+      <CropModal
+        visible={cropVisible}
+        imageUri={rawImageUri}
+        imageSize={rawImageSize}
+        onCancel={() => {
+          setCropVisible(false);
+          setRawImageUri(null);
+          setRawImageSize(null);
+        }}
+        onDone={handleCropDone}
+      />
     </SafeAreaView>
   );
 }
@@ -1276,6 +1511,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 14,
   },
+  avatarClip: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    overflow: "hidden",
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: Colors.primary,
+  },
   avatar: {
     width: 80,
     height: 80,
@@ -1298,7 +1542,30 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  userName: { fontSize: 22, fontWeight: "800", color: "#111", letterSpacing: -0.5 },
+  avatarImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+  },
+  cameraBadge: {
+    position: "absolute",
+    bottom: 4,
+    right: 4,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: Colors.primary,
+    borderWidth: 2.5,
+    borderColor: "#fff",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  userName: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#111",
+    letterSpacing: -0.5,
+  },
   userEmail: { fontSize: 13, color: "#aaa", marginTop: 3, fontWeight: "400" },
   phoneBadge: {
     flexDirection: "row",
@@ -1559,7 +1826,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 13,
     paddingVertical: 10,
   },
-  vacationChipText: { flex: 1, fontSize: 13, fontWeight: "600", color: "#92400e" },
+  vacationChipText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#92400e",
+  },
   vacationDeleteBtn: {
     width: 22,
     height: 22,
@@ -1602,7 +1874,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  orderName: { fontSize: 14, fontWeight: "700", color: "#111", marginBottom: 1 },
+  orderName: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#111",
+    marginBottom: 1,
+  },
   orderDate: { fontSize: 12, color: "#aaa", marginBottom: 1 },
   orderItems: { fontSize: 11, color: "#bbb" },
   orderRight: { alignItems: "flex-end", gap: 5 },
@@ -1750,7 +2027,12 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
-  dateTabValue: { fontSize: 15, fontWeight: "700", color: "#111", marginTop: 4 },
+  dateTabValue: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#111",
+    marginTop: 4,
+  },
   dateTabValueActive: { color: Colors.primary },
   addressSectionLabel: {
     fontSize: 11,

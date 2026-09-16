@@ -22,6 +22,8 @@ import { Colors } from "../../src/constants/colors";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { api } from "../../src/services/api";
 import { hasCompleteDeliveryAddress } from "../../src/utils/address";
+import { useFocusEffect } from "expo-router"; // or "@react-navigation/native"
+import { BackHandler } from "react-native";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const GRID_GAP = 12;
@@ -136,6 +138,17 @@ export default function ProductSearchScreen() {
   const [feedback, setFeedback] = useState("");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  useFocusEffect(
+  useCallback(() => {
+    const onBackPress = () => {
+      router.replace("/(customer)/catalog" as any);
+      return true;
+    };
+    const sub = BackHandler.addEventListener("hardwareBackPress", onBackPress);
+    return () => sub.remove();
+  }, [router])
+);
 
   const loadData = useCallback(async () => {
     try {
@@ -316,7 +329,7 @@ export default function ProductSearchScreen() {
   const ListHeader = (
     <View>
       <View style={s.header}>
-        <TouchableOpacity style={s.backBtn} onPress={() => router.back()}>
+       <TouchableOpacity style={s.backBtn} onPress={() => router.replace("/(customer)/catalog" as any)}>
           <Ionicons name="arrow-back" size={20} color="#111827" />
         </TouchableOpacity>
         <View style={s.searchBox}>

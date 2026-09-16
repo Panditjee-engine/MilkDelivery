@@ -262,14 +262,13 @@ function BrandHeader() {
             },
           ]}
         >
-          <LinearGradient
-            colors={[Colors.primary, Colors.primary + "BB"]}
-            style={brandStyles.leafGrad}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-          >
-            <Ionicons name="leaf" size={18} color="#fff" />
-          </LinearGradient>
+          <View style={brandStyles.leafGrad}>
+            <Image
+              source={{ uri: "https://panditjeeweb02.blob.core.windows.net/banners/gausatv-logo.jpeg" }}
+              style={{ width: 38, height: 38, borderRadius: 12 }}
+              resizeMode="cover"
+            />
+          </View>
         </Animated.View>
         <Animated.Text
           style={[
@@ -388,6 +387,7 @@ const brandStyles = StyleSheet.create({
     borderRadius: 12,
     justifyContent: "center",
     alignItems: "center",
+    overflow: "hidden",
   },
   brandName: {
     fontSize: 26,
