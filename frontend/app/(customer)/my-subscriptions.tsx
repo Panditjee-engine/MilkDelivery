@@ -299,7 +299,7 @@ function MiniCalendar({
                   calS.dayNum,
                   isSel && { color: "#fff", fontWeight: "800" },
                   isToday &&
-                    !isSel && { color: accentColor, fontWeight: "700" },
+                  !isSel && { color: accentColor, fontWeight: "700" },
                 ]}
               >
                 {day}
@@ -626,10 +626,10 @@ export default function MySubscriptionsScreen() {
         onClose={() => setShowEditModal(false)}
       />
       <DeliveryCalendarModal
-  visible={!!calendarSub}
-  sub={calendarSub}
-  onClose={() => setCalendarSub(null)}
-/>
+        visible={!!calendarSub}
+        sub={calendarSub}
+        onClose={() => setCalendarSub(null)}
+      />
     </SafeAreaView>
   );
 }
@@ -643,7 +643,7 @@ function SubscriptionCard({
   onCancel,
   onDownloadInvoice,
   downloadingInvoice,
-   onOpenCalendar,    
+  onOpenCalendar,
 }: {
   sub: Subscription;
   isActive: boolean;
@@ -728,7 +728,7 @@ function SubscriptionCard({
           </View>
         </View>
 
-                <TouchableOpacity
+        <TouchableOpacity
           style={C.calendarIconBtn}
           onPress={() => onOpenCalendar(sub)}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -898,7 +898,7 @@ const C = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-    calendarIconBtn: {
+  calendarIconBtn: {
     width: 32,
     height: 32,
     borderRadius: 8,
@@ -1066,20 +1066,20 @@ function EditModal({
     icon: string;
     hint: string;
   }> = [
-    { key: "daily", label: "Daily", icon: "sunny-outline", hint: "Every day" },
-    {
-      key: "alternate",
-      label: "Alternate",
-      icon: "git-compare-outline",
-      hint: "Every other day",
-    },
-    {
-      key: "custom",
-      label: "Custom",
-      icon: "calendar-outline",
-      hint: "Specific days",
-    },
-  ];
+      { key: "daily", label: "Daily", icon: "sunny-outline", hint: "Every day" },
+      {
+        key: "alternate",
+        label: "Alternate",
+        icon: "git-compare-outline",
+        hint: "Every other day",
+      },
+      {
+        key: "custom",
+        label: "Custom",
+        icon: "calendar-outline",
+        hint: "Specific days",
+      },
+    ];
 
   return (
     <Modal visible={visible} transparent animationType="none">
@@ -1689,6 +1689,12 @@ function DeliveryCalendarModal({
           </View>
 
           <ScrollView style={M.body} showsVerticalScrollIndicator={false}>
+            <View style={CAL.noticeBanner}>
+              <Ionicons name="megaphone-outline" size={16} color={Colors.primary} />
+              <Text style={CAL.noticeText}>
+                Please rate our product every day — your feedback matters to us! {'\n'} Click on a delivered date to submit your feedback.
+              </Text>
+            </View>
             <View style={calS.header}>
               <TouchableOpacity onPress={prevMo} style={calS.nav}>
                 <Ionicons name="chevron-back" size={14} color="#666" />
@@ -1770,6 +1776,25 @@ function DeliveryCalendarModal({
 }
 
 const CAL = StyleSheet.create({
+  noticeBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    backgroundColor: "#FFF4E8",
+    borderWidth: 1,
+    borderColor: "#FFE0BD",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 14,
+  },
+  noticeText: {
+    flex: 1,
+    fontSize: 12.5,
+    fontWeight: "700",
+    color: Colors.primary,
+    lineHeight: 18,
+  },
   dot: {
     width: 14, height: 14, borderRadius: 7,
     position: "absolute", bottom: 2,

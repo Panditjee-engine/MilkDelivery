@@ -1154,6 +1154,7 @@ function ProductCard({
   cartQty,
   cutoffRule,
   deliveryWindow,
+  rating,
 }: {
   product: any;
   onOpenDetails: () => void;
@@ -1163,6 +1164,7 @@ function ProductCard({
   cartQty: number;
   cutoffRule?: OrderCutoffRule | null;
   deliveryWindow?: DeliveryWindowRule | null;
+  rating?: { average: number; total: number } | null;
 }) {
   const theme = getCategoryTheme(product.category);
   const isDairy = isDairyProduct(product);
@@ -1232,9 +1234,17 @@ function ProductCard({
         )}
       </View>
       <View style={cardS.body}>
-        <Text style={cardS.name} numberOfLines={2}>
-          {product.name}
-        </Text>
+        <View style={cardS.nameRow}>
+          <Text style={cardS.name} numberOfLines={2}>
+            {product.name}
+          </Text>
+          {rating && rating.total > 0 ? (
+            <View style={cardS.ratingPill}>
+              <Ionicons name="star" size={9} color="#F59E0B" />
+              <Text style={cardS.ratingTxt}>{rating.average.toFixed(1)}</Text>
+            </View>
+          ) : null}
+        </View>
         <View style={cardS.priceRow}>
           <Text style={[cardS.price, { color: theme.accent }]}>
             ₹{product.price}
@@ -1436,14 +1446,34 @@ const cardS = StyleSheet.create({
   },
   qtyBadgeTxt: { fontSize: 9, fontWeight: "800", color: "#fff" },
   body: { padding: 10, paddingBottom: 7 },
-  name: {
+  nameRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 5,
+    marginBottom: 5,
+  },
+    name: {                         
+    flex: 1,                      
     minHeight: 32,
     fontSize: 12,
     fontWeight: "700",
     color: T.text,
-    marginBottom: 5,
     lineHeight: 16,
   },
+
+  ratingPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+    backgroundColor: "#FFFBEB",
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+    borderRadius: T.radius.full,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    marginTop: 1,
+  },
+  ratingTxt: { fontSize: 9, fontWeight: "900", color: "#B45309" },
   priceRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -1557,6 +1587,7 @@ function CategorySection({
   cart,
   cutoffRules,
   deliveryWindows,
+  ratings,
 }: {
   value: string;
   label: string;
@@ -1568,6 +1599,7 @@ function CategorySection({
   cart: CartItem[];
   cutoffRules: OrderCutoffRule[];
   deliveryWindows: DeliveryWindowRule[];
+  ratings: Record<string, { average: number; total: number }>;
 }) {
   const theme = getCategoryTheme(value);
   const isDairyCat = DAIRY_CATEGORIES.includes(value.toLowerCase());
@@ -1602,6 +1634,7 @@ function CategorySection({
               onAddToCart={() => onAddToCart(item)}
               cutoffRule={getOrderCutoffForProduct(item, cutoffRules)}
               deliveryWindow={getDeliveryWindowForProduct(item, deliveryWindows)}
+              rating={ratings[String(resolveProductId(item))] || null}
             />
           );
         })}
@@ -3981,6 +4014,7 @@ export default function CatalogScreen() {
     useState<PaymentMethodSettings>(DEFAULT_PAYMENT_METHODS);
   const [orderCutoffs, setOrderCutoffs] = useState<OrderCutoffRule[]>([]);
   const [deliveryWindows, setDeliveryWindows] = useState<DeliveryWindowRule[]>([]);
+  const [ratings, setRatings] = useState<Record<string, { average: number; total: number }>>({});
   const [toastVisible, setToastVisible] = useState(false);
   const [toastProduct, setToastProduct] = useState("");
   const [toastIsSub, setToastIsSub] = useState(false);
@@ -4086,6 +4120,26 @@ export default function CatalogScreen() {
     }
   }, [products, linkedAdminId]);
 
+  const fetchRatings = useCallback(async (list: any[]) => {      
+    const entries = await Promise.all(
+      (list || []).map(async (p) => {
+        const id = resolveProductId(p);
+        if (!id) return null;
+        try {
+          const fb = await api.getCatalogProductFeedback(String(id));
+          if (!fb?.total_reviews) return null;
+          return [
+            String(id),
+            { average: fb.average_rating ?? 0, total: fb.total_reviews ?? 0 },
+          ] as const;
+        } catch {
+          return null;
+        }
+      }),
+    );
+    setRatings(Object.fromEntries(entries.filter(Boolean) as any));
+  }, []);
+
   useEffect(() => {
     const id = (user as any)?.admin_id ?? (user as any)?.referral_admin_id;
     setLinkedAdminId(id ?? null);
@@ -4110,6 +4164,7 @@ export default function CatalogScreen() {
       const cutoffs = await fetchCutoffsForProducts(prods || [], linkedAdminId);
       const windows = await fetchDeliveryWindowsForProducts(prods || [], linkedAdminId);
       setProducts(prods);
+      void fetchRatings(prods || []); 
       setCategories(cats);
       setWalletBalance(wallet.balance ?? 0);
       setCatalogSlides(mapContentToSlides(content?.data || []));
@@ -4122,7 +4177,7 @@ export default function CatalogScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [selectedCategory, fetchSubs, linkedAdminId]);
+  }, [selectedCategory, fetchSubs, linkedAdminId , fetchRatings]);
 
   useEffect(() => {
     if (!products.length) return;
@@ -4806,6 +4861,7 @@ export default function CatalogScreen() {
             onOpenDetails={openProductDetails}
             cutoffRules={orderCutoffs}
             deliveryWindows={deliveryWindows}
+            ratings={ratings}
           />
         )}
       />

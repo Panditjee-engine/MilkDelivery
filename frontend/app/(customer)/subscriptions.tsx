@@ -303,7 +303,17 @@ function getMeta(status: string) {
 
 // ─── Summary bar ──────────────────────────────────────────────────────────────
 
-function SummaryBar({ orders }: { orders: Order[] }) {
+type OrderFilter = "all" | "active" | "delivered" | "cancelled";
+
+function SummaryBar({
+  orders,
+  filter,
+  onFilterChange,
+}: {
+  orders: Order[];
+  filter: OrderFilter;
+  onFilterChange: (f: OrderFilter) => void;
+}) {
   const active = orders.filter(
     (o) => !["delivered", "cancelled", "skipped"].includes(o.status),
   ).length;
@@ -311,48 +321,147 @@ function SummaryBar({ orders }: { orders: Order[] }) {
   const cancelled = orders.filter((o) =>
     ["cancelled", "skipped"].includes(o.status),
   ).length;
+
+  const toggle = (key: OrderFilter) => {
+    onFilterChange(filter === key ? "all" : key);
+  };
+
   return (
     <View style={smS.wrap}>
       <View style={smS.row}>
-        <View style={smS.pill}>
+        <TouchableOpacity
+          style={[smS.pill, filter === "all" && smS.pillActiveNeutral]}
+          onPress={() => onFilterChange("all")}
+          activeOpacity={0.75}
+        >
           <Text style={smS.n}>{orders.length}</Text>
           <Text style={smS.l}> Total</Text>
-        </View>
+        </TouchableOpacity>
+
         {active > 0 && (
-          <View
+          <TouchableOpacity
             style={[
               smS.pill,
               { backgroundColor: "#EFF6FF", borderColor: "#2563EB40" },
+              filter === "active" && {
+                backgroundColor: "#2563EB",
+                borderColor: "#2563EB",
+              },
             ]}
+            onPress={() => toggle("active")}
+            activeOpacity={0.75}
           >
-            <View style={[smS.dot, { backgroundColor: "#2563EB" }]} />
-            <Text style={[smS.n, { color: "#2563EB" }]}> {active}</Text>
-            <Text style={[smS.l, { color: "#2563EBCC" }]}> Active</Text>
-          </View>
+            <View
+              style={[
+                smS.dot,
+                { backgroundColor: filter === "active" ? "#fff" : "#2563EB" },
+              ]}
+            />
+            <Text
+              style={[
+                smS.n,
+                { color: filter === "active" ? "#fff" : "#2563EB" },
+              ]}
+            >
+              {" "}
+              {active}
+            </Text>
+            <Text
+              style={[
+                smS.l,
+                { color: filter === "active" ? "#DBEAFE" : "#2563EBCC" },
+              ]}
+            >
+              {" "}
+              Active
+            </Text>
+          </TouchableOpacity>
         )}
+
         {delivered > 0 && (
-          <View
+          <TouchableOpacity
             style={[
               smS.pill,
               { backgroundColor: "#F0FDF4", borderColor: "#16A34A40" },
+              filter === "delivered" && {
+                backgroundColor: "#16A34A",
+                borderColor: "#16A34A",
+              },
             ]}
+            onPress={() => toggle("delivered")}
+            activeOpacity={0.75}
           >
-            <View style={[smS.dot, { backgroundColor: "#16A34A" }]} />
-            <Text style={[smS.n, { color: "#16A34A" }]}> {delivered}</Text>
-            <Text style={[smS.l, { color: "#16A34ACC" }]}> Delivered</Text>
-          </View>
+            <View
+              style={[
+                smS.dot,
+                {
+                  backgroundColor:
+                    filter === "delivered" ? "#fff" : "#16A34A",
+                },
+              ]}
+            />
+            <Text
+              style={[
+                smS.n,
+                { color: filter === "delivered" ? "#fff" : "#16A34A" },
+              ]}
+            >
+              {" "}
+              {delivered}
+            </Text>
+            <Text
+              style={[
+                smS.l,
+                { color: filter === "delivered" ? "#DCFCE7" : "#16A34ACC" },
+              ]}
+            >
+              {" "}
+              Delivered
+            </Text>
+          </TouchableOpacity>
         )}
+
         {cancelled > 0 && (
-          <View
+          <TouchableOpacity
             style={[
               smS.pill,
               { backgroundColor: "#FEF2F2", borderColor: "#DC262640" },
+              filter === "cancelled" && {
+                backgroundColor: "#DC2626",
+                borderColor: "#DC2626",
+              },
             ]}
+            onPress={() => toggle("cancelled")}
+            activeOpacity={0.75}
           >
-            <View style={[smS.dot, { backgroundColor: "#DC2626" }]} />
-            <Text style={[smS.n, { color: "#DC2626" }]}> {cancelled}</Text>
-            <Text style={[smS.l, { color: "#DC2626CC" }]}> Cancelled</Text>
-          </View>
+            <View
+              style={[
+                smS.dot,
+                {
+                  backgroundColor:
+                    filter === "cancelled" ? "#fff" : "#DC2626",
+                },
+              ]}
+            />
+            <Text
+              style={[
+                smS.n,
+                { color: filter === "cancelled" ? "#fff" : "#DC2626" },
+              ]}
+            >
+              {" "}
+              {cancelled}
+            </Text>
+            <Text
+              style={[
+                smS.l,
+                { color: filter === "cancelled" ? "#FEE2E2" : "#DC2626CC" },
+              ]}
+            >
+              {" "}
+              Cancelled
+            </Text>
+          </TouchableOpacity>
         )}
       </View>
     </View>
@@ -382,6 +491,10 @@ const smS = StyleSheet.create({
     borderRadius: 20,
     paddingHorizontal: 10,
     paddingVertical: 4,
+  },
+  pillActiveNeutral: {
+    backgroundColor: "#111827",
+    borderColor: "#111827",
   },
   dot: { width: 5, height: 5, borderRadius: 3 },
   n: { fontSize: 12, fontWeight: "800", color: "#374151" },
@@ -1354,6 +1467,7 @@ export default function OrdersScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
+ const [orderFilter, setOrderFilter] = useState<"all" | "active" | "delivered" | "cancelled">("all");
   const [search, setSearch] = useState("");
   const [productMap, setProductMap] = useState<ProductMap>({});
   const [cancelOrder, setCancelOrder] = useState<Order | null>(null);
@@ -1496,13 +1610,16 @@ export default function OrdersScreen() {
     | { type: "order"; key: string; order: Order; sectionIndex: number };
 
   const listData: ListItem[] = [];
-  if (active.length > 0) {
+  if ((orderFilter === "all" || orderFilter === "active") && active.length > 0) {
     listData.push({ type: "header", key: "h-active", label: "Active" });
     active.forEach((o, i) =>
       listData.push({ type: "order", key: o.id, order: o, sectionIndex: i }),
     );
   }
-  if (delivered.length > 0) {
+  if (
+    (orderFilter === "all" || orderFilter === "delivered") &&
+    delivered.length > 0
+  ) {
     listData.push({ type: "header", key: "h-delivered", label: "Delivered" });
     delivered.forEach((o, i) =>
       listData.push({
@@ -1513,7 +1630,10 @@ export default function OrdersScreen() {
       }),
     );
   }
-  if (cancelled.length > 0) {
+  if (
+    (orderFilter === "all" || orderFilter === "cancelled") &&
+    cancelled.length > 0
+  ) {
     listData.push({ type: "header", key: "h-cancelled", label: "Cancelled" });
     cancelled.forEach((o, i) =>
       listData.push({
@@ -1548,7 +1668,12 @@ export default function OrdersScreen() {
       </Animated.View>
 
       {/* Summary pills */}
-      <SummaryBar orders={orders} />
+      {/* Summary pills */}
+      <SummaryBar
+        orders={orders}
+        filter={orderFilter}
+        onFilterChange={setOrderFilter}
+      />
       <RecordSearch value={search} onChange={setSearch} placeholder="Search product, order ID or status" />
 
       {/* List */}

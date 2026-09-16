@@ -369,11 +369,11 @@ export default function ProductDetailsScreen() {
           ) : null}
 
           <View style={s.infoGrid}>
-            <View style={s.infoBox}>
+            {/*<View style={s.infoBox}>
               <Ionicons name="cube-outline" size={18} color={Colors.primary} />
               <Text style={s.infoLabel}>Stock</Text>
               <Text style={s.infoValue}>{product.stock ?? "Available"}</Text>
-            </View>
+           </View>*/}
             <View style={s.infoBox}>
               <Ionicons name="repeat-outline" size={18} color={Colors.primary} />
               <Text style={s.infoLabel}>Order</Text>
