@@ -383,6 +383,8 @@ export default function MySubscriptionsScreen() {
   const hasLoadedOnce = useRef(false);
   const fetchInFlight = useRef(false);
 
+  const [showSearch, setShowSearch] = useState(false);
+
   // ── Use the history endpoint so cancelled/expired subs still come back
   // for the "Past" tab — api.getSubscriptions() now only returns
   // status === "active" ones on the backend.
@@ -526,16 +528,31 @@ export default function MySubscriptionsScreen() {
   return (
     <SafeAreaView style={S.container} edges={["top"]}>
       {/* ── Header ── */}
-      <View style={S.header}>
-        <TouchableOpacity onPress={() => router.back()} style={S.headerBack}>
-          <Ionicons name="chevron-back" size={22} color="#1A1A1A" />
-        </TouchableOpacity>
-        <Text style={S.headerTitle}>My Subscriptions</Text>
-        <View style={{ width: 36 }} />
-      </View>
+<View style={S.header}>
+  <TouchableOpacity onPress={() => router.back()} style={S.headerBack}>
+    <Ionicons name="chevron-back" size={22} color="#1A1A1A" />
+  </TouchableOpacity>
+  <Text style={S.headerTitle}>My Subscriptions</Text>
+  <TouchableOpacity
+    onPress={() => {
+      setShowSearch((v) => !v);
+      if (showSearch) setSearch("");
+    }}
+    style={S.headerBack}
+  >
+    <Ionicons name={showSearch ? "close" : "search"} size={20} color="#1A1A1A" />
+  </TouchableOpacity>
+</View>
+
 
       {/* ── Tabs ── */}
-      <RecordSearch value={search} onChange={setSearch} placeholder="Search product, subscription ID or plan" />
+      {showSearch && (
+        <RecordSearch
+          value={search}
+          onChange={setSearch}
+          placeholder="Search product, subscription ID or plan"
+        />
+      )}
       <View style={S.tabRow}>
         {(["active", "past"] as const).map((tab) => (
           <TouchableOpacity
