@@ -374,6 +374,11 @@ export default function ProfileScreen() {
   const [connectingGaushala, setConnectingGaushala] = useState(false);
   const isFocused = useIsFocused();
 
+  const [gaushalaInfo, setGaushalaInfo] = useState<any>(
+    (user as any)?.gaushala_info || null,
+  );
+  const [gaushalaInfoModal, setGaushalaInfoModal] = useState(false);
+
   const [profileImage, setProfileImage] = useState<string | null>(
     (user as any)?.profile_image || null,
   );
@@ -448,6 +453,25 @@ export default function ProfileScreen() {
     if (!isFocused) return;
     fetchData();
   }, [isFocused]);
+
+  useEffect(() => {
+    if (!isFocused) return;
+    const adminId = (user as any)?.admin_id;
+    if (adminId && !gaushalaInfo) {
+      api
+        .getAssignedAdmin()
+        .then((info) =>
+          setGaushalaInfo({
+            name: info.business_name || info.name,
+            phone: info.phone,
+            location:
+              info.location ||
+              (typeof info.address === "string" ? info.address : undefined),
+          }),
+        )
+        .catch(() => {});
+    }
+  }, [isFocused, (user as any)?.admin_id]);
 
   const fetchData = async () => {
     try {
@@ -586,6 +610,22 @@ export default function ProfileScreen() {
           referral_admin_id: result.admin_id,
         } as any);
       }
+
+      // connectGaushala doesn't return phone/location — fetch full details separately
+      setGaushalaInfo({ name: result.admin_name });
+      api
+        .getAssignedAdmin()
+        .then((info) =>
+          setGaushalaInfo({
+            name: info.business_name || info.name,
+            phone: info.phone,
+            location:
+              info.location ||
+              (typeof info.address === "string" ? info.address : undefined),
+          }),
+        )
+        .catch(() => {});
+
       setConnectModal(false);
       showToast(`Connected with ${result.admin_name || "Gaushala"}`, "success");
     } catch (error: any) {
@@ -1229,6 +1269,21 @@ export default function ProfileScreen() {
               <Ionicons name="business-outline" size={17} color="#16a34a" />
             </View>
             <Text style={styles.cardTitle}>Connect with Gaushala</Text>
+
+            {(user as any)?.admin_id && (
+              <TouchableOpacity
+                style={styles.infoIconBtn}
+                onPress={() => setGaushalaInfoModal(true)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons
+                  name="information-circle-outline"
+                  size={20}
+                  color="#16a34a"
+                />
+              </TouchableOpacity>
+            )}
+
             <View
               style={[
                 styles.connectionBadge,
@@ -1245,22 +1300,39 @@ export default function ProfileScreen() {
               </Text>
             </View>
           </View>
-          <Text style={styles.connectText}>
-            {(user as any)?.admin_id
-              ? "Your account is connected with a nearby gaushala."
-              : "Enter your gaushala referral code to see nearby products, content and services."}
-          </Text>
-          {!(user as any)?.admin_id && (
-            <View style={styles.connectActionRow}>
-              <Text style={styles.connectActionText}>
-                Tap to enter referral code
+
+          {(user as any)?.admin_id ? (
+            <>
+              <Text style={styles.connectText}>
+                {gaushalaInfo?.name ||
+                  "Your account is connected with a nearby gaushala."}
               </Text>
-              <Ionicons
-                name="chevron-forward"
-                size={16}
-                color={Colors.primary}
-              />
-            </View>
+              {gaushalaInfo?.location && (
+                <View style={styles.gaushalaMetaRow}>
+                  <Ionicons name="location-outline" size={13} color="#64748B" />
+                  <Text style={styles.gaushalaMetaText} numberOfLines={1}>
+                    {gaushalaInfo.location}
+                  </Text>
+                </View>
+              )}
+            </>
+          ) : (
+            <>
+              <Text style={styles.connectText}>
+                Enter your gaushala referral code to see nearby products,
+                content and services.
+              </Text>
+              <View style={styles.connectActionRow}>
+                <Text style={styles.connectActionText}>
+                  Tap to enter referral code
+                </Text>
+                <Ionicons
+                  name="chevron-forward"
+                  size={16}
+                  color={Colors.primary}
+                />
+              </View>
+            </>
           )}
         </TouchableOpacity>
 
@@ -1408,7 +1480,72 @@ export default function ProfileScreen() {
           </View>
         </View>
       </Modal>
+      <Modal visible={gaushalaInfoModal} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <View style={styles.dragHandle} />
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Gaushala Details</Text>
+              <TouchableOpacity
+                style={styles.closeBtn}
+                onPress={() => setGaushalaInfoModal(false)}
+              >
+                <Ionicons name="close" size={15} color="#666" />
+              </TouchableOpacity>
+            </View>
 
+            <View style={styles.connectModalIcon}>
+              <Ionicons name="business" size={26} color="#16a34a" />
+            </View>
+
+            <View style={{ gap: 14 }}>
+              <View style={styles.gaushalaDetailRow}>
+                <Ionicons
+                  name="business-outline"
+                  size={18}
+                  color={Colors.primary}
+                />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.gaushalaDetailLabel}>
+                    Farm / Gaushala Name
+                  </Text>
+                  <Text style={styles.gaushalaDetailValue}>
+                    {gaushalaInfo?.name || "—"}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.gaushalaDetailRow}>
+                <Ionicons
+                  name="call-outline"
+                  size={18}
+                  color={Colors.primary}
+                />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.gaushalaDetailLabel}>Contact Number</Text>
+                  <Text style={styles.gaushalaDetailValue}>
+                    {gaushalaInfo?.phone || "—"}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.gaushalaDetailRow}>
+                <Ionicons
+                  name="location-outline"
+                  size={18}
+                  color={Colors.primary}
+                />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.gaushalaDetailLabel}>Location</Text>
+                  <Text style={styles.gaushalaDetailValue}>
+                    {gaushalaInfo?.location || "—"}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
       {/* ── Edit Profile Modal ── */}
       <Modal visible={editModal} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
@@ -2070,4 +2207,43 @@ const styles = StyleSheet.create({
   },
   addressRequiredTitle: { fontSize: 13, fontWeight: "900", color: "#991B1B" },
   addressRequiredText: { fontSize: 11.5, color: "#B91C1C", marginTop: 2 },
+  infoIconBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  gaushalaMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginTop: 8,
+  },
+  gaushalaMetaText: {
+    fontSize: 12,
+    color: "#64748B",
+    fontWeight: "600",
+    flex: 1,
+  },
+  gaushalaDetailRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    backgroundColor: "#F8FBF7",
+    borderRadius: 14,
+    padding: 12,
+  },
+  gaushalaDetailLabel: {
+    fontSize: 11,
+    color: "#94A3B8",
+    fontWeight: "700",
+    textTransform: "uppercase",
+    marginBottom: 3,
+  },
+  gaushalaDetailValue: {
+    fontSize: 14,
+    color: "#111827",
+    fontWeight: "700",
+  },
 });

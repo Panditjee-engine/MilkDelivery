@@ -164,12 +164,12 @@ export interface AdminNotificationItem {
   admin_id?: string;
   event?: string;
   category:
-  | "order"
-  | "subscription"
-  | "wallet"
-  | "vacation"
-  | "general"
-  | string;
+    | "order"
+    | "subscription"
+    | "wallet"
+    | "vacation"
+    | "general"
+    | string;
   title: string;
   body: string;
   data?: Record<string, any>;
@@ -575,14 +575,24 @@ export interface ProductFeedbackSummary {
 }
 
 class ApiService {
-  async getReferralDirectory(): Promise<Array<{ admin_id: string; admin_name: string; referral_code: string; is_default: boolean }>> {
+  async getReferralDirectory(): Promise<
+    Array<{
+      admin_id: string;
+      admin_name: string;
+      referral_code: string;
+      is_default: boolean;
+    }>
+  > {
     return this.request("/admin/referral-directory");
   }
   async getProductSearchHistory(): Promise<string[]> {
     return this.request("/catalog/search-history");
   }
   async recordProductSearch(query: string) {
-    return this.request("/catalog/search-history", { method: "POST", body: JSON.stringify({ query }) });
+    return this.request("/catalog/search-history", {
+      method: "POST",
+      body: JSON.stringify({ query }),
+    });
   }
   async clearProductSearchHistory() {
     return this.request("/catalog/search-history", { method: "DELETE" });
@@ -651,18 +661,21 @@ class ApiService {
         console.log("BODY:", text);
       }
 
-       let message = text || "Request failed";
+      let message = text || "Request failed";
       try {
         const errJson = JSON.parse(text);
         if (Array.isArray(errJson.detail)) {
           message = errJson.detail
             .map((d: any) => {
-              const field = Array.isArray(d.loc) ? d.loc[d.loc.length - 1] : "field";
+              const field = Array.isArray(d.loc)
+                ? d.loc[d.loc.length - 1]
+                : "field";
               return `${field}: ${d.msg}`;
             })
             .join("; ");
         } else {
-          message = errJson.detail || errJson.message || text || "Request failed";
+          message =
+            errJson.detail || errJson.message || text || "Request failed";
         }
       } catch {
         // Keep the raw text when the backend does not return JSON.
@@ -774,6 +787,7 @@ class ApiService {
       email?: string;
       phone?: string;
       address?: any;
+      location?: string;
     }>("/auth/assigned-admin");
   }
 
@@ -1144,15 +1158,17 @@ class ApiService {
   }
 
   async getSubscriptionCalendar(subscriptionId: string) {
-    return this.request<Array<{
-      order_id: string;
-      delivery_date: string;
-      status: string;
-      product_id: string;
-      product_name?: string;
-      rated: boolean;
-      rating?: number | null;
-    }>>(`/orders/subscription/${subscriptionId}/calendar`);
+    return this.request<
+      Array<{
+        order_id: string;
+        delivery_date: string;
+        status: string;
+        product_id: string;
+        product_name?: string;
+        rated: boolean;
+        rating?: number | null;
+      }>
+    >(`/orders/subscription/${subscriptionId}/calendar`);
   }
 
   async downloadOrderInvoice(orderId: string) {
@@ -1308,13 +1324,15 @@ class ApiService {
 
   // Per-date order status for a subscription — used to render the
   // delivery calendar (checkmark on delivered dates) in the admin app. by goluu
-  async getAdminSubscriptionOrders(subscriptionId: string): Promise<Array<{
-    order_id: string;
-    delivery_date: string;
-    status: string;
-    has_feedback: boolean;
-    rating: number | null;
-  }>> {
+  async getAdminSubscriptionOrders(subscriptionId: string): Promise<
+    Array<{
+      order_id: string;
+      delivery_date: string;
+      status: string;
+      has_feedback: boolean;
+      rating: number | null;
+    }>
+  > {
     return this.request(`/admin/orders/subscription/${subscriptionId}`);
   }
 
@@ -1720,7 +1738,6 @@ class ApiService {
       body: JSON.stringify(data),
     });
   }
-
 
   async updateProductPrices(
     updates: Array<{ product_id: string; price: number }>,
@@ -2484,12 +2501,12 @@ class ApiService {
         const trimmed = text.trim();
         const data = trimmed
           ? (() => {
-            try {
-              return JSON.parse(trimmed);
-            } catch {
-              return null;
-            }
-          })()
+              try {
+                return JSON.parse(trimmed);
+              } catch {
+                return null;
+              }
+            })()
           : null;
 
         if (response.ok && data) return data;
@@ -2501,9 +2518,9 @@ class ApiService {
 
         throw new Error(
           (data &&
-            typeof data === "object" &&
-            "detail" in data &&
-            typeof data.detail === "string"
+          typeof data === "object" &&
+          "detail" in data &&
+          typeof data.detail === "string"
             ? data.detail
             : trimmed) || "Failed to fetch worker points",
         );
@@ -3137,7 +3154,6 @@ class ApiService {
     await AsyncStorage.removeItem("vet_data");
   }
 
-
   async getVetMilkRecords() {
     const token = await AsyncStorage.getItem("vet_token");
     const response = await fetch(`${API_BASE}/api/vet/milk-records`, {
@@ -3335,90 +3351,90 @@ class ApiService {
   }
 
   async getVetInseminations() {
-  const token = await AsyncStorage.getItem("vet_token");
-  const response = await fetch(`${API_BASE}/api/vet/insemination`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  const data = await response.json();
-  if (!response.ok)
-    throw new Error(data.detail || "Failed to fetch insemination records");
-  return data;
-}
+    const token = await AsyncStorage.getItem("vet_token");
+    const response = await fetch(`${API_BASE}/api/vet/insemination`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await response.json();
+    if (!response.ok)
+      throw new Error(data.detail || "Failed to fetch insemination records");
+    return data;
+  }
 
-async vetCreateInsemination(data: {
-  cowSrNo: string;
-  cowName?: string;
-  inseminationDate: string;
-  aiDate?: string;
-  pregnancyStatus?: boolean;
-  pdDone?: boolean;
-  pregnancyStatusDate?: string;
-  doctorName?: string;
-  actualCalvingDate?: string;
-  heatAfterCalvingDate?: string;
-  sire?: string;
-  lastCalvingDate?: string;
-  lastCalvingCalfGender?: string;
-}) {
-  const token = await AsyncStorage.getItem("vet_token");
-  const response = await fetch(`${API_BASE}/api/vet/insemination`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(data),
-  });
-  const result = await response.json();
-  if (!response.ok)
-    throw new Error(result.detail || "Failed to save insemination record");
-  return result;
-}
-
-async vetUpdateInsemination(
-  id: string,
-  data: Partial<{
+  async vetCreateInsemination(data: {
     cowSrNo: string;
-    cowName: string;
+    cowName?: string;
     inseminationDate: string;
-    aiDate: string;
-    pregnancyStatus: boolean;
-    pdDone: boolean;
-    pregnancyStatusDate: string;
-    doctorName: string;
-    actualCalvingDate: string;
-    heatAfterCalvingDate: string;
-    sire: string;
-    lastCalvingDate: string;
-    lastCalvingCalfGender: string;
-  }>,
-) {
-  const token = await AsyncStorage.getItem("vet_token");
-  const response = await fetch(`${API_BASE}/api/vet/insemination/${id}`, {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(data),
-  });
-  const result = await response.json();
-  if (!response.ok)
-    throw new Error(result.detail || "Failed to update insemination record");
-  return result;
-}
+    aiDate?: string;
+    pregnancyStatus?: boolean;
+    pdDone?: boolean;
+    pregnancyStatusDate?: string;
+    doctorName?: string;
+    actualCalvingDate?: string;
+    heatAfterCalvingDate?: string;
+    sire?: string;
+    lastCalvingDate?: string;
+    lastCalvingCalfGender?: string;
+  }) {
+    const token = await AsyncStorage.getItem("vet_token");
+    const response = await fetch(`${API_BASE}/api/vet/insemination`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(data),
+    });
+    const result = await response.json();
+    if (!response.ok)
+      throw new Error(result.detail || "Failed to save insemination record");
+    return result;
+  }
 
-async vetDeleteInsemination(id: string) {
-  const token = await AsyncStorage.getItem("vet_token");
-  const response = await fetch(`${API_BASE}/api/vet/insemination/${id}`, {
-    method: "DELETE",
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  const result = await response.json();
-  if (!response.ok)
-    throw new Error(result.detail || "Failed to delete insemination record");
-  return result;
-}
+  async vetUpdateInsemination(
+    id: string,
+    data: Partial<{
+      cowSrNo: string;
+      cowName: string;
+      inseminationDate: string;
+      aiDate: string;
+      pregnancyStatus: boolean;
+      pdDone: boolean;
+      pregnancyStatusDate: string;
+      doctorName: string;
+      actualCalvingDate: string;
+      heatAfterCalvingDate: string;
+      sire: string;
+      lastCalvingDate: string;
+      lastCalvingCalfGender: string;
+    }>,
+  ) {
+    const token = await AsyncStorage.getItem("vet_token");
+    const response = await fetch(`${API_BASE}/api/vet/insemination/${id}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(data),
+    });
+    const result = await response.json();
+    if (!response.ok)
+      throw new Error(result.detail || "Failed to update insemination record");
+    return result;
+  }
+
+  async vetDeleteInsemination(id: string) {
+    const token = await AsyncStorage.getItem("vet_token");
+    const response = await fetch(`${API_BASE}/api/vet/insemination/${id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const result = await response.json();
+    if (!response.ok)
+      throw new Error(result.detail || "Failed to delete insemination record");
+    return result;
+  }
 
   // ── Vet Semen Records ────────────────────────────────
 
@@ -4271,8 +4287,7 @@ async vetDeleteInsemination(id: string) {
       },
     );
     const data = await response.json();
-    if (!response.ok)
-      throw new Error(data.detail || "Failed to fetch product");
+    if (!response.ok) throw new Error(data.detail || "Failed to fetch product");
     return data;
   }
 
@@ -4311,10 +4326,9 @@ async vetDeleteInsemination(id: string) {
   }
 
   async getAdminFeedbackSummary() {
-    return this.request<ProductFeedbackSummary[]>(
-      "/admin/feedback/summary",
-      { silentErrorLog: true },
-    );
+    return this.request<ProductFeedbackSummary[]>("/admin/feedback/summary", {
+      silentErrorLog: true,
+    });
   }
 
   async getAdminOrderFeedback(orderId: string) {
@@ -4325,23 +4339,25 @@ async vetDeleteInsemination(id: string) {
   }
 
   async uploadProfileImage(uri: string): Promise<{ url: string }> {
-  const filename = uri.split("/").pop() || `photo_${Date.now()}.jpg`;
-  const match = /\.(\w+)$/.exec(filename);
-  const type = match ? `image/${match[1] === "jpg" ? "jpeg" : match[1]}` : "image/jpeg";
+    const filename = uri.split("/").pop() || `photo_${Date.now()}.jpg`;
+    const match = /\.(\w+)$/.exec(filename);
+    const type = match
+      ? `image/${match[1] === "jpg" ? "jpeg" : match[1]}`
+      : "image/jpeg";
 
-  const formData = new FormData();
-  formData.append("file", {
-    uri,
-    name: filename,
-    type,
-  } as any);
+    const formData = new FormData();
+    formData.append("file", {
+      uri,
+      name: filename,
+      type,
+    } as any);
 
-  return this.requestFormData<{ url: string }>(
-    "/auth/profile/photo",
-    formData,
-    "POST",
-  );
-}
+    return this.requestFormData<{ url: string }>(
+      "/auth/profile/photo",
+      formData,
+      "POST",
+    );
+  }
 
   // Logout
   logout = async () => {
