@@ -1,3 +1,4 @@
+import { useCachedScreenState } from "../../src/hooks/useCachedScreenState";
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import {
@@ -1853,7 +1854,7 @@ function InseminationCard({
 export default function VetInseminationScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [records, setRecords] = useState<InseminationRecord[]>([]);
+  const [records, setRecords] = useCachedScreenState<InseminationRecord[]>("screen:(veterinary)/insemination:records", []);
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>("newest");
   const [dateRange, setDateRange] = useState<DateRangeOption>("all_time");
@@ -1863,17 +1864,15 @@ export default function VetInseminationScreen() {
   const [editingRecord, setEditingRecord] = useState<InseminationRecord | null>(
     null,
   );
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(() => api.getScreenSnapshot("screen:(veterinary)/insemination:records") === undefined);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [vetName, setVetName] = useState<string | undefined>(undefined);
+  const [vetName, setVetName] = useCachedScreenState<string | undefined>("screen:(veterinary)/insemination:vetName", undefined);
 
-  const [cowMap, setCowMap] = useState<
-    Record<string, { type: string; photo?: string; isLeasedIn?: boolean }>
-  >({});
+  const [cowMap, setCowMap] = useCachedScreenState<Record<string, { type: string; photo?: string; isLeasedIn?: boolean }>>("screen:(veterinary)/insemination:cowMap", {});
 
   const fetchRecords = useCallback(async () => {
-    setLoading(true);
+    setLoading(api.getScreenSnapshot("screen:(veterinary)/insemination:records") === undefined);
     setError(null);
     try {
       const data = await api.getVetInseminations();
@@ -1912,6 +1911,7 @@ export default function VetInseminationScreen() {
   }, []);
 
   const onRefresh = async () => {
+    api.refreshLists();
     setRefreshing(true);
     await Promise.all([fetchRecords()]);
     setRefreshing(false);

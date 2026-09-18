@@ -482,11 +482,14 @@ export default function ProductDetailsScreen() {
             <View style={s.section}>
               <Text style={s.sectionTitle}>Description</Text>
               <Text style={s.description}>{product.description}</Text>
-              <View style={s.section}>
-                <Text style={s.sectionTitle}>Ratings & Reviews</Text>
-                {feedbackSummary?.total_reviews > 0 ? (
-                  <>
-                    <View
+            </View>
+          ) : null}
+
+          <View style={s.section}>
+            <Text style={s.sectionTitle}>Ratings & Reviews</Text>
+            {feedbackSummary?.total_reviews > 0 ? (
+              <>
+                <View
                       style={{
                         flexDirection: "row",
                         alignItems: "center",
@@ -494,22 +497,22 @@ export default function ProductDetailsScreen() {
                         marginBottom: 10,
                       }}
                     >
-                      <Text
+                  <Text
                         style={{
                           fontSize: 22,
                           fontWeight: "900",
                           color: "#111827",
                         }}
                       >
-                        {feedbackSummary.average_rating.toFixed(1)}
-                      </Text>
-                      <View>
-                        <StarRating
+                    {feedbackSummary.average_rating.toFixed(1)}
+                  </Text>
+                  <View>
+                    <StarRating
                           value={Math.round(feedbackSummary.average_rating)}
                           readOnly
                           size={16}
                         />
-                        <Text
+                    <Text
                           style={{
                             fontSize: 12,
                             color: "#6B7280",
@@ -517,40 +520,40 @@ export default function ProductDetailsScreen() {
                             marginTop: 2,
                           }}
                         >
-                          {feedbackSummary.total_reviews} review
+                      {feedbackSummary.total_reviews} review
                           {feedbackSummary.total_reviews > 1 ? "s" : ""}
-                        </Text>
-                      </View>
-                    </View>
-                    {feedbackSummary.feedback.slice(0, 10).map((fb: any) => (
-                      <View
-                        key={fb.id}
-                        style={{
-                          paddingVertical: 10,
-                          borderTopWidth: 1,
-                          borderTopColor: "#F0F2F5",
-                        }}
-                      >
-                        <View
+                    </Text>
+                  </View>
+                </View>
+                {feedbackSummary.feedback.slice(0, 10).map((fb: any) => (
+                  <View
+                    key={fb.id}
+                    style={{
+                      paddingVertical: 10,
+                      borderTopWidth: 1,
+                      borderTopColor: "#F0F2F5",
+                    }}
+                  >
+                    <View
                           style={{
                             flexDirection: "row",
                             justifyContent: "space-between",
                             alignItems: "center",
                           }}
                         >
-                          <Text
+                      <Text
                             style={{
                               fontSize: 13,
                               fontWeight: "800",
                               color: "#111827",
                             }}
                           >
-                            {fb.customer_name || "Customer"}
-                          </Text>
-                          <StarRating value={fb.rating} readOnly size={13} />
-                        </View>
-                        {fb.comment ? (
-                          <Text
+                        {fb.customer_name || "Customer"}
+                      </Text>
+                      <StarRating value={fb.rating} readOnly size={13} />
+                    </View>
+                    {fb.comment ? (
+                      <Text
                             style={{
                               fontSize: 13,
                               color: "#6B7280",
@@ -558,26 +561,24 @@ export default function ProductDetailsScreen() {
                               lineHeight: 18,
                             }}
                           >
-                            {fb.comment}
-                          </Text>
-                        ) : null}
-                      </View>
-                    ))}
-                  </>
-                ) : (
-                  <Text
+                        {fb.comment}
+                      </Text>
+                    ) : null}
+                  </View>
+                ))}
+              </>
+            ) : (
+              <Text
                     style={{
                       fontSize: 13,
                       color: "#9CA3AF",
                       fontWeight: "600",
                     }}
                   >
-                    No reviews yet for this product.
-                  </Text>
-                )}
-              </View>
-            </View>
-          ) : null}
+                No reviews yet for this product.
+              </Text>
+            )}
+          </View>
         </View>
       </ScrollView>
 

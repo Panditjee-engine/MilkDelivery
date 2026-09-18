@@ -894,6 +894,7 @@ function MilkScreenInner({
   };
 
   const onRefresh = () => {
+    api.refreshLists();
     setRefreshing(true);
     fetchAll();
   };

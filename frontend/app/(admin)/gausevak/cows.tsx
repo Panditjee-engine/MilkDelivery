@@ -4814,7 +4814,7 @@ function ListHeader({
 export default function CowsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [cows, setCows] = useState<Cow[]>([]);
+  const [cows, setCows] = useState<Cow[]>(() => api.getScreenSnapshot<Cow[]>("admin-cows") || []);
   const [addVisible, setAddVisible] = useState(false);
   const [editCow, setEditCow] = useState<Cow | null>(null);
   const [loading, setLoading] = useState(false);
@@ -4855,7 +4855,8 @@ export default function CowsScreen() {
   const { alertConfig, showAlert, dismissAlert } = useModernAlert();
 
   const fetchCows = useCallback(async (searchTerm?: string) => {
-    setLoading(true);
+    const session = api.getSnapshotSession();
+    setLoading(api.getScreenSnapshot("admin-cows") === undefined);
     setError(null);
     try {
       const [cowsData, inseminations] = await Promise.all([
@@ -4877,7 +4878,9 @@ export default function CowsScreen() {
               : "not_pregnant"
             : "unknown",
       }));
-      setCows(enriched);
+      if (session !== api.getSnapshotSession()) return;
+      if (!searchTerm) api.setScreenSnapshot("admin-cows", enriched);
+      setCows(prev => JSON.stringify(prev) === JSON.stringify(enriched) ? prev : enriched);
     } catch (err: any) {
       setError(err.message ?? "Failed to load cows.");
     } finally {
@@ -4890,6 +4893,7 @@ export default function CowsScreen() {
   }, [fetchCows]);
 
   const onRefresh = async () => {
+    api.refreshLists();
     setRefreshing(true);
     await fetchCows();
     setRefreshing(false);

@@ -21,11 +21,12 @@ import ViewShot, { captureRef } from "react-native-view-shot";
 import { useAuth } from "../../../src/contexts/AuthContext";
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { api, FarmSale, PaymentMethod } from "../../../src/services/api";
+import { localDateKey } from "../../../src/utils/localDate";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function todayStr() {
-  return new Date().toISOString().split("T")[0];
+  return localDateKey();
 }
 
 function fmtShortDate(dateStr: string): string {

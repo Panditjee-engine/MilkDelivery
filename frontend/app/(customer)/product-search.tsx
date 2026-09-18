@@ -226,6 +226,7 @@ export default function ProductSearchScreen() {
   }, [filteredProducts, categories]);
 
   const onRefresh = () => {
+    api.refreshLists();
     setRefreshing(true);
     loadData();
   };

@@ -1,3 +1,4 @@
+import { useCachedScreenState } from "../../../src/hooks/useCachedScreenState";
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -460,11 +461,11 @@ function useModernAlert() {
 export default function InsuranceScreen() {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("Cows");
-  const [cows, setCows] = useState<Cow[]>([]);
-  const [insurances, setInsurances] = useState<Record<string, Insurance>>({});
-  const [summary, setSummary] = useState<InsuranceSummary | null>(null);
-  const [notifLogs, setNotifLogs] = useState<NotifLog[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [cows, setCows] = useCachedScreenState<Cow[]>("screen:(admin)/gausevak/insurance:cows", []);
+  const [insurances, setInsurances] = useCachedScreenState<Record<string, Insurance>>("screen:(admin)/gausevak/insurance:insurances", {});
+  const [summary, setSummary] = useCachedScreenState<InsuranceSummary | null>("screen:(admin)/gausevak/insurance:summary", null);
+  const [notifLogs, setNotifLogs] = useCachedScreenState<NotifLog[]>("screen:(admin)/gausevak/insurance:notifLogs", []);
+  const [loading, setLoading] = useState(() => api.getScreenSnapshot("screen:(admin)/gausevak/insurance:cows") === undefined);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
   const [modalVisible, setModalVisible] = useState(false);
@@ -891,7 +892,7 @@ export default function InsuranceScreen() {
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}
-                onRefresh={() => { setRefreshing(true); loadData(); }}
+                onRefresh={() => { api.refreshLists(); setRefreshing(true); loadData(); }}
                 colors={[COLORS.primary]}
                 tintColor={COLORS.primary}
               />
@@ -919,7 +920,7 @@ export default function InsuranceScreen() {
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
-              onRefresh={() => { setRefreshing(true); loadData(); }}
+              onRefresh={() => { api.refreshLists(); setRefreshing(true); loadData(); }}
               colors={[COLORS.primary]}
             />
           }

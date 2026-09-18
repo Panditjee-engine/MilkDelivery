@@ -1,3 +1,4 @@
+import { useCachedScreenState } from "../../src/hooks/useCachedScreenState";
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   View,
@@ -534,8 +535,8 @@ function AnimalCard({
 export default function CowPage() {
   const router = useRouter();
 
-  const [animals, setAnimals] = useState<Animal[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [animals, setAnimals] = useCachedScreenState<Animal[]>("screen:(veterinary)/cow:animals", []);
+  const [loading, setLoading] = useState(() => api.getScreenSnapshot("screen:(veterinary)/cow:animals") === undefined);
   const [refreshing, setRefreshing] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -559,7 +560,7 @@ export default function CowPage() {
   });
 
   const loadData = useCallback(async () => {
-    setLoading(true);
+    setLoading(api.getScreenSnapshot("screen:(veterinary)/cow:animals") === undefined);
     try {
       const data = await api.vetGetCows();
       setAnimals(Array.isArray(data) ? data : []);
@@ -575,6 +576,7 @@ export default function CowPage() {
   }, []);
 
   const onRefresh = useCallback(async () => {
+    api.refreshLists();
     setRefreshing(true);
     await loadData();
     setRefreshing(false);

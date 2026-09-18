@@ -470,6 +470,7 @@ export default function SubscriptionsScreen() {
   };
 
   const onRefresh = () => {
+    api.refreshLists();
     setRefreshing(true);
     fetchData();
   };

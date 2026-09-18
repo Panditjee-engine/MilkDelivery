@@ -1,3 +1,4 @@
+import { useCachedScreenState } from "../../src/hooks/useCachedScreenState";
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
@@ -1213,21 +1214,21 @@ function DetailModal({
 export default function AdminDashboard() {
   const { user } = useAuth();
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => api.getScreenSnapshot("screen:(admin)/dashboard:stats") === undefined);
   const [refreshing, setRefreshing] = useState(false);
-  const [stats, setStats] = useState<any>(null);
-  const [products, setProducts] = useState<any[]>([]);
-  const [customers, setCustomers] = useState<any[]>([]);
-  const [orders, setOrders] = useState<any[]>([]);
-  const [subscriptions, setSubscriptions] = useState<any[]>([]);
-  const [pendingRechargeRequests, setPendingRechargeRequests] = useState<any[]>([]);
-  const [feedbackSummaries, setFeedbackSummaries] = useState<any[]>([]);
+  const [stats, setStats] = useCachedScreenState<any>("screen:(admin)/dashboard:stats", null);
+  const [products, setProducts] = useCachedScreenState<any[]>("screen:(admin)/dashboard:products", []);
+  const [customers, setCustomers] = useCachedScreenState<any[]>("screen:(admin)/dashboard:customers", []);
+  const [orders, setOrders] = useCachedScreenState<any[]>("screen:(admin)/dashboard:orders", []);
+  const [subscriptions, setSubscriptions] = useCachedScreenState<any[]>("screen:(admin)/dashboard:subscriptions", []);
+  const [pendingRechargeRequests, setPendingRechargeRequests] = useCachedScreenState<any[]>("screen:(admin)/dashboard:pendingRechargeRequests", []);
+  const [feedbackSummaries, setFeedbackSummaries] = useCachedScreenState<any[]>("screen:(admin)/dashboard:feedbackSummaries", []);
   const [selectedFeedbackProduct, setSelectedFeedbackProduct] = useState<{ id: string; name: string } | null>(null);
-  const [notificationSummary, setNotificationSummary] = useState<{
+  const [notificationSummary, setNotificationSummary] = useCachedScreenState<{
     unread: number;
     read: number;
     total: number;
-  }>({ unread: 0, read: 0, total: 0 });
+  }>("screen:(admin)/dashboard:notificationSummary", { unread: 0, read: 0, total: 0 });
   const [modalType, setModalType] = useState<ModalType>(null);
   const [deliveredProductsExpanded, setDeliveredProductsExpanded] =useState(true);
   const [feedbackExpanded, setFeedbackExpanded] = useState(true);
@@ -1305,6 +1306,7 @@ export default function AdminDashboard() {
   }, [isFocused]);
 
   const onRefresh = useCallback(() => {
+    api.refreshLists();
     setRefreshing(true);
     fetchData();
   }, []);

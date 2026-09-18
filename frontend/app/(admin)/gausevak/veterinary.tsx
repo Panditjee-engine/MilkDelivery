@@ -1,3 +1,4 @@
+import { useCachedScreenState } from "../../../src/hooks/useCachedScreenState";
 import React, { useEffect, useState, useRef } from "react";
 import {
   View,
@@ -448,15 +449,16 @@ function PasswordResetModal({
   const gradPair = AVATAR_GRADIENTS[colorIdx];
 
   return (
-    <Modal visible={visible} transparent animationType="fade">
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
-        <View style={pr.overlay}>
+     <Modal visible={visible} transparent animationType="fade">
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "android" ? 20 : 0}
+    >
+        <View style={dm.overlay}>
           <Animated.View
             style={[
-              pr.box,
+              dm.card,
               { opacity: opacAnim, transform: [{ translateY: slideAnim }] },
             ]}
           >
@@ -1160,7 +1162,7 @@ function VetDetailModal({
                   <View style={dm.detailInfo}>
                     <Text style={dm.detailLabel}>Farm Addresses</Text>
                     {vet.farm_location_labels &&
-                    vet.farm_location_labels.length > 0 ? (
+                      vet.farm_location_labels.length > 0 ? (
                       <View style={dm.locationTagsWrap}>
                         {vet.farm_location_labels.map((label, i) => (
                           <View key={i} style={dm.locationTag}>
@@ -1631,9 +1633,9 @@ function VetCard({
 
 export default function VeterinaryScreen() {
   const router = useRouter();
-  const [vets, setVets] = useState<Veterinary[]>([]);
-  const [locations, setLocations] = useState<BusinessLocation[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [vets, setVets] = useCachedScreenState<Veterinary[]>("screen:(admin)/gausevak/veterinary:vets", []);
+  const [locations, setLocations] = useCachedScreenState<BusinessLocation[]>("screen:(admin)/gausevak/veterinary:locations", []);
+  const [loading, setLoading] = useState(() => api.getScreenSnapshot("screen:(admin)/gausevak/veterinary:vets") === undefined);
   const [modalVisible, setModalVisible] = useState(false);
   const [creating, setCreating] = useState(false);
   const [selectedVet, setSelectedVet] = useState<Veterinary | null>(null);
@@ -1692,7 +1694,7 @@ export default function VeterinaryScreen() {
 
   const fetchVets = async () => {
     try {
-      setLoading(true);
+      setLoading(api.getScreenSnapshot("screen:(admin)/gausevak/veterinary:vets") === undefined);
       const data = await api.getAdminVeterinarians();
       setVets(data);
     } catch (e: any) {
@@ -1777,11 +1779,11 @@ export default function VeterinaryScreen() {
         vs.map((v) =>
           v.id === id
             ? {
-                ...v,
-                ...data,
-                farm_location_labels:
-                  updated?.farm_location_labels ?? v.farm_location_labels,
-              }
+              ...v,
+              ...data,
+              farm_location_labels:
+                updated?.farm_location_labels ?? v.farm_location_labels,
+            }
             : v,
         ),
       );
@@ -1789,11 +1791,11 @@ export default function VeterinaryScreen() {
         setSelectedVet((v) =>
           v
             ? {
-                ...v,
-                ...data,
-                farm_location_labels:
-                  updated?.farm_location_labels ?? v.farm_location_labels,
-              }
+              ...v,
+              ...data,
+              farm_location_labels:
+                updated?.farm_location_labels ?? v.farm_location_labels,
+            }
             : v,
         );
       showToast("Veterinarian updated!", "success");
@@ -2051,7 +2053,8 @@ export default function VeterinaryScreen() {
       <Modal visible={modalVisible} animationType="slide" transparent>
         <KeyboardAvoidingView
           style={{ flex: 1 }}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={Platform.OS === "android" ? 20 : 0}
         >
           <View style={styles.modalOverlay}>
             <View style={styles.modalBox}>
@@ -2196,7 +2199,7 @@ export default function VeterinaryScreen() {
                       style={[
                         styles.designationChip,
                         form.specialization === s &&
-                          styles.designationChipActive,
+                        styles.designationChipActive,
                       ]}
                       onPress={() =>
                         setForm((f) => ({
@@ -2214,7 +2217,7 @@ export default function VeterinaryScreen() {
                         style={[
                           styles.designationChipText,
                           form.specialization === s &&
-                            styles.designationChipTextActive,
+                          styles.designationChipTextActive,
                         ]}
                       >
                         {s}

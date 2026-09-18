@@ -1790,7 +1790,7 @@ function InseminationCard({
 export default function InseminationScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [records, setRecords] = useState<InseminationRecord[]>([]);
+  const [records, setRecords] = useState<InseminationRecord[]>(() => api.getScreenSnapshot<InseminationRecord[]>("admin-inseminations") || []);
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>("newest");
   const [dateRange, setDateRange] = useState<DateRangeOption>("all_time");
@@ -1808,11 +1808,14 @@ export default function InseminationScreen() {
     Record<string, { type: string; photo?: string }>
   >({});
   const fetchRecords = useCallback(async (searchTerm?: string) => {
-    setLoading(true);
+    const session = api.getSnapshotSession();
+    setLoading(api.getScreenSnapshot("admin-inseminations") === undefined);
     setError(null);
     try {
       const data = await api.getInseminations(searchTerm);
-      setRecords(data);
+      if (session !== api.getSnapshotSession()) return;
+      if (!searchTerm) api.setScreenSnapshot("admin-inseminations", data);
+      setRecords(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data);
     } catch (err: any) {
       setError(err.message ?? "Failed to load records.");
     } finally {
@@ -1844,6 +1847,7 @@ export default function InseminationScreen() {
   }, []);
 
   const onRefresh = async () => {
+    api.refreshLists();
     setRefreshing(true);
     await fetchRecords(search || undefined);
     setRefreshing(false);

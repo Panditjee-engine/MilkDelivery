@@ -15,6 +15,7 @@ import {
   KeyboardAvoidingView,
   Image,
   Linking,
+  Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -102,10 +103,10 @@ function formatFullDateLabel(isoStr: string) {
   });
 }
 
-// Auto-detect shift: morning = 5am–1pm, evening = rest
+// Early-morning entries belong to morning too; either shift remains selectable.
 function getCurrentShift(): "morning" | "evening" {
   const hour = new Date().getHours();
-  return hour >= 5 && hour < 13 ? "morning" : "evening";
+  return hour < 13 ? "morning" : "evening";
 }
 
 const DATE_OPTIONS = [dateStr(0), dateStr(1), dateStr(2)];
@@ -482,7 +483,7 @@ function InlineMilkEntry({
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (e) {
-      console.log("save error", e);
+      Alert.alert("Could not save milk entry", e instanceof Error ? e.message : "Please try again.");
     } finally {
       setSaving(false);
     }

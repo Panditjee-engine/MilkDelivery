@@ -3955,11 +3955,12 @@ const bannerModalS = StyleSheet.create({
 export default function CatalogScreen() {
   const router = useRouter();
   const { user, updateUser } = useAuth();
-  const [linkedAdminId, setLinkedAdminId] = useState<string | null>(null);
-  const [products, setProducts] = useState<any[]>([]);
-  const [categories, setCategories] = useState<any[]>([]);
+  const [linkedAdminId, setLinkedAdminId] = useState<string | null>(() => (user as any)?.admin_id ?? (user as any)?.referral_admin_id ?? null);
+  const catalogSnapshotKey = `customer-catalog:${linkedAdminId || "default"}`;
+  const [products, setProducts] = useState<any[]>(() => api.getScreenSnapshot<any[]>(catalogSnapshotKey) || []);
+  const [categories, setCategories] = useState<any[]>(() => api.getScreenSnapshot<any[]>("catalog-categories") || []);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !api.getScreenSnapshot(catalogSnapshotKey));
   const [refreshing, setRefreshing] = useState(false);
 
   const [quickAddVisible, setQuickAddVisible] = useState(false);
@@ -4147,13 +4148,15 @@ const handleCatalogScroll = useCallback(
           payment_methods: DEFAULT_PAYMENT_METHODS,
         })),
       ]);
-      const cutoffs = await fetchCutoffsForProducts(prods || [], linkedAdminId);
-      const windows = await fetchDeliveryWindowsForProducts(prods || [], linkedAdminId);
-      setProducts(prods);
-      setCategories(cats);
+      if (!selectedCategory) api.setScreenSnapshot(catalogSnapshotKey, prods);
+      api.setScreenSnapshot("catalog-categories", cats);
+      setProducts(prev => JSON.stringify(prev) === JSON.stringify(prods) ? prev : prods);
+      setCategories(prev => JSON.stringify(prev) === JSON.stringify(cats) ? prev : cats);
       setWalletBalance(wallet.balance ?? 0);
       setCatalogSlides(mapContentToSlides(content?.data || []));
       setPaymentMethods(normalizePaymentMethods(appSettings));
+      const cutoffs = await fetchCutoffsForProducts(prods || [], linkedAdminId);
+      const windows = await fetchDeliveryWindowsForProducts(prods || [], linkedAdminId);
       setOrderCutoffs(cutoffs || []);
       setDeliveryWindows(windows || []);
       await fetchSubs();
@@ -4162,7 +4165,7 @@ const handleCatalogScroll = useCallback(
       setLoading(false);
       setRefreshing(false);
     }
-  }, [selectedCategory, fetchSubs, linkedAdminId]);
+  }, [selectedCategory, fetchSubs, linkedAdminId, catalogSnapshotKey]);
 
   useEffect(() => {
     if (!products.length) return;
@@ -4261,6 +4264,7 @@ const handleCatalogScroll = useCallback(
   }, [openSubscribeProduct, openSubscribeTs]);
 
   const onRefresh = () => {
+    api.refreshLists();
     setRefreshing(true);
     void fetchData().catch(() => {
       setRefreshing(false);

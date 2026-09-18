@@ -373,9 +373,9 @@ const calS = StyleSheet.create({
 
 export default function MySubscriptionsScreen() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !api.getScreenSnapshot("customer-subscription-history"));
   const [refreshing, setRefreshing] = useState(false);
-  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>(() => api.getScreenSnapshot<Subscription[]>("customer-subscription-history") || []);
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState<"active" | "past">("active");
 
@@ -390,7 +390,7 @@ export default function MySubscriptionsScreen() {
   const [showCalendar, setShowCalendar] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [invoiceLoadingId, setInvoiceLoadingId] = useState<string | null>(null);
-  const hasLoadedOnce = useRef(false);
+  const hasLoadedOnce = useRef(!!api.getScreenSnapshot("customer-subscription-history"));
   const fetchInFlight = useRef(false);
 
   const [showSearch, setShowSearch] = useState(false);
@@ -408,7 +408,8 @@ export default function MySubscriptionsScreen() {
       const filtered = (data || []).filter(
         (sub: Subscription) => sub.pattern !== "buy_once",
       );
-      setSubscriptions(filtered);
+      api.setScreenSnapshot("customer-subscription-history", filtered);
+      setSubscriptions(prev => JSON.stringify(prev) === JSON.stringify(filtered) ? prev : filtered);
     } catch {
       Alert.alert("Error", "Failed to load subscriptions");
     } finally {
@@ -436,6 +437,7 @@ export default function MySubscriptionsScreen() {
   );
 
   const onRefresh = () => {
+    api.refreshLists();
     setRefreshing(true);
     fetchSubscriptions();
   };

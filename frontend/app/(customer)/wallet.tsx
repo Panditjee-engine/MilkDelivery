@@ -1,3 +1,4 @@
+import { useCachedScreenState } from "../../src/hooks/useCachedScreenState";
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
@@ -570,12 +571,12 @@ const ss = StyleSheet.create({
 export default function WalletScreen() {
   const router = useRouter();
   const { user, updateUser } = useAuth();
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => api.getScreenSnapshot("screen:(customer)/wallet:balance") === undefined);
   const [refreshing, setRefreshing] = useState(false);
-  const [balance, setBalance] = useState(0);
-  const [transactions, setTransactions] = useState<any[]>([]);
+  const [balance, setBalance] = useCachedScreenState("screen:(customer)/wallet:balance", 0);
+  const [transactions, setTransactions] = useCachedScreenState<any[]>("screen:(customer)/wallet:transactions", []);
   const [historyFilter, setHistoryFilter] = useState(defaultHistoryFilter);
-  const [rechargeRequests, setRechargeRequests] = useState<any[]>([]);
+  const [rechargeRequests, setRechargeRequests] = useCachedScreenState<any[]>("screen:(customer)/wallet:rechargeRequests", []);
   const [paymentQr, setPaymentQr] = useState<any>(null);
   const [qrPreviewVisible, setQrPreviewVisible] = useState(false);
   const [downloadingQr, setDownloadingQr] = useState(false);
@@ -745,6 +746,7 @@ export default function WalletScreen() {
   );
 
   const onRefresh = useCallback(() => {
+    api.refreshLists();
     setRefreshing(true);
     fetchData();
   }, [fetchData]);

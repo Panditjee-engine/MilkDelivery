@@ -301,17 +301,17 @@ function formatAddress(address?: CustomerAddress) {
   // Online/app customers use tower+flat+floor+area instead of line1/line2
   const isOnlineShape = !address.line1 && (address.tower || address.flat || address.area);
 
- if (isOnlineShape) {
-  const firstLine = [address.flat, address.tower].filter(Boolean).join(", ");
-  const lines = [
-    firstLine,
-    address.area,
-    address.landmark ? `Near ${address.landmark}` : "",
-    [address.city, address.state].filter(Boolean).join(", "),
-    address.pincode,
-  ].filter(Boolean);
-  return lines.length ? lines.join("\n") : "No address added";
-}
+  if (isOnlineShape) {
+    const firstLine = [address.flat, address.tower].filter(Boolean).join(", ");
+    const lines = [
+      firstLine,
+      address.area,
+      address.landmark ? `Near ${address.landmark}` : "",
+      [address.city, address.state].filter(Boolean).join(", "),
+      address.pincode,
+    ].filter(Boolean);
+    return lines.length ? lines.join("\n") : "No address added";
+  }
 
   const firstLine = [address.line1, address.line2, address.landmark]
     .filter(Boolean)
@@ -790,7 +790,11 @@ function CustomerFormBody({
     setForm((prev) => ({ ...prev, [key]: value as never }));
 
   return (
-    <ScrollView showsVerticalScrollIndicator={false}>
+    <ScrollView
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={{ paddingBottom: 60 }}   // 👈 add this
+      keyboardShouldPersistTaps="handled"              // 👈 add this too
+    >
       <SectionTitle icon="person-outline" title="Customer Info" />
       <InputField label="Name" value={form.name} onChangeText={setField("name")} />
       <InputField
@@ -869,6 +873,7 @@ function CustomerFormBody({
           thumbColor={form.is_active ? "#16a34a" : "#f3f4f6"}
         />
       </View>
+      <View style={{ height: 40 }} /> 
     </ScrollView>
   );
 }
@@ -932,7 +937,8 @@ function CustomerDetailModal({
       <View style={modalS.overlay}>
         <KeyboardAvoidingView
           style={{ width: "100%" }}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={Platform.OS === "android" ? 20 : 0}
         >
             <View style={[modalS.sheet, { paddingBottom: Math.max(bottomInset, 16) }]}>
             <View style={modalS.handle} />
@@ -1141,9 +1147,9 @@ export default function CustomersScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ from?: string }>();
   const insets = useSafeAreaInsets();
-  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>(() => api.getScreenSnapshot<Customer[]>("customer-manager") || []);
   const [partners, setPartners] = useState<DeliveryPartner[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !api.getScreenSnapshot("customer-manager"));
   const [creating, setCreating] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [detailVisible, setDetailVisible] = useState(false);
@@ -1164,7 +1170,7 @@ export default function CustomersScreen() {
 
   const fetchCustomers = async () => {
     try {
-      setLoading(true);
+      setLoading(!api.getScreenSnapshot("customer-manager"));
       const [offlineResult, onlineResult] = await Promise.allSettled([
         fetchAllAdminCustomerRows(),
         api.getAllUsers("customer"),
@@ -1174,7 +1180,9 @@ export default function CustomersScreen() {
       }
       const offlineRows = offlineResult.status === "fulfilled" ? offlineResult.value : [];
       const onlineRows = onlineResult.status === "fulfilled" ? onlineResult.value ?? [] : [];
-      setCustomers(mergeCustomerLists(offlineRows, onlineRows));
+      const merged = mergeCustomerLists(offlineRows, onlineRows);
+      setCustomers(merged);
+      api.setScreenSnapshot("customer-manager", merged);
       if (offlineResult.status === "rejected") {
         showToast("Offline records failed. Showing app customers.", "error");
       } else if (onlineResult.status === "rejected") {

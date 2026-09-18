@@ -1,3 +1,4 @@
+import { useCachedScreenState } from "../../../src/hooks/useCachedScreenState";
 import React, { useEffect, useState, useRef } from "react";
 import {
   View,
@@ -1614,11 +1615,11 @@ function WorkerCard({
 // ── Main Screen
 export default function WorkersScreen() {
   const router = useRouter();
-  const [workers, setWorkers] = useState<Worker[]>([]);
-  const [locations, setLocations] = useState<FarmLocationOption[]>([]);
+  const [workers, setWorkers] = useCachedScreenState<Worker[]>("screen:(admin)/gausevak/workers:workers", []);
+  const [locations, setLocations] = useCachedScreenState<FarmLocationOption[]>("screen:(admin)/gausevak/workers:locations", []);
   const [sortBy, setSortBy] = useState<SortOption>("name_asc");
   const [sortVisible, setSortVisible] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => api.getScreenSnapshot("screen:(admin)/gausevak/workers:workers") === undefined);
   const [modalVisible, setModalVisible] = useState(false);
   const [creating, setCreating] = useState(false);
   const [selectedWorker, setSelectedWorker] = useState<Worker | null>(null);
@@ -1667,7 +1668,7 @@ export default function WorkersScreen() {
 
   const fetchWorkers = async () => {
     try {
-      setLoading(true);
+      setLoading(api.getScreenSnapshot("screen:(admin)/gausevak/workers:workers") === undefined);
       const data = await api.getAdminWorkers();
       setWorkers(data);
     } catch (e: any) {
