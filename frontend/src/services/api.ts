@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { readCacheTtl } from "../utils/readCachePolicy";
 
 const API_BASE = process.env.EXPO_PUBLIC_BACKEND_URL || "";
 
@@ -588,12 +589,42 @@ class ApiService {
     return this.request("/catalog/search-history", { method: "DELETE" });
   }
   private token: string | null = null;
+  private snapshotSession = 0;
+  getSnapshotSession() { return this.snapshotSession; }
+  private screenSnapshots = new Map<string, unknown>();
+  getScreenSnapshot<T>(key: string): T | undefined {
+    return this.screenSnapshots.get(key) as T | undefined;
+  }
+  setScreenSnapshot(key: string, value: unknown) {
+    this.screenSnapshots.set(key, value);
+  }
+  refreshLists() { this.clearReadCache(); }
+  private readCache = new Map<string, { value: unknown; expires: number }>();
+  private pendingReads = new Map<string, Promise<any>>();
+  private cacheGeneration = 0;
+
+  private clearReadCache() {
+    this.cacheGeneration++;
+    this.readCache.clear();
+    this.pendingReads.clear();
+  }
 
   async init() {
-    this.token = await AsyncStorage.getItem("access_token");
+    const token = await AsyncStorage.getItem("access_token");
+    if (token !== this.token) {
+      this.snapshotSession++;
+      this.screenSnapshots.clear();
+      this.clearReadCache();
+    }
+    this.token = token;
   }
 
   setToken(token: string | null) {
+    if (token !== this.token) {
+      this.snapshotSession++;
+      this.screenSnapshots.clear();
+      this.clearReadCache();
+    }
     this.token = token;
 
     if (token) {
@@ -604,6 +635,46 @@ class ApiService {
   }
 
   private async request<T>(
+    endpoint: string,
+    options: ApiRequestOptions = {},
+  ): Promise<T> {
+    const method = (options.method || "GET").toUpperCase();
+    if (method !== "GET") this.clearReadCache();
+    const ttl = readCacheTtl(endpoint);
+    const eligible = method === "GET" && ttl > 0 && !options.signal && !options.headers;
+    if (!eligible) {
+      try { return await this.fetchRequest<T>(endpoint, options); }
+      finally { if (method !== "GET") this.clearReadCache(); }
+    }
+    const token = this.token || await AsyncStorage.getItem("access_token");
+    const key = `${token || "anonymous"}:${endpoint}`;
+    const cached = this.readCache.get(key);
+    if (cached && cached.expires > Date.now()) return JSON.parse(JSON.stringify(cached.value));
+    const existing = this.pendingReads.get(key);
+    if (existing) return JSON.parse(JSON.stringify(await existing));
+    const generation = this.cacheGeneration;
+    const pending = this.fetchRequest<T>(endpoint, options).then(value => {
+      if (generation === this.cacheGeneration) {
+        for (const [oldKey, entry] of this.readCache) {
+          if (entry.expires <= Date.now()) this.readCache.delete(oldKey);
+        }
+        if (this.readCache.size >= 80) {
+          const oldest = this.readCache.keys().next().value;
+          if (oldest) this.readCache.delete(oldest);
+        }
+        // Avoid retaining large image/base64 payloads in the navigation cache.
+        if (JSON.stringify(value).length <= 500000) {
+          this.readCache.set(key, { value, expires: Date.now() + ttl });
+        }
+      }
+      return value;
+    });
+    this.pendingReads.set(key, pending);
+    try { return JSON.parse(JSON.stringify(await pending)); }
+    finally { if (this.pendingReads.get(key) === pending) this.pendingReads.delete(key); }
+  }
+
+  private async fetchRequest<T>(
     endpoint: string,
     options: ApiRequestOptions = {},
   ): Promise<T> {
@@ -715,6 +786,16 @@ class ApiService {
   }
 
   private async requestFormData<T>(
+    endpoint: string,
+    formData: FormData,
+    method: "POST" | "PUT" = "POST",
+  ): Promise<T> {
+    this.clearReadCache();
+    try { return await this.fetchFormData<T>(endpoint, formData, method); }
+    finally { this.clearReadCache(); }
+  }
+
+  private async fetchFormData<T>(
     endpoint: string,
     formData: FormData,
     method: "POST" | "PUT" = "POST",
@@ -1625,9 +1706,15 @@ class ApiService {
   async bulkUpdateAdminOrderStatus(orderIds: string[], status: string) {
     const results: any[] = [];
     for (const orderId of orderIds) {
-      results.push(await this.updateAdminOrderStatus(orderId, status));
+      try {
+        await this.updateAdminOrderStatus(orderId, status);
+        results.push({ order_id: orderId, success: true });
+      } catch (error: any) {
+        if (error?.message === "UNAUTHORIZED") throw error;
+        results.push({ order_id: orderId, success: false, error: error?.message || "Could not update this order." });
+      }
     }
-    return { updated: results.length, failed: 0, results };
+    return { updated: results.filter(item => item.success).length, failed: results.filter(item => !item.success).length, results };
   }
 
   // Recurring subscriptions whose customers are tagged to this rider
@@ -1667,11 +1754,15 @@ class ApiService {
   ) {
     const results: any[] = [];
     for (const subscriptionId of subscriptionIds) {
-      results.push(
-        await this.updateAdminSubscriptionStatus(subscriptionId, status),
-      );
+      try {
+        await this.updateAdminSubscriptionStatus(subscriptionId, status);
+        results.push({ subscription_id: subscriptionId, success: true });
+      } catch (error: any) {
+        if (error?.message === "UNAUTHORIZED") throw error;
+        results.push({ subscription_id: subscriptionId, success: false, error: error?.message || "Could not update this subscription." });
+      }
     }
-    return { updated: results.length, failed: 0, results };
+    return { updated: results.filter(item => item.success).length, failed: results.filter(item => !item.success).length, results };
   }
 
   async cancelUserOrder(orderId: string) {
@@ -4323,6 +4414,25 @@ async vetDeleteInsemination(id: string) {
       { silentErrorLog: true },
     );
   }
+
+  async uploadProfileImage(uri: string): Promise<{ url: string }> {
+  const filename = uri.split("/").pop() || `photo_${Date.now()}.jpg`;
+  const match = /\.(\w+)$/.exec(filename);
+  const type = match ? `image/${match[1] === "jpg" ? "jpeg" : match[1]}` : "image/jpeg";
+
+  const formData = new FormData();
+  formData.append("file", {
+    uri,
+    name: filename,
+    type,
+  } as any);
+
+  return this.requestFormData<{ url: string }>(
+    "/auth/profile/photo",
+    formData,
+    "POST",
+  );
+}
 
   // Logout
   logout = async () => {

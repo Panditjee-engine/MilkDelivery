@@ -528,6 +528,7 @@ export default function FeedScreen({
   };
 
   const onRefresh = () => {
+    api.refreshLists();
     setRefreshing(true);
     fetchAll();
   };

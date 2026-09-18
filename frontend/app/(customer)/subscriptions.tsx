@@ -1351,11 +1351,11 @@ const em = StyleSheet.create({
 
 export default function OrdersScreen() {
   const isFocused = useIsFocused();
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !api.getScreenSnapshot("customer-orders"));
   const [refreshing, setRefreshing] = useState(false);
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [orders, setOrders] = useState<Order[]>(() => api.getScreenSnapshot<Order[]>("customer-orders") || []);
   const [search, setSearch] = useState("");
-  const [productMap, setProductMap] = useState<ProductMap>({});
+  const [productMap, setProductMap] = useState<ProductMap>(() => api.getScreenSnapshot<ProductMap>("customer-order-products") || {});
   const [cancelOrder, setCancelOrder] = useState<Order | null>(null);
   const [cancelModal, setCancelModal] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -1387,7 +1387,8 @@ export default function OrdersScreen() {
       for (const p of products) {
         if (p.id) map[p.id] = { name: p.name, unit: p.unit ?? "unit" };
       }
-      setProductMap(map);
+      api.setScreenSnapshot("customer-order-products", map);
+      setProductMap(prev => JSON.stringify(prev) === JSON.stringify(map) ? prev : map);
     } catch {
       /* non-fatal */
     }
@@ -1403,7 +1404,8 @@ export default function OrdersScreen() {
         const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
         return tb - ta;
       });
-      setOrders(sorted);
+      api.setScreenSnapshot("customer-orders", sorted);
+      setOrders(prev => JSON.stringify(prev) === JSON.stringify(sorted) ? prev : sorted);
     } catch (err) {
       console.warn("Failed to fetch orders:", (err as any)?.message || err);
     } finally {
@@ -1422,6 +1424,7 @@ export default function OrdersScreen() {
   }, [isFocused, fetchData, loadProductMap]);
 
   const onRefresh = () => {
+    api.refreshLists();
     setRefreshing(true);
     fetchData();
   };

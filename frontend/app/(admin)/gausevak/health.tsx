@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../../../src/services/api";
+import { localDateKey } from "../../../src/utils/localDate";
 import { useIsFocused } from "@react-navigation/native";
 
 interface CowRow {
@@ -282,7 +283,6 @@ function CowCard({
   );
 }
 
-const TODAY = new Date().toISOString().split("T")[0];
 const fmtDate = (iso: string) =>
   new Date(iso).toLocaleDateString("en-IN", {
     day: "numeric",
@@ -314,7 +314,7 @@ export default function CowHealthScreen() {
   const fetchAll = useCallback(async () => {
     try {
       const [res, cowsList] = await Promise.all([
-        api.getAdminHealthLogs(TODAY),
+        api.getAdminHealthLogs(localDateKey()),
         api.getCows(),
       ]);
 
@@ -620,7 +620,7 @@ const handleToggleHealth = async (cowId: string) => {
         <View style={{ flex: 1, marginLeft: 12 }}>
           <Text style={s.headerTitle}>Cow Health</Text>
           <Text style={s.headerSub}>
-            {rows.length} cows · {fmtDate(TODAY)}
+            {rows.length} cows · {fmtDate(localDateKey())}
           </Text>
         </View>
         <TouchableOpacity style={s.refreshBtn} onPress={onRefresh}>

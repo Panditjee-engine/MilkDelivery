@@ -1153,9 +1153,9 @@ export default function CustomersScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ from?: string }>();
   const insets = useSafeAreaInsets();
-  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>(() => api.getScreenSnapshot<Customer[]>("customer-manager") || []);
   const [partners, setPartners] = useState<DeliveryPartner[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !api.getScreenSnapshot("customer-manager"));
   const [creating, setCreating] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [detailVisible, setDetailVisible] = useState(false);
@@ -1176,7 +1176,7 @@ export default function CustomersScreen() {
 
   const fetchCustomers = async () => {
     try {
-      setLoading(true);
+      setLoading(!api.getScreenSnapshot("customer-manager"));
       const [offlineResult, onlineResult] = await Promise.allSettled([
         fetchAllAdminCustomerRows(),
         api.getAllUsers("customer"),
@@ -1186,7 +1186,9 @@ export default function CustomersScreen() {
       }
       const offlineRows = offlineResult.status === "fulfilled" ? offlineResult.value : [];
       const onlineRows = onlineResult.status === "fulfilled" ? onlineResult.value ?? [] : [];
-      setCustomers(mergeCustomerLists(offlineRows, onlineRows));
+      const merged = mergeCustomerLists(offlineRows, onlineRows);
+      setCustomers(merged);
+      api.setScreenSnapshot("customer-manager", merged);
       if (offlineResult.status === "rejected") {
         showToast("Offline records failed. Showing app customers.", "error");
       } else if (onlineResult.status === "rejected") {

@@ -1,3 +1,4 @@
+import { useCachedScreenState } from "../../src/hooks/useCachedScreenState";
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, RefreshControl, Modal, TextInput, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -28,11 +29,11 @@ const FAQ_URL = 'https://gausatv.com/faq';
 export default function DeliveryProfileScreen() {
   const { user, logout } = useAuth();
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => api.getScreenSnapshot("screen:(delivery)/profile:profileData") === undefined);
   const [refreshing, setRefreshing] = useState(false);
-  const [profileData, setProfileData] = useState<any>(null);
-  const [myOrders, setMyOrders] = useState<any[]>([]);
-  const [adminDetails, setAdminDetails] = useState<any>(null);
+  const [profileData, setProfileData] = useCachedScreenState<any>("screen:(delivery)/profile:profileData", null);
+  const [myOrders, setMyOrders] = useCachedScreenState<any[]>("screen:(delivery)/profile:myOrders", []);
+  const [adminDetails, setAdminDetails] = useCachedScreenState<any>("screen:(delivery)/profile:adminDetails", null);
 
   // Edit modal state
   const [editModalVisible, setEditModalVisible] = useState(false);
@@ -71,6 +72,7 @@ export default function DeliveryProfileScreen() {
 };
 
   const onRefresh = () => {
+    api.refreshLists();
     setRefreshing(true);
     fetchAllData();
   };

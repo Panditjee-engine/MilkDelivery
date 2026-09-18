@@ -1,3 +1,4 @@
+import { useCachedScreenState } from "../../../src/hooks/useCachedScreenState";
 import React, { useEffect, useState, useRef } from "react";
 import {
   View,
@@ -1632,9 +1633,9 @@ function VetCard({
 
 export default function VeterinaryScreen() {
   const router = useRouter();
-  const [vets, setVets] = useState<Veterinary[]>([]);
-  const [locations, setLocations] = useState<BusinessLocation[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [vets, setVets] = useCachedScreenState<Veterinary[]>("screen:(admin)/gausevak/veterinary:vets", []);
+  const [locations, setLocations] = useCachedScreenState<BusinessLocation[]>("screen:(admin)/gausevak/veterinary:locations", []);
+  const [loading, setLoading] = useState(() => api.getScreenSnapshot("screen:(admin)/gausevak/veterinary:vets") === undefined);
   const [modalVisible, setModalVisible] = useState(false);
   const [creating, setCreating] = useState(false);
   const [selectedVet, setSelectedVet] = useState<Veterinary | null>(null);
@@ -1693,7 +1694,7 @@ export default function VeterinaryScreen() {
 
   const fetchVets = async () => {
     try {
-      setLoading(true);
+      setLoading(api.getScreenSnapshot("screen:(admin)/gausevak/veterinary:vets") === undefined);
       const data = await api.getAdminVeterinarians();
       setVets(data);
     } catch (e: any) {

@@ -1,3 +1,4 @@
+import { useCachedScreenState } from "../../src/hooks/useCachedScreenState";
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
@@ -32,10 +33,10 @@ const C = {
 export default function DeliveryHome() {
   const { user } = useAuth();
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => api.getScreenSnapshot("screen:(delivery)/home:myOrders") === undefined);
   const [refreshing, setRefreshing] = useState(false);
-  const [checkinStatus, setCheckinStatus] = useState<any>(null);
-  const [myOrders, setMyOrders] = useState<any[]>([]);
+  const [checkinStatus, setCheckinStatus] = useCachedScreenState<any>("screen:(delivery)/home:checkinStatus", null);
+  const [myOrders, setMyOrders] = useCachedScreenState<any[]>("screen:(delivery)/home:myOrders", []);
   const [actionLoading, setActionLoading] = useState(false);
   const fetchingRef = useRef(false);
 
@@ -64,6 +65,7 @@ export default function DeliveryHome() {
   }, []);
 
   const onRefresh = useCallback(() => {
+    api.refreshLists();
     setRefreshing(true);
     fetchData();
   }, []);

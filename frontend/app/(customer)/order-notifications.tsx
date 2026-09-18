@@ -1,3 +1,4 @@
+import { useCachedScreenState } from "../../src/hooks/useCachedScreenState";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   View,
@@ -58,12 +59,12 @@ const patternLabel = (pattern?: string) =>
 
 export default function OrderNotificationsScreen() {
   const router = useRouter();
-  const [orders, setOrders] = useState<any[]>([]);
-  const [order, setOrder] = useState<any>(null);
+  const [orders, setOrders] = useCachedScreenState<any[]>("screen:(customer)/order-notifications:orders", []);
+  const [order, setOrder] = useCachedScreenState<any>("screen:(customer)/order-notifications:order", null);
   const [calendarVisible, setCalendarVisible] = useState(false);
   const [selectedDate, setSelectedDate] = useState("");
-  const [subscriptions, setSubscriptions] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [subscriptions, setSubscriptions] = useCachedScreenState<any[]>("screen:(customer)/order-notifications:subscriptions", []);
+  const [loading, setLoading] = useState(() => api.getScreenSnapshot("screen:(customer)/order-notifications:orders") === undefined);
   const [refreshing, setRefreshing] = useState(false);
 
   const loadLatestOrder = useCallback(async () => {
@@ -76,8 +77,8 @@ export default function OrderNotificationsScreen() {
       setOrders(list);
       setOrder(list[0] || null);
       setSubscriptions(Array.isArray(subscriptionData) ? subscriptionData : []);
-    } catch {
-      setOrder(null);
+    } catch (error) {
+      console.warn("Could not refresh order notifications", error);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -89,6 +90,7 @@ export default function OrderNotificationsScreen() {
   }, [loadLatestOrder]);
 
   const onRefresh = () => {
+    api.refreshLists();
     setRefreshing(true);
     loadLatestOrder();
   };

@@ -22,6 +22,7 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { api } from "../../../src/services/api";
+import { localDateKey } from "../../../src/utils/localDate";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 type SortOption = "name_asc" | "name_desc" | "fed_first" | "pending_first";
@@ -722,7 +723,7 @@ const STATUS_CFG: Record<
 // ─── Helpers
 
 function todayStr() {
-  return new Date().toISOString().split("T")[0];
+  return localDateKey();
 }
 
 function todayDDMM() {

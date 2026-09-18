@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
+import { useCachedScreenState } from "../../../src/hooks/useCachedScreenState";
 import {
   View,
   Text,
@@ -2869,7 +2870,7 @@ export default function MedicalScreen() {
 
   const [activeTab, setActiveTab] = useState<ActiveTab>("records");
 
-  const [records, setRecords] = useState<MedicalRecord[]>([]);
+  const [records, setRecords] = useState<MedicalRecord[]>(() => api.getScreenSnapshot<MedicalRecord[]>("admin-medical-records") || []);
   const [recScreen, setRecScreen] = useState<ActiveScreen>("home");
   const [recSearch, setRecSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>("newest");
@@ -2887,9 +2888,9 @@ export default function MedicalScreen() {
     Record<string, { type: string; photo?: string }>
   >({});
 
-  const [medicines, setMedicines] = useState<Medicine[]>([]);
-  const [medSummary, setMedSummary] = useState<MedicineStockSummary | null>(
-    null,
+  const [medicines, setMedicines] = useState<Medicine[]>(() => api.getScreenSnapshot<Medicine[]>("admin-medicines") || []);
+  const [medSummary, setMedSummary] = useCachedScreenState<MedicineStockSummary | null>(
+    "admin-medicine-summary", null,
   );
   const [stockScreen, setStockScreen] = useState<ActiveScreen>("home");
   const [stockSearch, setStockSearch] = useState("");
@@ -2906,7 +2907,8 @@ export default function MedicalScreen() {
   const [actionVisible, setActionVisible] = useState(false);
 
   const fetchRecords = useCallback(async (q?: string, status?: string) => {
-    setRecLoading(true);
+    const session = api.getSnapshotSession();
+    setRecLoading(api.getScreenSnapshot("admin-medical-records") === undefined);
     setRecError(null);
     try {
       const [data, cowsData] = await Promise.all([
@@ -2926,9 +2928,9 @@ export default function MedicalScreen() {
         cowPhoto: lookup[r.cowSrNo]?.photo,
       }));
 
-      setRecords(enriched);
-
-      setRecords(enriched);
+      if (session !== api.getSnapshotSession()) return;
+      if (!q && (!status || status === "all")) api.setScreenSnapshot("admin-medical-records", enriched);
+      setRecords(prev => JSON.stringify(prev) === JSON.stringify(enriched) ? prev : enriched);
     } catch (err: any) {
       setRecError(err.message ?? "Failed to load.");
     } finally {
@@ -2937,7 +2939,8 @@ export default function MedicalScreen() {
   }, []);
 
   const fetchMedicines = useCallback(async (q?: string, cat?: string) => {
-    setStockLoading(true);
+    const session = api.getSnapshotSession();
+    setStockLoading(api.getScreenSnapshot("admin-medicines") === undefined);
     setStockError(null);
     try {
       const [meds, sum] = await Promise.all([
@@ -2947,7 +2950,9 @@ export default function MedicalScreen() {
         }),
         (api as any).getMedicineStockSummary(),
       ]);
-      setMedicines(meds);
+      if (session !== api.getSnapshotSession()) return;
+      if (!q && (!cat || cat === "all")) api.setScreenSnapshot("admin-medicines", meds);
+      setMedicines(prev => JSON.stringify(prev) === JSON.stringify(meds) ? prev : meds);
       setMedSummary(sum);
     } catch (err: any) {
       setStockError(err.message ?? "Failed to load.");
@@ -3564,6 +3569,7 @@ export default function MedicalScreen() {
                     <RefreshControl
                       refreshing={recRefreshing}
                       onRefresh={async () => {
+                        api.refreshLists();
                         setRecRefreshing(true);
                         await fetchRecords(
                           recSearch || undefined,
@@ -3858,6 +3864,7 @@ export default function MedicalScreen() {
                     <RefreshControl
                       refreshing={stockRefreshing}
                       onRefresh={async () => {
+                        api.refreshLists();
                         setStockRefreshing(true);
                         await fetchMedicines(
                           stockSearch || undefined,
