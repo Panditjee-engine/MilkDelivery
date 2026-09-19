@@ -1,3 +1,4 @@
+import { useCachedScreenState } from "../../src/hooks/useCachedScreenState";
 import React, { useState, useCallback, useEffect } from "react";
 import {
   View,
@@ -143,8 +144,8 @@ export default function HealthScreen() {
 
   const HEALTH_OPTIONS = useHealthOptions(); // ← translated options
 
-  const [cows, setCows] = useState<Cow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [cows, setCows] = useCachedScreenState<Cow[]>("screen:(worker)/health:cows", []);
+  const [loading, setLoading] = useState(() => api.getScreenSnapshot("screen:(worker)/health:cows") === undefined);
   const [refreshing, setRefreshing] = useState(false);
 
   const [cowHealth, setCowHealth] = useState<CowHealthMap>({});
@@ -325,6 +326,7 @@ export default function HealthScreen() {
         <RefreshControl
           refreshing={refreshing}
           onRefresh={() => {
+            api.refreshLists();
             setRefreshing(true);
             fetchAll();
           }}

@@ -1,7 +1,9 @@
 // orders.tsx — fixed: cancel now uses DELETE /orders/{order_id} directly
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import RecordSearch, { matchesRecordSearch } from "../../src/components/RecordSearch";
+import RecordSearch, {
+  matchesRecordSearch,
+} from "../../src/components/RecordSearch";
 import {
   View,
   Text,
@@ -301,6 +303,35 @@ function getMeta(status: string) {
   return STATUS_META[status] ?? STATUS_META.unassigned;
 }
 
+function orderMatchesFilters(order: Order, filters: Set<string>): boolean {
+  const s = order.status;
+  if (["cancelled", "skipped"].includes(s)) return filters.has("cancelled");
+  if (s === "delivered") return filters.has("delivered");
+  if (s === "assigned") return filters.has("assigned");
+  if (s === "out_for_delivery") return filters.has("out_for_delivery");
+  return filters.has("pending"); // unassigned/unknown → treated as Pending
+}
+
+const DEFAULT_STATUS_FILTERS = ["pending", "assigned", "out_for_delivery"];
+
+function getStatusCounts(orders: Order[]): Record<string, number> {
+  const counts: Record<string, number> = {
+    pending: 0,
+    assigned: 0,
+    out_for_delivery: 0,
+    delivered: 0,
+    cancelled: 0,
+  };
+  for (const o of orders) {
+    if (["cancelled", "skipped"].includes(o.status)) counts.cancelled++;
+    else if (o.status === "delivered") counts.delivered++;
+    else if (o.status === "assigned") counts.assigned++;
+    else if (o.status === "out_for_delivery") counts.out_for_delivery++;
+    else counts.pending++;
+  }
+  return counts;
+}
+
 // ─── Summary bar ──────────────────────────────────────────────────────────────
 
 type OrderFilter = "all" | "active" | "delivered" | "cancelled";
@@ -512,6 +543,7 @@ function SectionHeader({ label }: { label: string }) {
     </View>
   );
 }
+
 const sh = StyleSheet.create({
   wrap: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 },
   line: { flex: 1, height: 1, backgroundColor: "#E5E7EB" },
@@ -1293,6 +1325,294 @@ const cd = StyleSheet.create({
   invoiceBtnTxt: { fontSize: 13, fontWeight: "800", color: Colors.primary },
 });
 
+const STATUS_FILTER_OPTIONS: {
+  key: string;
+  label: string;
+  icon: string;
+  color: string;
+}[] = [
+  { key: "pending", label: "Pending", icon: "time-outline", color: "#D97706" },
+  {
+    key: "assigned",
+    label: "Assigned",
+    icon: "bicycle-outline",
+    color: "#2563EB",
+  },
+  {
+    key: "out_for_delivery",
+    label: "Out for Delivery",
+    icon: "navigate-outline",
+    color: "#7C3AED",
+  },
+  {
+    key: "delivered",
+    label: "Delivered",
+    icon: "checkmark-circle-outline",
+    color: "#16A34A",
+  },
+  {
+    key: "cancelled",
+    label: "Cancelled",
+    icon: "close-circle-outline",
+    color: "#DC2626",
+  },
+];
+
+function FilterModal({
+  visible,
+  orders,
+  initialFilters,
+  initialSort,
+  onApply,
+  onClose,
+}: {
+  visible: boolean;
+  orders: Order[];
+  initialFilters: Set<string>;
+  initialSort: "newest" | "oldest";
+  onApply: (filters: Set<string>, sort: "newest" | "oldest") => void;
+  onClose: () => void;
+}) {
+  const [tempFilters, setTempFilters] = useState(new Set(initialFilters));
+  const [tempSort, setTempSort] = useState(initialSort);
+  const counts = getStatusCounts(orders);
+
+  useEffect(() => {
+    if (visible) {
+      setTempFilters(new Set(initialFilters));
+      setTempSort(initialSort);
+    }
+  }, [visible]);
+
+  const toggleFilter = (key: string) => {
+    setTempFilters((prev) => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide">
+      <View style={fm.overlay}>
+        <View style={fm.sheet}>
+          <View style={fm.dragHandle} />
+          <View style={fm.header}>
+            <Text style={fm.title}>Filter Orders</Text>
+            <TouchableOpacity onPress={onClose} style={fm.closeBtn}>
+              <Ionicons name="close" size={16} color="#666" />
+            </TouchableOpacity>
+          </View>
+
+          <View style={fm.totalRow}>
+            <Text style={fm.totalTxt}>
+              {orders.length} order{orders.length !== 1 ? "s" : ""} total
+            </Text>
+          </View>
+
+          <Text style={fm.sectionLabel}>Status</Text>
+          <View style={fm.chipRow}>
+            {STATUS_FILTER_OPTIONS.map((opt) => {
+              const active = tempFilters.has(opt.key);
+              const count = counts[opt.key] ?? 0;
+              return (
+                <TouchableOpacity
+                  key={opt.key}
+                  style={[
+                    fm.chip,
+                    active && {
+                      backgroundColor: opt.color + "15",
+                      borderColor: opt.color,
+                    },
+                  ]}
+                  onPress={() => toggleFilter(opt.key)}
+                >
+                  <Ionicons
+                    name={opt.icon as any}
+                    size={13}
+                    color={active ? opt.color : "#9CA3AF"}
+                  />
+                  <Text
+                    style={[
+                      fm.chipTxt,
+                      active && { color: opt.color, fontWeight: "800" },
+                    ]}
+                  >
+                    {opt.label}
+                  </Text>
+                  <View
+                    style={[
+                      fm.countBadge,
+                      { backgroundColor: active ? opt.color : "#E5E7EB" },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        fm.countTxt,
+                        { color: active ? "#fff" : "#6B7280" },
+                      ]}
+                    >
+                      {count}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          <Text style={fm.sectionLabel}>Sort by date</Text>
+          <View style={fm.sortRow}>
+            {(["newest", "oldest"] as const).map((s) => {
+              const active = tempSort === s;
+              return (
+                <TouchableOpacity
+                  key={s}
+                  style={[fm.sortBtn, active && fm.sortBtnActive]}
+                  onPress={() => setTempSort(s)}
+                >
+                  <Ionicons
+                    name={
+                      s === "newest" ? "arrow-down-outline" : "arrow-up-outline"
+                    }
+                    size={14}
+                    color={active ? "#fff" : "#374151"}
+                  />
+                  <Text style={[fm.sortTxt, active && { color: "#fff" }]}>
+                    {s === "newest" ? "Newest first" : "Oldest first"}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          <View style={fm.actionRow}>
+            <TouchableOpacity
+              style={fm.resetBtn}
+              onPress={() => {
+                setTempFilters(new Set(DEFAULT_STATUS_FILTERS));
+                setTempSort("newest");
+              }}
+            >
+              <Text style={fm.resetTxt}>Reset</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={fm.applyBtn}
+              onPress={() => onApply(tempFilters, tempSort)}
+            >
+              <Text style={fm.applyTxt}>Apply Filters</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const fm = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "flex-end",
+  },
+  sheet: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: 22,
+    paddingBottom: 32,
+  },
+  totalRow: { marginBottom: 14 },
+  totalTxt: { fontSize: 12, fontWeight: "700", color: "#9CA3AF" },
+  countBadge: {
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    paddingHorizontal: 5,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  countTxt: { fontSize: 10, fontWeight: "800" },
+  dragHandle: {
+    width: 36,
+    height: 4,
+    backgroundColor: "#E5E7EB",
+    borderRadius: 2,
+    alignSelf: "center",
+    marginBottom: 16,
+  },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 18,
+  },
+  title: { fontSize: 18, fontWeight: "800", color: "#111" },
+  closeBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 9,
+    backgroundColor: "#F3F4F6",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#9CA3AF",
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+    marginBottom: 10,
+    marginTop: 4,
+  },
+  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 18 },
+  chip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderWidth: 1.5,
+    borderColor: "#E5E7EB",
+    backgroundColor: "#F9FAFB",
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  chipTxt: { fontSize: 12, fontWeight: "700", color: "#6B7280" },
+  sortRow: { flexDirection: "row", gap: 10, marginBottom: 22 },
+  sortBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    borderWidth: 1.5,
+    borderColor: "#E5E7EB",
+    borderRadius: 14,
+    paddingVertical: 12,
+  },
+  sortBtnActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  sortTxt: { fontSize: 13, fontWeight: "700", color: "#374151" },
+  actionRow: { flexDirection: "row", gap: 10 },
+  resetBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: "#F3F4F6",
+    alignItems: "center",
+  },
+  resetTxt: { fontSize: 14, fontWeight: "700", color: "#374151" },
+  applyBtn: {
+    flex: 2,
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: Colors.primary,
+    alignItems: "center",
+  },
+  applyTxt: { fontSize: 14, fontWeight: "800", color: "#fff" },
+});
+
 // ─── Cancel Modal ─────────────────────────────────────────────────────────────
 
 function CancelModal({
@@ -1464,17 +1784,23 @@ const em = StyleSheet.create({
 
 export default function OrdersScreen() {
   const isFocused = useIsFocused();
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !api.getScreenSnapshot("customer-orders"));
   const [refreshing, setRefreshing] = useState(false);
-  const [orders, setOrders] = useState<Order[]>([]);
- const [orderFilter, setOrderFilter] = useState<"all" | "active" | "delivered" | "cancelled">("all");
+  const [orders, setOrders] = useState<Order[]>(() => api.getScreenSnapshot<Order[]>("customer-orders") || []);
   const [search, setSearch] = useState("");
-  const [productMap, setProductMap] = useState<ProductMap>({});
+  const [productMap, setProductMap] = useState<ProductMap>(() => api.getScreenSnapshot<ProductMap>("customer-order-products") || {});
   const [cancelOrder, setCancelOrder] = useState<Order | null>(null);
   const [cancelModal, setCancelModal] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [invoiceLoadingId, setInvoiceLoadingId] = useState<string | null>(null);
   const fetchingOrdersRef = useRef(false);
+
+  const [filterModalVisible, setFilterModalVisible] = useState(false);
+  const [statusFilters, setStatusFilters] = useState<Set<string>>(
+    new Set(["pending", "assigned", "out_for_delivery"]),
+  );
+  const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
+  const [searchVisible, setSearchVisible] = useState(false);
 
   const headerY = useRef(new Animated.Value(-20)).current;
   const headerOp = useRef(new Animated.Value(0)).current;
@@ -1501,7 +1827,8 @@ export default function OrdersScreen() {
       for (const p of products) {
         if (p.id) map[p.id] = { name: p.name, unit: p.unit ?? "unit" };
       }
-      setProductMap(map);
+      api.setScreenSnapshot("customer-order-products", map);
+      setProductMap(prev => JSON.stringify(prev) === JSON.stringify(map) ? prev : map);
     } catch {
       /* non-fatal */
     }
@@ -1517,7 +1844,8 @@ export default function OrdersScreen() {
         const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
         return tb - ta;
       });
-      setOrders(sorted);
+      api.setScreenSnapshot("customer-orders", sorted);
+      setOrders(prev => JSON.stringify(prev) === JSON.stringify(sorted) ? prev : sorted);
     } catch (err) {
       console.warn("Failed to fetch orders:", (err as any)?.message || err);
     } finally {
@@ -1536,6 +1864,7 @@ export default function OrdersScreen() {
   }, [isFocused, fetchData, loadProductMap]);
 
   const onRefresh = () => {
+    api.refreshLists();
     setRefreshing(true);
     fetchData();
   };
@@ -1593,57 +1922,40 @@ export default function OrdersScreen() {
     }
   };
 
-  const searchedOrders = orders.filter(order => matchesRecordSearch(search, [
-    order.id, order.status, order.product_name,
-    ...(order.items || []).flatMap(item => [item.product_name, item.name, productMap[item.product_id]?.name]),
-  ]));
-  const active = searchedOrders.filter(
-    (o) => !["delivered", "cancelled", "skipped"].includes(o.status),
-  );
-  const delivered = searchedOrders.filter((o) => o.status === "delivered");
-  const cancelled = searchedOrders.filter((o) =>
-    ["cancelled", "skipped"].includes(o.status),
+  const searchedOrders = orders.filter((order) =>
+    matchesRecordSearch(search, [
+      order.id,
+      order.status,
+      order.product_name,
+      ...(order.items || []).flatMap((item) => [
+        item.product_name,
+        item.name,
+        productMap[item.product_id]?.name,
+      ]),
+    ]),
   );
 
-  type ListItem =
-    | { type: "header"; key: string; label: string }
-    | { type: "order"; key: string; order: Order; sectionIndex: number };
+  const filteredOrders = searchedOrders
+    .filter((o) => orderMatchesFilters(o, statusFilters))
+    .sort((a, b) => {
+      const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return sortOrder === "newest" ? tb - ta : ta - tb;
+    });
 
-  const listData: ListItem[] = [];
-  if ((orderFilter === "all" || orderFilter === "active") && active.length > 0) {
-    listData.push({ type: "header", key: "h-active", label: "Active" });
-    active.forEach((o, i) =>
-      listData.push({ type: "order", key: o.id, order: o, sectionIndex: i }),
-    );
-  }
-  if (
-    (orderFilter === "all" || orderFilter === "delivered") &&
-    delivered.length > 0
-  ) {
-    listData.push({ type: "header", key: "h-delivered", label: "Delivered" });
-    delivered.forEach((o, i) =>
-      listData.push({
-        type: "order",
-        key: o.id + "-d",
-        order: o,
-        sectionIndex: i,
-      }),
-    );
-  }
-  if (
-    (orderFilter === "all" || orderFilter === "cancelled") &&
-    cancelled.length > 0
-  ) {
-    listData.push({ type: "header", key: "h-cancelled", label: "Cancelled" });
-    cancelled.forEach((o, i) =>
-      listData.push({
-        type: "order",
-        key: o.id + "-c",
-        order: o,
-        sectionIndex: i,
-      }),
-    );
-  }
+  type ListItem = {
+    type: "order";
+    key: string;
+    order: Order;
+    sectionIndex: number;
+  };
+
+  const listData: ListItem[] = filteredOrders.map((o, i) => ({
+    type: "order",
+    key: o.id,
+    order: o,
+    sectionIndex: i,
+  }));
 
   if (loading) return <LoadingScreen />;
 
@@ -1662,19 +1974,38 @@ export default function OrdersScreen() {
             {orders.length} order{orders.length !== 1 ? "s" : ""} total
           </Text>
         </View>
-        <View style={sc.headerBadge}>
-          <Ionicons name="receipt-outline" size={19} color={Colors.primary} />
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          <TouchableOpacity
+            style={sc.headerIconBtn}
+            onPress={() => setSearchVisible((v) => !v)}
+          >
+            <Ionicons
+              name={searchVisible ? "close" : "search-outline"}
+              size={18}
+              color={Colors.primary}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={sc.headerIconBtn}
+            onPress={() => setFilterModalVisible(true)}
+          >
+            <Ionicons name="filter-outline" size={18} color={Colors.primary} />
+            {(statusFilters.size !== DEFAULT_STATUS_FILTERS.length ||
+              !DEFAULT_STATUS_FILTERS.every((f) => statusFilters.has(f))) && (
+              <View style={sc.filterDot} />
+            )}
+          </TouchableOpacity>
         </View>
       </Animated.View>
 
       {/* Summary pills */}
-      {/* Summary pills */}
-      <SummaryBar
-        orders={orders}
-        filter={orderFilter}
-        onFilterChange={setOrderFilter}
-      />
-      <RecordSearch value={search} onChange={setSearch} placeholder="Search product, order ID or status" />
+      {searchVisible && (
+        <RecordSearch
+          value={search}
+          onChange={setSearch}
+          placeholder="Search product, order ID or status"
+        />
+      )}
 
       {/* List */}
       {orders.length === 0 ? (
@@ -1695,7 +2026,13 @@ export default function OrdersScreen() {
           data={listData}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
-          ListEmptyComponent={<Text style={{ padding: 24, textAlign: "center", color: "#6B7280" }}>No orders match your search.</Text>}
+          ListEmptyComponent={
+            <Text
+              style={{ padding: 24, textAlign: "center", color: "#6B7280" }}
+            >
+              No orders match your search.
+            </Text>
+          }
           keyExtractor={(item) => item.key}
           contentContainerStyle={sc.listContent}
           showsVerticalScrollIndicator={false}
@@ -1706,21 +2043,16 @@ export default function OrdersScreen() {
               tintColor={Colors.primary}
             />
           }
-          renderItem={({ item }) => {
-            if (item.type === "header") {
-              return <SectionHeader label={item.label} />;
-            }
-            return (
-              <OrderCard
-                order={item.order}
-                index={item.sectionIndex}
-                productMap={productMap}
-                onCancelPress={handleCancelPress}
-                onDownloadInvoice={handleDownloadInvoice}
-                downloadingInvoice={invoiceLoadingId === item.order.id}
-              />
-            );
-          }}
+          renderItem={({ item }) => (
+            <OrderCard
+              order={item.order}
+              index={item.sectionIndex}
+              productMap={productMap}
+              onCancelPress={handleCancelPress}
+              onDownloadInvoice={handleDownloadInvoice}
+              downloadingInvoice={invoiceLoadingId === item.order.id}
+            />
+          )}
         />
       )}
 
@@ -1732,6 +2064,18 @@ export default function OrdersScreen() {
           setCancelModal(false);
           setCancelOrder(null);
         }}
+      />
+      <FilterModal
+        visible={filterModalVisible}
+        orders={orders}
+        initialFilters={statusFilters}
+        initialSort={sortOrder}
+        onApply={(filters, sort) => {
+          setStatusFilters(filters);
+          setSortOrder(sort);
+          setFilterModalVisible(false);
+        }}
+        onClose={() => setFilterModalVisible(false)}
       />
     </SafeAreaView>
   );
@@ -1765,4 +2109,21 @@ const sc = StyleSheet.create({
   },
   listContent: { paddingHorizontal: 13, paddingTop: 8, paddingBottom: 40 },
   emptyContent: { flexGrow: 1 },
+  headerIconBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 13,
+    backgroundColor: Colors.primary + "15",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  filterDot: {
+    position: "absolute",
+    top: 6,
+    right: 6,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#EF4444",
+  },
 });

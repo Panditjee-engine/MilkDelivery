@@ -1332,7 +1332,7 @@ function SemenCard({
 export default function VetSemenRecordScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [records, setRecords] = useState<SemenRecord[]>([]);
+  const [records, setRecords] = useState<SemenRecord[]>(() => api.getScreenSnapshot<SemenRecord[]>("vet-semen") || []);
   const [screen, setScreen] = useState<"home" | "list">("home");
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>("newest");
@@ -1353,11 +1353,15 @@ export default function VetSemenRecordScreen() {
   >({});
 
   const fetchRecords = useCallback(async (q?: string) => {
-    setLoading(true);
+    const session = api.getSnapshotSession();
+    setLoading(api.getScreenSnapshot("vet-semen") === undefined);
     setError(null);
     try {
       const data = await api.vetGetSemenRecords(q);
-      setRecords(Array.isArray(data) ? data : []);
+      if (session !== api.getSnapshotSession()) return;
+      const rows = Array.isArray(data) ? data : [];
+      if (!q) api.setScreenSnapshot("vet-semen", rows);
+      setRecords(prev => JSON.stringify(prev) === JSON.stringify(rows) ? prev : rows);
     } catch (err: any) {
       setError(err.message ?? "Failed to load records.");
     } finally {
@@ -1399,6 +1403,7 @@ export default function VetSemenRecordScreen() {
   }, [search]);
 
   const onRefresh = async () => {
+    api.refreshLists();
     setRefreshing(true);
     await Promise.all([fetchRecords(search || undefined), fetchBulls()]);
     setRefreshing(false);

@@ -1,3 +1,4 @@
+import { useCachedScreenState } from "../../src/hooks/useCachedScreenState";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -77,9 +78,9 @@ function normalizeImageUri(img: string) {
 export default function AdminContentScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ from?: string }>();
-  const [items, setItems] = useState<AdminContent[]>([]);
+  const [items, setItems] = useCachedScreenState<AdminContent[]>("screen:(admin)/content:items", []);
   const [draft, setDraft] = useState<ContentDraft>(emptyDraft);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => api.getScreenSnapshot("screen:(admin)/content:items") === undefined);
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -258,6 +259,7 @@ export default function AdminContentScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={() => {
+                api.refreshLists();
                 setRefreshing(true);
                 loadContent();
               }}

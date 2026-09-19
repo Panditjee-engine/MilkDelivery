@@ -1380,7 +1380,7 @@ function SemenCard({
 export default function SemenRecordScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [records, setRecords] = useState<SemenRecord[]>([]);
+  const [records, setRecords] = useState<SemenRecord[]>(() => api.getScreenSnapshot<SemenRecord[]>("admin-semen") || []);
   const [screen, setScreen] = useState<"home" | "list">("home");
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>("newest");
@@ -1401,11 +1401,14 @@ export default function SemenRecordScreen() {
   >({});
 
   const fetchRecords = useCallback(async (q?: string) => {
-    setLoading(true);
+    const session = api.getSnapshotSession();
+    setLoading(api.getScreenSnapshot("admin-semen") === undefined);
     setError(null);
     try {
       const data = await api.getSemenRecords(q);
-      setRecords(data);
+      if (session !== api.getSnapshotSession()) return;
+      if (!q) api.setScreenSnapshot("admin-semen", data);
+      setRecords(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data);
     } catch (err: any) {
       setError(err.message ?? "Failed to load records.");
     } finally {
@@ -1445,6 +1448,7 @@ export default function SemenRecordScreen() {
   }, [search]);
 
   const onRefresh = async () => {
+    api.refreshLists();
     setRefreshing(true);
     await Promise.all([fetchRecords(search || undefined), fetchBulls()]);
     setRefreshing(false);

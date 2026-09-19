@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -9,11 +9,12 @@ import {
   TouchableOpacity,
   View,
   Alert,
+  BackHandler,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { api } from "../../src/services/api";
 import { Colors } from "../../src/constants/colors";
 import { hasCompleteDeliveryAddress } from "../../src/utils/address";
@@ -26,7 +27,10 @@ import {
   type OrderCutoffRule,
 } from "../../src/utils/orderCutoff";
 
-const CATEGORY_THEMES: Record<string, { bg: string; accent: string; icon: string }> = {
+const CATEGORY_THEMES: Record<
+  string,
+  { bg: string; accent: string; icon: string }
+> = {
   milk: { bg: "#EAF4FF", accent: "#3B82F6", icon: "water" },
   dairy: { bg: "#FFF4E6", accent: "#F59E0B", icon: "ice-cream" },
   bakery: { bg: "#FEF2F2", accent: "#EF4444", icon: "pizza" },
@@ -50,9 +54,24 @@ const weekDays = [
 ];
 const subscriptionPatterns = [
   { value: "daily", label: "Daily", icon: "sunny-outline", hint: "Every day" },
-  { value: "alternate", label: "Alternate", icon: "repeat-outline", hint: "Every other day" },
-  { value: "custom", label: "Custom", icon: "calendar-outline", hint: "Pick days" },
-  { value: "buy_once", label: "Buy Once", icon: "bag-check-outline", hint: "Single order" },
+  {
+    value: "alternate",
+    label: "Alternate",
+    icon: "repeat-outline",
+    hint: "Every other day",
+  },
+  {
+    value: "custom",
+    label: "Custom",
+    icon: "calendar-outline",
+    hint: "Pick days",
+  },
+  {
+    value: "buy_once",
+    label: "Buy Once",
+    icon: "bag-check-outline",
+    hint: "Single order",
+  },
 ];
 
 const isDairyProduct = (product: any) =>
@@ -93,10 +112,27 @@ export default function ProductDetailsScreen() {
   const [customDays, setCustomDays] = useState<number[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState("");
-  const [feedbackType, setFeedbackType] = useState<"address" | "balance" | null>(null);
+  const [feedbackType, setFeedbackType] = useState<
+    "address" | "balance" | null
+  >(null);
   const [orderCutoffs, setOrderCutoffs] = useState<OrderCutoffRule[]>([]);
   const [feedbackSummary, setFeedbackSummary] = useState<any>(null);
   const productId = params.id?.toString() || product?.id || product?._id;
+
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        router.replace("/(customer)/catalog" as any);
+        return true;
+      };
+      const sub = BackHandler.addEventListener(
+        "hardwareBackPress",
+        onBackPress,
+      );
+      return () => sub.remove();
+    }, [router]),
+  );
+
   const cutoffRule = getOrderCutoffForProduct(product, orderCutoffs);
   const cutoffText = getOrderCutoffBadgeText(cutoffRule);
   const cutoffPassed = isOrderCutoffPassed(cutoffRule);
@@ -149,7 +185,10 @@ export default function ProductDetailsScreen() {
 
   useEffect(() => {
     if (!productId) return;
-    api.getCatalogProductFeedback(productId).then(setFeedbackSummary).catch(() => { });
+    api
+      .getCatalogProductFeedback(productId)
+      .then(setFeedbackSummary)
+      .catch(() => {});
   }, [productId]);
 
   const theme = useMemo(() => getTheme(product?.category), [product?.category]);
@@ -157,7 +196,7 @@ export default function ProductDetailsScreen() {
   const isDairy = isDairyProduct(product);
   const orderTotal = (Number(product?.price) || 0) * quantity;
 
-  const openBuyFlow = () => {
+  const handleAddToCart = () => {
     if (!productId || isUnavailable) return;
     if (cutoffRule && isOrderCutoffPassed(cutoffRule)) {
       Alert.alert(
@@ -167,11 +206,32 @@ export default function ProductDetailsScreen() {
       );
       return;
     }
-    setQuantity(1);
-    setPattern(isDairy ? "daily" : "buy_once");
-    setCustomDays([]);
-    setFeedback("");
-    setBuySheetVisible(true);
+    router.push({
+      pathname: "/(customer)/catalog",
+      params: {
+        addToCartProduct: encodeURIComponent(JSON.stringify(product)),
+        addToCartQty: "1",
+      },
+    } as any);
+  };
+
+  const handleSubscribePress = () => {
+    if (!productId || isUnavailable) return;
+    if (cutoffRule && isOrderCutoffPassed(cutoffRule)) {
+      Alert.alert(
+        "Order cut-off time passed",
+        getOrderCutoffBlockedMessage(product, cutoffRule),
+        [{ text: "Got it" }],
+      );
+      return;
+    }
+    router.push({
+      pathname: "/(customer)/catalog",
+      params: {
+        openSubscribeProduct: encodeURIComponent(JSON.stringify(product)),
+        openSubscribeTs: String(Date.now()),
+      },
+    } as any);
   };
 
   const toggleCustomDay = (day: number) => {
@@ -257,7 +317,9 @@ export default function ProductDetailsScreen() {
       if (!(await ensureAddress())) return;
       const wallet = await api.getWallet();
       if ((wallet.balance ?? 0) < orderTotal) {
-        setFeedback("Wallet balance is low.Tap the arrow to recharge your wallet.");
+        setFeedback(
+          "Wallet balance is low.Tap the arrow to recharge your wallet.",
+        );
         setFeedbackType("balance");
         return;
       }
@@ -265,7 +327,14 @@ export default function ProductDetailsScreen() {
       tomorrow.setDate(tomorrow.getDate() + 1);
       const startDate = tomorrow.toISOString().split("T")[0];
       await api.createSubscription({
-        items: [{ product_id: productId, quantity, price: Number(product.price) || 0, amount: orderTotal }],
+        items: [
+          {
+            product_id: productId,
+            quantity,
+            price: Number(product.price) || 0,
+            amount: orderTotal,
+          },
+        ],
         pattern,
         custom_days: pattern === "custom" ? customDays : null,
         start_date: startDate,
@@ -279,7 +348,8 @@ export default function ProductDetailsScreen() {
       if (isCutoffError(error)) {
         Alert.alert(
           "Order cut-off time passed",
-          error?.message || "Please place this order before the product cut-off time.",
+          error?.message ||
+            "Please place this order before the product cut-off time.",
           [{ text: "Got it" }],
         );
         setBuySheetVisible(false);
@@ -305,7 +375,10 @@ export default function ProductDetailsScreen() {
       <SafeAreaView style={s.center}>
         <Ionicons name="cube-outline" size={40} color="#C9C9C9" />
         <Text style={s.emptyTitle}>Product not found</Text>
-        <TouchableOpacity style={s.backAction} onPress={() => router.back()}>
+        <TouchableOpacity
+          style={s.backAction}
+          onPress={() => router.replace("/(customer)/catalog" as any)}
+        >
           <Text style={s.backActionText}>Go Back</Text>
         </TouchableOpacity>
       </SafeAreaView>
@@ -314,9 +387,15 @@ export default function ProductDetailsScreen() {
 
   return (
     <SafeAreaView style={s.screen} edges={["top"]}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={s.scroll}
+      >
         <View style={s.header}>
-          <TouchableOpacity style={s.iconBtn} onPress={() => router.back()}>
+          <TouchableOpacity
+            style={s.iconBtn}
+            onPress={() => router.replace("/(customer)/catalog" as any)}
+          >
             <Ionicons name="arrow-back" size={20} color="#111827" />
           </TouchableOpacity>
           <Text style={s.headerTitle}>Product Details</Text>
@@ -325,10 +404,20 @@ export default function ProductDetailsScreen() {
 
         <View style={[s.hero, { backgroundColor: theme.bg }]}>
           {product.image ? (
-            <Image source={{ uri: product.image }} style={s.heroImage} resizeMode="cover" />
+            <Image
+              source={{ uri: product.image }}
+              style={s.heroImage}
+              resizeMode="cover"
+            />
           ) : (
-            <View style={[s.heroIcon, { backgroundColor: theme.accent + "22" }]}>
-              <Ionicons name={theme.icon as any} size={52} color={theme.accent} />
+            <View
+              style={[s.heroIcon, { backgroundColor: theme.accent + "22" }]}
+            >
+              <Ionicons
+                name={theme.icon as any}
+                size={52}
+                color={theme.accent}
+              />
             </View>
           )}
           {isUnavailable ? (
@@ -347,11 +436,15 @@ export default function ProductDetailsScreen() {
           </View>
           <Text style={s.name}>{product.name}</Text>
           <View style={s.priceRow}>
-            <Text style={[s.price, { color: theme.accent }]}>₹{product.price}</Text>
+            <Text style={[s.price, { color: theme.accent }]}>
+              ₹{product.price}
+            </Text>
             <Text style={s.unit}>per {formatUnit(product.unit)}</Text>
           </View>
           {cutoffText ? (
-            <View style={[s.cutoffNotice, cutoffPassed && s.cutoffNoticeBlocked]}>
+            <View
+              style={[s.cutoffNotice, cutoffPassed && s.cutoffNoticeBlocked]}
+            >
               <Ionicons
                 name={cutoffPassed ? "alert-circle-outline" : "time-outline"}
                 size={15}
@@ -375,7 +468,11 @@ export default function ProductDetailsScreen() {
               <Text style={s.infoValue}>{product.stock ?? "Available"}</Text>
            </View>*/}
             <View style={s.infoBox}>
-              <Ionicons name="repeat-outline" size={18} color={Colors.primary} />
+              <Ionicons
+                name="repeat-outline"
+                size={18}
+                color={Colors.primary}
+              />
               <Text style={s.infoLabel}>Order</Text>
               <Text style={s.infoValue}>Subscribe or cart</Text>
             </View>
@@ -392,14 +489,39 @@ export default function ProductDetailsScreen() {
             <Text style={s.sectionTitle}>Ratings & Reviews</Text>
             {feedbackSummary?.total_reviews > 0 ? (
               <>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                  <Text style={{ fontSize: 22, fontWeight: "900", color: "#111827" }}>
+                <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 8,
+                        marginBottom: 10,
+                      }}
+                    >
+                  <Text
+                        style={{
+                          fontSize: 22,
+                          fontWeight: "900",
+                          color: "#111827",
+                        }}
+                      >
                     {feedbackSummary.average_rating.toFixed(1)}
                   </Text>
                   <View>
-                    <StarRating value={Math.round(feedbackSummary.average_rating)} readOnly size={16} />
-                    <Text style={{ fontSize: 12, color: "#6B7280", fontWeight: "700", marginTop: 2 }}>
-                      {feedbackSummary.total_reviews} review{feedbackSummary.total_reviews > 1 ? "s" : ""}
+                    <StarRating
+                          value={Math.round(feedbackSummary.average_rating)}
+                          readOnly
+                          size={16}
+                        />
+                    <Text
+                          style={{
+                            fontSize: 12,
+                            color: "#6B7280",
+                            fontWeight: "700",
+                            marginTop: 2,
+                          }}
+                        >
+                      {feedbackSummary.total_reviews} review
+                          {feedbackSummary.total_reviews > 1 ? "s" : ""}
                     </Text>
                   </View>
                 </View>
@@ -412,14 +534,33 @@ export default function ProductDetailsScreen() {
                       borderTopColor: "#F0F2F5",
                     }}
                   >
-                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                      <Text style={{ fontSize: 13, fontWeight: "800", color: "#111827" }}>
+                    <View
+                          style={{
+                            flexDirection: "row",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                          }}
+                        >
+                      <Text
+                            style={{
+                              fontSize: 13,
+                              fontWeight: "800",
+                              color: "#111827",
+                            }}
+                          >
                         {fb.customer_name || "Customer"}
                       </Text>
                       <StarRating value={fb.rating} readOnly size={13} />
                     </View>
                     {fb.comment ? (
-                      <Text style={{ fontSize: 13, color: "#6B7280", marginTop: 4, lineHeight: 18 }}>
+                      <Text
+                            style={{
+                              fontSize: 13,
+                              color: "#6B7280",
+                              marginTop: 4,
+                              lineHeight: 18,
+                            }}
+                          >
                         {fb.comment}
                       </Text>
                     ) : null}
@@ -427,7 +568,13 @@ export default function ProductDetailsScreen() {
                 ))}
               </>
             ) : (
-              <Text style={{ fontSize: 13, color: "#9CA3AF", fontWeight: "600" }}>
+              <Text
+                    style={{
+                      fontSize: 13,
+                      color: "#9CA3AF",
+                      fontWeight: "600",
+                    }}
+                  >
                 No reviews yet for this product.
               </Text>
             )}
@@ -436,22 +583,63 @@ export default function ProductDetailsScreen() {
       </ScrollView>
 
       <View style={s.footer}>
-        <TouchableOpacity
-          style={[s.buyBtn, isUnavailable && s.buyBtnDisabled]}
-          onPress={openBuyFlow}
-          disabled={isUnavailable}
-          activeOpacity={0.86}
-        >
-          <LinearGradient
-            colors={isUnavailable ? ["#D1D5DB", "#9CA3AF"] : [Colors.primary, "#F97316"]}
-            style={s.buyGrad}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
+        {isUnavailable ? (
+          <View style={[s.buyBtn, s.buyBtnDisabled]}>
+            <LinearGradient
+              colors={["#D1D5DB", "#9CA3AF"]}
+              style={s.buyGrad}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+            >
+              <Ionicons name="bag-check-outline" size={19} color="#fff" />
+              <Text style={s.buyText}>Unavailable</Text>
+            </LinearGradient>
+          </View>
+        ) : isDairy ? (
+          <View style={s.footerRow}>
+            <TouchableOpacity
+              style={s.footerHalfBtn}
+              onPress={handleAddToCart}
+              activeOpacity={0.86}
+            >
+              <View style={[s.footerHalfInner, { backgroundColor: "#16A34A" }]}>
+                <Ionicons name="cart-outline" size={18} color="#fff" />
+                <Text style={s.buyText}>Add to Cart</Text>
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={s.footerHalfBtn}
+              onPress={handleSubscribePress}
+              activeOpacity={0.86}
+            >
+              <LinearGradient
+                colors={[Colors.primary, "#F97316"]}
+                style={s.footerHalfInner}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+              >
+                <Ionicons name="repeat-outline" size={18} color="#fff" />
+                <Text style={s.buyText}>Subscribe</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={s.buyBtn}
+            onPress={handleAddToCart}
+            activeOpacity={0.86}
           >
-            <Ionicons name="bag-check-outline" size={19} color="#fff" />
-            <Text style={s.buyText}>{isUnavailable ? "Unavailable" : "Buy Now"}</Text>
-          </LinearGradient>
-        </TouchableOpacity>
+            <LinearGradient
+              colors={[Colors.primary, "#F97316"]}
+              style={s.buyGrad}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+            >
+              <Ionicons name="cart-outline" size={19} color="#fff" />
+              <Text style={s.buyText}>Add to Cart</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        )}
       </View>
 
       <Modal
@@ -466,7 +654,9 @@ export default function ProductDetailsScreen() {
             <View style={s.sheetHeader}>
               <View style={{ flex: 1 }}>
                 <Text style={s.sheetTitle}>{product.name}</Text>
-                <Text style={s.sheetSub}>₹{product.price} · {formatUnit(product.unit)}</Text>
+                <Text style={s.sheetSub}>
+                  ₹{product.price} · {formatUnit(product.unit)}
+                </Text>
               </View>
               <TouchableOpacity
                 style={s.closeBtn}
@@ -496,30 +686,38 @@ export default function ProductDetailsScreen() {
               </TouchableOpacity>
             </View>
 
-            <Text style={s.sheetLabel}>{isDairy ? "Subscribe or buy once" : "Order type"}</Text>
+            <Text style={s.sheetLabel}>
+              {isDairy ? "Subscribe or buy once" : "Order type"}
+            </Text>
             <View style={s.patternGrid}>
-              {(isDairy ? subscriptionPatterns : [subscriptionPatterns[3]]).map((item) => {
-                const active = pattern === item.value;
-                return (
-                  <TouchableOpacity
-                    key={item.value}
-                    style={[s.patternCard, active && s.patternCardActive]}
-                    onPress={() => setPattern(item.value)}
-                  >
-                    <Ionicons
-                      name={item.icon as any}
-                      size={17}
-                      color={active ? "#fff" : Colors.primary}
-                    />
-                    <Text style={[s.patternLabel, active && s.patternLabelActive]}>
-                      {item.label}
-                    </Text>
-                    <Text style={[s.patternHint, active && s.patternHintActive]}>
-                      {item.hint}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
+              {(isDairy ? subscriptionPatterns : [subscriptionPatterns[3]]).map(
+                (item) => {
+                  const active = pattern === item.value;
+                  return (
+                    <TouchableOpacity
+                      key={item.value}
+                      style={[s.patternCard, active && s.patternCardActive]}
+                      onPress={() => setPattern(item.value)}
+                    >
+                      <Ionicons
+                        name={item.icon as any}
+                        size={17}
+                        color={active ? "#fff" : Colors.primary}
+                      />
+                      <Text
+                        style={[s.patternLabel, active && s.patternLabelActive]}
+                      >
+                        {item.label}
+                      </Text>
+                      <Text
+                        style={[s.patternHint, active && s.patternHintActive]}
+                      >
+                        {item.hint}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                },
+              )}
             </View>
 
             {pattern === "custom" ? (
@@ -567,7 +765,11 @@ export default function ProductDetailsScreen() {
                     }}
                     activeOpacity={0.8}
                   >
-                    <Ionicons name="arrow-forward-circle" size={22} color="#B45309" />
+                    <Ionicons
+                      name="arrow-forward-circle"
+                      size={22}
+                      color="#B45309"
+                    />
                   </TouchableOpacity>
                 )}
               </View>
@@ -595,22 +797,87 @@ export default function ProductDetailsScreen() {
 
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#fff" },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#fff", gap: 12 },
+  center: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#fff",
+    gap: 12,
+  },
   scroll: { paddingBottom: 120 },
-  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 18, paddingVertical: 12 },
-  iconBtn: { width: 42, height: 42, borderRadius: 14, backgroundColor: "#F8F7F4", alignItems: "center", justifyContent: "center" },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+  },
+  iconBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: "#F8F7F4",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   iconBtnGhost: { width: 42, height: 42 },
   headerTitle: { fontSize: 17, fontWeight: "900", color: "#111827" },
-  hero: { marginHorizontal: 18, borderRadius: 24, height: 280, alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  hero: {
+    marginHorizontal: 18,
+    borderRadius: 24,
+    height: 280,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
   heroImage: { width: "100%", height: "100%" },
-  heroIcon: { width: 118, height: 118, borderRadius: 34, alignItems: "center", justifyContent: "center" },
-  outBadge: { position: "absolute", top: 16, right: 16, backgroundColor: "#111827", borderRadius: 18, paddingHorizontal: 12, paddingVertical: 7 },
+  heroIcon: {
+    width: 118,
+    height: 118,
+    borderRadius: 34,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  outBadge: {
+    position: "absolute",
+    top: 16,
+    right: 16,
+    backgroundColor: "#111827",
+    borderRadius: 18,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
   outBadgeText: { color: "#fff", fontSize: 12, fontWeight: "900" },
   content: { padding: 20 },
-  categoryPill: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#F8F7F4", borderRadius: 18, paddingHorizontal: 11, paddingVertical: 7, marginBottom: 12 },
-  categoryText: { fontSize: 12, fontWeight: "900", textTransform: "capitalize" },
-  name: { fontSize: 26, lineHeight: 32, fontWeight: "900", color: "#111827", letterSpacing: -0.6 },
-  priceRow: { flexDirection: "row", alignItems: "baseline", gap: 8, marginTop: 10 },
+  categoryPill: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#F8F7F4",
+    borderRadius: 18,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+    marginBottom: 12,
+  },
+  categoryText: {
+    fontSize: 12,
+    fontWeight: "900",
+    textTransform: "capitalize",
+  },
+  name: {
+    fontSize: 26,
+    lineHeight: 32,
+    fontWeight: "900",
+    color: "#111827",
+    letterSpacing: -0.6,
+  },
+  priceRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: 8,
+    marginTop: 10,
+  },
   price: { fontSize: 28, fontWeight: "900", letterSpacing: -0.5 },
   unit: { fontSize: 13, fontWeight: "800", color: "#9CA3AF" },
   cutoffNotice: {
@@ -637,53 +904,218 @@ const s = StyleSheet.create({
   },
   cutoffNoticeTextBlocked: { color: "#DC2626" },
   infoGrid: { flexDirection: "row", gap: 12, marginTop: 18 },
-  infoBox: { flex: 1, backgroundColor: "#F9FAFB", borderRadius: 18, padding: 14, gap: 5, borderWidth: 1, borderColor: "#F0F2F5" },
-  infoLabel: { fontSize: 11, fontWeight: "800", color: "#9CA3AF", textTransform: "uppercase" },
+  infoBox: {
+    flex: 1,
+    backgroundColor: "#F9FAFB",
+    borderRadius: 18,
+    padding: 14,
+    gap: 5,
+    borderWidth: 1,
+    borderColor: "#F0F2F5",
+  },
+  infoLabel: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#9CA3AF",
+    textTransform: "uppercase",
+  },
   infoValue: { fontSize: 14, fontWeight: "900", color: "#111827" },
   section: { marginTop: 22 },
-  sectionTitle: { fontSize: 15, fontWeight: "900", color: "#111827", marginBottom: 8 },
-  description: { fontSize: 14, lineHeight: 21, color: "#6B7280", fontWeight: "600" },
-  footer: { position: "absolute", left: 0, right: 0, bottom: 0, padding: 18, backgroundColor: "#fff", borderTopWidth: 1, borderTopColor: "#F0F2F5" },
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: "900",
+    color: "#111827",
+    marginBottom: 8,
+  },
+  description: {
+    fontSize: 14,
+    lineHeight: 21,
+    color: "#6B7280",
+    fontWeight: "600",
+  },
+  footer: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    padding: 18,
+    backgroundColor: "#fff",
+    borderTopWidth: 1,
+    borderTopColor: "#F0F2F5",
+  },
   buyBtn: { borderRadius: 18, overflow: "hidden" },
   buyBtnDisabled: { opacity: 0.75 },
-  buyGrad: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9, paddingVertical: 16 },
+  buyGrad: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 9,
+    paddingVertical: 16,
+  },
   buyText: { color: "#fff", fontSize: 16, fontWeight: "900" },
-  sheetOverlay: { flex: 1, backgroundColor: "rgba(15,23,42,0.48)", justifyContent: "flex-end" },
-  sheet: { backgroundColor: "#fff", borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20, paddingBottom: 30 },
-  sheetHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: "#CBD5E1", alignSelf: "center", marginBottom: 16 },
-  sheetHeader: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 16 },
+  sheetOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(15,23,42,0.48)",
+    justifyContent: "flex-end",
+  },
+  sheet: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: 20,
+    paddingBottom: 30,
+  },
+  sheetHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#CBD5E1",
+    alignSelf: "center",
+    marginBottom: 16,
+  },
+  sheetHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 16,
+  },
   sheetTitle: { fontSize: 20, fontWeight: "900", color: "#111827" },
   sheetSub: { fontSize: 13, color: "#64748B", fontWeight: "700", marginTop: 3 },
-  closeBtn: { width: 36, height: 36, borderRadius: 12, backgroundColor: "#F1F5F9", alignItems: "center", justifyContent: "center" },
-  sheetLabel: { fontSize: 12, fontWeight: "900", color: "#64748B", textTransform: "uppercase", marginBottom: 9, marginTop: 6 },
-  qtyRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 16, marginBottom: 14 },
-  qtyBtn: { width: 44, height: 44, borderRadius: 15, backgroundColor: Colors.primary + "12", alignItems: "center", justifyContent: "center" },
+  closeBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: "#F1F5F9",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sheetLabel: {
+    fontSize: 12,
+    fontWeight: "900",
+    color: "#64748B",
+    textTransform: "uppercase",
+    marginBottom: 9,
+    marginTop: 6,
+  },
+  qtyRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 16,
+    marginBottom: 14,
+  },
+  qtyBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 15,
+    backgroundColor: Colors.primary + "12",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   qtyBtnActive: { backgroundColor: Colors.primary },
   qtyValueBox: { minWidth: 76, alignItems: "center" },
   qtyValue: { fontSize: 28, fontWeight: "900", color: "#111827" },
   qtyUnit: { fontSize: 10, fontWeight: "800", color: "#94A3B8" },
   patternGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  patternCard: { width: "47.8%", borderRadius: 16, borderWidth: 1.5, borderColor: "#E2E8F0", padding: 12, backgroundColor: "#fff" },
-  patternCardActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  patternLabel: { fontSize: 13, fontWeight: "900", color: "#111827", marginTop: 7 },
+  patternCard: {
+    width: "47.8%",
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: "#E2E8F0",
+    padding: 12,
+    backgroundColor: "#fff",
+  },
+  patternCardActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  patternLabel: {
+    fontSize: 13,
+    fontWeight: "900",
+    color: "#111827",
+    marginTop: 7,
+  },
   patternLabelActive: { color: "#fff" },
-  patternHint: { fontSize: 10.5, fontWeight: "700", color: "#94A3B8", marginTop: 2 },
+  patternHint: {
+    fontSize: 10.5,
+    fontWeight: "700",
+    color: "#94A3B8",
+    marginTop: 2,
+  },
   patternHintActive: { color: "rgba(255,255,255,0.78)" },
-  weekRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12, marginBottom: 4 },
-  dayChip: { width: 38, height: 38, borderRadius: 13, alignItems: "center", justifyContent: "center", backgroundColor: "#F1F5F9" },
+  weekRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  dayChip: {
+    width: 38,
+    height: 38,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F1F5F9",
+  },
   dayChipActive: { backgroundColor: Colors.primary },
   dayText: { fontSize: 12, fontWeight: "900", color: "#64748B" },
   dayTextActive: { color: "#fff" },
-  totalRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 18, paddingTop: 14, borderTopWidth: 1, borderTopColor: "#F1F5F9" },
+  totalRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 18,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: "#F1F5F9",
+  },
   totalLabel: { fontSize: 13, fontWeight: "800", color: "#64748B" },
   totalValue: { fontSize: 20, fontWeight: "900", color: "#111827" },
-  feedback: { marginTop: 10, color: "#B45309", fontSize: 12.5, fontWeight: "800" },
-  submitBtn: { marginTop: 14, borderRadius: 16, backgroundColor: Colors.primary, paddingVertical: 15, alignItems: "center", justifyContent: "center" },
+  feedback: {
+    marginTop: 10,
+    color: "#B45309",
+    fontSize: 12.5,
+    fontWeight: "800",
+  },
+  submitBtn: {
+    marginTop: 14,
+    borderRadius: 16,
+    backgroundColor: Colors.primary,
+    paddingVertical: 15,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   submitText: { fontSize: 15, fontWeight: "900", color: "#fff" },
   emptyTitle: { fontSize: 16, fontWeight: "900", color: "#111827" },
-  backAction: { backgroundColor: Colors.primary, borderRadius: 14, paddingHorizontal: 18, paddingVertical: 11 },
+  backAction: {
+    backgroundColor: Colors.primary,
+    borderRadius: 14,
+    paddingHorizontal: 18,
+    paddingVertical: 11,
+  },
   backActionText: { color: "#fff", fontSize: 14, fontWeight: "900" },
-  feedbackRow: { flexDirection: "row", alignItems: "center", marginTop: 10, gap: 8 },
-  feedbackFlex: { flex: 1, color: "#B45309", fontSize: 12.5, fontWeight: "800" },
+  feedbackRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 10,
+    gap: 8,
+  },
+  feedbackFlex: {
+    flex: 1,
+    color: "#B45309",
+    fontSize: 12.5,
+    fontWeight: "800",
+  },
   feedbackArrow: { padding: 2 },
+  buyText1: { color: "#fff", fontSize: 16, fontWeight: "900" },
+  footerRow: { flexDirection: "row", gap: 10 },
+  footerHalfBtn: { flex: 1, borderRadius: 18, overflow: "hidden" },
+  footerHalfInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 16,
+  },
 });

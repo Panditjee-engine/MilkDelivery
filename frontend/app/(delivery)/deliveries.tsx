@@ -1,3 +1,4 @@
+import { useCachedScreenState } from "../../src/hooks/useCachedScreenState";
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
@@ -57,13 +58,13 @@ type TabType = "active" | "completed";
 
 export default function DeliveriesScreen() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => api.getScreenSnapshot("screen:(delivery)/deliveries:myOrders") === undefined);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>("active");
-  const [checkinStatus, setCheckinStatus] = useState<any>(null);
+  const [checkinStatus, setCheckinStatus] = useCachedScreenState<any>("screen:(delivery)/deliveries:checkinStatus", null);
 
-  const [availableOrders, setAvailableOrders] = useState<any[]>([]);
-  const [myOrders, setMyOrders] = useState<any[]>([]);
+  const [availableOrders, setAvailableOrders] = useCachedScreenState<any[]>("screen:(delivery)/deliveries:availableOrders", []);
+  const [myOrders, setMyOrders] = useCachedScreenState<any[]>("screen:(delivery)/deliveries:myOrders", []);
 
   const [otpModalVisible, setOtpModalVisible] = useState(false);
   const [otpType, setOtpType] = useState<"pickup" | "delivery">("pickup");
@@ -105,6 +106,7 @@ export default function DeliveriesScreen() {
   }, []);
 
   const onRefresh = useCallback(() => {
+    api.refreshLists();
     setRefreshing(true);
     fetchData();
   }, []);

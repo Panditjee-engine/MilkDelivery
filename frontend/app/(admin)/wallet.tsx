@@ -1,3 +1,4 @@
+import { useCachedScreenState } from "../../src/hooks/useCachedScreenState";
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
@@ -573,14 +574,14 @@ export default function AdminWalletScreen() {
   const withdrawalAttempt = useRef<{ amount: number; id: string } | null>(null);
   const withdrawalBusy = useRef(false);
   const fetching = useRef(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => api.getScreenSnapshot("screen:(admin)/wallet:balance") === undefined);
   const [refreshing, setRefreshing] = useState(false);
-  const [balance, setBalance] = useState(0);
-  const [transactions, setTransactions] = useState<any[]>([]);
-  const [withdrawals, setWithdrawals] = useState<any[]>([]);
-  const [orders, setOrders] = useState<AdminOrder[]>([]);
+  const [balance, setBalance] = useCachedScreenState("screen:(admin)/wallet:balance", 0);
+  const [transactions, setTransactions] = useCachedScreenState<any[]>("screen:(admin)/wallet:transactions", []);
+  const [withdrawals, setWithdrawals] = useCachedScreenState<any[]>("screen:(admin)/wallet:withdrawals", []);
+  const [orders, setOrders] = useCachedScreenState<AdminOrder[]>("screen:(admin)/wallet:orders", []);
   const [historyFilter, setHistoryFilter] = useState(defaultHistoryFilter);
-  const [bankAccount, setBankAccount] = useState<BankAccount | null>(null);
+  const [bankAccount, setBankAccount] = useCachedScreenState<BankAccount | null>("screen:(admin)/wallet:bankAccount", null);
   const [showBank, setShowBank] = useState(false);
   const [showWithdraw, setShowWithdraw] = useState(false);
   const [statementModal, setStatementModal] = useState(false);
@@ -614,7 +615,7 @@ export default function AdminWalletScreen() {
       setTransactions(txData ?? []);
       setWithdrawals(withdrawalData ?? []);
       setOrders(Array.isArray(ordersData) ? ordersData : []);
-      if (bankData) setBankAccount(bankData);
+      setBankAccount(bankData ?? null);
     } catch (e) {
       console.error("Error fetching wallet:", e);
     } finally {
@@ -645,6 +646,7 @@ export default function AdminWalletScreen() {
   }, [statementModal]);
 
   const onRefresh = useCallback(() => {
+    api.refreshLists();
     setRefreshing(true);
     fetchData();
   }, []);

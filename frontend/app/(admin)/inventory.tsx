@@ -402,9 +402,9 @@ export default function InventoryScreen() {
   const { alertConfig, showAlert, dismissAlert } = useCustomAlert();
 
   // ── Core State
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !api.getScreenSnapshot("inventory-products"));
   const [refreshing, setRefreshing] = useState(false);
-  const [products, setProducts] = useState<Product[]>([]);
+  const [products, setProducts] = useState<Product[]>(() => api.getScreenSnapshot<Product[]>("inventory-products") || []);
 
   // -- for search
   const [searchQuery, setSearchQuery] = useState("");
@@ -467,6 +467,7 @@ export default function InventoryScreen() {
         api.getAdminFeedbackSummary().catch(() => []),
       ]);
       setProducts(data);
+      api.setScreenSnapshot("inventory-products", data);
       setOrderCutoffs(cutoffs || []);
       const map: Record<string, { average_rating: number; total_reviews: number }> = {};
       (feedbackSummaries || []).forEach((item: any) => {
@@ -482,10 +483,6 @@ export default function InventoryScreen() {
     }
   }, []);
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
   useFocusEffect(
     useCallback(() => {
       fetchData();
@@ -493,6 +490,7 @@ export default function InventoryScreen() {
   );
 
   const onRefresh = useCallback(() => {
+    api.refreshLists();
     setRefreshing(true);
     fetchData();
   }, [fetchData]);

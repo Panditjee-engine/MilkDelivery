@@ -70,17 +70,7 @@ type SortOption =
   | "recent_first";
 type FilterOption = "all" | "active" | "inactive" | "linked" | "unlinked" | "recent" | "pending" | "assigned" | "unassigned";
 type ToastVariant = "success" | "error" | "info";
-const FILTER_CHIP_WIDTHS: Record<FilterOption, number> = {
-  all: 54,
-  active: 76,
-  inactive: 88,
-  linked: 76,
-  unlinked: 78,
-  recent: 160,
-  pending: 132,
-  assigned: 100,
-  unassigned: 116,
-};
+
 const FILTER_LABELS: Record<FilterOption, string> = {
   all: "All", active: "Active", inactive: "Inactive", linked: "Linked",
   unlinked: "Offline", recent: "Added in Last 7 Days", pending: "Pending Claims",
@@ -893,6 +883,7 @@ function CustomerDetailModal({
   visible,
   partners,
   zones,
+  bottomInset,
   onClose,
   onSave,
   onDelete,
@@ -903,6 +894,7 @@ function CustomerDetailModal({
   visible: boolean;
   partners: DeliveryPartner[];
   zones: string[];
+  bottomInset: number;
   onClose: () => void;
   onSave: (id: string, payload: ReturnType<typeof buildPayload>) => Promise<void>;
   onDelete: (id: string, hard?: boolean) => Promise<void>;
@@ -948,7 +940,7 @@ function CustomerDetailModal({
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           keyboardVerticalOffset={Platform.OS === "android" ? 20 : 0}
         >
-          <View style={modalS.sheet}>
+            <View style={[modalS.sheet, { paddingBottom: Math.max(bottomInset, 16) }]}>
             <View style={modalS.handle} />
             <View style={modalS.header}>
               <View>
@@ -1083,6 +1075,7 @@ function CreateCustomerModal({
   partners,
   zones,
   creating,
+  bottomInset,
   onClose,
   onCreate,
 }: {
@@ -1090,6 +1083,7 @@ function CreateCustomerModal({
   partners: DeliveryPartner[];
   zones: string[];
   creating: boolean;
+  bottomInset: number;
   onClose: () => void;
   onCreate: (payload: ReturnType<typeof buildPayload>) => Promise<void>;
 }) {
@@ -1111,7 +1105,7 @@ function CreateCustomerModal({
           style={{ width: "100%" }}
           behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
-          <View style={modalS.sheet}>
+                <View style={[modalS.sheet, { paddingBottom: Math.max(bottomInset, 16) }]}>
             <View style={modalS.handle} />
             <View style={modalS.header}>
               <View>
@@ -1153,9 +1147,9 @@ export default function CustomersScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ from?: string }>();
   const insets = useSafeAreaInsets();
-  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>(() => api.getScreenSnapshot<Customer[]>("customer-manager") || []);
   const [partners, setPartners] = useState<DeliveryPartner[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !api.getScreenSnapshot("customer-manager"));
   const [creating, setCreating] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [detailVisible, setDetailVisible] = useState(false);
@@ -1176,7 +1170,7 @@ export default function CustomersScreen() {
 
   const fetchCustomers = async () => {
     try {
-      setLoading(true);
+      setLoading(!api.getScreenSnapshot("customer-manager"));
       const [offlineResult, onlineResult] = await Promise.allSettled([
         fetchAllAdminCustomerRows(),
         api.getAllUsers("customer"),
@@ -1186,7 +1180,9 @@ export default function CustomersScreen() {
       }
       const offlineRows = offlineResult.status === "fulfilled" ? offlineResult.value : [];
       const onlineRows = onlineResult.status === "fulfilled" ? onlineResult.value ?? [] : [];
-      setCustomers(mergeCustomerLists(offlineRows, onlineRows));
+      const merged = mergeCustomerLists(offlineRows, onlineRows);
+      setCustomers(merged);
+      api.setScreenSnapshot("customer-manager", merged);
       if (offlineResult.status === "rejected") {
         showToast("Offline records failed. Showing app customers.", "error");
       } else if (onlineResult.status === "rejected") {
@@ -1454,26 +1450,26 @@ export default function CustomersScreen() {
         </TouchableOpacity>
       </Modal>
 
-      {!loading && customers.length > 0 && (
+      {!loading && (
         <View style={styles.statsBar}>
-          <TouchableOpacity style={styles.statChip} onPress={() => setFilter("all")} accessibilityRole="button">
-            <Ionicons name="people" size={13} color="#2d6a4f" />
-            <Text style={styles.statChipText}>{customers.length} Customers</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.statChip, { backgroundColor: "#dcfce7" }]} onPress={() => setFilter("active")} accessibilityRole="button">
-            <View style={[styles.statusDot, { backgroundColor: "#16a34a" }]} />
-            <Text style={[styles.statChipText, { color: "#16a34a" }]}>
-              {totalActive} Active
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.statChip, { backgroundColor: "#dbeafe" }]} onPress={() => setFilter("linked")} accessibilityRole="button">
-            <View style={[styles.statusDot, { backgroundColor: "#2563eb" }]} />
-            <Text style={[styles.statChipText, { color: "#2563eb" }]}>
-              {totalLinked} Linked
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )}
+    <TouchableOpacity style={styles.statChip} onPress={() => setFilter("all")} accessibilityRole="button">
+      <Ionicons name="people" size={13} color="#2d6a4f" />
+      <Text style={styles.statChipText}>{customers.length} Customers</Text>
+    </TouchableOpacity>
+    <TouchableOpacity style={[styles.statChip, { backgroundColor: "#dcfce7" }]} onPress={() => setFilter("active")} accessibilityRole="button">
+      <View style={[styles.statusDot, { backgroundColor: "#16a34a" }]} />
+      <Text style={[styles.statChipText, { color: "#16a34a" }]}>
+        {totalActive} Active
+      </Text>
+    </TouchableOpacity>
+    <TouchableOpacity style={[styles.statChip, { backgroundColor: "#dbeafe" }]} onPress={() => setFilter("linked")} accessibilityRole="button">
+      <View style={[styles.statusDot, { backgroundColor: "#2563eb" }]} />
+      <Text style={[styles.statChipText, { color: "#2563eb" }]}>
+        {totalLinked} Linked
+      </Text>
+    </TouchableOpacity>
+  </View>
+)}
 
       <View style={styles.searchWrap}>
         <Ionicons name="search-outline" size={15} color="#7ca9d4" />
@@ -1493,40 +1489,38 @@ export default function CustomersScreen() {
         )}
       </View>
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.filterRow}
-      >
-        {(Object.keys(FILTER_LABELS) as FilterOption[]).map((option) => {
-          const active = filter === option;
-          return (
-            <TouchableOpacity
-              key={option}
-              style={[
-                styles.filterChip,
-                { width: FILTER_CHIP_WIDTHS[option] },
-                active && styles.filterChipActive,
-              ]}
-              onPress={() => {
-                setFilter(option);
-                if (option === "recent") setSortBy("recent_first");
-              }}
-              accessibilityRole="button"
-              accessibilityState={{ selected: active }}
-            >
-              <Text
-                style={[
-                  styles.filterChipText,
-                  active && styles.filterChipTextActive,
-                ]}
+      <View style={styles.filterBar}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterRow}
+        >
+          {(Object.keys(FILTER_LABELS) as FilterOption[]).map((option) => {
+            const active = filter === option;
+            return (
+              <TouchableOpacity
+                key={option}
+                style={[styles.filterChip, active && styles.filterChipActive]}
+                onPress={() => {
+                  setFilter(option);
+                  if (option === "recent") setSortBy("recent_first");
+                }}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
               >
-                {FILTER_LABELS[option]}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
+                <Text
+                  style={[styles.filterChipText, active && styles.filterChipTextActive]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.75}
+                >
+                  {FILTER_LABELS[option]}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
 
       {loading ? (
         <View style={styles.centered}>
@@ -1569,26 +1563,28 @@ export default function CustomersScreen() {
         />
       )}
 
-      <CustomerDetailModal
-        customer={selectedCustomer}
-        visible={detailVisible}
-        partners={partners}
-        zones={zones}
-        onClose={() => setDetailVisible(false)}
-        onSave={handleUpdate}
-        onDelete={handleDelete}
-        onApproveClaim={handleApproveClaim}
-        onRejectClaim={handleRejectClaim}
-      />
+<CustomerDetailModal
+  customer={selectedCustomer}
+  visible={detailVisible}
+  partners={partners}
+  zones={zones}
+  bottomInset={insets.bottom}
+  onClose={() => setDetailVisible(false)}
+  onSave={handleUpdate}
+  onDelete={handleDelete}
+  onApproveClaim={handleApproveClaim}
+  onRejectClaim={handleRejectClaim}
+/>
 
-      <CreateCustomerModal
-        visible={createVisible}
-        partners={partners}
-        zones={zones}
-        creating={creating}
-        onClose={() => setCreateVisible(false)}
-        onCreate={handleCreate}
-      />
+<CreateCustomerModal
+  visible={createVisible}
+  partners={partners}
+  zones={zones}
+  creating={creating}
+  bottomInset={insets.bottom}
+  onClose={() => setCreateVisible(false)}
+  onCreate={handleCreate}
+/>
     </View>
   );
 }
@@ -1715,26 +1711,26 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   searchInput: { flex: 1, color: "#111827", fontSize: 14 },
+   filterBar: {
+    height: 54,
+    justifyContent: "center",
+  },
   filterRow: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 10,
     gap: 8,
-    paddingRight: 16,
   },
   filterChip: {
+    width: 104,
     height: 34,
-    paddingHorizontal: 0,
-    paddingVertical: 0,
+    paddingHorizontal: 8,
     borderRadius: 999,
     backgroundColor: "#fff",
     borderWidth: 1,
     borderColor: "#dbe5ef",
     alignItems: "center",
     justifyContent: "center",
-    alignSelf: "flex-start",
   },
   filterChipActive: { backgroundColor: "#2d6a4f", borderColor: "#2d6a4f" },
   filterChipText: {
@@ -1830,13 +1826,13 @@ const pickerS = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 18,
   },
-  sheet: {
-    backgroundColor: "#fff",
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: "#dbe5ef",
-    padding: 14,
-  },
+sheet: {
+  backgroundColor: "#f8fbfd",
+  borderTopLeftRadius: 28,
+  borderTopRightRadius: 28,
+  padding: 20,
+  maxHeight: "90%",
+},
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -1888,7 +1884,6 @@ const modalS = StyleSheet.create({
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     padding: 20,
-    paddingBottom: Platform.OS === "ios" ? 36 : 24,
     maxHeight: "90%",
   },
   handle: { width: 36, height: 4, backgroundColor: "#dbe5ef", borderRadius: 999, alignSelf: "center", marginBottom: 18 },

@@ -12,6 +12,7 @@ import {
   Alert,
   Platform,
   TextInput,
+  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -29,6 +30,7 @@ interface SubscriptionItem {
   quantity: number;
   price: number;
   amount: number;
+  product_image?: string;
   product?: {
     id: string;
     name: string;
@@ -144,6 +146,14 @@ function getProductUnit(sub: Subscription): string {
 }
 function getProductPrice(sub: Subscription): number {
   return sub.items?.[0]?.price ?? sub.product?.price ?? 0;
+}
+function getProductImage(sub: Subscription): string | undefined {
+  return (
+    sub.items?.[0]?.product_image ??
+    sub.items?.[0]?.product?.image ??
+    sub.product?.image ??
+    undefined
+  );
 }
 function getTotalAmount(sub: Subscription): number {
   return sub.total_amount ?? sub.amount ?? 0;
@@ -363,9 +373,9 @@ const calS = StyleSheet.create({
 
 export default function MySubscriptionsScreen() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !api.getScreenSnapshot("customer-subscription-history"));
   const [refreshing, setRefreshing] = useState(false);
-  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>(() => api.getScreenSnapshot<Subscription[]>("customer-subscription-history") || []);
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState<"active" | "past">("active");
 
@@ -380,8 +390,11 @@ export default function MySubscriptionsScreen() {
   const [showCalendar, setShowCalendar] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [invoiceLoadingId, setInvoiceLoadingId] = useState<string | null>(null);
-  const hasLoadedOnce = useRef(false);
+  const hasLoadedOnce = useRef(!!api.getScreenSnapshot("customer-subscription-history"));
   const fetchInFlight = useRef(false);
+
+  const [showSearch, setShowSearch] = useState(false);
+  const [walletBalance, setWalletBalance] = useState<number>(0);
 
   // ── Use the history endpoint so cancelled/expired subs still come back
   // for the "Past" tab — api.getSubscriptions() now only returns
@@ -395,7 +408,8 @@ export default function MySubscriptionsScreen() {
       const filtered = (data || []).filter(
         (sub: Subscription) => sub.pattern !== "buy_once",
       );
-      setSubscriptions(filtered);
+      api.setScreenSnapshot("customer-subscription-history", filtered);
+      setSubscriptions(prev => JSON.stringify(prev) === JSON.stringify(filtered) ? prev : filtered);
     } catch {
       Alert.alert("Error", "Failed to load subscriptions");
     } finally {
@@ -406,13 +420,24 @@ export default function MySubscriptionsScreen() {
     }
   }, []);
 
-  useFocusEffect(
+   const fetchWalletBalance = useCallback(async () => {
+    try {
+      const data = await api.getWallet();
+      setWalletBalance(typeof data?.balance === "number" ? data.balance : 0);
+    } catch {
+      // silently ignore — don't block the subscription list on a wallet fetch failure
+    }
+  }, []);
+
+    useFocusEffect(
     useCallback(() => {
       fetchSubscriptions(!hasLoadedOnce.current);
-    }, [fetchSubscriptions]),
+      fetchWalletBalance();
+    }, [fetchSubscriptions, fetchWalletBalance]),
   );
 
   const onRefresh = () => {
+    api.refreshLists();
     setRefreshing(true);
     fetchSubscriptions();
   };
@@ -515,6 +540,8 @@ export default function MySubscriptionsScreen() {
     }
   };
 
+  const goToWallet = () => router.push("/(customer)/wallet");
+
   if (loading) return <LoadingScreen />;
 
   const tomorrow = (() => {
@@ -526,16 +553,31 @@ export default function MySubscriptionsScreen() {
   return (
     <SafeAreaView style={S.container} edges={["top"]}>
       {/* ── Header ── */}
-      <View style={S.header}>
-        <TouchableOpacity onPress={() => router.back()} style={S.headerBack}>
-          <Ionicons name="chevron-back" size={22} color="#1A1A1A" />
-        </TouchableOpacity>
-        <Text style={S.headerTitle}>My Subscriptions</Text>
-        <View style={{ width: 36 }} />
-      </View>
+<View style={S.header}>
+  <TouchableOpacity onPress={() => router.back()} style={S.headerBack}>
+    <Ionicons name="chevron-back" size={22} color="#1A1A1A" />
+  </TouchableOpacity>
+  <Text style={S.headerTitle}>My Subscriptions</Text>
+  <TouchableOpacity
+    onPress={() => {
+      setShowSearch((v) => !v);
+      if (showSearch) setSearch("");
+    }}
+    style={S.headerBack}
+  >
+    <Ionicons name={showSearch ? "close" : "search"} size={20} color="#1A1A1A" />
+  </TouchableOpacity>
+</View>
+
 
       {/* ── Tabs ── */}
-      <RecordSearch value={search} onChange={setSearch} placeholder="Search product, subscription ID or plan" />
+      {showSearch && (
+        <RecordSearch
+          value={search}
+          onChange={setSearch}
+          placeholder="Search product, subscription ID or plan"
+        />
+      )}
       <View style={S.tabRow}>
         {(["active", "past"] as const).map((tab) => (
           <TouchableOpacity
@@ -588,7 +630,7 @@ export default function MySubscriptionsScreen() {
             )}
           </View>
         ) : (
-          displaySubs.map((sub) => (
+               displaySubs.map((sub) => (
             <SubscriptionCard
               key={sub.id}
               sub={sub}
@@ -598,6 +640,8 @@ export default function MySubscriptionsScreen() {
               onDownloadInvoice={handleDownloadInvoice}
               downloadingInvoice={invoiceLoadingId === sub.id}
               onOpenCalendar={setCalendarSub}
+              walletBalance={walletBalance}
+              onRecharge={goToWallet}
             />
           ))
         )}
@@ -643,7 +687,9 @@ function SubscriptionCard({
   onCancel,
   onDownloadInvoice,
   downloadingInvoice,
-  onOpenCalendar,
+   onOpenCalendar,    
+  walletBalance,
+  onRecharge,
 }: {
   sub: Subscription;
   isActive: boolean;
@@ -652,6 +698,8 @@ function SubscriptionCard({
   onDownloadInvoice: (s: Subscription) => void;
   downloadingInvoice?: boolean;
   onOpenCalendar: (s: Subscription) => void;
+  walletBalance: number;
+  onRecharge: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const rot = useRef(new Animated.Value(0)).current;
@@ -673,6 +721,7 @@ function SubscriptionCard({
   const name = getProductName(sub);
   const unit = getProductUnit(sub);
   const price = getProductPrice(sub);
+  const image = getProductImage(sub);
   const total = getTotalAmount(sub);
   const qty = getTotalQty(sub);
   const pattern = PATTERN_LABELS[sub.pattern] ?? sub.pattern;
@@ -682,19 +731,27 @@ function SubscriptionCard({
   // (end_date lapsed automatically) — falls back to null when active.
   const statusBadge = getStatusBadge(sub);
   const isDimmed = !!statusBadge;
+  const isLowBalance = isActive && !isDimmed && total > walletBalance;
 
   return (
     <View style={[C.card, isDimmed && { opacity: 0.6 }]}>
       <TouchableOpacity style={C.row} onPress={toggle} activeOpacity={0.75}>
-        <View style={C.iconBox}>
-          <Ionicons name="cube" size={26} color={Colors.primary} />
+                <View style={C.iconBox}>
+          {image ? (
+            <Image source={{ uri: image }} style={C.productImage} resizeMode="cover" />
+          ) : (
+            <Ionicons name="cube" size={26} color={Colors.primary} />
+          )}
         </View>
 
-        <View style={C.info}>
+                <View style={C.info}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
             <Text style={C.name} numberOfLines={1}>
               {name}
             </Text>
+            {isLowBalance && (
+              <Ionicons name="alert-circle" size={15} color="#ef4444" />
+            )}
             {statusBadge && (
               <View
                 style={[C.statusBadge, { backgroundColor: statusBadge.bg }]}
@@ -705,7 +762,6 @@ function SubscriptionCard({
               </View>
             )}
           </View>
-
           <View style={C.patternPill}>
             <Ionicons name={icon as any} size={10} color={Colors.primary} />
             <Text style={C.patternTxt}>{pattern}</Text>
@@ -791,6 +847,19 @@ function SubscriptionCard({
               </View>
             )}
           </View>
+
+                   {isLowBalance && (
+            <View style={C.lowBalanceBanner}>
+              <Ionicons name="warning" size={16} color="#dc2626" />
+              <Text style={C.lowBalanceText}>
+                Low wallet balance for this delivery
+              </Text>
+              <TouchableOpacity style={C.rechargeBtn} onPress={onRecharge}>
+                <Ionicons name="wallet-outline" size={13} color="#fff" />
+                <Text style={C.rechargeBtnTxt}>Recharge</Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
           <TouchableOpacity
             style={C.invoiceBtn}
@@ -897,6 +966,11 @@ const C = StyleSheet.create({
     backgroundColor: "#FFF4E8",
     justifyContent: "center",
     alignItems: "center",
+    overflow: "hidden",
+  },
+  productImage: {
+    width: "100%",
+    height: "100%",
   },
   calendarIconBtn: {
     width: 32,
@@ -1007,6 +1081,34 @@ const C = StyleSheet.create({
     borderColor: "#fecaca",
   },
   cancelTxt: { fontSize: 13, fontWeight: "700", color: "#ef4444" },
+  lowBalanceBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#FEF2F2",
+    borderWidth: 1,
+    borderColor: "#fecaca",
+    borderRadius: 9,
+    paddingVertical: 9,
+    paddingHorizontal: 10,
+    marginBottom: 10,
+  },
+  lowBalanceText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#dc2626",
+  },
+  rechargeBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#dc2626",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 7,
+  },
+  rechargeBtnTxt: { fontSize: 11, fontWeight: "800", color: "#fff" },
 });
 
 // ─── Edit Modal

@@ -216,11 +216,13 @@ export default function LeaseModal({
     setSelectedFarm(farm);
     setStep("form");
     setSelectedLocation(null);
-    setFarmLocations([]);
-    setLocationsLoading(true);
+    const cached = api.getScreenSnapshot<BusinessLocation[]>(`lease-locations:${farm.admin_id}`);
+    setFarmLocations(cached || []);
+    setLocationsLoading(cached === undefined);
     try {
       const res = await api.getFarmLocations(farm.admin_id);
       const locs = res?.locations ?? [];
+      api.setScreenSnapshot(`lease-locations:${farm.admin_id}`, locs);
       setFarmLocations(locs);
       // preselect the one returned by search, if it matches
       const preselect = locs.find((l) => l.id === farm.location_id);

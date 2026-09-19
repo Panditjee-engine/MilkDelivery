@@ -1,3 +1,4 @@
+import { useCachedScreenState } from "../../src/hooks/useCachedScreenState";
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   View,
@@ -1712,7 +1713,7 @@ export default function VetMedicalScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
-  const [records, setRecords] = useState<MedicalRecord[]>([]);
+  const [records, setRecords] = useCachedScreenState<MedicalRecord[]>("screen:(veterinary)/medical:records", []);
   const [screen, setScreen] = useState<"home" | "list">("home");
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>("newest");
@@ -1723,16 +1724,14 @@ export default function VetMedicalScreen() {
   );
   const [formVisible, setFormVisible] = useState(false);
   const [editRecord, setEditRecord] = useState<MedicalRecord | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(() => api.getScreenSnapshot("screen:(veterinary)/medical:records") === undefined);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [cowLookup, setCowLookup] = useState<
-    Record<string, { type: string; photo?: string }>
-  >({});
-  const [vetName, setVetName] = useState<string | undefined>(undefined);
+  const [cowLookup, setCowLookup] = useCachedScreenState<Record<string, { type: string; photo?: string }>>("screen:(veterinary)/medical:cowLookup", {});
+  const [vetName, setVetName] = useCachedScreenState<string | undefined>("screen:(veterinary)/medical:vetName", undefined);
 
   const fetchRecords = useCallback(async () => {
-    setLoading(true);
+    setLoading(api.getScreenSnapshot("screen:(veterinary)/medical:records") === undefined);
     setError(null);
     try {
       const [data, cows] = await Promise.all([
@@ -2114,6 +2113,7 @@ export default function VetMedicalScreen() {
                 <RefreshControl
                   refreshing={refreshing}
                   onRefresh={async () => {
+                    api.refreshLists();
                     setRefreshing(true);
                     await fetchRecords();
                     setRefreshing(false);

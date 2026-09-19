@@ -1963,6 +1963,7 @@ export default function FarmPage() {
   }, [isFocused, fetchAll]);
 
   const onRefresh = () => {
+    api.refreshLists();
     setRefreshing(true);
     fetchAll(false);
   };

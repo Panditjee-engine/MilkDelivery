@@ -1730,10 +1730,10 @@ export default function AdminOrdersScreen() {
   const [currentAdmin, setCurrentAdmin] = useState<{
     id: string;
     name?: string;
-  } | null>(null);
-  const [globalLoading, setGlobalLoading] = useState(true);
+  } | null>(() => api.getScreenSnapshot<{ id: string; name?: string }>("orders-admin-identity") || null);
+  const [globalLoading, setGlobalLoading] = useState(() => !api.getScreenSnapshot("orders-admin-identity"));
 
-  const [allOrders, setAllOrders] = useState<Order[]>([]);
+  const [allOrders, setAllOrders] = useState<Order[]>(() => api.getScreenSnapshot<Order[]>("admin-orders-all") || []);
   const [products, setProducts] = useState<any[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [ordersRefreshing, setOrdersRefreshing] = useState(false);
@@ -1773,7 +1773,7 @@ export default function AdminOrdersScreen() {
   const [cancelTarget, setCancelTarget] = useState<Order | null>(null);
   const [cancelLoading, setCancelLoading] = useState(false);
 
-  const [allSubscriptions, setAllSubscriptions] = useState<Subscription[]>([]);
+  const [allSubscriptions, setAllSubscriptions] = useState<Subscription[]>(() => api.getScreenSnapshot<Subscription[]>("admin-subscriptions") || []);
   const [subsLoading, setSubsLoading] = useState(false);
   const [subsRefreshing, setSubsRefreshing] = useState(false);
   const [subFilter, setSubFilter] = useState<"ALL" | "ACTIVE" | "INACTIVE">(
@@ -1792,7 +1792,8 @@ export default function AdminOrdersScreen() {
     async function loadAdmin() {
       try {
         const profile = await api.getMe();
-        setCurrentAdmin({ id: profile.id, name: profile.name });
+        api.setScreenSnapshot("orders-admin-identity", { id: profile.id, name: profile.name });
+        setCurrentAdmin(prev => prev?.id === profile.id && prev?.name === profile.name ? prev : { id: profile.id, name: profile.name });
       } catch (e) {
         console.error("Admin identity fetch failed:", e);
       } finally {
@@ -1834,7 +1835,8 @@ export default function AdminOrdersScreen() {
         api.getProducts(),
       ]);
 
-      setAllOrders(ordersData); // backend already returns buy_once only
+      setAllOrders(prev => JSON.stringify(prev) === JSON.stringify(ordersData) ? prev : ordersData);
+      if (!date) api.setScreenSnapshot("admin-orders-all", ordersData);
       setProducts(productsData);
     } catch (e: any) {
       console.error("[AdminOrders] fetchOrders FAILED:", e?.message ?? e);
@@ -1935,7 +1937,8 @@ export default function AdminOrdersScreen() {
           : { ...sub, on_vacation_today: false };
       });
 
-      setAllSubscriptions(withVacation);
+      setAllSubscriptions(prev => JSON.stringify(prev) === JSON.stringify(withVacation) ? prev : withVacation);
+      api.setScreenSnapshot("admin-subscriptions", withVacation);
 
       // Only resolve names for items that DON'T have product_name stored
       const needsResolution = withVacation.flatMap((s) =>
@@ -1970,10 +1973,10 @@ export default function AdminOrdersScreen() {
     if (!isFocused || globalLoading || !currentAdmin) return;
 
     if (activeTab === "orders") {
-      setOrdersLoading(true);
+      setOrdersLoading(!api.getScreenSnapshot("admin-orders-all") && allOrders.length === 0);
       fetchOrders();
     } else {
-      setSubsLoading(true);
+      setSubsLoading(!api.getScreenSnapshot("admin-subscriptions") && allSubscriptions.length === 0);
       fetchSubscriptions();
     }
   }, [
@@ -1986,11 +1989,13 @@ export default function AdminOrdersScreen() {
   ]);
 
   const onOrdersRefresh = useCallback(() => {
+    api.refreshLists();
     setOrdersRefreshing(true);
     fetchOrders();
   }, [fetchOrders]);
 
   const onSubsRefresh = useCallback(() => {
+    api.refreshLists();
     setSubsRefreshing(true);
     fetchSubscriptions();
   }, [fetchSubscriptions]);
@@ -2311,6 +2316,7 @@ export default function AdminOrdersScreen() {
   const setSelectedSubs = (ids: string[]) => setSelectedSubIds(new Set(ids));
 
   const handleSingleOrderDelivered = async (order: Order) => {
+    if (bulkLoading) return;
     setBulkLoading(true);
     try {
       await api.updateAdminOrderStatus(order.id, "delivered");
@@ -2331,6 +2337,7 @@ export default function AdminOrdersScreen() {
   };
 
   const handleSingleSubDelivered = async (sub: Subscription) => {
+    if (bulkLoading) return;
     const walletBlock = getSubscriptionWalletBlock(sub);
     if (walletBlock) {
       Alert.alert(
@@ -2359,30 +2366,29 @@ export default function AdminOrdersScreen() {
   };
 
   const handleBulkDelivered = async () => {
+    if (bulkLoading) return;
     const isOrders = activeTab === "orders";
+    let skippedCount = 0;
     let ids = Array.from(isOrders ? selectedOrderIds : selectedSubIds);
     if (!isOrders) {
       const allowedIds = new Set(selectableSubs.map((sub) => sub.id));
       const blockedCount = ids.filter((id) => !allowedIds.has(id)).length;
+      skippedCount = blockedCount;
       ids = ids.filter((id) => allowedIds.has(id));
       if (blockedCount) {
         setSelectedSubIds(new Set(ids));
-        Alert.alert(
-          "Some subscriptions skipped",
-          "Low-wallet or inactive subscriptions were removed from selection.",
-        );
       }
     }
     if (!ids.length) {
       Alert.alert(
         "Select items",
-        `Select ${isOrders ? "orders" : "subscriptions"} first.`,
+        skippedCount ? "Selected subscriptions are not eligible for delivery. Please check their status and wallet balance." : `Select ${isOrders ? "orders" : "subscriptions"} first.`,
       );
       return;
     }
     Alert.alert(
       "Mark Delivered?",
-      `Mark ${ids.length} selected ${isOrders ? "orders" : "subscriptions"} as delivered?`,
+      `Mark ${ids.length} selected ${isOrders ? "orders" : "subscriptions"} as delivered?${skippedCount ? `\n\n${skippedCount} ineligible subscriptions were excluded.` : ""}`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -2390,14 +2396,20 @@ export default function AdminOrdersScreen() {
           onPress: async () => {
             setBulkLoading(true);
             try {
+              const result = isOrders
+                ? await api.bulkUpdateAdminOrderStatus(ids, "delivered")
+                : await api.bulkUpdateAdminSubscriptionStatus(ids, "delivered");
+              const failures = (result.results || []).filter((item: any) => !item.success);
               if (isOrders) {
-                await api.bulkUpdateAdminOrderStatus(ids, "delivered");
-                setSelectedOrderIds(new Set());
+                setSelectedOrderIds(new Set(failures.map((item: any) => item.order_id).filter(Boolean)));
                 await fetchOrders();
               } else {
-                await api.bulkUpdateAdminSubscriptionStatus(ids, "delivered");
-                setSelectedSubIds(new Set());
+                setSelectedSubIds(new Set(failures.map((item: any) => item.subscription_id).filter(Boolean)));
                 await fetchSubscriptions();
+              }
+              if (result.failed) {
+                const reason = failures.find((item: any) => typeof item.error === "string")?.error;
+                Alert.alert("Some deliveries failed", `${result.updated || 0} updated, ${result.failed} failed.${reason ? `\n${reason}` : " Please refresh and check the selected records."}`);
               }
             } catch (e: any) {
               Alert.alert(

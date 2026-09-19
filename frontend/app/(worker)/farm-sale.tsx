@@ -859,6 +859,7 @@ function FarmSaleScreenInner() {
   }, []);
 
   const onRefresh = () => {
+    api.refreshLists();
     setRefreshing(true);
     fetchAll();
   };
