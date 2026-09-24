@@ -34,6 +34,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { APP_VERSION } from "../../src/services/useVersionCheck";
+import Svg, { Path, Circle, Ellipse, Rect, G } from "react-native-svg";
 
 // ── Palette
 const C = {
@@ -133,6 +134,64 @@ type AlertCfg = {
   message?: string;
   buttons: AlertBtn[];
 };
+
+// ── Hero Milk Background
+function HeroMilkBackground() {
+  return (
+    <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+      <Svg width="100%" height="100%" viewBox="0 0 400 260" preserveAspectRatio="xMidYMid slice">
+        {/* base tint */}
+        <Rect x="0" y="0" width="400" height="260" fill="#fff" opacity={0.05} />
+
+        {/* soft wave bands */}
+        <Path
+          d="M0 45 Q100 15 200 40 Q300 65 400 30 L400 0 L0 0 Z"
+          fill="#fff"
+          opacity={0.08}
+        />
+        <Path
+          d="M0 225 Q100 200 200 220 Q300 240 400 210 L400 260 L0 260 Z"
+          fill="#fff"
+          opacity={0.07}
+        />
+
+        {/* milk bottle - left of center */}
+        <G transform="translate(120, 70)">
+          <Path
+            d="M0 5 h14 v10 l6 8 v50 a6 6 0 0 1 -6 6 h-14 a6 6 0 0 1 -6 -6 v-50 l6 -8 z"
+            fill="#fff"
+            opacity={0.14}
+          />
+          <Rect x="2" y="7" width="10" height="8" rx="1.5" fill="#fff" opacity={0.2} />
+        </G>
+
+        {/* milk bottle - right of center, bigger */}
+        <G transform="translate(290, 40)">
+          <Path
+            d="M0 20 h20 v14 l8 10 v70 a8 8 0 0 1 -8 8 h-20 a8 8 0 0 1 -8 -8 v-70 l8 -10 z"
+            fill="#fff"
+            opacity={0.12}
+          />
+          <Rect x="3" y="23" width="14" height="10" rx="2" fill="#fff" opacity={0.18} />
+        </G>
+
+        {/* milk drops */}
+        <Path
+          d="M130 35 q6 10 0 16 a6 6 0 0 1 -6 -16 z"
+          fill="#fff"
+          opacity={0.18}
+        />
+        <Circle cx="220" cy="190" r="7" fill="#fff" opacity={0.13} />
+        <Circle cx="150" cy="205" r="5" fill="#fff" opacity={0.16} />
+        <Circle cx="280" cy="65" r="4" fill="#fff" opacity={0.18} />
+
+        {/* leaf accents */}
+        <Ellipse cx="200" cy="25" rx="10" ry="5" fill="#fff" opacity={0.1} />
+        <Ellipse cx="140" cy="235" rx="12" ry="5" fill="#fff" opacity={0.08} />
+      </Svg>
+    </View>
+  );
+}
 
 function CustomAlert({
   cfg,
@@ -1666,8 +1725,7 @@ export default function AdminSettingsScreen() {
             },
           ]}
         >
-          <View style={s.heroBubble1} />
-          <View style={s.heroBubble2} />
+          <HeroMilkBackground />
           <View style={s.heroAvatarRow}>
             <View style={s.heroAvatarRing}>
               <View style={s.heroAvatar}>

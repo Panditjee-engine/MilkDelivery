@@ -1452,8 +1452,8 @@ const cardS = StyleSheet.create({
     gap: 5,
     marginBottom: 5,
   },
-    name: {                         
-    flex: 1,                      
+  name: {
+    flex: 1,
     minHeight: 32,
     fontSize: 12,
     fontWeight: "700",
@@ -4120,7 +4120,7 @@ export default function CatalogScreen() {
     }
   }, [products, linkedAdminId]);
 
-  const fetchRatings = useCallback(async (list: any[]) => {      
+  const fetchRatings = useCallback(async (list: any[]) => {
     const entries = await Promise.all(
       (list || []).map(async (p) => {
         const id = resolveProductId(p);
@@ -4164,7 +4164,7 @@ export default function CatalogScreen() {
       const cutoffs = await fetchCutoffsForProducts(prods || [], linkedAdminId);
       const windows = await fetchDeliveryWindowsForProducts(prods || [], linkedAdminId);
       setProducts(prods);
-      void fetchRatings(prods || []); 
+      void fetchRatings(prods || []);
       setCategories(cats);
       setWalletBalance(wallet.balance ?? 0);
       setCatalogSlides(mapContentToSlides(content?.data || []));
@@ -4177,7 +4177,7 @@ export default function CatalogScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [selectedCategory, fetchSubs, linkedAdminId , fetchRatings]);
+  }, [selectedCategory, fetchSubs, linkedAdminId, fetchRatings]);
 
   useEffect(() => {
     if (!products.length) return;
@@ -4670,6 +4670,7 @@ export default function CatalogScreen() {
     () => (catalogSlides.length > 0 ? catalogSlides : NEWLY_ADDED_SLIDES),
     [catalogSlides],
   );
+  const hasUploadedSlides = catalogSlides.length > 0;
 
   useEffect(() => {
     activeNewSlideRef.current = activeNewSlide;
@@ -4756,26 +4757,45 @@ export default function CatalogScreen() {
                 activeOpacity={0.88}
                 onPress={() => openBannerDetails(slide)}
               >
-                <LinearGradient
-                  colors={slide.colors as [string, string]}
-                  style={mainS.newCard}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                >
-                  <View style={mainS.newTextBox}>
-                    <Text style={mainS.newKicker} numberOfLines={1}>{slide.kicker}</Text>
-                    <Text style={mainS.newCardTitle} numberOfLines={1}>{slide.title}</Text>
-                    <Text style={mainS.newCardSub} numberOfLines={2} ellipsizeMode="tail">
-                      {slide.subtitle}
-                    </Text>
-                  </View>
-                  <Image
-                    source={slide.image}
-                    style={mainS.newImage}
-                    resizeMode="contain"
-                  />
-                  <View style={mainS.newGlow} />
-                </LinearGradient>
+                <View style={mainS.newCard}>
+                  {hasUploadedSlides ? (
+                    <View style={mainS.newCardFull}>
+                      <Image
+                        source={slide.image}
+                        style={mainS.newImageFull}
+                        resizeMode="cover"
+                      />
+                      <LinearGradient
+                        colors={["transparent", "rgba(0,0,0,0.7)"]}
+                        style={mainS.newCardScrim}
+                      />
+                      <View style={mainS.newTextBoxFull}>
+                        <Text style={mainS.newKicker} numberOfLines={1}>{slide.kicker}</Text>
+                        <Text style={mainS.newCardTitle} numberOfLines={1}>{slide.title}</Text>
+                        <Text style={mainS.newCardSub} numberOfLines={2} ellipsizeMode="tail">
+                          {slide.subtitle}
+                        </Text>
+                      </View>
+                    </View>
+                  ) : (
+                    <LinearGradient
+                      colors={slide.colors as [string, string]}
+                      style={mainS.newCardInner}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                    >
+                      <View style={mainS.newTextBox}>
+                        <Text style={mainS.newKicker} numberOfLines={1}>{slide.kicker}</Text>
+                        <Text style={mainS.newCardTitle} numberOfLines={1}>{slide.title}</Text>
+                        <Text style={mainS.newCardSub} numberOfLines={2} ellipsizeMode="tail">
+                          {slide.subtitle}
+                        </Text>
+                      </View>
+                      <Image source={slide.image} style={mainS.newImage} resizeMode="contain" />
+                      <View style={mainS.newGlow} />
+                    </LinearGradient>
+                  )}
+                </View>
               </TouchableOpacity>
             </View>
           ))}
@@ -5015,15 +5035,30 @@ const mainS = StyleSheet.create({
     height: 150,
     borderRadius: 24,
     overflow: "hidden",
-    paddingHorizontal: 18,
-    paddingVertical: 16,
-    flexDirection: "row",
-    alignItems: "flex-start",
     shadowColor: "#123524",
     shadowOpacity: 0.16,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 6 },
     elevation: 4,
+  },
+  newCardInner: {
+    flex: 1,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+  newCardFull: { flex: 1 },
+  newImageFull: { width: "100%", height: "100%" },
+  newCardScrim: {
+    position: "absolute",
+    left: 0, right: 0, bottom: 0,
+    height: 90,
+  },
+  newTextBoxFull: {
+    position: "absolute",
+    left: 18, right: 18, bottom: 14,
+    zIndex: 2,
   },
   newTextBox: { flex: 1, zIndex: 2 },
   newKicker: {
