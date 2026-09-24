@@ -18,6 +18,7 @@ interface User {
   referral_admin_id?: string;
   admin_id?: string; 
   manual_qr_recharge_enabled?: boolean;
+  profile_image?: string;
 }
 
 interface Worker {

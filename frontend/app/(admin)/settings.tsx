@@ -34,6 +34,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { APP_VERSION } from "../../src/services/useVersionCheck";
+import CropModal from "../../src/components/CropModal";
 
 // ── Palette
 const C = {
@@ -677,6 +678,14 @@ export default function AdminSettingsScreen() {
   const hasAutoOpenedLocations = useRef(false);
 
   const referralCode = buildReferralCode(user);
+
+  const [profileImage, setProfileImage] = useState<string | null>(
+  (user as any)?.profile_image || null,
+);
+const [uploadingImage, setUploadingImage] = useState(false);
+const [cropVisible, setCropVisible] = useState(false);
+const [rawImageUri, setRawImageUri] = useState<string | null>(null);
+const [rawImageSize, setRawImageSize] = useState<{ w: number; h: number } | null>(null);
 
   const [activeModal, setActiveModal] = useState<ModalType>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -1542,6 +1551,79 @@ export default function AdminSettingsScreen() {
     );
   };
 
+const pickImage = async (fromCamera: boolean) => {
+  try {
+    const permissionResult = fromCamera
+      ? await ImagePicker.requestCameraPermissionsAsync()
+      : await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (!permissionResult.granted) {
+      showAlert(
+        "Permission Needed",
+        fromCamera ? "Camera permission is required." : "Gallery permission is required.",
+        undefined,
+        "camera-outline",
+        C.deepPeach,
+        C.dark,
+      );
+      return;
+    }
+
+    const result = fromCamera
+      ? await ImagePicker.launchCameraAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: false,
+          quality: 1,
+        })
+      : await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: false,
+          quality: 1,
+        });
+
+    if (result.canceled || !result.assets?.length) return;
+
+    const asset = result.assets[0];
+    setRawImageUri(asset.uri);
+    setRawImageSize({ w: asset.width, h: asset.height });
+    setCropVisible(true);
+  } catch (error: any) {
+    showAlert("Error", error?.message || "Could not open picker");
+  }
+};
+
+const handleCropDone = async (croppedUri: string) => {
+  setCropVisible(false);
+  setUploadingImage(true);
+  setProfileImage(croppedUri);
+  try {
+    const uploaded = await api.uploadProfileImage(croppedUri);
+    updateUser({ profile_image: uploaded.url } as any);
+    setProfileImage(uploaded.url);
+    showAlert("Updated", "Profile photo updated", undefined, "checkmark-circle", "#E8F5E9", "#388E3C");
+  } catch (error: any) {
+    showAlert("Failed", error?.message || "Could not update photo");
+  } finally {
+    setUploadingImage(false);
+    setRawImageUri(null);
+  }
+};
+
+const handleChangePhoto = () => {
+  showAlert(
+    "Change Profile Photo",
+    "Choose a source for your new profile photo.",
+    [
+      { text: "Camera", onPress: () => pickImage(true) },
+      { text: "Gallery", onPress: () => pickImage(false) },
+      { text: "Cancel", style: "cancel" },
+    ],
+    "camera-outline",
+    C.deepPeach,
+    C.primary,
+  );
+};
+  
   const handleDeleteAccount = () => {
     setDeletePassword("");
     setDeleteModal(true);
@@ -1650,64 +1732,89 @@ export default function AdminSettingsScreen() {
         </Animated.View>
 
         {/* ── Hero Profile Card */}
-        <Animated.View
-          style={[
-            s.heroCard,
-            {
-              opacity: headerAnim,
-              transform: [
-                {
-                  translateY: headerAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [20, 0],
-                  }),
-                },
-              ],
-            },
-          ]}
+       <Animated.View
+  style={[
+    s.heroCard,
+    {
+      opacity: headerAnim,
+      transform: [
+        {
+          translateY: headerAnim.interpolate({
+            inputRange: [0, 1],
+            outputRange: [20, 0],
+          }),
+        },
+      ],
+    },
+  ]}
+>
+  <View style={s.heroRow}>
+    {/* Left: avatar + camera */}
+    <TouchableOpacity
+      style={s.heroAvatarWrap}
+      activeOpacity={0.85}
+      onPress={handleChangePhoto}
+      disabled={uploadingImage}
+    >
+      <View style={s.heroAvatarRing}>
+        {profileImage ? (
+          <Image
+            key={profileImage}
+            source={{ uri: profileImage }}
+            style={s.heroAvatarImg}
+            resizeMode="cover"
+          />
+        ) : (
+          <View style={s.heroAvatar}>
+            <Text style={s.heroAvatarTxt}>{initials}</Text>
+          </View>
+        )}
+      </View>
+      <View style={s.heroCameraBadge}>
+        <Ionicons
+          name={uploadingImage ? "hourglass-outline" : "camera"}
+          size={11}
+          color="#fff"
+        />
+      </View>
+    </TouchableOpacity>
+
+    {/* Right: name, email, edit */}
+    <View style={s.heroInfo}>
+      <View style={s.heroNameRow}>
+        <Text style={s.heroName} numberOfLines={1}>
+          {user?.name ?? "Administrator"}
+        </Text>
+        <TouchableOpacity
+          style={s.heroEditBtn}
+          activeOpacity={0.85}
+          onPress={() => openModal("profile")}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <View style={s.heroBubble1} />
-          <View style={s.heroBubble2} />
-          <View style={s.heroAvatarRow}>
-            <View style={s.heroAvatarRing}>
-              <View style={s.heroAvatar}>
-                <Text style={s.heroAvatarTxt}>{initials}</Text>
-              </View>
-            </View>
-            <View style={s.heroBadge}>
-              <Ionicons name="shield-checkmark" size={10} color="#fff" />
-              <Text style={s.heroBadgeTxt}>Admin</Text>
-            </View>
-          </View>
-          <Text style={s.heroName}>{user?.name ?? "Administrator"}</Text>
-          <Text style={s.heroEmail}>{user?.email ?? ""}</Text>
-          <View style={s.heroDivider} />
-          <View style={s.heroBtnRow}>
-            <TouchableOpacity
-              style={s.heroBtn}
-              onPress={() => openModal("profile")}
-              activeOpacity={0.85}
-            >
-              <Ionicons name="pencil-outline" size={14} color={C.dark} />
-              <Text style={s.heroBtnTxt}>Edit Profile</Text>
-            </TouchableOpacity>
-            <View style={s.heroBtnSep} />
-            <TouchableOpacity
-              style={[s.heroBtn, s.heroBtnDark]}
-              onPress={() => openModal("password")}
-              activeOpacity={0.85}
-            >
-              <Ionicons
-                name="lock-closed-outline"
-                size={14}
-                color="rgba(255,255,255,0.9)"
-              />
-              <Text style={[s.heroBtnTxt, { color: "rgba(255,255,255,0.9)" }]}>
-                Password
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </Animated.View>
+          <Ionicons name="pencil-outline" size={14} color="#fff" />
+        </TouchableOpacity>
+      </View>
+      <Text style={s.heroEmail} numberOfLines={1}>
+        {user?.email ?? ""}
+      </Text>
+      <View style={s.heroBadge}>
+        <Ionicons name="shield-checkmark" size={10} color="#fff" />
+        <Text style={s.heroBadgeTxt}>Admin</Text>
+      </View>
+    </View>
+  </View>
+
+  <View style={s.heroDivider} />
+
+  <TouchableOpacity
+    style={s.heroPwBtn}
+    onPress={() => openModal("password")}
+    activeOpacity={0.85}
+  >
+    <Ionicons name="lock-closed-outline" size={14} color="rgba(255,255,255,0.9)" />
+    <Text style={s.heroPwBtnTxt}>Change Password</Text>
+  </TouchableOpacity>
+</Animated.View>
 
         {/* ── Referral & Share */}
         <View style={s.referralCard}>
@@ -2771,6 +2878,17 @@ export default function AdminSettingsScreen() {
           </View>
         )}
       </SettingModal>
+      <CropModal
+  visible={cropVisible}
+  imageUri={rawImageUri}
+  imageSize={rawImageSize}
+  onCancel={() => {
+    setCropVisible(false);
+    setRawImageUri(null);
+    setRawImageSize(null);
+  }}
+  onDone={handleCropDone}
+/>
     </SafeAreaView>
   );
 }
@@ -3302,40 +3420,17 @@ const s = StyleSheet.create({
     bottom: -20,
     left: 20,
   },
-  heroAvatarRow: { alignItems: "center", marginBottom: 12 },
-  heroAvatarRing: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    borderWidth: 2.5,
-    borderColor: "rgba(255,255,255,0.35)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  heroAvatar: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    backgroundColor: "rgba(255,255,255,0.22)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  heroAvatarTxt: {
-    fontSize: 24,
-    fontWeight: "900",
-    color: "#fff",
-    letterSpacing: -0.5,
-  },
-  heroBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "rgba(187,107,63,0.55)",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginTop: 8,
-  },
+heroBadge: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 4,
+  backgroundColor: "rgba(187,107,63,0.55)",
+  paddingHorizontal: 9,
+  paddingVertical: 3,
+  borderRadius: 10,
+  alignSelf: "flex-start",
+  marginTop: 2,
+},
   heroBadgeTxt: {
     fontSize: 10,
     fontWeight: "800",
@@ -3360,25 +3455,84 @@ const s = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.18)",
     marginVertical: 16,
   },
-  heroBtnRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 0,
-    width: "100%",
-  },
-  heroBtn: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    backgroundColor: "rgba(255,255,255,0.9)",
-    borderRadius: 14,
-    paddingVertical: 11,
-  },
-  heroBtnDark: { backgroundColor: "rgba(255,255,255,0.15)" },
-  heroBtnSep: { width: 10 },
-  heroBtnTxt: { fontSize: 13, fontWeight: "700", color: C.dark },
+  heroRow: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 16,
+  width: "100%",
+},
+heroAvatarWrap: {
+  width: 72,
+  height: 72,
+},
+heroAvatarRing: {
+  width: 72,
+  height: 72,
+  borderRadius: 36,
+  borderWidth: 2.5,
+  borderColor: "rgba(255,255,255,0.35)",
+  justifyContent: "center",
+  alignItems: "center",
+  overflow: "hidden",
+},
+heroAvatar: {
+  width: 62,
+  height: 62,
+  borderRadius: 31,
+  backgroundColor: "rgba(255,255,255,0.22)",
+  justifyContent: "center",
+  alignItems: "center",
+},
+heroAvatarImg: { width: 62, height: 62, borderRadius: 31 },
+heroAvatarTxt: {
+  fontSize: 22,
+  fontWeight: "900",
+  color: "#fff",
+  letterSpacing: -0.5,
+},
+heroCameraBadge: {
+  position: "absolute",
+  bottom: -2,
+  right: -2,
+  width: 24,
+  height: 24,
+  borderRadius: 12,
+  backgroundColor: C.dark,
+  borderWidth: 2,
+  borderColor: C.primary,
+  justifyContent: "center",
+  alignItems: "center",
+},
+heroInfo: { flex: 1, gap: 4 },
+heroNameRow: {
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 8,
+},
+heroEditBtn: {
+  width: 28,
+  height: 28,
+  borderRadius: 9,
+  backgroundColor: "rgba(255,255,255,0.18)",
+  justifyContent: "center",
+  alignItems: "center",
+},
+heroPwBtn: {
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 8,
+  backgroundColor: "rgba(255,255,255,0.15)",
+  borderRadius: 14,
+  paddingVertical: 12,
+  width: "100%",
+},
+heroPwBtnTxt: {
+  fontSize: 13,
+  fontWeight: "700",
+  color: "rgba(255,255,255,0.9)",
+},
   referralCard: {
     backgroundColor: "#fff",
     marginHorizontal: 16,

@@ -1,4 +1,4 @@
-import React, { useState , useRef, useEffect} from "react";
+import React, { useState , useRef, useEffect,useCallback} from "react";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -13,7 +13,6 @@ import {
   Animated,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useAuth } from "../../src/contexts/AuthContext";
@@ -22,6 +21,8 @@ import { Colors } from "../../src/constants/colors";
 import Button from "../../src/components/Button";
 import Input from "../../src/components/Input";
 import CropModal from "../../src/components/CropModal";
+import { BackHandler } from "react-native";
+import { useRouter, useFocusEffect } from "expo-router";
 
 function PhotoSourceSheet({
   visible,
@@ -214,6 +215,16 @@ export default function EditProfileScreen() {
 const goBack = () => {
   router.replace("/(customer)/profile");
 };
+
+useFocusEffect(
+  useCallback(() => {
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      goBack();
+      return true;
+    });
+    return () => sub.remove();
+  }, []),
+);
 
   const pickImage = async (fromCamera: boolean) => {
     try {

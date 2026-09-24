@@ -1,36 +1,26 @@
 import { useCachedScreenState } from "../../src/hooks/useCachedScreenState";
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   View,
   Text,
+  TextInput,
   StyleSheet,
   FlatList,
   ActivityIndicator,
   StatusBar,
   Platform,
-  Animated,
   Modal,
   RefreshControl,
   TouchableOpacity,
-  LayoutAnimation,
-  UIManager,
   Image,
+  ScrollView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { api } from "../../src/services/api";
 import Scanner from "../../src/components/Scanner";
 
-// ── Enable LayoutAnimation on Android
-if (
-  Platform.OS === "android" &&
-  UIManager.setLayoutAnimationEnabledExperimental
-) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
-
-// ── Color System
+// ── Palette
 const C = {
   primary: "#FF9675",
   accent: "#8B6854",
@@ -40,14 +30,12 @@ const C = {
   text: "#3D1F0A",
   textMuted: "#A07850",
   textLight: "#C9A882",
+  border: "#EDD8C4",
+  white: "#FFFFFF",
 };
 
-// ── Platform
 const IS_IOS = Platform.OS === "ios";
 const STATUS_BAR_HEIGHT = IS_IOS ? 0 : (StatusBar.currentHeight ?? 0);
-const HEADER_EXPANDED = IS_IOS ? 178 : 168;
-const HEADER_COLLAPSED = IS_IOS ? 100 : 90;
-const SCROLL_THRESHOLD = 60;
 
 // ── Types
 interface Animal {
@@ -74,24 +62,16 @@ interface Animal {
   leaseEndDate?: string;
 }
 
+type FilterKey = "all" | "active" | "inactive" | "sold";
+
 // ── Helpers
 function fmtDate(d?: string) {
   if (!d) return "—";
   const parts = d.split("-");
   if (parts.length !== 3) return d;
   const months = [
-    "Jan",
-    "Feb",
-    "Mar",
-    "Apr",
-    "May",
-    "Jun",
-    "Jul",
-    "Aug",
-    "Sep",
-    "Oct",
-    "Nov",
-    "Dec",
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
   ];
   return `${parts[2]} ${months[Number(parts[1]) - 1]} ${parts[0]}`;
 }
@@ -102,40 +82,28 @@ function fmtPrice(p?: number) {
 }
 
 function getStatusProps(a: Animal) {
-  if (a.isSold) return { color: "#dc2626", bg: "#fef2f2", label: "Sold" };
-  if (a.isActive) return { color: "#16a34a", bg: "#f0fdf4", label: "Active" };
-  return { color: "#d97706", bg: "#fffbeb", label: "Inactive" };
+  if (a.isSold)
+    return { color: "#dc2626", bg: "#fef2f2", label: "Sold", icon: "pricetag" };
+  if (a.isActive)
+    return { color: "#16a34a", bg: "#f0fdf4", label: "Active", icon: "checkmark" };
+  return { color: "#d97706", bg: "#fffbeb", label: "Inactive", icon: "pause" };
 }
 
-// ── Animal Avatar
-function AnimalAvatar({
+// ── Avatar (memoized so the photo doesn't reload on toggle)
+const AnimalAvatar = React.memo(function AnimalAvatar({
   animal,
-  size = 52,
-  expanded = false,
+  size = 56,
 }: {
   animal: Animal;
   size?: number;
-  expanded?: boolean;
 }) {
+  const st = getStatusProps(animal);
   const isMale = animal.gender === "Male";
   const isCalf = (animal.age ?? 0) < 1;
-  const bgColor = expanded ? "#FFF0E4" : C.card;
-  const borderClr = expanded ? C.primary : "#EDD8C4";
-
-  if (animal.photo) {
-    return (
-      <Image
-        source={{ uri: animal.photo }}
-        style={{
-          width: size,
-          height: size,
-          borderRadius: size * 0.28,
-          borderWidth: 1.5,
-          borderColor: borderClr,
-        }}
-      />
-    );
-  }
+  const source = useMemo(
+    () => (animal.photo ? { uri: animal.photo } : undefined),
+    [animal.photo],
+  );
 
   let iconName: keyof typeof Ionicons.glyphMap = "paw-outline";
   let iconColor = C.dark;
@@ -148,217 +116,150 @@ function AnimalAvatar({
   }
 
   return (
-    <View
-      style={{
-        width: size,
-        height: size,
-        borderRadius: size * 0.28,
-        backgroundColor: bgColor,
-        borderWidth: 1.5,
-        borderColor: borderClr,
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
-      <Ionicons
-        name={iconName}
-        size={Math.round(size * 0.52)}
-        color={iconColor}
-      />
+    <View style={{ width: size, height: size }}>
+      {source ? (
+        <Image
+          source={source}
+          resizeMethod="resize"
+          fadeDuration={0}
+          style={{
+            width: size,
+            height: size,
+            borderRadius: size * 0.26,
+            borderWidth: 1.5,
+            borderColor: C.border,
+            backgroundColor: C.card,
+          }}
+        />
+      ) : (
+        <View
+          style={{
+            width: size,
+            height: size,
+            borderRadius: size * 0.26,
+            backgroundColor: C.card,
+            borderWidth: 1.5,
+            borderColor: C.border,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Ionicons name={iconName} size={Math.round(size * 0.5)} color={iconColor} />
+        </View>
+      )}
+      <View style={[s.avatarBadge, { backgroundColor: st.color }]}>
+        <Ionicons name={st.icon as any} size={9} color="#fff" />
+      </View>
     </View>
   );
-}
+});
 
-// ── Info Row
-function InfoRow({
-  icon,
+// ── Data Block
+function Block({
   label,
   value,
+  unit,
+  sub,
+  icon,
+  wide,
   highlight,
 }: {
-  icon: keyof typeof Ionicons.glyphMap;
   label: string;
   value: string;
+  unit?: string;
+  sub?: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  wide?: boolean;
   highlight?: boolean;
 }) {
   return (
-    <View style={s.infoRow}>
-      <View style={s.infoIconWrap}>
-        <Ionicons name={icon} size={14} color={C.accent} />
+    <View style={[s.block, wide && s.blockWide]}>
+      <View style={s.blockTop}>
+        <Text style={s.blockLabel}>{label}</Text>
+        <Ionicons name={icon} size={14} color={highlight ? C.dark : C.accent} />
       </View>
-      <Text style={s.infoLabel}>{label}</Text>
-      <Text
-        style={[s.infoValue, highlight && { color: C.dark, fontWeight: "800" }]}
-      >
-        {value}
-      </Text>
+      <View style={s.blockValueRow}>
+        <Text
+          style={[s.blockValue, highlight && { color: C.dark }]}
+          numberOfLines={1}
+        >
+          {value}
+        </Text>
+        {!!unit && value !== "—" && <Text style={s.blockUnit}>{unit}</Text>}
+      </View>
+      {!!sub && <Text style={s.blockSub}>{sub}</Text>}
     </View>
   );
 }
 
-// ── Section Header
-function SectionHeader({
-  title,
-  icon,
-}: {
-  title: string;
-  icon: keyof typeof Ionicons.glyphMap;
-}) {
-  return (
-    <View style={s.sectionHeader}>
-      <Ionicons name={icon} size={13} color={C.accent} />
-      <Text style={s.sectionTitle}>{title}</Text>
-    </View>
-  );
-}
-
-// ── Animal Card
-function AnimalCard({
+// ── Animal Card (plain views: no animation, no elevation, no clipping)
+const AnimalCard = React.memo(function AnimalCard({
   animal,
-  index,
   expanded,
   onToggle,
 }: {
   animal: Animal;
-  index: number;
   expanded: boolean;
   onToggle: (id: string) => void;
 }) {
-  const opacity = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(18)).current;
-  const scale = useRef(new Animated.Value(1)).current;
-  const chevronRot = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(opacity, {
-        toValue: 1,
-        duration: 280,
-        delay: index * 50,
-        useNativeDriver: true,
-      }),
-      Animated.spring(translateY, {
-        toValue: 0,
-        delay: index * 50,
-        tension: 90,
-        friction: 12,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, []);
-
-  useEffect(() => {
-    Animated.timing(chevronRot, {
-      toValue: expanded ? 1 : 0,
-      duration: 260,
-      useNativeDriver: true,
-    }).start();
-  }, [expanded]);
-
-  const rotateStr = chevronRot.interpolate({
-    inputRange: [0, 1],
-    outputRange: ["0deg", "180deg"],
-  });
   const st = getStatusProps(animal);
   const isMale = animal.gender === "Male";
   const gColor = isMale ? "#1a4a8a" : "#7c3aed";
   const gBg = isMale ? "#EEF4FF" : "#FDF4FF";
-
-  const onPressIn = () =>
-    Animated.spring(scale, {
-      toValue: 0.975,
-      useNativeDriver: true,
-      tension: 200,
-      friction: 10,
-    }).start();
-  const onPressOut = () =>
-    Animated.spring(scale, {
-      toValue: 1,
-      useNativeDriver: true,
-      tension: 200,
-      friction: 10,
-    }).start();
-
-  const handlePress = () => onToggle(animal.id);
+  const ageText =
+    animal.age !== undefined && animal.age !== null
+      ? `${animal.age} yr${animal.age !== 1 ? "s" : ""}`
+      : null;
 
   return (
-    <Animated.View
-      style={[
-        s.card,
-        expanded && s.cardExpanded,
-        { opacity, transform: [{ translateY }, { scale }] },
-      ]}
-    >
-      {/* ── Header Row ── */}
+    <View style={[s.card, expanded && s.cardExpanded]}>
       <TouchableOpacity
         activeOpacity={0.85}
-        onPress={handlePress}
-        onPressIn={onPressIn}
-        onPressOut={onPressOut}
+        onPress={() => onToggle(animal.id)}
         style={s.cardHeader}
       >
-        <AnimalAvatar animal={animal} size={54} expanded={expanded} />
+        <AnimalAvatar animal={animal} size={58} />
 
         <View style={s.cardInfo}>
           <View style={s.nameRow}>
             <Text style={s.cowName} numberOfLines={1}>
               {animal.name || "Unknown"}
             </Text>
-            <View style={s.tagPill}>
-              <Text style={s.tagPillText}>{animal.tag_number}</Text>
-            </View>
+            <Text style={s.cowTag}>#{animal.tag_number}</Text>
           </View>
+
+          {!!animal.breed && (
+            <Text style={s.breedText} numberOfLines={1}>
+              {animal.breed}
+            </Text>
+          )}
+
           <View style={s.metaRow}>
-            {!!animal.breed && (
-              <View style={s.chip}>
-                <Text style={s.chipText}>{animal.breed}</Text>
-              </View>
-            )}
+            <View style={s.tagPill}>
+              <Text style={s.tagPillLabel}>TAG</Text>
+              <Text style={s.tagPillValue}>{animal.tag_number}</Text>
+            </View>
             {!!animal.gender && (
-              <View style={[s.chip, { backgroundColor: gBg }]}>
-                <Ionicons
-                  name={isMale ? "male" : "female"}
-                  size={10}
-                  color={gColor}
-                />
-                <Text style={[s.chipText, { color: gColor }]}>
-                  {animal.gender}
-                </Text>
+              <View style={[s.chip, { backgroundColor: gBg, borderColor: gBg }]}>
+                <Ionicons name={isMale ? "male" : "female"} size={10} color={gColor} />
+                <Text style={[s.chipText, { color: gColor }]}>{animal.gender}</Text>
               </View>
             )}
-            {animal.age !== undefined && animal.age !== null && (
+            {!!ageText && (
               <View style={s.chip}>
-                <Text style={s.chipText}>
-                  {animal.age} yr{animal.age !== 1 ? "s" : ""}
-                </Text>
+                <Text style={s.chipText}>{ageText}</Text>
               </View>
             )}
             {animal.isLeasedIn && (
-              <View style={[s.chip, { backgroundColor: "#EEF4FF" }]}>
-                <Ionicons
-                  name="swap-horizontal-outline"
-                  size={10}
-                  color="#1a4a8a"
-                />
-                <Text style={[s.chipText, { color: "#1a4a8a" }]}>
-                  Leased in
-                  {animal.lessorFarmName ? ` · ${animal.lessorFarmName}` : ""}
-                </Text>
+              <View style={[s.chip, { backgroundColor: "#EEF4FF", borderColor: "#EEF4FF" }]}>
+                <Ionicons name="swap-horizontal-outline" size={10} color="#1a4a8a" />
+                <Text style={[s.chipText, { color: "#1a4a8a" }]}>Leased in</Text>
               </View>
             )}
             {animal.isLeasedOut && (
-              <View style={[s.chip, { backgroundColor: "#FEF2F2" }]}>
-                <Ionicons
-                  name="lock-closed-outline"
-                  size={10}
-                  color="#dc2626"
-                />
-                <Text style={[s.chipText, { color: "#dc2626" }]}>
-                  Leased out
-                  {animal.leasedToFarmName
-                    ? ` · ${animal.leasedToFarmName}`
-                    : ""}
-                </Text>
+              <View style={[s.chip, { backgroundColor: "#FEF2F2", borderColor: "#FEF2F2" }]}>
+                <Ionicons name="lock-closed-outline" size={10} color="#dc2626" />
+                <Text style={[s.chipText, { color: "#dc2626" }]}>Leased out</Text>
               </View>
             )}
           </View>
@@ -366,201 +267,131 @@ function AnimalCard({
 
         <View style={s.cardRight}>
           <View style={[s.statusBadge, { backgroundColor: st.bg }]}>
-            <View style={[s.statusDot, { backgroundColor: st.color }]} />
             <Text style={[s.statusText, { color: st.color }]}>{st.label}</Text>
           </View>
-          <Animated.View
-            style={{ transform: [{ rotate: rotateStr }], marginTop: 4 }}
-          >
-            <Ionicons name="chevron-down" size={16} color={C.textLight} />
-          </Animated.View>
+          <Ionicons
+            name={expanded ? "chevron-up" : "chevron-down"}
+            size={18}
+            color={C.textLight}
+          />
         </View>
       </TouchableOpacity>
 
-      {/* ── Expanded Body ── */}
       {expanded && (
         <View style={s.cardBody}>
-          {/* Top divider */}
-          <View style={s.bodyDivider} />
-
-          {/* Identity banner */}
-          <View style={s.identityBanner}>
-            <AnimalAvatar animal={animal} size={72} expanded />
-            <View style={s.identityInfo}>
-              <Text style={s.identityName}>{animal.name || "Unknown"}</Text>
-              <Text style={s.identityBreed}>
-                {animal.breed || "Breed not specified"}
-              </Text>
-              <View
-                style={{
-                  flexDirection: "row",
-                  gap: 6,
-                  marginTop: 8,
-                  flexWrap: "wrap",
-                }}
-              >
-                <View style={[s.statusBadge, { backgroundColor: st.bg }]}>
-                  <View style={[s.statusDot, { backgroundColor: st.color }]} />
-                  <Text style={[s.statusText, { color: st.color }]}>
-                    {st.label}
-                  </Text>
-                </View>
-                {!!animal.gender && (
-                  <View style={[s.chip, { backgroundColor: gBg }]}>
-                    <Ionicons
-                      name={isMale ? "male" : "female"}
-                      size={10}
-                      color={gColor}
-                    />
-                    <Text style={[s.chipText, { color: gColor }]}>
-                      {animal.gender}
-                    </Text>
-                  </View>
-                )}
-              </View>
-            </View>
-          </View>
-
-          {/* ── Basic Info ── */}
-          <SectionHeader
-            title="Basic Information"
-            icon="information-circle-outline"
-          />
-          <View style={s.infoBlock}>
-            <InfoRow
-              icon="pricetag-outline"
-              label="Tag Number"
-              value={animal.tag_number}
+          <View style={s.grid}>
+            <Block
+              label="WEIGHT"
+              value={animal.weight ? String(animal.weight) : "—"}
+              unit="kg"
+              icon="barbell-outline"
             />
-            <InfoRow
-              icon="paw-outline"
-              label="Breed"
-              value={animal.breed || "—"}
-            />
-            <InfoRow
-              icon="calendar-outline"
-              label="Age"
+            <Block
+              label="AGE"
               value={
                 animal.age !== undefined && animal.age !== null
-                  ? `${animal.age} year${animal.age !== 1 ? "s" : ""}`
+                  ? String(animal.age)
                   : "—"
               }
+              unit={animal.age === 1 ? "yr" : "yrs"}
+              icon="calendar-outline"
             />
-            <InfoRow
-              icon="barbell-outline"
-              label="Weight"
-              value={animal.weight ? `${animal.weight} kg` : "—"}
-            />
-            <InfoRow
-              icon="male-female-outline"
-              label="Gender"
+            <Block
+              label="GENDER"
               value={animal.gender || "—"}
+              icon="male-female-outline"
             />
-            <InfoRow
-              icon="layers-outline"
-              label="Type"
+            <Block
+              label="TYPE"
               value={animal.type || "—"}
+              icon="layers-outline"
             />
-          </View>
-
-          {/* ── Date Info ── */}
-          <SectionHeader title="Dates" icon="calendar-outline" />
-          <View style={s.infoBlock}>
-            <InfoRow
-              icon="gift-outline"
-              label="Date of Birth"
+            <Block
+              label="DATE OF BIRTH"
               value={fmtDate(animal.dob)}
+              icon="gift-outline"
             />
-            <InfoRow
-              icon="cart-outline"
-              label="Purchase Date"
+            <Block
+              label="PURCHASE DATE"
               value={fmtDate(animal.purchase_date)}
+              icon="cart-outline"
             />
-          </View>
-
-          {/* ── Financial Info ── */}
-          <SectionHeader title="Financial" icon="cash-outline" />
-          <View style={s.infoBlock}>
-            <InfoRow
-              icon="cash-outline"
-              label="Purchase Price"
+            <Block
+              label="PURCHASE PRICE"
               value={fmtPrice(animal.purchase_price)}
+              icon="cash-outline"
               highlight
             />
-          </View>
-
-          {/* ── Status ── */}
-          <SectionHeader title="Status" icon="shield-checkmark-outline" />
-          <View style={s.infoBlock}>
-            <InfoRow
-              icon="checkmark-circle-outline"
-              label="Active"
-              value={animal.isActive ? "Yes" : "No"}
+            <Block
+              label="STATUS"
+              value={st.label}
+              sub={animal.isSold ? "Sold" : animal.isActive ? "In herd" : "Not active"}
+              icon="shield-checkmark-outline"
             />
-            <InfoRow
-              icon="storefront-outline"
-              label="Sold"
-              value={animal.isSold ? "Yes" : "No"}
-            />
-          </View>
 
-          {/* ── Notes ── */}
-          {!!animal.notes && (
-            <>
-              <SectionHeader title="Notes" icon="document-text-outline" />
-              <View style={s.notesBox}>
+            {animal.isLeasedIn && (
+              <Block
+                wide
+                label="LEASED IN FROM"
+                value={animal.lessorFarmName || "—"}
+                sub={
+                  animal.leaseEndDate
+                    ? `Until ${fmtDate(animal.leaseEndDate)}`
+                    : animal.leasedLocationLabel
+                }
+                icon="swap-horizontal-outline"
+              />
+            )}
+            {animal.isLeasedOut && (
+              <Block
+                wide
+                label="LEASED OUT TO"
+                value={animal.leasedToFarmName || "—"}
+                sub={
+                  animal.leaseEndDate
+                    ? `Until ${fmtDate(animal.leaseEndDate)}`
+                    : animal.leasedLocationLabel
+                }
+                icon="lock-closed-outline"
+              />
+            )}
+            {!!animal.notes && (
+              <View style={[s.block, s.blockWide]}>
+                <View style={s.blockTop}>
+                  <Text style={s.blockLabel}>NOTES</Text>
+                  <Ionicons name="document-text-outline" size={14} color={C.accent} />
+                </View>
                 <Text style={s.notesText}>{animal.notes}</Text>
               </View>
-            </>
-          )}
-
-          {/* ── Actions ── */}
-          <View style={s.actionRow}>
-            <TouchableOpacity style={s.btnPrimary} activeOpacity={0.8}>
-              <Ionicons name="eye-outline" size={15} color="#fff" />
-              <Text style={s.btnPrimaryText}>View Full Record</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={s.btnOutline} activeOpacity={0.8}>
-              <Ionicons name="create-outline" size={15} color={C.dark} />
-              <Text style={s.btnOutlineText}>Edit</Text>
-            </TouchableOpacity>
+            )}
           </View>
         </View>
       )}
-    </Animated.View>
+    </View>
   );
-}
+});
 
 // ── Main Page
 export default function CowPage() {
   const router = useRouter();
 
-  const [animals, setAnimals] = useCachedScreenState<Animal[]>("screen:(veterinary)/cow:animals", []);
-  const [loading, setLoading] = useState(() => api.getScreenSnapshot("screen:(veterinary)/cow:animals") === undefined);
+  const [animals, setAnimals] = useCachedScreenState<Animal[]>(
+    "screen:(veterinary)/cow:animals",
+    [],
+  );
+  const [loading, setLoading] = useState(
+    () => api.getScreenSnapshot("screen:(veterinary)/cow:animals") === undefined,
+  );
   const [refreshing, setRefreshing] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-
-  const scrollY = useRef(new Animated.Value(0)).current;
-
-  const headerHeight = scrollY.interpolate({
-    inputRange: [0, SCROLL_THRESHOLD],
-    outputRange: [HEADER_EXPANDED, HEADER_COLLAPSED],
-    extrapolate: "clamp",
-  });
-  const statsOpacity = scrollY.interpolate({
-    inputRange: [0, SCROLL_THRESHOLD * 0.55],
-    outputRange: [1, 0],
-    extrapolate: "clamp",
-  });
-  const statsTranslate = scrollY.interpolate({
-    inputRange: [0, SCROLL_THRESHOLD],
-    outputRange: [0, -24],
-    extrapolate: "clamp",
-  });
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<FilterKey>("all");
 
   const loadData = useCallback(async () => {
-    setLoading(api.getScreenSnapshot("screen:(veterinary)/cow:animals") === undefined);
+    setLoading(
+      api.getScreenSnapshot("screen:(veterinary)/cow:animals") === undefined,
+    );
     try {
       const data = await api.vetGetCows();
       setAnimals(Array.isArray(data) ? data : []);
@@ -582,72 +413,128 @@ export default function CowPage() {
     setRefreshing(false);
   }, []);
 
-  const toggleCard = (id: string) =>
-    setExpandedId((prev) => (prev === id ? null : id));
+  const toggleCard = useCallback(
+    (id: string) => setExpandedId((prev) => (prev === id ? null : id)),
+    [],
+  );
 
-  const totalAnimals = animals.length;
-  const activeAnimals = animals.filter((a) => a.isActive && !a.isSold).length;
-  const soldAnimals = animals.filter((a) => a.isSold).length;
+  const handleScanned = (data: string) => {
+    setShowScanner(false);
+    const code = (data || "").trim();
+    if (!code) return;
+    const lower = code.toLowerCase();
+    const match = animals.find(
+      (a) =>
+        (a.tag_number || "").toLowerCase() === lower ||
+        String(a.id).toLowerCase() === lower,
+    );
+    setFilter("all");
+    setQuery(match ? match.tag_number : code);
+    if (match) setExpandedId(match.id);
+  };
+
+  // counts
+  const counts = {
+    all: animals.length,
+    active: animals.filter((a) => a.isActive && !a.isSold).length,
+    inactive: animals.filter((a) => !a.isActive && !a.isSold).length,
+    sold: animals.filter((a) => a.isSold).length,
+  };
+
+  const FILTERS = [
+    { key: "all" as FilterKey, label: "All Herd", dot: null as string | null },
+    { key: "active" as FilterKey, label: "Active", dot: "#16a34a" },
+    { key: "inactive" as FilterKey, label: "Inactive", dot: "#d97706" },
+    { key: "sold" as FilterKey, label: "Sold", dot: "#dc2626" },
+  ];
+
+  const q = query.trim().toLowerCase();
+  const visible = animals.filter((a) => {
+    if (filter === "active" && !(a.isActive && !a.isSold)) return false;
+    if (filter === "inactive" && !(!a.isActive && !a.isSold)) return false;
+    if (filter === "sold" && !a.isSold) return false;
+    if (!q) return true;
+    return (
+      (a.tag_number || "").toLowerCase().includes(q) ||
+      (a.name || "").toLowerCase().includes(q) ||
+      (a.breed || "").toLowerCase().includes(q)
+    );
+  });
+
+  const syncing = loading || refreshing;
 
   return (
     <View style={s.screen}>
-      <StatusBar barStyle="light-content" backgroundColor={C.dark} />
+      <StatusBar barStyle="dark-content" backgroundColor={C.bg} />
 
-      {/* ── Collapsing Header ── */}
-      <Animated.View style={[s.header, { height: headerHeight }]}>
-        <LinearGradient
-          colors={["#BB6B3F", "#8B6854"]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={StyleSheet.absoluteFill}
-        />
-        <View style={s.headerGlow} pointerEvents="none" />
-        <View style={s.headerGlow2} pointerEvents="none" />
-
-        {/* Top row */}
-        <View style={s.headerTopRow}>
-          <TouchableOpacity style={s.iconBtn} onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={20} color="#fff" />
-          </TouchableOpacity>
-          <Text style={s.headerTitle}>Animals</Text>
+      {/* ── Top: search + scan ── */}
+      <View style={s.top}>
+        <View style={s.searchRow}>
           <TouchableOpacity
-            style={s.iconBtn}
-            onPress={() => setShowScanner(true)}
+            style={s.backBtn}
+            onPress={() => router.back()}
+            activeOpacity={0.8}
           >
-            <Ionicons name="qr-code-outline" size={20} color="#fff" />
+            <Ionicons name="arrow-back" size={20} color={C.text} />
+          </TouchableOpacity>
+
+          <View style={s.searchBox}>
+            <Ionicons name="search-outline" size={18} color={C.textLight} />
+            <TextInput
+              style={s.searchInput}
+              placeholder="Search Tag, Cow Name, Breed"
+              placeholderTextColor={C.textLight}
+              value={query}
+              onChangeText={setQuery}
+              autoCorrect={false}
+            />
+            {!!query && (
+              <TouchableOpacity onPress={() => setQuery("")}>
+                <Ionicons name="close-circle" size={17} color={C.textLight} />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          <TouchableOpacity
+            style={s.scanBtn}
+            onPress={() => setShowScanner(true)}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="qr-code-outline" size={17} color="#fff" />
+            <Text style={s.scanText}>Scan</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Stats — fade on scroll */}
-        <Animated.View
-          style={[
-            s.statsStrip,
-            {
-              opacity: statsOpacity,
-              transform: [{ translateY: statsTranslate }],
-            },
-          ]}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={s.filterRow}
         >
-          <View style={s.statItem}>
-            <Text style={s.statValue}>{totalAnimals}</Text>
-            <Text style={s.statLabel}>Total</Text>
-          </View>
-          <View style={s.statDivider} />
-          <View style={s.statItem}>
-            <Text style={[s.statValue, { color: "#86efac" }]}>
-              {activeAnimals}
-            </Text>
-            <Text style={s.statLabel}>Active</Text>
-          </View>
-          <View style={s.statDivider} />
-          <View style={s.statItem}>
-            <Text style={[s.statValue, { color: "#fca5a5" }]}>
-              {soldAnimals}
-            </Text>
-            <Text style={s.statLabel}>Sold</Text>
-          </View>
-        </Animated.View>
-      </Animated.View>
+          {FILTERS.map((f) => {
+            const active = filter === f.key;
+            return (
+              <TouchableOpacity
+                key={f.key}
+                style={[s.filterChip, active && s.filterChipActive]}
+                onPress={() => setFilter(f.key)}
+                activeOpacity={0.85}
+              >
+                {!!f.dot && !active && (
+                  <View style={[s.filterDot, { backgroundColor: f.dot }]} />
+                )}
+                <Text style={[s.filterText, active && { color: "#fff" }]}>
+                  {f.label}
+                </Text>
+                <View style={[s.filterCount, active && s.filterCountActive]}>
+                  <Text style={[s.filterCountText, active && { color: C.text }]}>
+                    {counts[f.key]}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
 
       {/* ── Content ── */}
       {loading ? (
@@ -655,33 +542,51 @@ export default function CowPage() {
           <ActivityIndicator size="large" color={C.primary} />
           <Text style={s.loadingText}>Loading animals...</Text>
         </View>
-      ) : animals.length === 0 ? (
-        <View style={s.centered}>
-          <View style={s.emptyIconBox}>
-            <Ionicons name="paw-outline" size={34} color={C.textLight} />
-          </View>
-          <Text style={s.emptyTitle}>No Animals Found</Text>
-          <Text style={s.emptySubtitle}>Pull down to refresh</Text>
-        </View>
       ) : (
-        <Animated.FlatList
-          data={animals}
+        <FlatList
+          data={visible}
+          extraData={expandedId}
           keyExtractor={(a) => a.id}
-          renderItem={({ item, index }) => (
+          removeClippedSubviews={false}
+          initialNumToRender={8}
+          renderItem={({ item }) => (
             <AnimalCard
               animal={item}
-              index={index}
               expanded={expandedId === item.id}
               onToggle={toggleCard}
             />
           )}
+          ListHeaderComponent={
+            <View style={s.listHead}>
+              <Text style={s.listTitle}>Animals</Text>
+              <View style={s.syncPill}>
+                <Ionicons
+                  name={syncing ? "sync-outline" : "checkmark-circle-outline"}
+                  size={13}
+                  color={C.dark}
+                />
+                <Text style={s.syncText}>
+                  {syncing ? "Syncing..." : `${visible.length} shown`}
+                </Text>
+              </View>
+            </View>
+          }
+          ListEmptyComponent={
+            <View style={s.emptyWrap}>
+              <View style={s.emptyIconBox}>
+                <Ionicons name="paw-outline" size={34} color={C.textLight} />
+              </View>
+              <Text style={s.emptyTitle}>No Animals Found</Text>
+              <Text style={s.emptySubtitle}>
+                {q || filter !== "all"
+                  ? "Try a different search or filter"
+                  : "Pull down to refresh"}
+              </Text>
+            </View>
+          }
           contentContainerStyle={s.listContent}
           showsVerticalScrollIndicator={false}
-          onScroll={Animated.event(
-            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-            { useNativeDriver: false },
-          )}
-          scrollEventThrottle={16}
+          keyboardShouldPersistTaps="handled"
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -699,13 +604,7 @@ export default function CowPage() {
         <Scanner
           title="Scan Animal Tag"
           subtitle="Scan the QR code on animal's ear tag"
-          onScanned={(data: string) => {
-            setShowScanner(false);
-            router.push({
-              pathname: "/(veterinary)/scanner-result",
-              params: { data },
-            } as any);
-          }}
+          onScanned={handleScanned}
           onClose={() => setShowScanner(false)}
         />
       </Modal>
@@ -717,80 +616,99 @@ export default function CowPage() {
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: C.bg },
 
-  // Header
-  header: {
+  // Top
+  top: {
+    backgroundColor: C.bg,
     paddingTop: IS_IOS ? 54 : STATUS_BAR_HEIGHT + 12,
-    paddingHorizontal: 20,
-    overflow: "hidden",
-    zIndex: 10,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F5E6D8",
   },
-  headerGlow: {
-    position: "absolute",
-    top: -40,
-    right: -40,
-    width: 160,
-    height: 160,
-    borderRadius: 80,
-    backgroundColor: C.primary,
-    opacity: 0.25,
-  },
-  headerGlow2: {
-    position: "absolute",
-    bottom: -20,
-    left: -20,
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: "#fff",
-    opacity: 0.06,
-  },
-  headerTopRow: {
+  searchRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 14,
+    gap: 8,
+    paddingHorizontal: 14,
   },
-  iconBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: "rgba(255,255,255,0.15)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.25)",
+  backBtn: {
+    width: 40,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: C.card,
     alignItems: "center",
     justifyContent: "center",
   },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#fff",
-    letterSpacing: 0.4,
-    fontFamily: Platform.OS === "ios" ? "Georgia" : "serif",
-  },
-  statsStrip: {
+  searchBox: {
+    flex: 1,
     flexDirection: "row",
-    backgroundColor: "rgba(0,0,0,0.18)",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: C.white,
     borderRadius: 14,
-    overflow: "hidden",
+    borderWidth: 1.5,
+    borderColor: C.border,
+    paddingHorizontal: 12,
+    height: 44,
   },
-  statItem: { flex: 1, alignItems: "center", paddingVertical: 10 },
-  statDivider: {
-    width: 1,
-    backgroundColor: "rgba(255,255,255,0.15)",
-    marginVertical: 8,
+  searchInput: { flex: 1, fontSize: 13, color: C.text, paddingVertical: 0 },
+  scanBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: C.text,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    height: 44,
   },
-  statValue: { fontSize: 17, fontWeight: "800", color: "#fff" },
-  statLabel: {
-    fontSize: 10,
-    color: "rgba(255,255,255,0.55)",
-    marginTop: 2,
-    fontWeight: "600",
-    letterSpacing: 0.5,
-    textTransform: "uppercase",
+  scanText: { color: "#fff", fontSize: 13, fontWeight: "800" },
+
+  // Filters
+  filterRow: { paddingHorizontal: 14, paddingTop: 12, gap: 8 },
+  filterChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: C.white,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: C.border,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
   },
+  filterChipActive: { backgroundColor: C.text, borderColor: C.text },
+  filterDot: { width: 7, height: 7, borderRadius: 3.5 },
+  filterText: { fontSize: 12, fontWeight: "700", color: C.accent },
+  filterCount: {
+    backgroundColor: C.card,
+    borderRadius: 9,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    minWidth: 20,
+    alignItems: "center",
+  },
+  filterCountActive: { backgroundColor: C.primary },
+  filterCountText: { fontSize: 10, fontWeight: "800", color: C.dark },
 
   // List
-  listContent: { padding: 14 },
+  listContent: { paddingHorizontal: 14, paddingTop: 6 },
+  listHead: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 12,
+  },
+  listTitle: { fontSize: 20, fontWeight: "800", color: C.text },
+  syncPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: C.card,
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  syncText: { fontSize: 11, fontWeight: "700", color: C.dark },
+
   centered: {
     flex: 1,
     alignItems: "center",
@@ -798,6 +716,7 @@ const s = StyleSheet.create({
     gap: 12,
   },
   loadingText: { fontSize: 14, color: C.textMuted },
+  emptyWrap: { alignItems: "center", paddingTop: 60, gap: 10 },
   emptyIconBox: {
     width: 72,
     height: 72,
@@ -806,199 +725,111 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1.5,
-    borderColor: "#EDD8C4",
+    borderColor: C.border,
   },
   emptyTitle: { fontSize: 17, fontWeight: "800", color: C.text },
   emptySubtitle: { fontSize: 13, color: C.textMuted, textAlign: "center" },
 
-  // Card shell
+  // Card: constant border width, no elevation, no clipping
   card: {
-    backgroundColor: "#fff",
-    borderRadius: 20,
+    backgroundColor: C.white,
+    borderRadius: 18,
     marginBottom: 12,
     borderWidth: 1.5,
-    borderColor: "#EDD8C4",
-    overflow: "hidden",
+    borderColor: C.border,
   },
   cardExpanded: {
     borderColor: C.primary,
-    shadowColor: C.dark,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.18,
-    shadowRadius: 14,
-    elevation: 8,
   },
-
-  // Card header row
   cardHeader: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 14,
+    padding: 12,
     gap: 12,
   },
-  cardInfo: { flex: 1, gap: 5, minWidth: 0 },
-  nameRow: {
+  avatarBadge: {
+    position: "absolute",
+    right: -4,
+    bottom: -4,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: C.white,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cardInfo: { flex: 1, gap: 4, minWidth: 0 },
+  nameRow: { flexDirection: "row", alignItems: "baseline", gap: 6 },
+  cowName: { fontSize: 17, fontWeight: "800", color: C.text, flexShrink: 1 },
+  cowTag: { fontSize: 14, fontWeight: "600", color: C.textLight },
+  breedText: { fontSize: 12, color: C.textMuted, fontWeight: "500" },
+  metaRow: { flexDirection: "row", flexWrap: "wrap", gap: 5, marginTop: 2 },
+  tagPill: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 7,
-    flexWrap: "wrap",
-  },
-  cowName: { fontSize: 15, fontWeight: "700", color: C.text, flexShrink: 1 },
-  tagPill: {
-    backgroundColor: C.card,
-    borderRadius: 8,
+    gap: 5,
+    backgroundColor: C.text,
+    borderRadius: 7,
     paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderWidth: 1,
-    borderColor: "#EDD8C4",
+    paddingVertical: 3,
   },
-  tagPillText: {
-    fontSize: 11,
+  tagPillLabel: {
+    fontSize: 9,
     fontWeight: "800",
-    color: C.dark,
-    letterSpacing: 0.5,
+    color: C.primary,
+    letterSpacing: 0.6,
   },
-  metaRow: { flexDirection: "row", flexWrap: "wrap", gap: 5 },
+  tagPillValue: { fontSize: 11, fontWeight: "700", color: "#fff" },
   chip: {
     flexDirection: "row",
     alignItems: "center",
     gap: 3,
     backgroundColor: C.bg,
-    borderRadius: 8,
+    borderRadius: 7,
     paddingHorizontal: 7,
     paddingVertical: 3,
     borderWidth: 1,
-    borderColor: "#EDD8C4",
+    borderColor: C.border,
   },
   chipText: { fontSize: 11, fontWeight: "600", color: C.accent },
 
-  cardRight: { alignItems: "flex-end", gap: 6 },
+  cardRight: { alignItems: "flex-end", gap: 8, alignSelf: "flex-start" },
   statusBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    borderRadius: 20,
-    paddingHorizontal: 10,
+    borderRadius: 10,
+    paddingHorizontal: 9,
     paddingVertical: 4,
   },
-  statusDot: { width: 6, height: 6, borderRadius: 3 },
-  statusText: { fontSize: 11, fontWeight: "700" },
+  statusText: { fontSize: 10, fontWeight: "800" },
 
   // Expanded body
-  cardBody: { paddingHorizontal: 14, paddingBottom: 16 },
-  bodyDivider: {
-    height: 1.5,
-    backgroundColor: C.card,
-    marginBottom: 14,
-    borderRadius: 1,
-  },
-
-  // Identity banner
-  identityBanner: {
-    flexDirection: "row",
-    gap: 14,
-    alignItems: "center",
+  cardBody: { paddingHorizontal: 12, paddingBottom: 14 },
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  block: {
+    flexBasis: "47%",
+    flexGrow: 1,
     backgroundColor: C.bg,
     borderRadius: 14,
-    padding: 14,
-    marginBottom: 16,
     borderWidth: 1,
-    borderColor: "#EDD8C4",
+    borderColor: C.border,
+    padding: 12,
   },
-  identityInfo: { flex: 1 },
-  identityName: { fontSize: 19, fontWeight: "800", color: C.text },
-  identityBreed: { fontSize: 13, color: C.textMuted, marginTop: 2 },
-
-  // Section header
-  sectionHeader: {
+  blockWide: { flexBasis: "100%" },
+  blockTop: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    marginBottom: 8,
-    marginTop: 4,
+    justifyContent: "space-between",
+    marginBottom: 6,
   },
-  sectionTitle: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: C.accent,
-    textTransform: "uppercase",
+  blockLabel: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: C.textMuted,
     letterSpacing: 0.8,
   },
-
-  // Info block + row
-  infoBlock: {
-    backgroundColor: C.bg,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#EDD8C4",
-    overflow: "hidden",
-    marginBottom: 14,
-  },
-  infoRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: "#EDD8C4",
-    gap: 10,
-  },
-  infoIconWrap: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    backgroundColor: C.card,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  infoLabel: {
-    flex: 1,
-    fontSize: 13,
-    color: C.textMuted,
-    fontWeight: "500",
-  },
-  infoValue: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: C.text,
-    textAlign: "right",
-    maxWidth: "50%",
-  },
-
-  // Notes
-  notesBox: {
-    backgroundColor: C.card,
-    borderRadius: 14,
-    padding: 13,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: "#EDD8C4",
-  },
-  notesText: { fontSize: 13, color: C.textMuted, lineHeight: 20 },
-
-  // Actions
-  actionRow: { flexDirection: "row", gap: 10 },
-  btnPrimary: {
-    flex: 1,
-    backgroundColor: C.primary,
-    borderRadius: 12,
-    paddingVertical: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-  },
-  btnPrimaryText: { fontSize: 13, fontWeight: "700", color: "#fff" },
-  btnOutline: {
-    flex: 1,
-    borderRadius: 12,
-    paddingVertical: 11,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    borderWidth: 1.5,
-    borderColor: C.primary,
-  },
-  btnOutlineText: { fontSize: 13, fontWeight: "700", color: C.dark },
+  blockValueRow: { flexDirection: "row", alignItems: "baseline", gap: 4 },
+  blockValue: { fontSize: 20, fontWeight: "800", color: C.text, flexShrink: 1 },
+  blockUnit: { fontSize: 12, fontWeight: "600", color: C.textLight },
+  blockSub: { fontSize: 11, color: C.accent, fontWeight: "600", marginTop: 3 },
+  notesText: { fontSize: 13, color: C.textLight === "" ? "" : C.textMuted, lineHeight: 19 },
 });
