@@ -869,6 +869,7 @@ class ApiService {
       phone?: string;
       address?: any;
       location?: string;
+      profile_image?: string; 
     }>("/auth/assigned-admin");
   }
 

@@ -20,6 +20,7 @@ import {
   LayoutAnimation,
   Alert,
   FlatList,
+  Image,
 } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -45,6 +46,8 @@ interface OrderItem {
   quantity: number;
   price: number;
   amount: number;
+  product_image?: string;
+  image_type?: string;
 }
 
 interface Order {
@@ -71,10 +74,16 @@ interface Order {
   payment_method?: string;
   payment_status?: string;
   razorpay_payment_id?: string;
+  admin_profile_image?: string;
 }
 
 interface ProductMap {
   [productId: string]: { name: string; unit: string };
+}
+
+interface AdminMap {
+  // ← ADD THIS
+  [adminId: string]: { name?: string; profile_image?: string };
 }
 
 async function saveAndShareInvoice(payload: {
@@ -196,6 +205,80 @@ function getPaymentLabel(method?: string): string {
       return "Payment";
   }
 }
+
+function getProductImage(order: Order): string | undefined {
+  const img = order.items?.[0]?.product_image;
+  const type = order.items?.[0]?.image_type;
+  if (!img) return undefined;
+  if (img.startsWith("data:") || img.startsWith("http")) return img;
+  return type === "base64" ? `data:image/jpeg;base64,${img}` : img;
+}
+
+function ProductThumb({
+  uri,
+  meta,
+  extra,
+}: {
+  uri?: string;
+  meta: { color: string; bg: string; icon: string };
+  extra: number;
+}) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [uri]);
+  return (
+    <View style={th.wrap}>
+      {uri && !failed ? (
+        <Image
+          source={{ uri }}
+          style={th.img}
+          resizeMode="cover"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <View style={[th.img, th.fallback, { backgroundColor: meta.bg }]}>
+          <Ionicons name={meta.icon as any} size={26} color={meta.color} />
+        </View>
+      )}
+      <View style={[th.statusDot, { backgroundColor: meta.color }]}>
+        <Ionicons name={meta.icon as any} size={10} color="#fff" />
+      </View>
+      {extra > 0 && (
+        <View style={th.more}>
+          <Text style={th.moreTxt}>+{extra}</Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+const th = StyleSheet.create({
+  wrap: { width: 64, height: 64 },
+  img: { width: 64, height: 64, borderRadius: 14, backgroundColor: "#F3F4F6" },
+  fallback: { justifyContent: "center", alignItems: "center" },
+  statusDot: {
+    position: "absolute",
+    right: -4,
+    bottom: -4,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: "#fff",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  more: {
+    position: "absolute",
+    left: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.65)",
+    borderTopRightRadius: 8,
+    borderBottomLeftRadius: 14,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  moreTxt: { color: "#fff", fontSize: 10, fontWeight: "800" },
+});
 
 // ─── Delivery badge ───────────────────────────────────────────────────────────
 
@@ -791,6 +874,7 @@ function OrderCard({
   order,
   index,
   productMap,
+  adminMap,
   onCancelPress,
   onDownloadInvoice,
   downloadingInvoice,
@@ -798,6 +882,7 @@ function OrderCard({
   order: Order;
   index: number;
   productMap: ProductMap;
+  adminMap: AdminMap;
   onCancelPress: (order: Order) => void;
   onDownloadInvoice: (order: Order) => void;
   downloadingInvoice?: boolean;
@@ -867,9 +952,12 @@ function OrderCard({
   const isCancelled = ["cancelled", "skipped"].includes(order.status);
   const productName = getProductName(order, productMap);
   const totalQty = getTotalQty(order);
+  const imageUri = getProductImage(order);
+  const extraCount = Math.max(0, (order.items?.length || 0) - 1);
   const adminName =
     order.admin_name ||
     (order.admin_id ? `Store ${order.admin_id.slice(-4)}` : "");
+  const adminInfo = order.admin_id ? adminMap[order.admin_id] : undefined;
   const pattern =
     order.pattern === "buy_once" ? "One-time" : (order.pattern ?? "");
   const chevronRot = chevron.interpolate({
@@ -885,42 +973,43 @@ function OrderCard({
         { opacity, transform: [{ translateY }, { scale: cardScale }] },
       ]}
     >
-      <View style={[cd.stripe, { backgroundColor: meta.color }]} />
-
       <TouchableOpacity style={cd.top} onPress={toggle} activeOpacity={0.88}>
-        <View style={[cd.iconBox, { backgroundColor: meta.bg }]}>
-          <Ionicons name={meta.icon as any} size={20} color={meta.color} />
-        </View>
+        <ProductThumb uri={imageUri} meta={meta} extra={extraCount} />
 
-        <View style={{ flex: 1, marginLeft: 12 }}>
+        <View style={{ flex: 1, marginLeft: 14 }}>
           <Text style={cd.productName} numberOfLines={1}>
             {productName}
           </Text>
-          <View style={cd.metaRow}>
-            <Text style={cd.dateText}>{formatDate(order.delivery_date)}</Text>
-            {badge && (
-              <>
-                <View style={cd.dotSep} />
-                <DeliveryBadgeView badge={badge} />
-              </>
-            )}
-          </View>
-          <View
-            style={[
-              cd.statusBadge,
-              { backgroundColor: meta.bg, borderColor: meta.color + "40" },
-            ]}
-          >
-            <View style={[cd.statusDot, { backgroundColor: meta.color }]} />
-            <Text style={[cd.statusTxt, { color: meta.color }]}>
-              {meta.label}
-            </Text>
+          <Text style={cd.subLine} numberOfLines={1}>
+            {totalQty} unit{totalQty !== 1 ? "s" : ""} ·{" "}
+            {formatDate(order.delivery_date)}
+          </Text>
+          <View style={cd.badgeRow}>
+            <View
+              style={[
+                cd.statusBadge,
+                { backgroundColor: meta.bg, borderColor: meta.color + "40" },
+              ]}
+            >
+              <View style={[cd.statusDot, { backgroundColor: meta.color }]} />
+              <Text style={[cd.statusTxt, { color: meta.color }]}>
+                {meta.label}
+              </Text>
+            </View>
+            {badge && <DeliveryBadgeView badge={badge} />}
           </View>
         </View>
 
-        <View style={{ alignItems: "flex-end", gap: 6 }}>
+        <View
+          style={{
+            alignItems: "flex-end",
+            justifyContent: "space-between",
+            alignSelf: "stretch",
+            paddingVertical: 2,
+          }}
+        >
           <Text style={cd.amount}>₹{order.total_amount?.toFixed(2)}</Text>
-          {order.delivery_otp && isActive && (
+          {order.delivery_otp && isActive ? (
             <View
               style={[
                 cd.otpPill,
@@ -932,13 +1021,15 @@ function OrderCard({
             >
               <Ionicons
                 name="lock-closed-outline"
-                size={9}
+                size={8}
                 color={Colors.primary}
               />
               <Text style={[cd.otpPillTxt, { color: Colors.primary }]}>
                 {order.delivery_otp}
               </Text>
             </View>
+          ) : (
+            <View />
           )}
           <Animated.View style={{ transform: [{ rotate: chevronRot }] }}>
             <Ionicons name="chevron-down" size={17} color="#C4C4C4" />
@@ -1042,7 +1133,19 @@ function OrderCard({
           {adminName !== "" && (
             <View style={cd.storeRow}>
               <View style={cd.storeIcon}>
-                <Ionicons name="storefront-outline" size={14} color="#6366F1" />
+                {adminInfo?.profile_image ? (
+                  <Image
+                    source={{ uri: adminInfo.profile_image }}
+                    style={cd.storeImg}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <Ionicons
+                    name="storefront-outline"
+                    size={14}
+                    color="#6366F1"
+                  />
+                )}
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={cd.storeLabel}>Fulfilled by</Text>
@@ -1058,7 +1161,6 @@ function OrderCard({
               )}
             </View>
           )}
-
           {order.delivery_partner_name && (
             <View style={cd.riderRow}>
               <View style={cd.riderIcon}>
@@ -1130,11 +1232,23 @@ const cd = StyleSheet.create({
     elevation: 3,
   },
   stripe: { height: 3 },
+  subLine: {
+    fontSize: 12,
+    color: "#6B7280",
+    fontWeight: "600",
+    marginBottom: 6,
+  },
+  badgeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    flexWrap: "wrap",
+  },
   top: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingVertical: 14,
   },
   iconBox: {
     width: 42,
@@ -1175,13 +1289,13 @@ const cd = StyleSheet.create({
   otpPill: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    borderWidth: 1.5,
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    gap: 3,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
   },
-  otpPillTxt: { fontSize: 14, fontWeight: "900", letterSpacing: 3 },
+  otpPillTxt: { fontSize: 11, fontWeight: "800", letterSpacing: 1 },
   divider: { height: 1, backgroundColor: "#F5F5F5", marginHorizontal: 14 },
   expanded: { paddingHorizontal: 14, paddingBottom: 12, paddingTop: 8 },
   sectionLabel: {
@@ -1237,7 +1351,9 @@ const cd = StyleSheet.create({
     backgroundColor: "#EDE9FE",
     justifyContent: "center",
     alignItems: "center",
+    overflow: "hidden", // add this line
   },
+  storeImg: { width: 32, height: 32, borderRadius: 10 }, // add this
   storeLabel: {
     fontSize: 9,
     color: "#9CA3AF",
@@ -1784,11 +1900,40 @@ const em = StyleSheet.create({
 
 export default function OrdersScreen() {
   const isFocused = useIsFocused();
-  const [loading, setLoading] = useState(() => !api.getScreenSnapshot("customer-orders"));
+  const [loading, setLoading] = useState(
+    () => !api.getScreenSnapshot("customer-orders"),
+  );
   const [refreshing, setRefreshing] = useState(false);
-  const [orders, setOrders] = useState<Order[]>(() => api.getScreenSnapshot<Order[]>("customer-orders") || []);
+  const [orders, setOrders] = useState<Order[]>(
+    () => api.getScreenSnapshot<Order[]>("customer-orders") || [],
+  );
   const [search, setSearch] = useState("");
-  const [productMap, setProductMap] = useState<ProductMap>(() => api.getScreenSnapshot<ProductMap>("customer-order-products") || {});
+  const [productMap, setProductMap] = useState<ProductMap>(
+    () => api.getScreenSnapshot<ProductMap>("customer-order-products") || {},
+  );
+
+  const [adminMap, setAdminMap] = useState<AdminMap>(
+    () => api.getScreenSnapshot<AdminMap>("customer-order-admins") || {},
+  );
+
+const loadAdminMap = useCallback(async () => {
+  try {
+    const admins = await api.getAdmins();
+    const map: AdminMap = {};
+    for (const a of admins) {
+      if (a.id || a.admin_id) {
+        const id = a.id || a.admin_id;
+        map[id] = { name: a.name, profile_image: a.profile_image };
+      }
+    }
+    api.setScreenSnapshot("customer-order-admins", map);
+    setAdminMap((prev) =>
+      JSON.stringify(prev) === JSON.stringify(map) ? prev : map,
+    );
+  } catch (e) {
+  }
+}, []);
+
   const [cancelOrder, setCancelOrder] = useState<Order | null>(null);
   const [cancelModal, setCancelModal] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -1828,11 +1973,21 @@ export default function OrdersScreen() {
         if (p.id) map[p.id] = { name: p.name, unit: p.unit ?? "unit" };
       }
       api.setScreenSnapshot("customer-order-products", map);
-      setProductMap(prev => JSON.stringify(prev) === JSON.stringify(map) ? prev : map);
+      setProductMap((prev) =>
+        JSON.stringify(prev) === JSON.stringify(map) ? prev : map,
+      );
     } catch {
       /* non-fatal */
     }
   }, []);
+
+  const sig = (list: Order[]) =>
+    JSON.stringify(
+      list.map(({ items, ...o }) => ({
+        ...o,
+        items: items?.map(({ product_image, ...i }) => i),
+      })),
+    );
 
   const fetchData = useCallback(async () => {
     if (fetchingOrdersRef.current) return;
@@ -1845,7 +2000,7 @@ export default function OrdersScreen() {
         return tb - ta;
       });
       api.setScreenSnapshot("customer-orders", sorted);
-      setOrders(prev => JSON.stringify(prev) === JSON.stringify(sorted) ? prev : sorted);
+      setOrders((prev) => (sig(prev) === sig(sorted) ? prev : sorted));
     } catch (err) {
       console.warn("Failed to fetch orders:", (err as any)?.message || err);
     } finally {
@@ -1855,13 +2010,14 @@ export default function OrdersScreen() {
     }
   }, []);
 
-  useEffect(() => {
-    if (!isFocused) return;
-    loadProductMap();
-    fetchData();
-    const iv = setInterval(fetchData, 60_000);
-    return () => clearInterval(iv);
-  }, [isFocused, fetchData, loadProductMap]);
+useEffect(() => {
+  if (!isFocused) return;
+  loadProductMap();
+  loadAdminMap();      // ← was missing, add this
+  fetchData();
+  const iv = setInterval(fetchData, 60_000);
+  return () => clearInterval(iv);
+}, [isFocused, fetchData, loadProductMap, loadAdminMap]);   // ← add loadAdminMap here too
 
   const onRefresh = () => {
     api.refreshLists();
@@ -2048,6 +2204,7 @@ export default function OrdersScreen() {
               order={item.order}
               index={item.sectionIndex}
               productMap={productMap}
+              adminMap={adminMap}
               onCancelPress={handleCancelPress}
               onDownloadInvoice={handleDownloadInvoice}
               downloadingInvoice={invoiceLoadingId === item.order.id}

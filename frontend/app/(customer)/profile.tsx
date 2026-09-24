@@ -31,6 +31,8 @@ import {
 } from "../../src/utils/address";
 
 const { width } = Dimensions.get("window");
+const COVER_URL =
+  "https://panditjeeweb02.blob.core.windows.net/banners/gausatv-logo.jpeg";
 
 // ─── Custom Alert ─────────────────────────────────────────────────────────────
 
@@ -525,6 +527,7 @@ export default function ProfileScreen() {
             location:
               info.location ||
               (typeof info.address === "string" ? info.address : undefined),
+            image: info.profile_image || null,
           }),
         )
         .catch(() => { });
@@ -669,7 +672,6 @@ export default function ProfileScreen() {
         } as any);
       }
 
-      // connectGaushala doesn't return phone/location — fetch full details separately
       setGaushalaInfo({ name: result.admin_name });
       api
         .getAssignedAdmin()
@@ -680,6 +682,7 @@ export default function ProfileScreen() {
             location:
               info.location ||
               (typeof info.address === "string" ? info.address : undefined),
+            image: info.profile_image || null,
           }),
         )
         .catch(() => { });
@@ -1034,6 +1037,7 @@ export default function ProfileScreen() {
         contentContainerStyle={{ paddingBottom: 40 }}
       >
         {/* ── Hero ── */}
+        {/* ── Hero ── */}
         <View style={styles.hero}>
           <HeroMilkBackground />
           <TouchableOpacity
@@ -1061,111 +1065,45 @@ export default function ProfileScreen() {
             <View style={styles.cameraBadge}>
               <Ionicons
                 name={uploadingImage ? "hourglass-outline" : "camera"}
-                size={12}
+                size={10}
                 color="#fff"
               />
             </View>
           </TouchableOpacity>
-          <Text style={styles.userName}>{user?.name}</Text>
-          <Text style={styles.userEmail}>{user?.email}</Text>
-          {user?.phone && (
-            <View style={styles.phoneBadge}>
-              <Ionicons name="call-outline" size={11} color={Colors.primary} />
-              <Text style={styles.phoneText}>{user.phone}</Text>
-            </View>
-          )}
-          <TouchableOpacity
-            style={styles.editBtn}
-            onPress={() => router.push("/(customer)/edit-profile" as any)}
-          >
-            <Ionicons name="create-outline" size={15} color="#fff" />
-            <Text style={styles.editBtnText}>Edit Profile</Text>
-          </TouchableOpacity>
-        </View>
 
-        {/* ── Delivery Address ── */}
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <View style={[styles.cardIconBox, { backgroundColor: "#EEF4FF" }]}>
-              <Ionicons name="location" size={17} color="#4F7EFF" />
-            </View>
-            <Text style={styles.cardTitle}>Delivery Address</Text>
-            <TouchableOpacity
-              style={styles.addIconBtn}
-              onPress={() => router.push("/address-book" as any)}
-            >
-              <Ionicons
-                name="chevron-forward"
-                size={17}
-                color={Colors.primary}
-              />
-            </TouchableOpacity>
-          </View>
-          {addressBook.length > 0 ? (
-            <View style={styles.addressList}>
-              {addressBook.map((address) => (
-                <TouchableOpacity
-                  key={address.id}
-                  style={styles.savedAddressCard}
-                  activeOpacity={0.85}
-                  onPress={() => router.push("/address-book" as any)}
-                >
-                  <View style={styles.addressTopRow}>
-                    <View style={styles.addressTypeBadge}>
-                      <Ionicons
-                        name={
-                          address?.label === "work"
-                            ? "briefcase-outline"
-                            : address?.label === "other"
-                              ? "location-outline"
-                              : "home-outline"
-                        }
-                        size={13}
-                        color={Colors.primary}
-                      />
-                      <Text style={styles.addressTypeText}>
-                        {String(address?.label || "home").toUpperCase()}
-                      </Text>
-                    </View>
-                    {address?.is_default && (
-                      <View style={styles.defaultBadge}>
-                        <Text style={styles.defaultBadgeText}>Default</Text>
-                      </View>
-                    )}
-                  </View>
-                  <Text style={styles.savedAddressText}>
-                    {formatDeliveryAddress(address)}
-                  </Text>
-                  <Text style={styles.savedAddressAction}>
-                    Tap to manage address
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          ) : (
-            <TouchableOpacity
-              style={styles.emptyAddress}
-              onPress={() =>
-                router.push({
-                  pathname: "/address-book",
-                  params: { addressRequired: "1" },
-                } as any)
-              }
-            >
-              <Ionicons
-                name="add-circle-outline"
-                size={20}
-                color={Colors.primary}
-              />
-              <Text style={styles.emptyAddressText}>
-                {user?.address
-                  ? "Complete delivery address"
-                  : "Add delivery address"}
+          <View style={styles.heroInfo}>
+            <View style={styles.nameRow}>
+              <Text style={styles.userName} numberOfLines={1}>
+                {user?.name}
               </Text>
-            </TouchableOpacity>
-          )}
+              <TouchableOpacity
+                style={styles.editBtn}
+                activeOpacity={0.85}
+                onPress={() => router.push("/(customer)/edit-profile" as any)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons
+                  name="create-outline"
+                  size={16}
+                  color={Colors.primary}
+                />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.userEmail} numberOfLines={1}>
+              {user?.email}
+            </Text>
+            {!!user?.phone && (
+              <View style={styles.phoneRow}>
+                <Ionicons
+                  name="call-outline"
+                  size={11}
+                  color={Colors.primary}
+                />
+                <Text style={styles.phoneText}>{user.phone}</Text>
+              </View>
+            )}
+          </View>
         </View>
-
         {/* ── Vacation Mode (Card visual design untouched) ── */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
@@ -1323,10 +1261,25 @@ export default function ProfileScreen() {
           }
         >
           <View style={styles.cardHeader}>
-            <View style={[styles.cardIconBox, { backgroundColor: "#ECFDF5" }]}>
-              <Ionicons name="business-outline" size={17} color="#16a34a" />
+            <View
+              style={[
+                styles.cardIconBox,
+                { backgroundColor: "#ECFDF5", overflow: "hidden" },
+              ]}
+            >
+              {(user as any)?.admin_id && gaushalaInfo?.image ? (
+                <Image
+                  source={{ uri: gaushalaInfo.image }}
+                  style={{ width: 36, height: 36 }}
+                  resizeMode="cover"
+                />
+              ) : (
+                <Ionicons name="business-outline" size={17} color="#16a34a" />
+              )}
             </View>
-            <Text style={styles.cardTitle}>Connect with Gaushala</Text>
+            {!(user as any)?.admin_id && (
+              <Text style={styles.cardTitle}>Connect with Gaushala</Text>
+            )}
 
             {(user as any)?.admin_id && (
               <TouchableOpacity
@@ -1362,8 +1315,7 @@ export default function ProfileScreen() {
           {(user as any)?.admin_id ? (
             <>
               <Text style={styles.connectText}>
-                {gaushalaInfo?.name ||
-                  "Your account is connected with a nearby gaushala."}
+                Connected with {gaushalaInfo?.name || "your nearby gaushala"}.
               </Text>
               {gaushalaInfo?.location && (
                 <View style={styles.gaushalaMetaRow}>
@@ -1377,8 +1329,8 @@ export default function ProfileScreen() {
           ) : (
             <>
               <Text style={styles.connectText}>
-                Enter your gaushala referral code to see nearby products,
-                content and services.
+                Not connected to any gaushala. Enter a referral code to see
+                nearby products, content and services.
               </Text>
               <View style={styles.connectActionRow}>
                 <Text style={styles.connectActionText}>
@@ -1511,7 +1463,15 @@ export default function ProfileScreen() {
             </View>
             <View style={styles.modalBody}>
               <View style={styles.connectModalIcon}>
-                <Ionicons name="business" size={26} color="#16a34a" />
+                {gaushalaInfo?.image ? (
+                  <Image
+                    source={{ uri: gaushalaInfo.image }}
+                    style={{ width: 58, height: 58, borderRadius: 18 }}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <Ionicons name="business" size={26} color="#16a34a" />
+                )}
               </View>
               <Text style={styles.connectModalText}>
                 Enter the referral code shared by your nearby gaushala.
@@ -1679,117 +1639,88 @@ const styles = StyleSheet.create({
 
   // Hero
   hero: {
+    flexDirection: "row",
     alignItems: "center",
-    paddingTop: 36,
-    paddingBottom: 32,
-    paddingHorizontal: 20,
+    gap: 14,
     backgroundColor: "#FFF9F5",
-    marginBottom: 16,
-    overflow: "hidden",
+    marginHorizontal: 16,
+    marginTop: 10,
+    marginBottom: 14,
+    padding: 16,
+    borderRadius: 22,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
   },
-  heroBg: {
-    position: "absolute",
-    top: -60,
-    left: -60,
-    right: -60,
-    height: 180,
-    backgroundColor: Colors.primary + "0D",
-    borderRadius: 100,
+  cover: {
+    height: 110,
+    marginHorizontal: 12,
+    marginTop: 8,
+    borderRadius: 16,
+    backgroundColor: Colors.primary + "20",
   },
   avatarRing: {
-    width: 94,
-    height: 94,
-    borderRadius: 47,
-    borderWidth: 2.5,
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    borderWidth: 2,
     borderColor: Colors.primary + "35",
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 14,
   },
   avatarClip: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     overflow: "hidden",
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: Colors.primary,
   },
   avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     backgroundColor: Colors.primary,
     justifyContent: "center",
     alignItems: "center",
   },
-  avatarText: { fontSize: 30, fontWeight: "800", color: "#fff" },
-  avatarBadge: {
+  avatarText: { fontSize: 24, fontWeight: "800", color: "#fff" },
+  avatarImage: { width: 64, height: 64, borderRadius: 32 },
+  cameraBadge: {
     position: "absolute",
-    bottom: 4,
-    right: 4,
+    bottom: -2,
+    right: -2,
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: "#22c55e",
-    borderWidth: 2.5,
-    borderColor: "#fff",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  avatarImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-  },
-  cameraBadge: {
-    position: "absolute",
-    bottom: 4,
-    right: 4,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
     backgroundColor: Colors.primary,
-    borderWidth: 2.5,
+    borderWidth: 2,
     borderColor: "#fff",
     justifyContent: "center",
     alignItems: "center",
   },
+  heroInfo: { flex: 1, gap: 3 },
   userName: {
-    fontSize: 22,
+    flex: 1,
+    fontSize: 18,
     fontWeight: "800",
     color: "#111",
-    letterSpacing: -0.5,
+    letterSpacing: -0.3,
   },
-  userEmail: { fontSize: 13, color: "#aaa", marginTop: 3, fontWeight: "400" },
-  phoneBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    backgroundColor: Colors.primary + "10",
-    paddingHorizontal: 11,
-    paddingVertical: 5,
-    borderRadius: 20,
-    marginTop: 10,
-  },
-  phoneText: { fontSize: 12, color: Colors.primary, fontWeight: "600" },
+  userEmail: { fontSize: 12, color: "#6B7280", fontWeight: "500" },
+  phoneText: { fontSize: 12, color: Colors.primary, fontWeight: "700" },
   editBtn: {
-    flexDirection: "row",
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    backgroundColor: Colors.primary + "14",
+    justifyContent: "center",
     alignItems: "center",
-    gap: 6,
-    backgroundColor: Colors.primary,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 22,
-    marginTop: 14,
-    shadowColor: Colors.primary,
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
   },
-  editBtnText: { fontSize: 13, fontWeight: "700", color: "#fff" },
-
+  editBtnText: { fontSize: 14, fontWeight: "700", color: "#fff" },
   // Cards
   card: {
     backgroundColor: "#fff",
@@ -1816,6 +1747,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  nameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  phoneRow: { flexDirection: "row", alignItems: "center", gap: 4 },
   cardTitle: { fontSize: 15, fontWeight: "700", color: "#111", flex: 1 },
   addIconBtn: {
     width: 32,
@@ -2179,6 +2117,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignSelf: "center",
     marginBottom: 12,
+    overflow: "hidden",
   },
   connectModalText: {
     fontSize: 14,
