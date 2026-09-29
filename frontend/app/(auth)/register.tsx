@@ -5,6 +5,7 @@ import {
   StyleSheet,
   ScrollView,
   KeyboardAvoidingView,
+  Keyboard,
   Platform,
   TouchableOpacity,
   TextInput,
@@ -201,11 +202,13 @@ function RegisterOtpCodeModal({
   code,
   phone,
   onClose,
+  onDismiss,
 }: {
   visible: boolean;
   code: string;
   phone: string;
   onClose: () => void;
+  onDismiss: () => void;
 }) {
   return (
     <Modal
@@ -214,6 +217,8 @@ function RegisterOtpCodeModal({
       animationType="fade"
       presentationStyle="overFullScreen"
       statusBarTranslucent
+      onRequestClose={onClose}
+      onDismiss={onDismiss}
     >
       <View style={codeModal.overlay}>
         <View style={codeModal.card}>
@@ -535,6 +540,7 @@ export default function RegisterScreen() {
   const [otpVerified, setOtpVerified] = useState(false);
   const [otpDevCode, setOtpDevCode] = useState("");
   const [otpCodeModalVisible, setOtpCodeModalVisible] = useState(false);
+  const otpPopupClosing = useRef(false);
   const [resendIn, setResendIn] = useState(0);
 
   // ── Referral state — QR code se initialize
@@ -756,15 +762,33 @@ export default function RegisterScreen() {
   }, [otpVerified, step]);
 
   useEffect(() => {
-    if (step !== "otp") return;
+    if (step !== "otp" || otpCodeModalVisible || otpPopupClosing.current) return;
     if (otpFocusTimer.current) clearTimeout(otpFocusTimer.current);
     otpFocusTimer.current = setTimeout(() => otpInputRef.current?.focus(), 250);
     return () => {
       if (otpFocusTimer.current) clearTimeout(otpFocusTimer.current);
     };
-  }, [step]);
+  }, [step, otpCodeModalVisible]);
+
+  const openOtpCode = () => {
+    if (otpPopupClosing.current) return;
+    if (otpFocusTimer.current) clearTimeout(otpFocusTimer.current);
+    Keyboard.dismiss();
+    setOtpCodeModalVisible(true);
+  };
+
+  const onOtpCodeDismissed = () => {
+    otpPopupClosing.current = false;
+    if (step === "otp") focusOtpInput();
+  };
+
+  const closeOtpCode = () => {
+    otpPopupClosing.current = Platform.OS === "ios";
+    setOtpCodeModalVisible(false);
+  };
 
   const focusOtpInput = () => {
+    if (otpCodeModalVisible || otpPopupClosing.current) return;
     otpInputRef.current?.blur();
     if (otpFocusTimer.current) clearTimeout(otpFocusTimer.current);
     otpFocusTimer.current = setTimeout(() => otpInputRef.current?.focus(), 60);
@@ -781,7 +805,7 @@ export default function RegisterScreen() {
       setResendIn(30);
       setOtp("");
       setOtpDevCode(devCode);
-      setOtpCodeModalVisible(!!devCode);
+      if (devCode) openOtpCode();
       showToast(
         isResend
           ? "OTP sent again to your phone"
@@ -790,7 +814,6 @@ export default function RegisterScreen() {
       );
       if (!isResend) {
         goToOtp();
-        setTimeout(() => otpInputRef.current?.focus(), 350);
       }
     } catch (error: any) {
       showToast(
@@ -989,7 +1012,8 @@ export default function RegisterScreen() {
         visible={otpCodeModalVisible}
         code={otpDevCode}
         phone={fullPhone}
-        onClose={() => setOtpCodeModalVisible(false)}
+        onClose={closeOtpCode}
+        onDismiss={onOtpCodeDismissed}
       />
 
       <KeyboardAvoidingView
@@ -999,6 +1023,8 @@ export default function RegisterScreen() {
         <ScrollView
           contentContainerStyle={s.scroll}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
         >
           {/* Header */}
           <LinearGradient
@@ -1241,7 +1267,7 @@ export default function RegisterScreen() {
                   {!!otpDevCode && (
                     <TouchableOpacity
                       style={s.viewCodeBtn}
-                      onPress={() => setOtpCodeModalVisible(true)}
+                      onPress={openOtpCode}
                       activeOpacity={0.85}
                     >
                       <Ionicons name="eye-outline" size={15} color={C.primary} />
