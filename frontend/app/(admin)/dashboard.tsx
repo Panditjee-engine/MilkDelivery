@@ -1230,9 +1230,9 @@ export default function AdminDashboard() {
     total: number;
   }>("screen:(admin)/dashboard:notificationSummary", { unread: 0, read: 0, total: 0 });
   const [modalType, setModalType] = useState<ModalType>(null);
-  const [deliveredProductsExpanded, setDeliveredProductsExpanded] =useState(true);
+  const [deliveredProductsExpanded, setDeliveredProductsExpanded] = useState(true);
   const [feedbackExpanded, setFeedbackExpanded] = useState(true);
-  const [tomorrowQuantityExpanded, setTomorrowQuantityExpanded] =useState(true);
+  const [tomorrowQuantityExpanded, setTomorrowQuantityExpanded] = useState(true);
   const isFocused = useIsFocused();
   const fetchingRef = useRef(false);
 
@@ -1581,7 +1581,7 @@ export default function AdminDashboard() {
           <Ionicons name="chevron-forward" size={18} color={C.dark} />
         </TouchableOpacity>
 
-                 {/* feedback summary card */}
+        {/* feedback summary card */}
         <View style={styles.deliveredProductCard}>
           <TouchableOpacity
             style={styles.deliveredProductHeader}
@@ -1589,8 +1589,8 @@ export default function AdminDashboard() {
             onPress={() => setFeedbackExpanded((value) => !value)}
           >
             <View style={styles.deliveredProductTitleRow}>
-              <View style={[styles.deliveredProductIcon, { backgroundColor: "#F59E0B" }]}>
-                <Ionicons name="star" size={18} color="#fff" />
+              <View style={[styles.deliveredProductIcon, { backgroundColor: "#fae9cb" }]}>
+                <Ionicons name="star" size={18} color="#9e642d" />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.deliveredProductTitle}>Customer Feedback</Text>
@@ -1658,7 +1658,7 @@ export default function AdminDashboard() {
           >
             <View style={styles.deliveredProductTitleRow}>
               <View style={styles.deliveredProductIcon}>
-                <Ionicons name="checkmark-done" size={18} color="#fff" />
+                <Ionicons name="checkmark-done" size={18} color="#814e2b" />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.deliveredProductTitle}>
@@ -1670,16 +1670,10 @@ export default function AdminDashboard() {
               </View>
             </View>
             <View style={styles.deliveredTotalPill}>
-              <Text style={styles.deliveredTotalValue}>
-                {todayDeliveredSummary.deliveredCount}
-              </Text>
-              <Text style={styles.deliveredTotalLabel}>Delivered</Text>
+              <Text style={styles.deliveredTotalValue}>{feedbackSummaries.length}</Text>
+              <Text style={styles.deliveredTotalLabel}>Products</Text>
             </View>
-            <Ionicons
-              name={deliveredProductsExpanded ? "chevron-up" : "chevron-down"}
-              size={17}
-              color="#15803D"
-            />
+            <Ionicons name={feedbackExpanded ? "chevron-up" : "chevron-down"} size={17} color={C.dark} />
           </TouchableOpacity>
 
           {deliveredProductsExpanded ? (
@@ -2547,12 +2541,20 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     padding: 12,
     borderWidth: 1.5,
-    borderColor: "#D9F4DD",
-    shadowColor: "#15803D",
+    borderColor: "#FFE1CC",
+    shadowColor: C.dark,
     shadowOpacity: 0.08,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 4 },
     elevation: 3,
+  },
+  deliveredProductIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 11,
+    backgroundColor: "#fdebd3",
+    alignItems: "center",
+    justifyContent: "center",
   },
   deliveredProductHeader: {
     flexDirection: "row",
@@ -2565,14 +2567,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-  },
-  deliveredProductIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 11,
-    backgroundColor: "#16A34A",
-    alignItems: "center",
-    justifyContent: "center",
   },
   deliveredProductTitle: {
     fontSize: 13,

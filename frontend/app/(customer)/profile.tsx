@@ -142,6 +142,78 @@ function HeroMilkBackground() {
     </View>
   );
 }
+
+// ─── Screen Background ─────────────────────────────────────────────────────
+function ScreenBackground() {
+  const ORANGE = "#FF8E57";
+  const GREEN = "#4CAF50";
+  return (
+    <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+      <Svg
+        width="100%"
+        height="100%"
+        viewBox="0 0 400 800"
+        preserveAspectRatio="xMidYMid slice"
+      >
+        {/* big soft circles */}
+        <Circle cx="380" cy="60" r="130" fill={ORANGE} opacity={0.07} />
+        <Circle cx="-20" cy="420" r="110" fill={GREEN} opacity={0.06} />
+        <Circle cx="400" cy="640" r="120" fill={ORANGE} opacity={0.06} />
+
+        {/* bottom wave */}
+        <Path
+          d="M0 730 Q100 700 200 725 Q300 750 400 715 L400 800 L0 800 Z"
+          fill={GREEN}
+          opacity={0.07}
+        />
+        <Path
+          d="M0 765 Q120 740 220 762 Q320 784 400 752 L400 800 L0 800 Z"
+          fill={ORANGE}
+          opacity={0.08}
+        />
+
+        {/* milk bottle – left */}
+        <G transform="translate(18, 300) rotate(-12)">
+          <Path
+            d="M0 5 h14 v10 l6 8 v50 a6 6 0 0 1 -6 6 h-14 a6 6 0 0 1 -6 -6 v-50 l6 -8 z"
+            fill={ORANGE}
+            opacity={0.13}
+          />
+          <Rect x="2" y="7" width="10" height="8" rx="1.5" fill={ORANGE} opacity={0.2} />
+        </G>
+
+        {/* milk bottle – right */}
+        <G transform="translate(340, 500) rotate(10)">
+          <Path
+            d="M0 5 h14 v10 l6 8 v50 a6 6 0 0 1 -6 6 h-14 a6 6 0 0 1 -6 -6 v-50 l6 -8 z"
+            fill={GREEN}
+            opacity={0.12}
+          />
+          <Rect x="2" y="7" width="10" height="8" rx="1.5" fill={GREEN} opacity={0.18} />
+        </G>
+
+        {/* milk drops */}
+        <Path d="M60 170 q7 12 0 19 a7 7 0 0 1 -7 -19 z" fill={ORANGE} opacity={0.16} />
+        <Path d="M350 250 q6 10 0 16 a6 6 0 0 1 -6 -16 z" fill={GREEN} opacity={0.15} />
+        <Path d="M90 620 q7 12 0 19 a7 7 0 0 1 -7 -19 z" fill={ORANGE} opacity={0.14} />
+        <Path d="M300 700 q6 10 0 16 a6 6 0 0 1 -6 -16 z" fill={GREEN} opacity={0.13} />
+
+        {/* leaves */}
+        <Ellipse cx="40" cy="480" rx="14" ry="6" fill={GREEN} opacity={0.12} transform="rotate(-30 40 480)" />
+        <Ellipse cx="360" cy="380" rx="14" ry="6" fill={GREEN} opacity={0.12} transform="rotate(25 360 380)" />
+        <Ellipse cx="200" cy="580" rx="12" ry="5" fill={ORANGE} opacity={0.1} transform="rotate(-15 200 580)" />
+
+        {/* small dots */}
+        <Circle cx="120" cy="260" r="3" fill={ORANGE} opacity={0.22} />
+        <Circle cx="270" cy="330" r="4" fill={GREEN} opacity={0.2} />
+        <Circle cx="150" cy="450" r="3" fill={GREEN} opacity={0.2} />
+        <Circle cx="320" cy="590" r="3" fill={ORANGE} opacity={0.22} />
+        <Circle cx="70" cy="700" r="4" fill={ORANGE} opacity={0.2} />
+        <Circle cx="250" cy="120" r="3" fill={GREEN} opacity={0.2} />
+      </Svg>
+    </View>
+  );
+}
 function CustomAlert({
   config,
   onDismiss,
@@ -1025,6 +1097,7 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
+      <ScreenBackground />
       <Toast
         visible={toast.visible}
         message={toast.message}
@@ -1036,7 +1109,6 @@ export default function ProfileScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 40 }}
       >
-        {/* ── Hero ── */}
         {/* ── Hero ── */}
         <View style={styles.hero}>
           <HeroMilkBackground />
@@ -1635,7 +1707,7 @@ export default function ProfileScreen() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F4F4F6" },
+  container: { flex: 1, backgroundColor: "#FAF7F3" },
 
   // Hero
   hero: {
