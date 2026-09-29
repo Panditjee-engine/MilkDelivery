@@ -22,6 +22,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { LinearGradient } from "expo-linear-gradient";
 import { api } from "../../src/services/api";
+import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 
 // ── Brand Colors
 const C = {
@@ -491,24 +492,9 @@ const fi = StyleSheet.create({
 });
 
 const ROLES = [
-  {
-    value: "customer" as Role,
-    label: "Customer",
-    emoji: "🛒",
-    desc: "Order essentials",
-  },
-  {
-    value: "delivery_partner" as Role,
-    label: "Delivery",
-    emoji: "🚴",
-    desc: "Earn on your ride",
-  },
-  {
-    value: "admin" as Role,
-    label: "Admin",
-    emoji: "🛡️",
-    desc: "Manage platform",
-  },
+  { value: "customer" as Role, label: "Customer", icon: "cart-outline" as const, desc: "Order essentials" },
+  { value: "delivery_partner" as Role, label: "Delivery", icon: "bicycle-outline" as const, desc: "Earn on your ride" },
+  { value: "admin" as Role, label: "Admin", icon: "shield-checkmark-outline" as const, desc: "Manage Farm" },
 ];
 
 export default function RegisterScreen() {
@@ -992,14 +978,13 @@ export default function RegisterScreen() {
         onClose={() => setOtpCodeModalVisible(false)}
       />
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={{ flex: 1 }}
-      >
-        <ScrollView
-          contentContainerStyle={s.scroll}
-          showsVerticalScrollIndicator={false}
-        >
+<KeyboardAwareScrollView
+  contentContainerStyle={[s.scroll, { paddingBottom: 40 }]}
+  showsVerticalScrollIndicator={false}
+  keyboardShouldPersistTaps="handled"
+  enableOnAndroid
+  extraScrollHeight={20}
+>
           {/* Header */}
           <LinearGradient
             colors={[C.primary, C.accent, "#FFD580"]}
@@ -1364,7 +1349,12 @@ export default function RegisterScreen() {
                         onPress={() => setRole(r.value)}
                         activeOpacity={0.8}
                       >
-                        <Text style={s.roleEmoji}>{r.emoji}</Text>
+                        <Ionicons
+  name={r.icon}
+  size={22}
+  color={active ? C.primary : C.textSub}
+  style={{ marginBottom: 4 }}
+/>
                         <Text
                           style={[s.roleLabel, active && { color: C.primary }]}
                         >
@@ -1616,8 +1606,7 @@ export default function RegisterScreen() {
               <Text style={s.footerLink}>Sign In</Text>
             </TouchableOpacity>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+        </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }
@@ -1838,15 +1827,15 @@ const s = StyleSheet.create({
     color: C.text,
     letterSpacing: 0.8,
   },
-  otpHiddenInput: {
-    position: "absolute",
-    opacity: 0.01,
-    left: 12,
-    right: 12,
-    top: 58,
-    height: 68,
-    color: "transparent",
-  },
+otpHiddenInput: {
+  position: "absolute",
+  opacity: 0.01,
+  left: 12,
+  right: 12,
+  top: 0,
+  height: 58,   // was 58 top + 68 height = overhang past card. Match otpBoxesRow height only.
+  color: "transparent",
+},
   otpFooterRow: {
     flexDirection: "row",
     alignItems: "center",

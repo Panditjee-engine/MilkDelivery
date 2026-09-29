@@ -1279,12 +1279,12 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={["bottom", "left", "right"]}>
-      <StatusBar
-        barStyle="dark-content"
-        backgroundColor="#FFFFFF"
-        translucent={false}
-      />
-      <View style={styles.statusBarPatch} />
+<StatusBar
+  barStyle="dark-content"
+  backgroundColor="#F4F6FA"
+  translucent={false}
+/>
+<View style={styles.statusBarPatch} />
 
       <Toast
         message={toast.message}
@@ -1457,10 +1457,10 @@ export default function LoginScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F4F6FA" },
-  statusBarPatch: {
-    backgroundColor: "#FFFFFF",
-    height: Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0,
-  },
+statusBarPatch: {
+  backgroundColor: "#F4F6FA",
+  height: Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0,
+},
   keyboardView: { flex: 1 },
   scrollContent: { flexGrow: 1, paddingHorizontal: 22, paddingTop: 14, paddingBottom: 16 },
   header: { alignItems: "center", marginTop: 6, marginBottom: 18 },

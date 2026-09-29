@@ -21,6 +21,7 @@ import {
   Alert,
   FlatList,
   Image,
+  Linking,
 } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -883,7 +884,6 @@ function OrderCard({
                 {meta.label}
               </Text>
             </View>
-            {badge && <DeliveryBadgeView badge={badge} />}
           </View>
         </View>
 
@@ -961,6 +961,14 @@ function OrderCard({
             />
             {order.created_at && (
               <DetailCell label="Placed" value={formatTime(order.created_at)} />
+            )}
+            {order.delivery_otp && isActive && (
+              <DetailCell
+                label="Delivery OTP"
+                value={order.delivery_otp}
+                accent
+                mono
+              />
             )}
           </View>
 
@@ -1056,50 +1064,64 @@ function OrderCard({
               <View style={{ flex: 1 }}>
                 <Text style={cd.riderLabel}>Delivery partner</Text>
                 <Text style={cd.riderName}>{order.delivery_partner_name}</Text>
-                {order.delivery_partner_phone && (
+                {/* {order.delivery_partner_phone && (
                   <Text style={cd.riderPhone}>
                     {order.delivery_partner_phone}
                   </Text>
-                )}
+                )} */}
               </View>
-              <View style={cd.riderBadge}>
-                <Text style={cd.riderBadgeText}>Assigned</Text>
-              </View>
+              {order.delivery_partner_phone && (
+                <TouchableOpacity
+                  style={cd.riderCallBtn}
+                  activeOpacity={0.8}
+                  onPress={() =>
+                    Linking.openURL(
+                      `tel:${order.delivery_partner_phone}`,
+                    ).catch(() =>
+                      Alert.alert("Error", "Unable to place the call."),
+                    )
+                  }
+                >
+                  <Ionicons name="call" size={14} color="#fff" />
+                </TouchableOpacity>
+              )}
             </View>
           )}
 
-          {order.delivery_otp && isActive && (
+          {/* {order.delivery_otp && isActive && (
             <OTPBlock otp={order.delivery_otp} />
-          )}
+          )} */}
 
-          <TouchableOpacity
-            style={cd.invoiceBtn}
-            onPress={() => onDownloadInvoice(order)}
-            activeOpacity={0.85}
-            disabled={downloadingInvoice}
-          >
-            <Ionicons
-              name={
-                downloadingInvoice ? "hourglass-outline" : "download-outline"
-              }
-              size={14}
-              color={Colors.primary}
-            />
-            <Text style={cd.invoiceBtnTxt}>
-              {downloadingInvoice ? "Preparing Invoice..." : "Download Invoice"}
-            </Text>
-          </TouchableOpacity>
+<View style={cd.actionRow}>
+  <TouchableOpacity
+    style={[cd.invoiceBtn, isActive && cd.actionBtnHalf]}
+    onPress={() => onDownloadInvoice(order)}
+    activeOpacity={0.85}
+    disabled={downloadingInvoice}
+  >
+    <Ionicons
+      name={
+        downloadingInvoice ? "hourglass-outline" : "download-outline"
+      }
+      size={14}
+      color={Colors.primary}
+    />
+    <Text style={cd.invoiceBtnTxt} numberOfLines={1}>
+      {downloadingInvoice ? "Preparing..." : "Invoice"}
+    </Text>
+  </TouchableOpacity>
 
-          {isActive && (
-            <TouchableOpacity
-              style={cd.cancelBtn}
-              onPress={() => onCancelPress(order)}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="close-circle-outline" size={14} color="#EF4444" />
-              <Text style={cd.cancelBtnTxt}>Cancel Order</Text>
-            </TouchableOpacity>
-          )}
+  {isActive && (
+    <TouchableOpacity
+      style={[cd.cancelBtn, cd.actionBtnHalf]}
+      onPress={() => onCancelPress(order)}
+      activeOpacity={0.8}
+    >
+      <Ionicons name="close-circle-outline" size={14} color="#EF4444" />
+      <Text style={cd.cancelBtnTxt}>Cancel Order</Text>
+    </TouchableOpacity>
+  )}
+</View>
         </View>
       )}
     </Animated.View>
@@ -1117,6 +1139,14 @@ const cd = StyleSheet.create({
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 3 },
     elevation: 3,
+  },
+  riderCallBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: "#2563EB",
+    justifyContent: "center",
+    alignItems: "center",
   },
   stripe: { height: 3 },
   subLine: {
@@ -1300,32 +1330,39 @@ const cd = StyleSheet.create({
     paddingVertical: 4,
   },
   riderBadgeText: { fontSize: 10, fontWeight: "800", color: "#2563EB" },
-  cancelBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    backgroundColor: "#FEF2F2",
-    paddingVertical: 11,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#FECACA",
-    marginTop: 8,
-  },
-  cancelBtnTxt: { fontSize: 13, fontWeight: "700", color: "#EF4444" },
-  invoiceBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    backgroundColor: "#FFF7ED",
-    paddingVertical: 11,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#FED7AA",
-    marginTop: 8,
-  },
-  invoiceBtnTxt: { fontSize: 13, fontWeight: "800", color: Colors.primary },
+  actionRow: {
+  flexDirection: "row",
+  gap: 8,
+  marginTop: 8,
+},
+actionBtnHalf: {
+  flex: 1,
+  marginTop: 0,
+},
+cancelBtn: {
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 6,
+  backgroundColor: "#FEF2F2",
+  paddingVertical: 11,
+  borderRadius: 12,
+  borderWidth: 1,
+  borderColor: "#FECACA",
+},
+cancelBtnTxt: { fontSize: 13, fontWeight: "700", color: "#EF4444" },
+invoiceBtn: {
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 6,
+  backgroundColor: "#FFF7ED",
+  paddingVertical: 11,
+  borderRadius: 12,
+  borderWidth: 1,
+  borderColor: "#FED7AA",
+},
+invoiceBtnTxt: { fontSize: 13, fontWeight: "800", color: Colors.primary },
 });
 
 const STATUS_FILTER_OPTIONS: {
@@ -1803,23 +1840,22 @@ export default function OrdersScreen() {
     () => api.getScreenSnapshot<AdminMap>("customer-order-admins") || {},
   );
 
-const loadAdminMap = useCallback(async () => {
-  try {
-    const admins = await api.getAdmins();
-    const map: AdminMap = {};
-    for (const a of admins) {
-      if (a.id || a.admin_id) {
-        const id = a.id || a.admin_id;
-        map[id] = { name: a.name, profile_image: a.profile_image };
+  const loadAdminMap = useCallback(async () => {
+    try {
+      const admins = await api.getAdmins();
+      const map: AdminMap = {};
+      for (const a of admins) {
+        if (a.id || a.admin_id) {
+          const id = a.id || a.admin_id;
+          map[id] = { name: a.name, profile_image: a.profile_image };
+        }
       }
-    }
-    api.setScreenSnapshot("customer-order-admins", map);
-    setAdminMap((prev) =>
-      JSON.stringify(prev) === JSON.stringify(map) ? prev : map,
-    );
-  } catch (e) {
-  }
-}, []);
+      api.setScreenSnapshot("customer-order-admins", map);
+      setAdminMap((prev) =>
+        JSON.stringify(prev) === JSON.stringify(map) ? prev : map,
+      );
+    } catch (e) {}
+  }, []);
 
   const [cancelOrder, setCancelOrder] = useState<Order | null>(null);
   const [cancelModal, setCancelModal] = useState(false);
@@ -1897,14 +1933,14 @@ const loadAdminMap = useCallback(async () => {
     }
   }, []);
 
-useEffect(() => {
-  if (!isFocused) return;
-  loadProductMap();
-  loadAdminMap();      // ← was missing, add this
-  fetchData();
-  const iv = setInterval(fetchData, 60_000);
-  return () => clearInterval(iv);
-}, [isFocused, fetchData, loadProductMap, loadAdminMap]);   // ← add loadAdminMap here too
+  useEffect(() => {
+    if (!isFocused) return;
+    loadProductMap();
+    loadAdminMap(); // ← was missing, add this
+    fetchData();
+    const iv = setInterval(fetchData, 60_000);
+    return () => clearInterval(iv);
+  }, [isFocused, fetchData, loadProductMap, loadAdminMap]); // ← add loadAdminMap here too
 
   const onRefresh = () => {
     api.refreshLists();
