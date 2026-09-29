@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import RecordSearch, { matchesRecordSearch } from "../../src/components/RecordSearch";
+import RecordSearch, {
+  matchesRecordSearch,
+} from "../../src/components/RecordSearch";
 import {
   View,
   Text,
@@ -373,9 +375,15 @@ const calS = StyleSheet.create({
 
 export default function MySubscriptionsScreen() {
   const router = useRouter();
-  const [loading, setLoading] = useState(() => !api.getScreenSnapshot("customer-subscription-history"));
+  const [loading, setLoading] = useState(
+    () => !api.getScreenSnapshot("customer-subscription-history"),
+  );
   const [refreshing, setRefreshing] = useState(false);
-  const [subscriptions, setSubscriptions] = useState<Subscription[]>(() => api.getScreenSnapshot<Subscription[]>("customer-subscription-history") || []);
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>(
+    () =>
+      api.getScreenSnapshot<Subscription[]>("customer-subscription-history") ||
+      [],
+  );
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState<"active" | "past">("active");
 
@@ -390,7 +398,9 @@ export default function MySubscriptionsScreen() {
   const [showCalendar, setShowCalendar] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [invoiceLoadingId, setInvoiceLoadingId] = useState<string | null>(null);
-  const hasLoadedOnce = useRef(!!api.getScreenSnapshot("customer-subscription-history"));
+  const hasLoadedOnce = useRef(
+    !!api.getScreenSnapshot("customer-subscription-history"),
+  );
   const fetchInFlight = useRef(false);
 
   const [showSearch, setShowSearch] = useState(false);
@@ -409,7 +419,9 @@ export default function MySubscriptionsScreen() {
         (sub: Subscription) => sub.pattern !== "buy_once",
       );
       api.setScreenSnapshot("customer-subscription-history", filtered);
-      setSubscriptions(prev => JSON.stringify(prev) === JSON.stringify(filtered) ? prev : filtered);
+      setSubscriptions((prev) =>
+        JSON.stringify(prev) === JSON.stringify(filtered) ? prev : filtered,
+      );
     } catch {
       Alert.alert("Error", "Failed to load subscriptions");
     } finally {
@@ -420,7 +432,7 @@ export default function MySubscriptionsScreen() {
     }
   }, []);
 
-   const fetchWalletBalance = useCallback(async () => {
+  const fetchWalletBalance = useCallback(async () => {
     try {
       const data = await api.getWallet();
       setWalletBalance(typeof data?.balance === "number" ? data.balance : 0);
@@ -429,7 +441,7 @@ export default function MySubscriptionsScreen() {
     }
   }, []);
 
-    useFocusEffect(
+  useFocusEffect(
     useCallback(() => {
       fetchSubscriptions(!hasLoadedOnce.current);
       fetchWalletBalance();
@@ -444,10 +456,19 @@ export default function MySubscriptionsScreen() {
 
   const activeSubs = subscriptions.filter(isSubscriptionActive);
   const pastSubs = subscriptions.filter((s) => !isSubscriptionActive(s));
-  const displaySubs = (activeTab === "active" ? activeSubs : pastSubs).filter(sub => matchesRecordSearch(search, [
-    sub.id, sub.product?.name, sub.pattern, sub.status,
-    ...(sub.items || []).flatMap(item => [item.product_name, item.product?.name]),
-  ]));
+  const displaySubs = (activeTab === "active" ? activeSubs : pastSubs).filter(
+    (sub) =>
+      matchesRecordSearch(search, [
+        sub.id,
+        sub.product?.name,
+        sub.pattern,
+        sub.status,
+        ...(sub.items || []).flatMap((item) => [
+          item.product_name,
+          item.product?.name,
+        ]),
+      ]),
+  );
 
   const openEdit = (sub: Subscription) => {
     setEditingSub(sub);
@@ -553,22 +574,25 @@ export default function MySubscriptionsScreen() {
   return (
     <SafeAreaView style={S.container} edges={["top"]}>
       {/* ── Header ── */}
-<View style={S.header}>
-  <TouchableOpacity onPress={() => router.back()} style={S.headerBack}>
-    <Ionicons name="chevron-back" size={22} color="#1A1A1A" />
-  </TouchableOpacity>
-  <Text style={S.headerTitle}>My Subscriptions</Text>
-  <TouchableOpacity
-    onPress={() => {
-      setShowSearch((v) => !v);
-      if (showSearch) setSearch("");
-    }}
-    style={S.headerBack}
-  >
-    <Ionicons name={showSearch ? "close" : "search"} size={20} color="#1A1A1A" />
-  </TouchableOpacity>
-</View>
-
+      <View style={S.header}>
+        <TouchableOpacity onPress={() => router.back()} style={S.headerBack}>
+          <Ionicons name="chevron-back" size={22} color="#1A1A1A" />
+        </TouchableOpacity>
+        <Text style={S.headerTitle}>My Subscriptions</Text>
+        <TouchableOpacity
+          onPress={() => {
+            setShowSearch((v) => !v);
+            if (showSearch) setSearch("");
+          }}
+          style={S.headerBack}
+        >
+          <Ionicons
+            name={showSearch ? "close" : "search"}
+            size={20}
+            color="#1A1A1A"
+          />
+        </TouchableOpacity>
+      </View>
 
       {/* ── Tabs ── */}
       {showSearch && (
@@ -610,14 +634,18 @@ export default function MySubscriptionsScreen() {
               <Ionicons name="repeat-outline" size={32} color="#ccc" />
             </View>
             <Text style={S.emptyTitle}>
-              {search.trim() ? "No matching subscriptions" : activeTab === "active"
-                ? "No active subscriptions"
-                : "No past subscriptions"}
+              {search.trim()
+                ? "No matching subscriptions"
+                : activeTab === "active"
+                  ? "No active subscriptions"
+                  : "No past subscriptions"}
             </Text>
             <Text style={S.emptyBody}>
-              {search.trim() ? "Try another search or switch tabs." : activeTab === "active"
-                ? "Subscribe to a product with Daily, Alternate, or Custom delivery."
-                : "Expired or cancelled subscriptions will appear here."}
+              {search.trim()
+                ? "Try another search or switch tabs."
+                : activeTab === "active"
+                  ? "Subscribe to a product with Daily, Alternate, or Custom delivery."
+                  : "Expired or cancelled subscriptions will appear here."}
             </Text>
             {activeTab === "active" && (
               <TouchableOpacity
@@ -630,7 +658,7 @@ export default function MySubscriptionsScreen() {
             )}
           </View>
         ) : (
-               displaySubs.map((sub) => (
+          displaySubs.map((sub) => (
             <SubscriptionCard
               key={sub.id}
               sub={sub}
@@ -687,7 +715,7 @@ function SubscriptionCard({
   onCancel,
   onDownloadInvoice,
   downloadingInvoice,
-   onOpenCalendar,    
+  onOpenCalendar,
   walletBalance,
   onRecharge,
 }: {
@@ -736,15 +764,19 @@ function SubscriptionCard({
   return (
     <View style={[C.card, isDimmed && { opacity: 0.6 }]}>
       <TouchableOpacity style={C.row} onPress={toggle} activeOpacity={0.75}>
-                <View style={C.iconBox}>
+        <View style={C.iconBox}>
           {image ? (
-            <Image source={{ uri: image }} style={C.productImage} resizeMode="cover" />
+            <Image
+              source={{ uri: image }}
+              style={C.productImage}
+              resizeMode="cover"
+            />
           ) : (
             <Ionicons name="cube" size={26} color={Colors.primary} />
           )}
         </View>
 
-                <View style={C.info}>
+        <View style={C.info}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
             <Text style={C.name} numberOfLines={1}>
               {name}
@@ -848,7 +880,7 @@ function SubscriptionCard({
             )}
           </View>
 
-                   {isLowBalance && (
+          {isLowBalance && (
             <View style={C.lowBalanceBanner}>
               <Ionicons name="warning" size={16} color="#dc2626" />
               <Text style={C.lowBalanceText}>
@@ -1623,12 +1655,24 @@ const S = StyleSheet.create({
 
 // ─── Star Rating
 
-function StarRating({ value, onChange, size = 28 }: { value: number; onChange: (n: number) => void; size?: number }) {
+function StarRating({
+  value,
+  onChange,
+  size = 28,
+}: {
+  value: number;
+  onChange: (n: number) => void;
+  size?: number;
+}) {
   return (
     <View style={{ flexDirection: "row", gap: 6 }}>
       {[1, 2, 3, 4, 5].map((n) => (
         <TouchableOpacity key={n} onPress={() => onChange(n)}>
-          <Ionicons name={n <= value ? "star" : "star-outline"} size={size} color="#f59e0b" />
+          <Ionicons
+            name={n <= value ? "star" : "star-outline"}
+            size={size}
+            color="#f59e0b"
+          />
         </TouchableOpacity>
       ))}
     </View>
@@ -1638,7 +1682,10 @@ function StarRating({ value, onChange, size = 28 }: { value: number; onChange: (
 // ─── Rate Product Modal
 
 function RateProductModal({
-  visible, day, onClose, onSubmitted,
+  visible,
+  day,
+  onClose,
+  onSubmitted,
 }: {
   visible: boolean;
   day: CalendarDayInfo | null;
@@ -1698,7 +1745,11 @@ function RateProductModal({
             multiline
           />
           <View style={{ flexDirection: "row", gap: 10, marginTop: 16 }}>
-            <TouchableOpacity style={R.cancelBtn} onPress={onClose} disabled={saving}>
+            <TouchableOpacity
+              style={R.cancelBtn}
+              onPress={onClose}
+              disabled={saving}
+            >
               <Text style={R.cancelTxt}>Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -1707,7 +1758,11 @@ function RateProductModal({
               disabled={saving}
             >
               <Text style={R.saveTxt}>
-                {saving ? "Saving…" : day.rated ? "Update Rating" : "Submit Rating"}
+                {saving
+                  ? "Saving…"
+                  : day.rated
+                    ? "Update Rating"
+                    : "Submit Rating"}
               </Text>
             </TouchableOpacity>
           </View>
@@ -1720,7 +1775,9 @@ function RateProductModal({
 // ─── Delivery Calendar Modal
 
 function DeliveryCalendarModal({
-  visible, sub, onClose,
+  visible,
+  sub,
+  onClose,
 }: {
   visible: boolean;
   sub: Subscription | null;
@@ -1767,8 +1824,10 @@ function DeliveryCalendarModal({
   const ds = (day: number) => dateToString(new Date(yr, mo, day));
   const today = dateToString(new Date());
 
-  const prevMo = () => (mo === 0 ? (setMo(11), setYr((y) => y - 1)) : setMo((m) => m - 1));
-  const nextMo = () => (mo === 11 ? (setMo(0), setYr((y) => y + 1)) : setMo((m) => m + 1));
+  const prevMo = () =>
+    mo === 0 ? (setMo(11), setYr((y) => y - 1)) : setMo((m) => m - 1);
+  const nextMo = () =>
+    mo === 11 ? (setMo(0), setYr((y) => y + 1)) : setMo((m) => m + 1);
 
   const onDayPress = (info: CalendarDayInfo) => {
     if (info.status === "delivered" && info.product_id) setRateDay(info);
@@ -1777,7 +1836,11 @@ function DeliveryCalendarModal({
   return (
     <Modal visible={visible} transparent animationType="slide">
       <View style={M.overlay}>
-        <TouchableOpacity style={{ flex: 1 }} onPress={onClose} activeOpacity={1} />
+        <TouchableOpacity
+          style={{ flex: 1 }}
+          onPress={onClose}
+          activeOpacity={1}
+        />
         <View style={[M.sheet, { maxHeight: "85%" }]}>
           <View style={M.handle} />
           <View style={M.header}>
@@ -1801,14 +1864,18 @@ function DeliveryCalendarModal({
               <TouchableOpacity onPress={prevMo} style={calS.nav}>
                 <Ionicons name="chevron-back" size={14} color="#666" />
               </TouchableOpacity>
-              <Text style={calS.title}>{FULL_MONTH_NAMES[mo]} {yr}</Text>
+              <Text style={calS.title}>
+                {FULL_MONTH_NAMES[mo]} {yr}
+              </Text>
               <TouchableOpacity onPress={nextMo} style={calS.nav}>
                 <Ionicons name="chevron-forward" size={14} color="#666" />
               </TouchableOpacity>
             </View>
             <View style={calS.names}>
               {DAY_NAMES.map((d) => (
-                <Text key={d} style={calS.dayName}>{d}</Text>
+                <Text key={d} style={calS.dayName}>
+                  {d}
+                </Text>
               ))}
             </View>
 
@@ -1823,7 +1890,9 @@ function DeliveryCalendarModal({
                   const str = ds(day);
                   const info = dayMap[str];
                   const isToday = str === today;
-                  const color = info ? STATUS_COLORS[info.status] || "#ccc" : undefined;
+                  const color = info
+                    ? STATUS_COLORS[info.status] || "#ccc"
+                    : undefined;
                   return (
                     <TouchableOpacity
                       key={`d-${day}`}
@@ -1832,13 +1901,25 @@ function DeliveryCalendarModal({
                       disabled={!info || info.status !== "delivered"}
                       activeOpacity={info?.status === "delivered" ? 0.6 : 1}
                     >
-                      <Text style={[calS.dayNum, isToday && { color: Colors.primary, fontWeight: "700" }]}>
+                      <Text
+                        style={[
+                          calS.dayNum,
+                          isToday && {
+                            color: Colors.primary,
+                            fontWeight: "700",
+                          },
+                        ]}
+                      >
                         {day}
                       </Text>
                       {info && (
                         <View style={[CAL.dot, { backgroundColor: color }]}>
                           {info.status === "delivered" && (
-                            <Ionicons name={info.rated ? "star" : "checkmark"} size={7} color="#fff" />
+                            <Ionicons
+                              name={info.rated ? "star" : "checkmark"}
+                              size={7}
+                              color="#fff"
+                            />
                           )}
                         </View>
                       )}
@@ -1861,7 +1942,9 @@ function DeliveryCalendarModal({
                 </View>
               ))}
             </View>
-            <Text style={CAL.hint}>Tap a delivered date to rate that day's delivery.</Text>
+            <Text style={CAL.hint}>
+              Tap a delivered date to rate that day's delivery.
+            </Text>
             <View style={{ height: 20 }} />
           </ScrollView>
         </View>
@@ -1898,29 +1981,79 @@ const CAL = StyleSheet.create({
     lineHeight: 18,
   },
   dot: {
-    width: 14, height: 14, borderRadius: 7,
-    position: "absolute", bottom: 2,
-    justifyContent: "center", alignItems: "center",
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    position: "absolute",
+    bottom: 2,
+    justifyContent: "center",
+    alignItems: "center",
   },
-  legend: { flexDirection: "row", flexWrap: "wrap", gap: 14, marginTop: 16, justifyContent: "center" },
+  legend: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 14,
+    marginTop: 16,
+    justifyContent: "center",
+  },
   legendItem: { flexDirection: "row", alignItems: "center", gap: 5 },
   legendDot: { width: 8, height: 8, borderRadius: 4 },
   legendTxt: { fontSize: 11, color: "#888", fontWeight: "600" },
-  hint: { fontSize: 11, color: "#aaa", textAlign: "center", marginTop: 10, fontStyle: "italic" },
+  hint: {
+    fontSize: 11,
+    color: "#aaa",
+    textAlign: "center",
+    marginTop: 10,
+    fontStyle: "italic",
+  },
 });
 
 const R = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", padding: 24 },
-  card: { backgroundColor: "#fff", borderRadius: 18, padding: 20, width: "100%" },
-  title: { fontSize: 16, fontWeight: "800", color: "#111", textAlign: "center" },
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+  },
+  card: {
+    backgroundColor: "#fff",
+    borderRadius: 18,
+    padding: 20,
+    width: "100%",
+  },
+  title: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#111",
+    textAlign: "center",
+  },
   date: { fontSize: 12, color: "#999", textAlign: "center", marginTop: 2 },
   input: {
-    borderWidth: 1, borderColor: "#ebebeb", borderRadius: 10, padding: 12,
-    fontSize: 13, color: "#111", minHeight: 70, textAlignVertical: "top",
+    borderWidth: 1,
+    borderColor: "#ebebeb",
+    borderRadius: 10,
+    padding: 12,
+    fontSize: 13,
+    color: "#111",
+    minHeight: 70,
+    textAlignVertical: "top",
     backgroundColor: "#F8F9FA",
   },
-  cancelBtn: { flex: 1, paddingVertical: 13, borderRadius: 12, backgroundColor: "#F5F5F3", alignItems: "center" },
+  cancelBtn: {
+    flex: 1,
+    paddingVertical: 13,
+    borderRadius: 12,
+    backgroundColor: "#F5F5F3",
+    alignItems: "center",
+  },
   cancelTxt: { fontSize: 14, fontWeight: "700", color: "#666" },
-  saveBtn: { flex: 2, paddingVertical: 13, borderRadius: 12, backgroundColor: Colors.primary, alignItems: "center" },
+  saveBtn: {
+    flex: 2,
+    paddingVertical: 13,
+    borderRadius: 12,
+    backgroundColor: Colors.primary,
+    alignItems: "center",
+  },
   saveTxt: { fontSize: 14, fontWeight: "800", color: "#fff" },
 });

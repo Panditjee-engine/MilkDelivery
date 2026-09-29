@@ -5,6 +5,7 @@ import {
   StyleSheet,
   ScrollView,
   KeyboardAvoidingView,
+  Keyboard,
   Platform,
   TouchableOpacity,
   TextInput,
@@ -22,6 +23,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { LinearGradient } from "expo-linear-gradient";
 import { api } from "../../src/services/api";
+import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 
 // ── Brand Colors
 const C = {
@@ -201,11 +203,13 @@ function RegisterOtpCodeModal({
   code,
   phone,
   onClose,
+  onDismiss,
 }: {
   visible: boolean;
   code: string;
   phone: string;
   onClose: () => void;
+  onDismiss: () => void;
 }) {
   return (
     <Modal
@@ -214,6 +218,8 @@ function RegisterOtpCodeModal({
       animationType="fade"
       presentationStyle="overFullScreen"
       statusBarTranslucent
+      onRequestClose={onClose}
+      onDismiss={onDismiss}
     >
       <View style={codeModal.overlay}>
         <View style={codeModal.card}>
@@ -491,24 +497,9 @@ const fi = StyleSheet.create({
 });
 
 const ROLES = [
-  {
-    value: "customer" as Role,
-    label: "Customer",
-    emoji: "🛒",
-    desc: "Order essentials",
-  },
-  {
-    value: "delivery_partner" as Role,
-    label: "Delivery",
-    emoji: "🚴",
-    desc: "Earn on your ride",
-  },
-  {
-    value: "admin" as Role,
-    label: "Admin",
-    emoji: "🛡️",
-    desc: "Manage platform",
-  },
+  { value: "customer" as Role, label: "Customer", icon: "cart-outline" as const, desc: "Order essentials" },
+  { value: "delivery_partner" as Role, label: "Delivery", icon: "bicycle-outline" as const, desc: "Earn on your ride" },
+  { value: "admin" as Role, label: "Admin", icon: "shield-checkmark-outline" as const, desc: "Manage Farm" },
 ];
 
 export default function RegisterScreen() {
@@ -535,6 +526,7 @@ export default function RegisterScreen() {
   const [otpVerified, setOtpVerified] = useState(false);
   const [otpDevCode, setOtpDevCode] = useState("");
   const [otpCodeModalVisible, setOtpCodeModalVisible] = useState(false);
+  const otpPopupClosing = useRef(false);
   const [resendIn, setResendIn] = useState(0);
 
   // ── Referral state — QR code se initialize
@@ -756,15 +748,33 @@ export default function RegisterScreen() {
   }, [otpVerified, step]);
 
   useEffect(() => {
-    if (step !== "otp") return;
+    if (step !== "otp" || otpCodeModalVisible || otpPopupClosing.current) return;
     if (otpFocusTimer.current) clearTimeout(otpFocusTimer.current);
     otpFocusTimer.current = setTimeout(() => otpInputRef.current?.focus(), 250);
     return () => {
       if (otpFocusTimer.current) clearTimeout(otpFocusTimer.current);
     };
-  }, [step]);
+  }, [step, otpCodeModalVisible]);
+
+  const openOtpCode = () => {
+    if (otpPopupClosing.current) return;
+    if (otpFocusTimer.current) clearTimeout(otpFocusTimer.current);
+    Keyboard.dismiss();
+    setOtpCodeModalVisible(true);
+  };
+
+  const onOtpCodeDismissed = () => {
+    otpPopupClosing.current = false;
+    if (step === "otp") focusOtpInput();
+  };
+
+  const closeOtpCode = () => {
+    otpPopupClosing.current = Platform.OS === "ios";
+    setOtpCodeModalVisible(false);
+  };
 
   const focusOtpInput = () => {
+    if (otpCodeModalVisible || otpPopupClosing.current) return;
     otpInputRef.current?.blur();
     if (otpFocusTimer.current) clearTimeout(otpFocusTimer.current);
     otpFocusTimer.current = setTimeout(() => otpInputRef.current?.focus(), 60);
@@ -781,7 +791,7 @@ export default function RegisterScreen() {
       setResendIn(30);
       setOtp("");
       setOtpDevCode(devCode);
-      setOtpCodeModalVisible(!!devCode);
+      if (devCode) openOtpCode();
       showToast(
         isResend
           ? "OTP sent again to your phone"
@@ -790,7 +800,6 @@ export default function RegisterScreen() {
       );
       if (!isResend) {
         goToOtp();
-        setTimeout(() => otpInputRef.current?.focus(), 350);
       }
     } catch (error: any) {
       showToast(
@@ -989,17 +998,17 @@ export default function RegisterScreen() {
         visible={otpCodeModalVisible}
         code={otpDevCode}
         phone={fullPhone}
-        onClose={() => setOtpCodeModalVisible(false)}
+        onClose={closeOtpCode}
+        onDismiss={onOtpCodeDismissed}
       />
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={{ flex: 1 }}
-      >
-        <ScrollView
-          contentContainerStyle={s.scroll}
-          showsVerticalScrollIndicator={false}
-        >
+<KeyboardAwareScrollView
+  contentContainerStyle={[s.scroll, { paddingBottom: 40 }]}
+  showsVerticalScrollIndicator={false}
+  keyboardShouldPersistTaps="handled"
+  enableOnAndroid
+  extraScrollHeight={20}
+>
           {/* Header */}
           <LinearGradient
             colors={[C.primary, C.accent, "#FFD580"]}
@@ -1241,7 +1250,7 @@ export default function RegisterScreen() {
                   {!!otpDevCode && (
                     <TouchableOpacity
                       style={s.viewCodeBtn}
-                      onPress={() => setOtpCodeModalVisible(true)}
+                      onPress={openOtpCode}
                       activeOpacity={0.85}
                     >
                       <Ionicons name="eye-outline" size={15} color={C.primary} />
@@ -1364,7 +1373,12 @@ export default function RegisterScreen() {
                         onPress={() => setRole(r.value)}
                         activeOpacity={0.8}
                       >
-                        <Text style={s.roleEmoji}>{r.emoji}</Text>
+                        <Ionicons
+  name={r.icon}
+  size={22}
+  color={active ? C.primary : C.textSub}
+  style={{ marginBottom: 4 }}
+/>
                         <Text
                           style={[s.roleLabel, active && { color: C.primary }]}
                         >
@@ -1616,8 +1630,7 @@ export default function RegisterScreen() {
               <Text style={s.footerLink}>Sign In</Text>
             </TouchableOpacity>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+        </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }
@@ -1838,15 +1851,15 @@ const s = StyleSheet.create({
     color: C.text,
     letterSpacing: 0.8,
   },
-  otpHiddenInput: {
-    position: "absolute",
-    opacity: 0.01,
-    left: 12,
-    right: 12,
-    top: 58,
-    height: 68,
-    color: "transparent",
-  },
+otpHiddenInput: {
+  position: "absolute",
+  opacity: 0.01,
+  left: 12,
+  right: 12,
+  top: 0,
+  height: 58,   // was 58 top + 68 height = overhang past card. Match otpBoxesRow height only.
+  color: "transparent",
+},
   otpFooterRow: {
     flexDirection: "row",
     alignItems: "center",

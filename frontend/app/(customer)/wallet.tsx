@@ -26,12 +26,20 @@ import Constants from "expo-constants";
 import * as Sharing from "expo-sharing";
 import { Calendar } from "react-native-calendars";
 import { api, StatementTemplateSettings } from "../../src/services/api";
-import WalletHistoryFilter, { defaultHistoryFilter, matchesWalletHistory } from "../../src/components/WalletHistoryFilter";
+import WalletHistoryFilter, {
+  defaultHistoryFilter,
+  matchesWalletHistory,
+} from "../../src/components/WalletHistoryFilter";
 import { Colors } from "../../src/constants/colors";
 import LoadingScreen from "../../src/components/LoadingScreen";
 import Button from "../../src/components/Button";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { useFocusEffect } from "@react-navigation/native";
+import {
+  OrderDetailModal,
+  useOrderMap,
+  getProductName,
+} from "../../src/components/OrderHistoryList";
 
 const quickAmounts = [100, 200, 500, 1000];
 const MIN_AMOUNT = 100;
@@ -53,7 +61,11 @@ function addMonths(date: Date, months: number): Date {
   return next;
 }
 
-function getStatementRangeDates(range: StatementRange, start: string, end: string) {
+function getStatementRangeDates(
+  range: StatementRange,
+  start: string,
+  end: string,
+) {
   const today = new Date();
   if (range === "custom") {
     return { startDate: start, endDate: end };
@@ -67,7 +79,9 @@ function getStatementRangeDates(range: StatementRange, start: string, end: strin
 
 function statementLogoUri(value?: string) {
   if (!value) return "";
-  return value.startsWith("data:image") ? value : `data:image/jpeg;base64,${value}`;
+  return value.startsWith("data:image")
+    ? value
+    : `data:image/jpeg;base64,${value}`;
 }
 
 function isExpoGo(): boolean {
@@ -77,7 +91,7 @@ function isExpoGo(): boolean {
 function canUseRazorpayNativeModule(): boolean {
   return Boolean(
     !isExpoGo() &&
-      (NativeModules.RNRazorpayCheckout || NativeModules.RazorpayCheckout),
+    (NativeModules.RNRazorpayCheckout || NativeModules.RazorpayCheckout),
   );
 }
 
@@ -90,11 +104,7 @@ function getRazorpayContact(phone?: string): string | undefined {
 function getFileCacheDir(): string {
   try {
     const FS = require("expo-file-system/legacy");
-    return (
-      FS.cacheDirectory ??
-      FS.documentDirectory ??
-      ""
-    );
+    return FS.cacheDirectory ?? FS.documentDirectory ?? "";
   } catch {
     try {
       const FS = require("expo-file-system");
@@ -571,12 +581,24 @@ const ss = StyleSheet.create({
 export default function WalletScreen() {
   const router = useRouter();
   const { user, updateUser } = useAuth();
-  const [loading, setLoading] = useState(() => api.getScreenSnapshot("screen:(customer)/wallet:balance") === undefined);
+  const [loading, setLoading] = useState(
+    () =>
+      api.getScreenSnapshot("screen:(customer)/wallet:balance") === undefined,
+  );
   const [refreshing, setRefreshing] = useState(false);
-  const [balance, setBalance] = useCachedScreenState("screen:(customer)/wallet:balance", 0);
-  const [transactions, setTransactions] = useCachedScreenState<any[]>("screen:(customer)/wallet:transactions", []);
+  const [balance, setBalance] = useCachedScreenState(
+    "screen:(customer)/wallet:balance",
+    0,
+  );
+  const [transactions, setTransactions] = useCachedScreenState<any[]>(
+    "screen:(customer)/wallet:transactions",
+    [],
+  );
   const [historyFilter, setHistoryFilter] = useState(defaultHistoryFilter);
-  const [rechargeRequests, setRechargeRequests] = useCachedScreenState<any[]>("screen:(customer)/wallet:rechargeRequests", []);
+  const [rechargeRequests, setRechargeRequests] = useCachedScreenState<any[]>(
+    "screen:(customer)/wallet:rechargeRequests",
+    [],
+  );
   const [paymentQr, setPaymentQr] = useState<any>(null);
   const [qrPreviewVisible, setQrPreviewVisible] = useState(false);
   const [downloadingQr, setDownloadingQr] = useState(false);
@@ -602,6 +624,9 @@ export default function WalletScreen() {
   const [successVisible, setSuccessVisible] = useState(false);
   const [successAmount, setSuccessAmount] = useState(0);
   const manualQrEnabled = user?.manual_qr_recharge_enabled === true;
+
+  const orderMap = useOrderMap();
+  const [detailOrder, setDetailOrder] = useState<any>(null);
 
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -705,7 +730,7 @@ export default function WalletScreen() {
     else setToast(null);
   };
 
-   const updateUserRef = useRef(updateUser);
+  const updateUserRef = useRef(updateUser);
   useEffect(() => {
     updateUserRef.current = updateUser;
   }, [updateUser]);
@@ -732,12 +757,12 @@ export default function WalletScreen() {
       setRefreshing(false);
     }
   }, []);
-  
+
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-   useFocusEffect(
+  useFocusEffect(
     useCallback(() => {
       fetchData();
       const interval = setInterval(fetchData, 3000);
@@ -877,7 +902,9 @@ export default function WalletScreen() {
         pathname: "/(customer)/payment-success",
         params: {
           amount: amount.toFixed(2),
-          balance: Number.isFinite(verifiedBalance) ? String(verifiedBalance) : "",
+          balance: Number.isFinite(verifiedBalance)
+            ? String(verifiedBalance)
+            : "",
           paymentId: checkoutResult.razorpay_payment_id || "",
         },
       });
@@ -890,8 +917,8 @@ export default function WalletScreen() {
       const reason = isRazorpayRouteMissing
         ? "Online payment API is not active on the server yet. Please restart/deploy the backend with Razorpay wallet routes."
         : message.includes("react-native-razorpay")
-        ? "Online payments need a development or production build. Please open the installed app build and try again."
-        : message || "Your wallet was not charged. Please try again.";
+          ? "Online payments need a development or production build. Please open the installed app build and try again."
+          : message || "Your wallet was not charged. Please try again.";
       setRechargeModal(false);
       router.push({
         pathname: "/(customer)/payment-failed",
@@ -955,7 +982,10 @@ export default function WalletScreen() {
       statementEndDate,
     );
     if (!startDate || !endDate) {
-      Alert.alert("Select date range", "Please select both start and end date.");
+      Alert.alert(
+        "Select date range",
+        "Please select both start and end date.",
+      );
       return;
     }
     if (startDate > endDate) {
@@ -964,7 +994,10 @@ export default function WalletScreen() {
     }
     const dir = getFileCacheDir();
     if (!dir) {
-      Alert.alert("Storage unavailable", "Could not prepare the statement file.");
+      Alert.alert(
+        "Storage unavailable",
+        "Could not prepare the statement file.",
+      );
       return;
     }
     setDownloadingStatement(true);
@@ -974,8 +1007,7 @@ export default function WalletScreen() {
         end_date: endDate,
       });
       const filename =
-        payload.filename ||
-        `wallet-statement-${startDate}-${endDate}.pdf`;
+        payload.filename || `wallet-statement-${startDate}-${endDate}.pdf`;
       const fileUri = `${dir}${filename}`;
       await writeBase64File(fileUri, payload.base64);
       closeStatementModal();
@@ -1041,9 +1073,14 @@ export default function WalletScreen() {
       date: item.created_at,
       data: item,
     })),
-  ].filter(entry => matchesWalletHistory(entry.data, historyFilter, entry.kind === "request")).sort(
-    (a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime(),
-  );
+  ]
+    .filter((entry) =>
+      matchesWalletHistory(entry.data, historyFilter, entry.kind === "request"),
+    )
+    .sort(
+      (a, b) =>
+        new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime(),
+    );
   const activeStatementRange = getStatementRangeDates(
     statementRange,
     statementStartDate,
@@ -1077,8 +1114,7 @@ export default function WalletScreen() {
   const statementLogo = statementLogoUri(statementTemplate?.logo_base64);
   const statementBrandName =
     statementTemplate?.business_name || "Gau Satva Wallet";
-  const statementBrandSub =
-    statementTemplate?.tagline || "Wallet statement";
+  const statementBrandSub = statementTemplate?.tagline || "Wallet statement";
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
@@ -1188,10 +1224,18 @@ export default function WalletScreen() {
             onPress={() => setStatementModal(true)}
             activeOpacity={0.86}
           >
-            <Ionicons name="download-outline" size={15} color={Colors.primary} />
+            <Ionicons
+              name="download-outline"
+              size={15}
+              color={Colors.primary}
+            />
             <Text style={styles.statementBtnText}>Statement</Text>
           </TouchableOpacity>
-          <WalletHistoryFilter value={historyFilter} onChange={setHistoryFilter} requests />
+          <WalletHistoryFilter
+            value={historyFilter}
+            onChange={setHistoryFilter}
+            requests
+          />
         </View>
         {historyItems.length === 0 ? (
           <View style={styles.emptyState}>
@@ -1269,8 +1313,23 @@ export default function WalletScreen() {
                 );
               }
               const tx = entry.data;
+              const orderId = tx.metadata?.order_id;
+              const matchedOrder = orderId ? orderMap[orderId] : null;
+              
+              const displayDesc = matchedOrder
+                ? getProductName(matchedOrder)
+                : tx.description;
+
               return (
-                <View key={`tx-${entry.id || index}`} style={styles.txCard}>
+                <TouchableOpacity
+                  key={`tx-${entry.id || index}`}
+                  style={styles.txCard}
+                  activeOpacity={matchedOrder ? 0.7 : 1}
+                  onLongPress={() => {
+                    if (matchedOrder) setDetailOrder(matchedOrder);
+                  }}
+                  delayLongPress={300}
+                >
                   <View
                     style={[
                       styles.txIcon,
@@ -1286,7 +1345,7 @@ export default function WalletScreen() {
                     />
                   </View>
                   <View style={styles.txInfo}>
-                    <Text style={styles.txDesc}>{tx.description}</Text>
+                    <Text style={styles.txDesc}>{displayDesc}</Text>
                     <Text style={styles.txDate}>
                       {formatDate(tx.created_at)}
                     </Text>
@@ -1302,7 +1361,7 @@ export default function WalletScreen() {
                     </Text>
                     <Text style={styles.txBal}>₹{tx.balance_after}</Text>
                   </View>
-                </View>
+                </TouchableOpacity>
               );
             })}
           </View>
@@ -1371,9 +1430,19 @@ export default function WalletScreen() {
 
               <View style={styles.modeTabs}>
                 {[
-                  { key: "online" as RechargeMode, label: "Online", icon: "card-outline" },
+                  {
+                    key: "online" as RechargeMode,
+                    label: "Online",
+                    icon: "card-outline",
+                  },
                   ...(manualQrEnabled
-                    ? [{ key: "manual" as RechargeMode, label: "QR Manual", icon: "qr-code-outline" }]
+                    ? [
+                        {
+                          key: "manual" as RechargeMode,
+                          label: "QR Manual",
+                          icon: "qr-code-outline",
+                        },
+                      ]
                     : []),
                 ].map((mode) => {
                   const active = rechargeMode === mode.key;
@@ -1389,7 +1458,12 @@ export default function WalletScreen() {
                         size={15}
                         color={active ? "#fff" : Colors.primary}
                       />
-                      <Text style={[styles.modeTabText, active && styles.modeTabTextActive]}>
+                      <Text
+                        style={[
+                          styles.modeTabText,
+                          active && styles.modeTabTextActive,
+                        ]}
+                      >
                         {mode.label}
                       </Text>
                     </TouchableOpacity>
@@ -1400,12 +1474,17 @@ export default function WalletScreen() {
               {rechargeMode === "online" || !manualQrEnabled ? (
                 <View style={styles.onlineBox}>
                   <View style={styles.onlineIcon}>
-                    <Ionicons name="shield-checkmark-outline" size={22} color={Colors.primary} />
+                    <Ionicons
+                      name="shield-checkmark-outline"
+                      size={22}
+                      color={Colors.primary}
+                    />
                   </View>
                   <View style={styles.qrInfo}>
                     <Text style={styles.qrLabel}>Secure Razorpay Payment</Text>
                     <Text style={styles.qrNote}>
-                      Wallet balance updates only after successful payment verification.
+                      Wallet balance updates only after successful payment
+                      verification.
                     </Text>
                   </View>
                 </View>
@@ -1422,7 +1501,11 @@ export default function WalletScreen() {
                         resizeMode="contain"
                       />
                       <View style={styles.qrTapHint}>
-                        <Ionicons name="expand-outline" size={11} color="#fff" />
+                        <Ionicons
+                          name="expand-outline"
+                          size={11}
+                          color="#fff"
+                        />
                       </View>
                     </TouchableOpacity>
                   ) : (
@@ -1629,7 +1712,8 @@ export default function WalletScreen() {
               <View>
                 <Text style={styles.modalTitle}>Wallet Statement</Text>
                 <Text style={styles.statementPeriodText}>
-                  {activeStatementRange.startDate} to {activeStatementRange.endDate}
+                  {activeStatementRange.startDate} to{" "}
+                  {activeStatementRange.endDate}
                 </Text>
               </View>
               <TouchableOpacity
@@ -1739,9 +1823,16 @@ export default function WalletScreen() {
                   ]}
                 >
                   {statementLogo ? (
-                    <Image source={{ uri: statementLogo }} style={styles.statementBrandImage} />
+                    <Image
+                      source={{ uri: statementLogo }}
+                      style={styles.statementBrandImage}
+                    />
                   ) : (
-                    <Ionicons name="business-outline" size={23} color={Colors.primary} />
+                    <Ionicons
+                      name="business-outline"
+                      size={23}
+                      color={Colors.primary}
+                    />
                   )}
                 </View>
                 <View style={{ flex: 1 }}>
@@ -1760,11 +1851,16 @@ export default function WalletScreen() {
               </View>
 
               <View style={styles.statementInfoBox}>
-                <Ionicons name="document-text-outline" size={19} color={Colors.primary} />
+                <Ionicons
+                  name="document-text-outline"
+                  size={19}
+                  color={Colors.primary}
+                />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.statementInfoTitle}>PDF statement</Text>
                   <Text style={styles.statementInfoText}>
-                    Includes credits, debits, transaction dates, descriptions and running balance.
+                    Includes credits, debits, transaction dates, descriptions
+                    and running balance.
                   </Text>
                 </View>
               </View>
@@ -1780,7 +1876,9 @@ export default function WalletScreen() {
               >
                 <Ionicons name="download-outline" size={18} color="#fff" />
                 <Text style={styles.statementDownloadText}>
-                  {downloadingStatement ? "Preparing PDF..." : "Download Statement"}
+                  {downloadingStatement
+                    ? "Preparing PDF..."
+                    : "Download Statement"}
                 </Text>
               </TouchableOpacity>
             </ScrollView>
@@ -1794,6 +1892,11 @@ export default function WalletScreen() {
         amount={successAmount}
         newBalance={balance}
         onClose={() => setSuccessVisible(false)}
+      />
+      <OrderDetailModal
+        visible={!!detailOrder}
+        order={detailOrder}
+        onClose={() => setDetailOrder(null)}
       />
     </SafeAreaView>
   );

@@ -1,14 +1,28 @@
 import { useCachedScreenState } from "../../src/hooks/useCachedScreenState";
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, RefreshControl, Modal, TextInput, Linking } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import React, { useState, useEffect } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Alert,
+  RefreshControl,
+  Modal,
+  TextInput,
+  Linking,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { useAuth } from '../../src/contexts/AuthContext';
-import { api } from '../../src/services/api';
-import LoadingScreen from '../../src/components/LoadingScreen';
-import { formatDeliveryAddress } from '../../src/utils/address';
+import { useAuth } from "../../src/contexts/AuthContext";
+import { api } from "../../src/services/api";
+import LoadingScreen from "../../src/components/LoadingScreen";
+import { formatDeliveryAddress } from "../../src/utils/address";
 import { APP_VERSION } from "../../src/services/useVersionCheck";
+import { Image } from "react-native";
+import * as ImagePicker from "expo-image-picker";
+import CropModal from "../../src/components/CropModal";
 
 const C = {
   primary: "#FF9675",
@@ -23,53 +37,76 @@ const C = {
   border: "#F5E6D0",
 };
 
-const RIDER_TIPS_URL = 'https://gausatv.com/rider-tips';
-const FAQ_URL = 'https://gausatv.com/faq';
+const RIDER_TIPS_URL = "https://gausatv.com/rider-tips";
+const FAQ_URL = "https://gausatv.com/faq";
 
 export default function DeliveryProfileScreen() {
   const { user, logout } = useAuth();
   const router = useRouter();
-  const [loading, setLoading] = useState(() => api.getScreenSnapshot("screen:(delivery)/profile:profileData") === undefined);
+  const [loading, setLoading] = useState(
+    () =>
+      api.getScreenSnapshot("screen:(delivery)/profile:profileData") ===
+      undefined,
+  );
   const [refreshing, setRefreshing] = useState(false);
-  const [profileData, setProfileData] = useCachedScreenState<any>("screen:(delivery)/profile:profileData", null);
-  const [myOrders, setMyOrders] = useCachedScreenState<any[]>("screen:(delivery)/profile:myOrders", []);
-  const [adminDetails, setAdminDetails] = useCachedScreenState<any>("screen:(delivery)/profile:adminDetails", null);
+  const [profileData, setProfileData] = useCachedScreenState<any>(
+    "screen:(delivery)/profile:profileData",
+    null,
+  );
+  const [myOrders, setMyOrders] = useCachedScreenState<any[]>(
+    "screen:(delivery)/profile:myOrders",
+    [],
+  );
+  const [adminDetails, setAdminDetails] = useCachedScreenState<any>(
+    "screen:(delivery)/profile:adminDetails",
+    null,
+  );
+
+  const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [cropVisible, setCropVisible] = useState(false);
+  const [rawImageUri, setRawImageUri] = useState<string | null>(null);
+  const [rawImageSize, setRawImageSize] = useState<{
+    w: number;
+    h: number;
+  } | null>(null);
 
   // Edit modal state
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
   const [editForm, setEditForm] = useState({
-    name: '',
-    email: '',
-    phone: '',
+    name: "",
+    email: "",
+    phone: "",
   });
 
   useEffect(() => {
     fetchAllData();
   }, []);
 
- const fetchAllData = async () => {
-  try {
-    const [profile, orders] = await Promise.all([
-      api.getMe(),
-      api.getMyOrders(),
-    ]);
-    setProfileData(profile);
-    setMyOrders(orders || []);
-
+  const fetchAllData = async () => {
     try {
-  const admin = await api.getAssignedAdmin();
-  setAdminDetails(admin);
-} catch (err: any) {
-  setAdminDetails(null);
-}
-  } catch (error) {
-    console.error('Error fetching data:', error);
-  } finally {
-    setLoading(false);
-    setRefreshing(false);
-  }
-};
+      const [profile, orders] = await Promise.all([
+        api.getMe(),
+        api.getMyOrders(),
+      ]);
+      setProfileData(profile);
+      setProfileImage(profile?.profile_image || null);
+      setMyOrders(orders || []);
+
+      try {
+        const admin = await api.getAssignedAdmin();
+        setAdminDetails(admin);
+      } catch (err: any) {
+        setAdminDetails(null);
+      }
+    } catch (error) {
+      console.error("Error fetching data:", error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
 
   const onRefresh = () => {
     api.refreshLists();
@@ -80,41 +117,41 @@ export default function DeliveryProfileScreen() {
   const handleOpenEditModal = () => {
     const currentUser = profileData || user;
     setEditForm({
-      name: currentUser?.name || '',
-      email: currentUser?.email || '',
-      phone: currentUser?.phone || '',
+      name: currentUser?.name || "",
+      email: currentUser?.email || "",
+      phone: currentUser?.phone || "",
     });
     setEditModalVisible(true);
   };
 
   const handleSaveProfile = async () => {
     if (!editForm.name.trim()) {
-      Alert.alert('Error', 'Name is required');
+      Alert.alert("Error", "Name is required");
       return;
     }
 
     setEditLoading(true);
     try {
       await api.updateProfile(editForm);
-      Alert.alert('Success', 'Profile updated successfully');
+      Alert.alert("Success", "Profile updated successfully");
       setEditModalVisible(false);
       await fetchAllData();
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to update profile');
+      Alert.alert("Error", error.message || "Failed to update profile");
     } finally {
       setEditLoading(false);
     }
   };
 
   const handleLogout = () => {
-    Alert.alert('Logout', 'Are you sure you want to logout?', [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert("Logout", "Are you sure you want to logout?", [
+      { text: "Cancel", style: "cancel" },
       {
-        text: 'Logout',
-        style: 'destructive',
+        text: "Logout",
+        style: "destructive",
         onPress: async () => {
           await logout();
-          router.replace('/');
+          router.replace("/");
         },
       },
     ]);
@@ -122,23 +159,89 @@ export default function DeliveryProfileScreen() {
 
   const openExternalLink = (url: string) => {
     Linking.openURL(url).catch(() =>
-      Alert.alert('Error', 'Unable to open this link right now.'),
+      Alert.alert("Error", "Unable to open this link right now."),
     );
   };
 
   const handleContactAdmin = () => {
     if (adminDetails?.phone) {
       Linking.openURL(`tel:${adminDetails.phone}`).catch(() =>
-        Alert.alert('Error', 'Unable to place the call.'),
+        Alert.alert("Error", "Unable to place the call."),
       );
     } else {
-      Alert.alert('Contact Support', 'Admin phone number is not available yet.');
+      Alert.alert(
+        "Contact Support",
+        "Admin phone number is not available yet.",
+      );
     }
   };
 
+  const pickImage = async (fromCamera: boolean) => {
+    try {
+      const permissionResult = fromCamera
+        ? await ImagePicker.requestCameraPermissionsAsync()
+        : await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+      if (!permissionResult.granted) {
+        Alert.alert(
+          "Error",
+          fromCamera
+            ? "Camera permission is required."
+            : "Gallery permission is required.",
+        );
+        return;
+      }
+
+      const result = fromCamera
+        ? await ImagePicker.launchCameraAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: false,
+            quality: 1,
+          })
+        : await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: false,
+            quality: 1,
+          });
+
+      if (result.canceled || !result.assets?.length) return;
+
+      const asset = result.assets[0];
+      setRawImageUri(asset.uri);
+      setRawImageSize({ w: asset.width, h: asset.height });
+      setCropVisible(true);
+    } catch (error: any) {
+      Alert.alert("Error", error?.message || "Could not open picker");
+    }
+  };
+
+  const handleCropDone = async (croppedUri: string) => {
+    setCropVisible(false);
+    setUploadingImage(true);
+    setProfileImage(croppedUri);
+    try {
+      const uploaded = await api.uploadProfileImage(croppedUri);
+      setProfileImage(uploaded.url);
+      setProfileData((prev: any) => ({ ...prev, profile_image: uploaded.url }));
+    } catch (error: any) {
+      Alert.alert("Error", error?.message || "Could not update photo");
+    } finally {
+      setUploadingImage(false);
+      setRawImageUri(null);
+    }
+  };
+
+  const handleChangePhoto = () => {
+    Alert.alert("Change Profile Photo", "Choose a source", [
+      { text: "Camera", onPress: () => pickImage(true) },
+      { text: "Gallery", onPress: () => pickImage(false) },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  };
+
   const formatAdminAddress = (address: any): string => {
-    if (!address) return 'Not provided';
-    if (typeof address === 'string') return address;
+    if (!address) return "Not provided";
+    if (typeof address === "string") return address;
     const parts = [
       address.line1,
       address.line2,
@@ -146,13 +249,15 @@ export default function DeliveryProfileScreen() {
       address.state,
       address.pincode,
     ].filter(Boolean);
-    return parts.length ? parts.join(', ') : 'Not provided';
+    return parts.length ? parts.join(", ") : "Not provided";
   };
 
   if (loading) return <LoadingScreen />;
 
   const displayUser = profileData || user;
-  const savedAddresses = Array.isArray(displayUser?.addresses) ? displayUser.addresses : [];
+  const savedAddresses = Array.isArray(displayUser?.addresses)
+    ? displayUser.addresses
+    : [];
   const defaultAddress =
     savedAddresses.find((address: any) => address?.is_default) ||
     savedAddresses[0] ||
@@ -160,23 +265,57 @@ export default function DeliveryProfileScreen() {
     null;
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
       <ScrollView
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.primary} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={C.primary}
+          />
+        }
       >
         {/* Profile Header */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
-            <View style={styles.profileImage}>
-              <Ionicons name="person" size={32} color={C.dark} />
-            </View>
+            <TouchableOpacity
+              style={styles.avatarRing}
+              activeOpacity={0.85}
+              onPress={handleChangePhoto}
+              disabled={uploadingImage}
+            >
+              <View style={styles.profileImage}>
+                {profileImage ? (
+                  <Image
+                    key={profileImage}
+                    source={{ uri: profileImage }}
+                    style={styles.avatarImage}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <Ionicons name="person" size={32} color={C.dark} />
+                )}
+              </View>
+              <View style={styles.cameraBadge}>
+                <Ionicons
+                  name={uploadingImage ? "hourglass-outline" : "camera"}
+                  size={10}
+                  color="#fff"
+                />
+              </View>
+            </TouchableOpacity>
             <View>
-              <Text style={styles.userName}>{displayUser?.name || 'Delivery Partner'}</Text>
+              <Text style={styles.userName}>
+                {displayUser?.name || "Delivery Partner"}
+              </Text>
               <Text style={styles.userSubtitle}>Delivery Partner</Text>
             </View>
           </View>
-          <TouchableOpacity style={styles.editButton} onPress={handleOpenEditModal}>
+          <TouchableOpacity
+            style={styles.editButton}
+            onPress={handleOpenEditModal}
+          >
             <Ionicons name="pencil-outline" size={20} color={C.primary} />
           </TouchableOpacity>
         </View>
@@ -189,7 +328,9 @@ export default function DeliveryProfileScreen() {
             </View>
             <View style={styles.zoneTextWrap}>
               <Text style={styles.zoneLabel}>Assigned Zone</Text>
-              <Text style={styles.zoneValue}>{displayUser?.zone || 'Not assigned'}</Text>
+              <Text style={styles.zoneValue}>
+                {displayUser?.zone || "Not assigned"}
+              </Text>
             </View>
           </View>
         </View>
@@ -205,7 +346,9 @@ export default function DeliveryProfileScreen() {
               </View>
               <View style={styles.infoContent}>
                 <Text style={styles.infoLabel}>Phone</Text>
-                <Text style={styles.infoValue}>{displayUser?.phone || 'Not provided'}</Text>
+                <Text style={styles.infoValue}>
+                  {displayUser?.phone || "Not provided"}
+                </Text>
               </View>
             </View>
 
@@ -229,7 +372,7 @@ export default function DeliveryProfileScreen() {
           <TouchableOpacity
             style={styles.addressButtonCard}
             activeOpacity={0.88}
-            onPress={() => router.push('/address-book' as any)}
+            onPress={() => router.push("/address-book" as any)}
           >
             <View style={styles.addressButtonIcon}>
               <Ionicons name="location" size={22} color={C.primary} />
@@ -239,14 +382,16 @@ export default function DeliveryProfileScreen() {
                 <Text style={styles.addressButtonTitle}>Manage Address</Text>
                 <View style={styles.addressButtonPill}>
                   <Text style={styles.addressButtonPillText}>
-                    {savedAddresses.length ? `${savedAddresses.length} Saved` : 'Add New'}
+                    {savedAddresses.length
+                      ? `${savedAddresses.length} Saved`
+                      : "Add New"}
                   </Text>
                 </View>
               </View>
               <Text style={styles.addressButtonText} numberOfLines={2}>
                 {defaultAddress
                   ? formatDeliveryAddress(defaultAddress)
-                  : 'Add, edit, update or delete your delivery address'}
+                  : "Add, edit, update or delete your delivery address"}
               </Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color={C.primary} />
@@ -260,12 +405,18 @@ export default function DeliveryProfileScreen() {
           <View style={styles.infoCard}>
             <View style={styles.infoRow}>
               <View style={styles.infoIcon}>
-                <MaterialCommunityIcons name="home-city-outline" size={18} color={C.primary} />
+                <MaterialCommunityIcons
+                  name="home-city-outline"
+                  size={18}
+                  color={C.primary}
+                />
               </View>
               <View style={styles.infoContent}>
                 <Text style={styles.infoLabel}>Gaushala / Admin Name</Text>
                 <Text style={styles.infoValue}>
-                  {adminDetails?.business_name || adminDetails?.name || 'Not available'}
+                  {adminDetails?.business_name ||
+                    adminDetails?.name ||
+                    "Not available"}
                 </Text>
               </View>
             </View>
@@ -278,7 +429,9 @@ export default function DeliveryProfileScreen() {
               </View>
               <View style={styles.infoContent}>
                 <Text style={styles.infoLabel}>Admin Phone</Text>
-                <Text style={styles.infoValue}>{adminDetails?.phone || 'Not provided'}</Text>
+                <Text style={styles.infoValue}>
+                  {adminDetails?.phone || "Not provided"}
+                </Text>
               </View>
             </View>
 
@@ -290,7 +443,9 @@ export default function DeliveryProfileScreen() {
               </View>
               <View style={styles.infoContent}>
                 <Text style={styles.infoLabel}>Admin Email</Text>
-                <Text style={styles.infoValue}>{adminDetails?.email || 'Not provided'}</Text>
+                <Text style={styles.infoValue}>
+                  {adminDetails?.email || "Not provided"}
+                </Text>
               </View>
             </View>
 
@@ -315,7 +470,10 @@ export default function DeliveryProfileScreen() {
           <Text style={styles.sectionTitle}>Help & Support</Text>
 
           <View style={styles.infoCard}>
-            <TouchableOpacity style={styles.infoRow} onPress={() => openExternalLink(RIDER_TIPS_URL)}>
+            <TouchableOpacity
+              style={styles.infoRow}
+              onPress={() => openExternalLink(RIDER_TIPS_URL)}
+            >
               <View style={styles.infoIcon}>
                 <Ionicons name="book-outline" size={18} color={C.primary} />
               </View>
@@ -328,7 +486,10 @@ export default function DeliveryProfileScreen() {
 
             <View style={styles.infoDivider} />
 
-            <TouchableOpacity style={styles.infoRow} onPress={handleContactAdmin}>
+            <TouchableOpacity
+              style={styles.infoRow}
+              onPress={handleContactAdmin}
+            >
               <View style={styles.infoIcon}>
                 <Ionicons name="headset-outline" size={18} color={C.primary} />
               </View>
@@ -341,9 +502,16 @@ export default function DeliveryProfileScreen() {
 
             <View style={styles.infoDivider} />
 
-            <TouchableOpacity style={styles.infoRow} onPress={() => openExternalLink(FAQ_URL)}>
+            <TouchableOpacity
+              style={styles.infoRow}
+              onPress={() => openExternalLink(FAQ_URL)}
+            >
               <View style={styles.infoIcon}>
-                <Ionicons name="help-circle-outline" size={18} color={C.primary} />
+                <Ionicons
+                  name="help-circle-outline"
+                  size={18}
+                  color={C.primary}
+                />
               </View>
               <View style={styles.infoContent}>
                 <Text style={styles.infoLabel}>FAQs</Text>
@@ -393,12 +561,18 @@ export default function DeliveryProfileScreen() {
               <View style={styles.formGroup}>
                 <Text style={styles.formLabel}>Full Name</Text>
                 <View style={styles.formInputContainer}>
-                  <Ionicons name="person-outline" size={18} color={C.textMuted} />
+                  <Ionicons
+                    name="person-outline"
+                    size={18}
+                    color={C.textMuted}
+                  />
                   <TextInput
                     style={styles.formInput}
                     placeholder="Enter your name"
                     value={editForm.name}
-                    onChangeText={(text) => setEditForm({ ...editForm, name: text })}
+                    onChangeText={(text) =>
+                      setEditForm({ ...editForm, name: text })
+                    }
                     placeholderTextColor={C.textLight}
                   />
                 </View>
@@ -413,7 +587,9 @@ export default function DeliveryProfileScreen() {
                     style={styles.formInput}
                     placeholder="Enter your email"
                     value={editForm.email}
-                    onChangeText={(text) => setEditForm({ ...editForm, email: text })}
+                    onChangeText={(text) =>
+                      setEditForm({ ...editForm, email: text })
+                    }
                     placeholderTextColor={C.textLight}
                     editable={false}
                   />
@@ -429,7 +605,9 @@ export default function DeliveryProfileScreen() {
                     style={styles.formInput}
                     placeholder="Enter your phone"
                     value={editForm.phone}
-                    onChangeText={(text) => setEditForm({ ...editForm, phone: text })}
+                    onChangeText={(text) =>
+                      setEditForm({ ...editForm, phone: text })
+                    }
                     placeholderTextColor={C.textLight}
                   />
                 </View>
@@ -449,13 +627,24 @@ export default function DeliveryProfileScreen() {
                 disabled={editLoading}
               >
                 <Text style={styles.saveButtonText}>
-                  {editLoading ? 'Saving...' : 'Save Changes'}
+                  {editLoading ? "Saving..." : "Save Changes"}
                 </Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
+      <CropModal
+        visible={cropVisible}
+        imageUri={rawImageUri}
+        imageSize={rawImageSize}
+        onCancel={() => {
+          setCropVisible(false);
+          setRawImageUri(null);
+          setRawImageSize(null);
+        }}
+        onDone={handleCropDone}
+      />
     </SafeAreaView>
   );
 }
@@ -467,9 +656,9 @@ const styles = StyleSheet.create({
   },
 
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingHorizontal: 20,
     paddingVertical: 20,
     backgroundColor: C.card,
@@ -477,8 +666,8 @@ const styles = StyleSheet.create({
     borderBottomColor: C.border,
   },
   headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
     flex: 1,
   },
@@ -487,27 +676,27 @@ const styles = StyleSheet.create({
     height: 56,
     borderRadius: 28,
     backgroundColor: C.light,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   userName: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: "700",
     color: C.text,
     marginBottom: 2,
   },
   userSubtitle: {
     fontSize: 12,
     color: C.textMuted,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   editButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
     backgroundColor: C.light,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
 
   zoneCardWrap: {
@@ -516,8 +705,8 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   zoneCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 14,
     backgroundColor: C.card,
     borderRadius: 16,
@@ -535,8 +724,8 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: 16,
     backgroundColor: C.light,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   zoneTextWrap: {
     flex: 1,
@@ -544,12 +733,12 @@ const styles = StyleSheet.create({
   zoneLabel: {
     fontSize: 12,
     color: C.textMuted,
-    fontWeight: '500',
+    fontWeight: "500",
     marginBottom: 2,
   },
   zoneValue: {
     fontSize: 17,
-    fontWeight: '700',
+    fontWeight: "700",
     color: C.text,
   },
 
@@ -559,26 +748,26 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: "700",
     color: C.text,
     marginBottom: 12,
   },
   sectionHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 12,
   },
   sectionSubtext: {
     fontSize: 12,
     color: C.textMuted,
-    fontWeight: '500',
+    fontWeight: "500",
   },
 
   infoCard: {
     backgroundColor: C.card,
     borderRadius: 14,
-    overflow: 'hidden',
+    overflow: "hidden",
     borderWidth: 1,
     borderColor: C.border,
     shadowColor: C.dark,
@@ -588,8 +777,8 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 16,
     paddingVertical: 14,
   },
@@ -597,8 +786,8 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     marginRight: 12,
     backgroundColor: C.bg,
   },
@@ -608,12 +797,12 @@ const styles = StyleSheet.create({
   infoLabel: {
     fontSize: 12,
     color: C.textMuted,
-    fontWeight: '500',
+    fontWeight: "500",
     marginBottom: 2,
   },
   infoValue: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
     color: C.text,
   },
   infoDivider: {
@@ -621,8 +810,8 @@ const styles = StyleSheet.create({
     backgroundColor: C.border,
   },
   addressButtonCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
     backgroundColor: C.card,
     borderRadius: 16,
@@ -640,23 +829,23 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: 16,
     backgroundColor: C.light,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   addressButtonContent: {
     flex: 1,
   },
   addressButtonTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     gap: 8,
     marginBottom: 5,
   },
   addressButtonTitle: {
     flex: 1,
     fontSize: 15,
-    fontWeight: '800',
+    fontWeight: "800",
     color: C.text,
   },
   addressButtonPill: {
@@ -667,12 +856,12 @@ const styles = StyleSheet.create({
   },
   addressButtonPillText: {
     fontSize: 10,
-    fontWeight: '800',
+    fontWeight: "800",
     color: C.dark,
   },
   addressButtonText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: "600",
     color: C.textMuted,
     lineHeight: 17,
   },
@@ -689,40 +878,40 @@ const styles = StyleSheet.create({
   versionTxt: { fontSize: 12, fontWeight: "600", color: C.dark },
 
   logoutButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     marginHorizontal: 20,
     paddingVertical: 14,
     paddingHorizontal: 16,
-    backgroundColor: '#FDEDEA',
+    backgroundColor: "#FDEDEA",
     borderRadius: 12,
     gap: 10,
     marginTop: 8,
   },
   logoutText: {
     fontSize: 15,
-    fontWeight: '700',
-    color: '#B3261E',
+    fontWeight: "700",
+    color: "#B3261E",
   },
 
   // Modal Styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(61, 31, 10, 0.45)',
-    justifyContent: 'flex-end',
+    backgroundColor: "rgba(61, 31, 10, 0.45)",
+    justifyContent: "flex-end",
   },
   modalContent: {
     backgroundColor: C.card,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingBottom: 20,
-    maxHeight: '85%',
+    maxHeight: "85%",
   },
   modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingHorizontal: 20,
     paddingTop: 20,
     paddingBottom: 16,
@@ -731,14 +920,14 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: "700",
     color: C.text,
   },
   modalClose: {
     width: 36,
     height: 36,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
 
   modalBody: {
@@ -751,13 +940,13 @@ const styles = StyleSheet.create({
   },
   formLabel: {
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: "600",
     color: C.text,
     marginBottom: 8,
   },
   formInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: C.bg,
     borderRadius: 10,
     paddingHorizontal: 12,
@@ -773,7 +962,7 @@ const styles = StyleSheet.create({
   },
 
   modalFooter: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 10,
     paddingHorizontal: 20,
     paddingTop: 20,
@@ -785,11 +974,11 @@ const styles = StyleSheet.create({
     backgroundColor: C.bg,
     borderWidth: 1,
     borderColor: C.border,
-    alignItems: 'center',
+    alignItems: "center",
   },
   cancelButtonText: {
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: "700",
     color: C.textMuted,
   },
   saveButton: {
@@ -797,11 +986,36 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 10,
     backgroundColor: C.primary,
-    alignItems: 'center',
+    alignItems: "center",
   },
   saveButtonText: {
     fontSize: 15,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  avatarRing: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  avatarImage: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+  },
+  cameraBadge: {
+    position: "absolute",
+    bottom: -2,
+    right: -2,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: C.primary,
+    borderWidth: 2,
+    borderColor: "#fff",
+    justifyContent: "center",
+    alignItems: "center",
   },
 });

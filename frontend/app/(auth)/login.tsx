@@ -366,12 +366,14 @@ function WrongPasswordModal({
   onTryAgain,
   onForgotPassword,
   onClose,
+  onDismiss,
 }: {
   visible: boolean;
   identifier: string;
   onTryAgain: () => void;
   onForgotPassword: () => void;
   onClose: () => void;
+  onDismiss: () => void;
 }) {
   const scaleAnim = useRef(new Animated.Value(0.85)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
@@ -426,7 +428,7 @@ function WrongPasswordModal({
   }, [visible]);
 
   return (
-    <Modal visible={visible} transparent animationType="fade">
+    <Modal visible={visible} transparent animationType="fade" presentationStyle="overFullScreen" onRequestClose={onClose} onDismiss={onDismiss}>
       <View style={wm.overlay}>
         <Animated.View
           style={[
@@ -1151,6 +1153,7 @@ export default function LoginScreen() {
 
   const [wrongPasswordModal, setWrongPasswordModal] = useState(false);
   const [forgotPasswordModal, setForgotPasswordModal] = useState(false);
+  const pendingForgotPassword = useRef(false);
   const [prefillIdentifier, setPrefillIdentifier] = useState("");
 
   const [toast, setToast] = useState({
@@ -1274,8 +1277,9 @@ export default function LoginScreen() {
   };
 
   const handleOpenForgotFromModal = () => {
+    pendingForgotPassword.current = Platform.OS === "ios";
     setWrongPasswordModal(false);
-    setTimeout(() => setForgotPasswordModal(true), 300);
+    if (Platform.OS !== "ios") setTimeout(() => setForgotPasswordModal(true), 300);
   };
 
   return (
@@ -1297,6 +1301,12 @@ export default function LoginScreen() {
       />
 
       <WrongPasswordModal
+        onDismiss={() => {
+          if (pendingForgotPassword.current) {
+            pendingForgotPassword.current = false;
+            setForgotPasswordModal(true);
+          }
+        }}
         visible={wrongPasswordModal}
         identifier={prefillIdentifier}
         onTryAgain={() => {
@@ -1321,6 +1331,7 @@ export default function LoginScreen() {
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
           {/* Header */}
           <View style={styles.header}>
@@ -1460,10 +1471,10 @@ export default function LoginScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F4F6FA" },
-  statusBarPatch: {
-    backgroundColor: "#FFFFFF",
-    height: Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0,
-  },
+statusBarPatch: {
+  backgroundColor: "#F4F6FA",
+  height: Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0,
+},
   keyboardView: { flex: 1 },
   scrollContent: { flexGrow: 1, paddingHorizontal: 22, paddingTop: 14, paddingBottom: 16 },
   header: { alignItems: "center", marginTop: 6, marginBottom: 18 },
