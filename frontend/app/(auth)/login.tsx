@@ -23,6 +23,7 @@ import Input from "../../src/components/Input";
 import Button from "../../src/components/Button";
 import { api } from "../../src/services/api";
 import { APP_VERSION } from "../../src/services/useVersionCheck";
+import FarmBackground, { FARM_SKY } from "../../src/components/FarmBackground";
 
 type ToastType = "error" | "success" | "warn";
 
@@ -248,7 +249,7 @@ const otp = StyleSheet.create({
     elevation: 50,
   },
   card: {
-    backgroundColor: "#fff",
+    backgroundColor: "#18cf07",
     borderRadius: 28,
     paddingHorizontal: 28,
     paddingTop: 28,
@@ -1279,9 +1280,11 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={["bottom", "left", "right"]}>
+      <FarmBackground />
+
       <StatusBar
         barStyle="dark-content"
-        backgroundColor="#FFFFFF"
+        backgroundColor={FARM_SKY}
         translucent={false}
       />
       <View style={styles.statusBarPatch} />
@@ -1445,7 +1448,7 @@ export default function LoginScreen() {
 
           <View style={styles.versionStrip}>
             <MaterialCommunityIcons name="cow" size={14} color="#4CAF50" />
-            <Text style={[styles.versionTxt, { color: "#4CAF50" }]}> 
+            <Text style={[styles.versionTxt, { color: "#4CAF50" }]}>
               GauSatva Version-{APP_VERSION}
             </Text>
           </View>
@@ -1475,11 +1478,11 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 15, color: Colors.textSecondary },
   form: { marginBottom: 16 },
   card: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#e1f3e6",
     borderRadius: 20,
     padding: 18,
     gap: 8,
-    shadowColor: "#000",
+    shadowColor: "#4d4d4d",
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.08,
     shadowRadius: 12,
@@ -1570,4 +1573,4 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
   }
-  })
+})
