@@ -357,6 +357,19 @@ interface CartItem {
   customDays: number[];
 }
 
+function isUnavailable(p: any): boolean {
+  return !p?.is_available || (p?.stock ?? 0) <= 0;
+}
+function getPayableTotal(cart: CartItem[]): number {
+  return cart
+    .filter((i) => !isUnavailable(i.product))
+    .reduce((s, i) => s + i.product.price * i.quantity, 0);
+}
+function clampToStock(product: any, qty: number): number {
+  if (isUnavailable(product)) return qty; // quantity yaad rakho, stock aane par wapas mil jayegi
+  return Math.max(1, Math.min(qty, product.stock ?? qty));
+}
+
 function isDairyProduct(p: any): boolean {
   return DAIRY_CATEGORIES.includes(p?.category?.toLowerCase());
 }
@@ -3122,7 +3135,9 @@ function CartSheet({
     }
   }, [visible, paymentMethods]);
 
-  const cartTotal = cart.reduce((s, i) => s + i.product.price * i.quantity, 0);
+  const unavailableItems = cart.filter((i) => isUnavailable(i.product));
+  const hasUnavailable = unavailableItems.length > 0;
+  const cartTotal = getPayableTotal(cart);
   const canAfford = walletBalance >= cartTotal;
   if (!visible) return null;
 
@@ -3137,6 +3152,7 @@ function CartSheet({
   };
 
   const requestPlaceOrder = () => {
+    if (hasUnavailable) return;
     console.log("[Cart] place order tapped", {
       paymentMethod,
       itemCount: cart.length,
@@ -3257,8 +3273,9 @@ function CartSheet({
                 <View>
                   {cart.map((item) => {
                     const theme = getCategoryTheme(item.product.category);
+                    const out = isUnavailable(item.product);
                     return (
-                      <View key={item.id} style={cartS.item}>
+                      <View key={item.id} style={[cartS.item, out && { opacity: 0.55 }]}>
                         <View style={[cartS.icon, { backgroundColor: theme.bg }]}>
                           <Ionicons
                             name={theme.icon as any}
@@ -3270,9 +3287,15 @@ function CartSheet({
                           <Text style={cartS.itemName} numberOfLines={2}>
                             {item.product.name}
                           </Text>
-                          <Text style={cartS.itemPrice}>
-                            ₹{(item.product.price * item.quantity).toFixed(2)}
-                          </Text>
+                          {out ? (
+                            <Text style={{ fontSize: 11, fontWeight: "800", color: T.red }}>
+                              item Out of stock · Stock updates when available
+                            </Text>
+                          ) : (
+                            <Text style={cartS.itemPrice}>
+                              ₹{(item.product.price * item.quantity).toFixed(2)}
+                            </Text>
+                          )}
                         </View>
                         <View style={cartS.qtyRow}>
                           <TouchableOpacity
@@ -3298,6 +3321,7 @@ function CartSheet({
                               { backgroundColor: theme.accent },
                             ]}
                             onPress={() => {
+                              if (out) return;
                               const m = item.product.stock ?? 0;
                               if (item.quantity >= m) {
                                 alert(`Only ${m} available`);
@@ -3330,6 +3354,14 @@ function CartSheet({
                     ₹{cartTotal.toFixed(2)}
                   </Text>
                 </View>
+                {hasUnavailable && (
+                  <View style={cartS.lowBal}>
+                    <Ionicons name="alert-circle-outline" size={12} color={T.red} />
+                    <Text style={[cartS.lowBalTxt, { color: T.red }]}>
+                      {unavailableItems.length} item unavailable hai. Remove it or wait for the stock to be available.
+                    </Text>
+                  </View>
+                )}
                 <PaymentMethodSelector
                   value={paymentMethod}
                   onChange={setPaymentMethod}
@@ -3358,13 +3390,15 @@ function CartSheet({
                 )}
                 <Button
                   title={
-                    submitting
-                      ? "Placing Order…"
-                      : `Place Order · ₹${cartTotal.toFixed(2)}`
+                    hasUnavailable
+                      ? "RemoveUnavailable items"
+                      : submitting
+                        ? "Placing Order…"
+                        : `Place Order · ₹${cartTotal.toFixed(2)}`
                   }
                   onPress={requestPlaceOrder}
                   loading={submitting}
-                  disabled={submitting}
+                  disabled={submitting || hasUnavailable}
                 />
               </View>
             )}
@@ -3656,7 +3690,7 @@ function MiniCartPill({
   const bounce = useRef(new Animated.Value(1)).current;
   const prev = useRef(0);
   const total = cart.reduce((s, c) => s + c.quantity, 0);
-  const sum = cart.reduce((s, i) => s + i.product.price * i.quantity, 0);
+  const sum = getPayableTotal(cart);
 
   useEffect(() => {
     if (total > 0) {
@@ -4001,6 +4035,25 @@ export default function CatalogScreen() {
   const [cartVisible, setCartVisible] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  const cartHydratedRef = useRef(false);
+  const lastSavedRef = useRef("");
+  const userId = (user as any)?.id ?? (user as any)?._id;
+  const userIdRef = useRef(userId);
+
+  const cartSignature = (items: CartItem[]) =>
+    JSON.stringify(
+      items
+        .map((i) => [String(resolveProductId(i.product)), i.quantity])
+        .sort(),
+    );
+
+  useEffect(() => {
+    userIdRef.current = userId;
+    cartHydratedRef.current = false;
+    lastSavedRef.current = "";
+    setCart([]);
+  }, [userId]);
+
   const [subSheetVisible, setSubSheetVisible] = useState(false);
   const [activeSubscriptions, setActiveSubscriptions] = useState<any[]>([]);
   const [cancelling, setCancelling] = useState<string | null>(null);
@@ -4146,6 +4199,117 @@ export default function CatalogScreen() {
   }, [user]);
 
   const getProductId = useCallback(resolveProductId, []);
+
+  const cartRef = useRef<CartItem[]>([]);
+  cartRef.current = cart;
+
+  const saveCartNow = useCallback(async () => {
+    if (!cartHydratedRef.current || !userIdRef.current) return;
+    const current = cartRef.current;
+    const sig = cartSignature(current);
+    if (sig === lastSavedRef.current) return;      
+    try {
+      await api.saveCart(
+        current.map((i) => ({
+          product_id: String(getProductId(i.product)),
+          quantity: i.quantity,
+        })),
+      );
+      lastSavedRef.current = sig;
+    } catch (e) {
+      console.log("[Cart] save failed", e);      
+    }
+  }, [getProductId]);
+
+  const syncCartFromServer = useCallback(async () => {
+    const requestedFor = userIdRef.current;
+    const rows = await api.getCart();
+    if (userIdRef.current !== requestedFor) return;  
+    const list = Array.isArray(rows) ? rows : [];
+    const byId = new Map(list.map((r) => [String(r.product_id), r]));
+    const isFirstLoad = !cartHydratedRef.current;
+
+    if (isFirstLoad) {
+      const fromDb: CartItem[] = list
+        .filter((r) => r.product)
+        .map((r) => ({
+          id: String(r.product_id),
+          product: r.product,
+          quantity: clampToStock(r.product, r.quantity),
+          pattern: "buy_once",
+          customDays: [],
+        }));
+
+      lastSavedRef.current = cartSignature(fromDb);
+
+      setCart((prev) => {
+        const map = new Map(fromDb.map((i) => [getProductId(i.product), i]));
+        prev.forEach((p) => {
+          const pid = getProductId(p.product);
+          const ex = map.get(pid);
+          if (ex) ex.quantity = clampToStock(ex.product, ex.quantity + p.quantity);
+          else map.set(pid, p);
+        });
+        return Array.from(map.values());
+      });
+      cartHydratedRef.current = true;
+      return;
+    }
+
+    setCart((prev) =>
+      prev.map((item) => {
+        const row = byId.get(String(getProductId(item.product)));
+        if (!row) return item;
+        const product = row.product
+          ? row.product
+          : { ...item.product, is_available: false, stock: 0 };
+        return { ...item, product, quantity: clampToStock(product, item.quantity) };
+      }),
+    );
+  }, [getProductId]);
+
+  useEffect(() => {
+    if (!isFocused || !userId) return;
+    const run = () =>
+      void syncCartFromServer().catch((e) =>
+        console.log("[Cart] sync failed", e),
+      );
+    run();
+    const sub = AppState.addEventListener("change", (s) => {
+      if (s === "active") run();
+    });
+    const iv = setInterval(
+      run,
+      cartHydratedRef.current && !cartVisible ? 60000 : cartVisible ? 30000 : 5000,
+    );
+    return () => {
+      sub.remove();
+      clearInterval(iv);
+    };
+  }, [isFocused, userId, cartVisible, syncCartFromServer]);
+
+  // debounce save
+  useEffect(() => {
+    if (!cartHydratedRef.current) return;
+    const t = setTimeout(() => void saveCartNow(), 300);
+    return () => clearTimeout(t);
+  }, [cart, saveCartNow]);
+
+  useEffect(() => {
+    if (!isFocused) void saveCartNow();
+  }, [isFocused, saveCartNow]);
+
+  useEffect(() => {
+    api.setCartFlusher(saveCartNow);
+    const sub = AppState.addEventListener("change", (s) => {
+      if (s !== "active") void saveCartNow();
+    });
+    return () => {
+      sub.remove();
+      void saveCartNow();
+      api.setCartFlusher(null);
+    };
+  }, [saveCartNow]);
 
   const fetchData = useCallback(async () => {
     try {
@@ -4440,7 +4604,7 @@ export default function CatalogScreen() {
     );
   };
 
-  const cartTotal = cart.reduce((s, i) => s + i.product.price * i.quantity, 0);
+  const cartTotal = getPayableTotal(cart);
 
   // ── FIXED: All cart items go as ONE buy_once subscription
   const handlePlaceOrder = async (paymentMethod: PaymentMethod) => {
@@ -4450,6 +4614,16 @@ export default function CatalogScreen() {
       cartTotal,
       selectedAddressId: selectedAddress?.id ?? null,
     });
+    const bad = cart.filter(
+      (i) => isUnavailable(i.product) || i.quantity > (i.product.stock ?? 0),
+    );
+    if (bad.length) {
+      Alert.alert(
+        "Cart me unavailable items",
+        `${bad.map((i) => i.product.name).join(", ")} abhi available nahi hain. Inhe remove karein ya stock aane ka wait karein.`,
+      );
+      return;
+    }
     const blockedItem = cart.find((item) => {
       const rule = getOrderCutoffForProduct(item.product, orderCutoffs);
       return Boolean(rule && isOrderCutoffPassed(rule));
@@ -4563,6 +4737,7 @@ export default function CatalogScreen() {
 
       setSuccessItemCount(placedCount);
       setCart([]);
+      api.clearCart().catch(() => undefined);
       setCartVisible(false);
       setSuccessIsSub(false);
       api

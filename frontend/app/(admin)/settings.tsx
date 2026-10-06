@@ -570,18 +570,18 @@ function ShareModal({
                 >
                   <View style={qrS.card}>
                     <View style={qrS.cardHeader}>
-                      <View style={qrS.leafBadge}>
-                        <Ionicons name="leaf" size={14} color="#fff" />
-                      </View>
+                      <Image
+                        source={require("../../assets/images/adaptive-icon.png")}
+                        style={qrS.logoImg}
+                        resizeMode="contain"
+                      />
                       <Text style={qrS.gaushaalaName}>{displayName}</Text>
                     </View>
                     <Text style={qrS.cardTitle}>
                       Scan Our QR To Connect With Us
                     </Text>
                     <Text style={qrS.cardSubtitle}>
-                      Scan the QR code to download our app and use the referral
-                      code to connect directly with the{"\n"}farm and explore
-                      fresh products.
+                      Use the referral code to connect with the farm.
                     </Text>
                     <View style={qrS.qrBox}>
                       <QRCode
@@ -607,7 +607,7 @@ function ShareModal({
                   </View>
                 </ViewShot>
                 <View style={qrS.codeRow}>
-                  <Text style={qrS.codeLabel}>Your Referral - Code:</Text>
+                  <Text style={qrS.codeLabel}>Your Referral Code:</Text>
                   <View style={qrS.codePill}>
                     <Text style={qrS.codeValue}>{shortCode}</Text>
                   </View>
@@ -3930,14 +3930,11 @@ const qrS = StyleSheet.create({
     gap: 8,
     marginBottom: 14,
   },
-  leafBadge: {
-    width: 28,
-    height: 28,
-    borderRadius: 9,
-    backgroundColor: C.primary,
-    justifyContent: "center",
-    alignItems: "center",
-  },
+  logoImg: {
+  width: 36,
+  height: 36,
+  borderRadius: 10,
+},
   gaushaalaName: {
     fontSize: 16,
     fontWeight: "800",
