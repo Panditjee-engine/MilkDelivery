@@ -1,388 +1,764 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
+import { StatusBar } from "expo-status-bar";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import * as Location from "expo-location";
+import LeafletMap, { LeafletHandle } from "../src/components/LeafletMap";
 import { useAuth } from "../src/contexts/AuthContext";
 import { api } from "../src/services/api";
 import { Colors } from "../src/constants/colors";
-import Button from "../src/components/Button";
-import Input from "../src/components/Input";
-import {
-  formatDeliveryAddress,
-  hasCompleteDeliveryAddress,
-} from "../src/utils/address";
 
-const emptyAddress = () => ({
+// ─── Types / helpers ──────────────────────────────────────────────────────────
+
+type Addr = {
+  id: string;
+  label: "home" | "work" | "other";
+  is_default: boolean;
+  flat: string;
+  building: string;
+  tower?: string;
+  full_address: string;
+  area: string;
+  city: string;
+  pincode: string;
+  landmark: string;
+  lat: number | null;
+  lng: number | null;
+};
+
+type Region = {
+  latitude: number;
+  longitude: number;
+  latitudeDelta: number;
+  longitudeDelta: number;
+};
+
+const DEFAULT_REGION: Region = {
+  latitude: 28.6692,
+  longitude: 77.4538,
+  latitudeDelta: 0.01,
+  longitudeDelta: 0.01,
+};
+
+const blankAddr = (isDefault: boolean): Addr => ({
   id: `addr_${Date.now()}`,
   label: "home",
-  is_default: true,
+  is_default: isDefault,
+  flat: "",
+  building: "",
   full_address: "",
   area: "",
   city: "",
   pincode: "",
+  landmark: "",
+  lat: null,
+  lng: null,
 });
 
-const normalizeAddressBook = (user: any) => {
-  const addresses = Array.isArray(user?.addresses) ? user.addresses : [];
-  const withIds = addresses.map((address: any, index: number) => ({
-    id: address.id || `addr_${index}_${Date.now()}`,
-    is_default: false,
-    ...address,
+const loadAddresses = (user: any): Addr[] => {
+  const list = Array.isArray(user?.addresses) ? user.addresses : [];
+  const mapped: Addr[] = list.map((a: any, i: number) => ({
+    ...blankAddr(false),
+    ...a,
+    building: a.building || a.tower || "",
+    id: a.id || `addr_${i}`,
   }));
-
-  if (!withIds.length && user?.address) {
-    withIds.push({
-      id: user.address.id || "addr_default",
-      label: user.address.label || "home",
-      is_default: true,
+  if (!mapped.length && user?.address && typeof user.address === "object") {
+    mapped.push({
+      ...blankAddr(true),
       ...user.address,
+      building: user.address.building || user.address.tower || "",
+      id: user.address.id || "addr_default",
     });
   }
-
-  if (withIds.length && !withIds.some((address: any) => address.is_default)) {
-    withIds[0].is_default = true;
-  }
-
-  return withIds;
+  if (mapped.length && !mapped.some((a) => a.is_default))
+    mapped[0].is_default = true;
+  return mapped;
 };
+
+const formatAddr = (a: any) =>
+  [a?.flat, a?.building || a?.tower, a?.area, a?.city, a?.pincode]
+    .filter(Boolean)
+    .join(", ");
+
+const reverse = async (lat: number, lng: number): Promise<Partial<Addr>> => {
+  const patch: Partial<Addr> = { lat, lng };
+  try {
+    const [r] = await Location.reverseGeocodeAsync({
+      latitude: lat,
+      longitude: lng,
+    });
+    if (r) {
+      patch.area = r.district || r.subregion || r.street || "";
+      patch.city = r.city || r.subregion || "";
+      patch.pincode = r.postalCode || "";
+      patch.full_address = [
+        r.name,
+        r.street,
+        r.district,
+        r.city,
+        r.region,
+        r.postalCode,
+      ]
+        .filter(Boolean)
+        .join(", ");
+    }
+  } catch {}
+  return patch;
+};
+
+// ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function CustomerAddressesScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ addressRequired?: string; returnTo?: string }>();
+  const insets = useSafeAreaInsets();
+  const { height: winH } = useWindowDimensions();
+  const params = useLocalSearchParams<{
+    addressRequired?: string;
+    returnTo?: string;
+  }>();
   const { user, updateUser } = useAuth();
-  const [addressBook, setAddressBook] = useState<any[]>(() => normalizeAddressBook(user));
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState<any>(() => emptyAddress());
-  const [formOpen, setFormOpen] = useState(false);
+
+  const mapRef = useRef<LeafletHandle>(null);
+  const [addresses, setAddresses] = useState<Addr[]>(() => loadAddresses(user));
+  const [listQuery, setListQuery] = useState("");
+  const [mapQuery, setMapQuery] = useState("");
+  const [mapOpen, setMapOpen] = useState(false);
+  const [step, setStep] = useState<"map" | "details">("map");
+  const [region, setRegion] = useState<Region>(DEFAULT_REGION);
+  const [busy, setBusy] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState<Addr>(blankAddr(true));
+
+  const setField = (k: keyof Addr, v: any) =>
+    setForm((f) => ({ ...f, [k]: v }));
 
   useEffect(() => {
-    const next = normalizeAddressBook(user);
-    setAddressBook(next);
-    if (!next.length || params.addressRequired === "1") {
+    setAddresses(loadAddresses(user));
+  }, [(user as any)?.addresses, (user as any)?.address]);
+
+  // ── location helpers
+  const goToDetails = async (lat: number, lng: number) => {
+   mapRef.current?.flyTo(lat, lng);
+    const patch = await reverse(lat, lng);
+    setForm((f) => ({ ...f, ...patch }));
+    setStep("details");
+  };
+
+  const useCurrentLocation = async () => {
+    setBusy(true);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("Permission needed", "Please allow location access.");
+        return;
+      }
+      const pos = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+      await goToDetails(pos.coords.latitude, pos.coords.longitude);
+    } catch (e: any) {
+      Alert.alert("Error", e?.message || "Could not get location");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // search inside the map modal
+  const searchInMap = async () => {
+    if (!mapQuery.trim()) return;
+    setBusy(true);
+    try {
+      const res = await Location.geocodeAsync(mapQuery.trim());
+      if (!res.length) {
+        Alert.alert("Not found", "Try a more specific search.");
+        return;
+      }
+      await goToDetails(res[0].latitude, res[0].longitude);
+    } catch (e: any) {
+      Alert.alert("Error", e?.message || "Search failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // search on the list screen → opens details for that place
+  const searchFromList = async () => {
+    if (!listQuery.trim()) return;
+    setBusy(true);
+    try {
+      const res = await Location.geocodeAsync(listQuery.trim());
+      if (!res.length) {
+        Alert.alert("Not found", "Try a more specific search.");
+        return;
+      }
+      const { latitude, longitude } = res[0];
+      const patch = await reverse(latitude, longitude);
       setEditingId(null);
-      setForm({ ...emptyAddress(), is_default: next.length === 0 });
-      setFormOpen(true);
+      setForm({ ...blankAddr(addresses.length === 0), ...patch });
+      setRegion({
+        latitude,
+        longitude,
+        latitudeDelta: 0.005,
+        longitudeDelta: 0.005,
+      });
+      setMapQuery("");
+      setStep("details");
+      setMapOpen(true);
+      setListQuery("");
+    } catch (e: any) {
+      Alert.alert("Error", e?.message || "Search failed");
+    } finally {
+      setBusy(false);
     }
-  }, [user?.address, (user as any)?.addresses, params.addressRequired]);
-
-  const defaultAddress = useMemo(
-    () => addressBook.find((item) => item.is_default) || addressBook[0] || null,
-    [addressBook],
-  );
-
-  const openNewAddress = () => {
-    setEditingId(null);
-    setForm({ ...emptyAddress(), is_default: addressBook.length === 0 });
-    setFormOpen(true);
   };
 
-  const openEditAddress = (address: any) => {
-    setEditingId(address.id);
-    setForm({
-      ...emptyAddress(),
-      ...address,
-      full_address: address.full_address || "",
-      area: address.area || "",
-      city: address.city || "",
-      pincode: address.pincode || "",
+  const confirmPin = () => goToDetails(region.latitude, region.longitude);
+
+ const openNew = () => {
+  setEditingId(null);
+  setForm(blankAddr(addresses.length === 0));
+  setRegion(DEFAULT_REGION); // ADD
+  setMapQuery("");
+  setStep("map");
+  setMapOpen(true);
+};
+
+const openEdit = (a: Addr) => {
+  setEditingId(a.id);
+  setForm(a);
+  if (a.lat && a.lng) {
+    setRegion({
+      latitude: a.lat,
+      longitude: a.lng,
+      latitudeDelta: 0.005,
+      longitudeDelta: 0.005,
     });
-    setFormOpen(true);
+  } else {
+    setRegion(DEFAULT_REGION); // ADD
+  }
+  setStep("details");
+  setMapOpen(true);
+};
+
+  // ── persist
+  const persist = async (list: Addr[]) => {
+    const def = list.find((a) => a.is_default) || list[0] || null;
+    const normalized = list.map((a) => ({
+      ...a,
+      is_default: def ? a.id === def.id : false,
+    }));
+    const address = normalized.find((a) => a.is_default) || null;
+    await api.updateProfile({ address, addresses: normalized });
+    updateUser({ address, addresses: normalized } as any);
+    setAddresses(normalized);
   };
 
-  const persistAddresses = async (nextBook: any[], successMessage: string) => {
-    const normalizedBook = nextBook.map((address, index) => ({
-      ...address,
-      id: address.id || `addr_${index}_${Date.now()}`,
-    }));
-    if (normalizedBook.length && !normalizedBook.some((address) => address.is_default)) {
-      normalizedBook[0].is_default = true;
+  const saveAddress = async () => {
+    if (!form.flat.trim() || !form.building.trim()) {
+      Alert.alert("Missing details", "Flat and building are required.");
+      return;
     }
-    const nextDefault =
-      normalizedBook.find((address) => address.is_default) || normalizedBook[0] || null;
-
+    if (!form.lat || !form.lng) {
+      Alert.alert("Pick location", "Please select a location on the map.");
+      return;
+    }
+    const payload: Addr = {
+      ...form,
+      flat: form.flat.trim(),
+      building: form.building.trim(),
+      tower: form.building.trim(),
+      area: form.area.trim(),
+      city: form.city.trim(),
+      pincode: form.pincode.trim(),
+      landmark: form.landmark.trim(),
+    };
     setSaving(true);
     try {
-      await api.updateProfile({
-        address: nextDefault,
-        addresses: normalizedBook,
-      });
-      setAddressBook(normalizedBook);
-      updateUser({ address: nextDefault, addresses: normalizedBook } as any);
-      Alert.alert("Success", successMessage);
-      return true;
-    } catch (error: any) {
-      Alert.alert("Error", error?.message || "Could not save address. Please try again.");
-      return false;
+      let list = editingId
+        ? addresses.map((a) => (a.id === editingId ? payload : a))
+        : [...addresses, payload];
+      if (payload.is_default) {
+        list = list.map((a) => ({ ...a, is_default: a.id === payload.id }));
+      }
+      await persist(list);
+      setMapOpen(false);
+      if (params.returnTo === "catalog") {
+        router.replace("/(customer)/catalog" as any);
+      }
+    } catch (e: any) {
+      Alert.alert("Error", e?.message || "Could not save address");
     } finally {
       setSaving(false);
     }
   };
 
-  const saveAddress = async () => {
-    const normalizedAddress = {
-      id: form.id || `addr_${Date.now()}`,
-      label: form.label || "home",
-      is_default: form.is_default ?? addressBook.length === 0,
-      full_address: String(form.full_address || "").trim(),
-      area: String(form.area || "").trim(),
-      city: String(form.city || "").trim(),
-      pincode: String(form.pincode || "").replace(/\D/g, "").slice(0, 6),
-    };
-
-    if (!hasCompleteDeliveryAddress(normalizedAddress)) {
-      Alert.alert("Address required", "Please enter Area / Society and City.");
-      return;
-    }
-
-    const nextBook = editingId
-      ? addressBook.map((address) =>
-          address.id === editingId ? { ...address, ...normalizedAddress } : address,
-        )
-      : [...addressBook, normalizedAddress];
-
-    const normalizedBook = nextBook.map((address) => ({
-      ...address,
-      is_default: normalizedAddress.is_default
-        ? address.id === normalizedAddress.id
-        : address.is_default,
-    }));
-
-    const saved = await persistAddresses(normalizedBook, "Address saved successfully.");
-    if (saved) {
-      setFormOpen(false);
-      if (params.returnTo === "catalog") {
-        router.replace("/(customer)/catalog" as any);
-      }
+  const setDefault = async (a: Addr) => {
+    try {
+      await persist(
+        addresses.map((x) => ({ ...x, is_default: x.id === a.id })),
+      );
+    } catch (e: any) {
+      Alert.alert("Error", e?.message || "Could not update default");
     }
   };
 
-  const deleteAddress = (address: any) => {
-    Alert.alert("Delete Address", "Remove this saved delivery address?", [
+  const removeAddress = (a: Addr) =>
+    Alert.alert("Delete address", "Remove this saved address?", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Delete",
         style: "destructive",
         onPress: async () => {
-          const remaining = addressBook.filter((item) => item.id !== address.id);
-          const saved = await persistAddresses(remaining, "Address removed successfully.");
-          if (saved && editingId === address.id) {
-            setFormOpen(false);
-            setEditingId(null);
+          try {
+            const rest = addresses.filter((x) => x.id !== a.id);
+            if (rest.length && !rest.some((x) => x.is_default))
+              rest[0].is_default = true;
+            await persist(rest);
+          } catch (e: any) {
+            Alert.alert("Error", e?.message || "Could not delete");
           }
         },
       },
     ]);
-  };
 
-  const setDefaultAddress = async (address: any) => {
-    const nextBook = addressBook.map((item) => ({
-      ...item,
-      is_default: item.id === address.id,
-    }));
-    await persistAddresses(nextBook, "Default address updated.");
-  };
+  // ─── UI ─────────────────────────────────────────────────────────────────────
 
   return (
-    <SafeAreaView style={styles.container} edges={["top"]}>
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+    <SafeAreaView style={s.container} edges={["top"]}>
+      <View style={s.header}>
+        <TouchableOpacity style={s.backBtn} onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={20} color="#111827" />
         </TouchableOpacity>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.title}>Delivery Addresses</Text>
-          <Text style={styles.subtitle}>Add, edit and choose your default address</Text>
-        </View>
-        <TouchableOpacity style={styles.addTopBtn} onPress={openNewAddress}>
-          <Ionicons name="add" size={20} color="#fff" />
-        </TouchableOpacity>
+        <Text style={s.title}>Delivery Addresses</Text>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
-        {params.addressRequired === "1" && (
-          <View style={styles.requiredCard}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+      >
+        {params.addressRequired === "1" && addresses.length === 0 && (
+          <View style={s.requiredCard}>
             <Ionicons name="location" size={18} color="#dc2626" />
-            <Text style={styles.requiredText}>
+            <Text style={s.requiredText}>
               Please add your delivery address before placing an order.
             </Text>
           </View>
         )}
 
-        {defaultAddress && (
-          <View style={styles.defaultCard}>
-            <View style={styles.defaultIcon}>
-              <Ionicons name="navigate-circle" size={22} color={Colors.primary} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.defaultLabel}>Default Address</Text>
-              <Text style={styles.defaultText} numberOfLines={2}>
-                {formatDeliveryAddress(defaultAddress)}
-              </Text>
-            </View>
-          </View>
-        )}
-
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Saved Addresses</Text>
-          <TouchableOpacity style={styles.newInlineBtn} onPress={openNewAddress}>
-            <Ionicons name="add-circle-outline" size={16} color={Colors.primary} />
-            <Text style={styles.newInlineText}>New Address</Text>
-          </TouchableOpacity>
+        {/* search */}
+        <View style={s.searchBox}>
+          <Ionicons name="search" size={18} color="#888" />
+          <TextInput
+            style={s.searchInput}
+            placeholder="Search area, street, landmark"
+            value={listQuery}
+            onChangeText={setListQuery}
+            returnKeyType="search"
+            onSubmitEditing={searchFromList}
+          />
+          {busy ? (
+            <ActivityIndicator size="small" color={Colors.primary} />
+          ) : (
+            !!listQuery && (
+              <TouchableOpacity onPress={searchFromList}>
+                <Text style={{ color: Colors.primary, fontWeight: "800" }}>
+                  Go
+                </Text>
+              </TouchableOpacity>
+            )
+          )}
         </View>
 
-        {addressBook.length ? (
-          <View style={styles.addressList}>
-            {addressBook.map((address) => (
-              <View key={address.id} style={styles.addressCard}>
-                <View style={styles.addressTop}>
-                  <View style={styles.typeBadge}>
-                    <Ionicons
-                      name={
-                        address.label === "work"
-                          ? "briefcase-outline"
-                          : address.label === "other"
-                            ? "location-outline"
-                            : "home-outline"
-                      }
-                      size={14}
-                      color={Colors.primary}
-                    />
-                    <Text style={styles.typeText}>{String(address.label || "home").toUpperCase()}</Text>
-                  </View>
-                  {address.is_default && (
-                    <View style={styles.defaultBadge}>
-                      <Text style={styles.defaultBadgeText}>Default</Text>
-                    </View>
-                  )}
-                </View>
-                <Text style={styles.addressText}>{formatDeliveryAddress(address)}</Text>
-                <View style={styles.actions}>
-                  {!address.is_default && (
-                    <TouchableOpacity
-                      style={styles.actionBtn}
-                      onPress={() => setDefaultAddress(address)}
-                      disabled={saving}
-                    >
-                      <Ionicons name="checkmark-circle-outline" size={15} color={Colors.primary} />
-                      <Text style={styles.actionText}>Set Default</Text>
-                    </TouchableOpacity>
-                  )}
-                  <TouchableOpacity style={styles.actionBtn} onPress={() => openEditAddress(address)}>
-                    <Ionicons name="create-outline" size={15} color="#2563eb" />
-                    <Text style={[styles.actionText, { color: "#2563eb" }]}>Edit</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.actionBtn}
-                    onPress={() => deleteAddress(address)}
-                    disabled={saving}
-                  >
-                    <Ionicons name="trash-outline" size={15} color="#dc2626" />
-                    <Text style={[styles.actionText, { color: "#dc2626" }]}>Delete</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ))}
-          </View>
-        ) : (
-          <TouchableOpacity style={styles.emptyCard} onPress={openNewAddress}>
-            <Ionicons name="location-outline" size={28} color={Colors.primary} />
-            <Text style={styles.emptyTitle}>No address added yet</Text>
-            <Text style={styles.emptyText}>Add your delivery address to place orders faster.</Text>
+        {/* add address */}
+        <TouchableOpacity
+          style={s.addBtn}
+          onPress={openNew}
+          activeOpacity={0.85}
+        >
+          <Ionicons name="add-circle" size={20} color="#fff" />
+          <Text style={s.addBtnText}>Add new address</Text>
+        </TouchableOpacity>
+
+        {/* saved */}
+        <Text style={s.section}>SAVED ADDRESSES</Text>
+
+        {addresses.length === 0 && (
+          <TouchableOpacity style={s.emptyCard} onPress={openNew}>
+            <Ionicons
+              name="location-outline"
+              size={28}
+              color={Colors.primary}
+            />
+            <Text style={s.emptyTitle}>No address added yet</Text>
+            <Text style={s.emptyText}>
+              Add your delivery address to order faster.
+            </Text>
           </TouchableOpacity>
         )}
 
-        {formOpen && (
-          <View style={styles.formCard}>
-            <View style={styles.formHeader}>
-              <Text style={styles.formTitle}>{editingId ? "Edit Address" : "New Address"}</Text>
-              <TouchableOpacity onPress={() => setFormOpen(false)}>
-                <Ionicons name="close" size={20} color="#6b7280" />
+        {addresses.map((a) => (
+          <View key={a.id} style={s.addrCard}>
+            <View style={s.addrTop}>
+              <View style={s.badge}>
+                <Ionicons
+                  name={
+                    a.label === "work"
+                      ? "briefcase-outline"
+                      : a.label === "other"
+                        ? "location-outline"
+                        : "home-outline"
+                  }
+                  size={13}
+                  color={Colors.primary}
+                />
+                <Text style={s.badgeText}>{a.label.toUpperCase()}</Text>
+              </View>
+              {a.is_default && (
+                <View style={s.defBadge}>
+                  <Text style={s.defText}>DEFAULT</Text>
+                </View>
+              )}
+            </View>
+
+            <Text style={s.addrText}>{formatAddr(a) || a.full_address}</Text>
+            {!!a.landmark && <Text style={s.sub}>Landmark: {a.landmark}</Text>}
+            {a.lat && a.lng ? (
+              <Text style={s.sub}>
+                📍 {Number(a.lat).toFixed(5)}, {Number(a.lng).toFixed(5)}
+              </Text>
+            ) : (
+              <Text style={[s.sub, { color: "#dc2626" }]}>
+                Location not pinned. Tap Edit.
+              </Text>
+            )}
+
+            <View style={s.actions}>
+              {!a.is_default && (
+                <TouchableOpacity
+                  style={s.actionBtn}
+                  onPress={() => setDefault(a)}
+                >
+                  <Ionicons
+                    name="checkmark-circle-outline"
+                    size={15}
+                    color={Colors.primary}
+                  />
+                  <Text style={s.actionText}>Set Default</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity style={s.actionBtn} onPress={() => openEdit(a)}>
+                <Ionicons name="create-outline" size={15} color="#2563eb" />
+                <Text style={[s.actionText, { color: "#2563eb" }]}>Edit</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={s.actionBtn}
+                onPress={() => removeAddress(a)}
+              >
+                <Ionicons name="trash-outline" size={15} color="#dc2626" />
+                <Text style={[s.actionText, { color: "#dc2626" }]}>Delete</Text>
               </TouchableOpacity>
             </View>
+          </View>
+        ))}
+      </ScrollView>
 
-            <View style={styles.typeRow}>
-              {[
-                { key: "home", label: "Home", icon: "home-outline" },
-                { key: "work", label: "Work", icon: "briefcase-outline" },
-                { key: "other", label: "Other", icon: "location-outline" },
-              ].map((item) => {
-                const active = (form.label || "home") === item.key;
-                return (
-                  <TouchableOpacity
-                    key={item.key}
-                    style={[styles.typeChip, active && styles.typeChipActive]}
-                    onPress={() => setForm({ ...form, label: item.key })}
-                  >
-                    <Ionicons name={item.icon as any} size={14} color={active ? "#fff" : Colors.primary} />
-                    <Text style={[styles.typeChipText, active && styles.typeChipTextActive]}>
-                      {item.label}
+      {/* ── Map + details modal ── */}
+      <Modal
+        visible={mapOpen}
+        animationType="slide"
+        statusBarTranslucent
+        onRequestClose={() => setMapOpen(false)}
+      >
+        <View style={{ flex: 1 }}>
+          <StatusBar style="dark" translucent />
+<View
+  style={StyleSheet.absoluteFill}
+  pointerEvents={step === "map" ? "auto" : "none"}
+>
+  <LeafletMap
+    ref={mapRef}
+    lat={region.latitude}
+    lng={region.longitude}
+    onMove={(la, ln) =>
+      setRegion((r) => ({ ...r, latitude: la, longitude: ln }))
+    }
+  />
+</View>
+
+          {step === "map" && (
+            <View pointerEvents="none" style={s.pinWrap}>
+              <Ionicons name="location" size={42} color={Colors.primary} />
+            </View>
+          )}
+
+          {/* top: close + search */}
+          <View
+            style={[s.topBar, { paddingTop: insets.top + 8 }]}
+            pointerEvents="box-none"
+          >
+            <TouchableOpacity
+              style={s.roundBtn}
+              onPress={() => setMapOpen(false)}
+            >
+              <Ionicons name="close" size={20} color="#111" />
+            </TouchableOpacity>
+            {step === "map" && (
+              <View style={s.mapSearchBox}>
+                <Ionicons name="search" size={18} color="#888" />
+                <TextInput
+                  style={s.searchInput}
+                  placeholder="Search area, street, landmark"
+                  value={mapQuery}
+                  onChangeText={setMapQuery}
+                  returnKeyType="search"
+                  onSubmitEditing={searchInMap}
+                />
+                {!!mapQuery && (
+                  <TouchableOpacity onPress={searchInMap}>
+                    <Text style={{ color: Colors.primary, fontWeight: "800" }}>
+                      Go
                     </Text>
                   </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            <Input
-              label="Complete Address"
-              value={form.full_address || ""}
-              onChangeText={(text) => setForm({ ...form, full_address: text })}
-              placeholder="House, street, society or nearby area"
-            />
-            <Input
-              label="Area / Society*"
-              value={form.area || ""}
-              onChangeText={(text) => setForm({ ...form, area: text })}
-              placeholder="Society, colony or area"
-            />
-            <Input
-              label="City*"
-              value={form.city || ""}
-              onChangeText={(text) => setForm({ ...form, city: text })}
-              placeholder="City"
-            />
-            <Input
-              label="Pincode"
-              value={form.pincode || ""}
-              onChangeText={(text) =>
-                setForm({ ...form, pincode: text.replace(/\D/g, "").slice(0, 6) })
-              }
-              placeholder="Optional"
-              keyboardType="number-pad"
-            />
-
-            <TouchableOpacity
-              style={styles.defaultRow}
-              onPress={() => setForm({ ...form, is_default: !form.is_default })}
-            >
-              <View style={[styles.checkBox, form.is_default && styles.checkBoxActive]}>
-                {form.is_default && <Ionicons name="checkmark" size={13} color="#fff" />}
+                )}
               </View>
-              <Text style={styles.defaultRowText}>Use as default delivery address</Text>
-            </TouchableOpacity>
-
-            <Button
-              title={saving ? "Saving..." : editingId ? "Save Address" : "Add Address"}
-              onPress={saveAddress}
-              loading={saving}
-            />
+            )}
           </View>
-        )}
 
-        <View style={{ height: 30 }} />
-      </ScrollView>
+          {/* step 1 buttons */}
+          {step === "map" && (
+            <View
+              style={[
+                s.bottom,
+                { bottom: Platform.OS === "ios" ? 12 + insets.bottom : 24 },
+              ]}
+            >
+              <TouchableOpacity
+                style={s.primaryBtn}
+                onPress={useCurrentLocation}
+                disabled={busy}
+              >
+                {busy ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <>
+                    <Ionicons name="navigate" size={18} color="#fff" />
+                    <Text style={s.primaryText}>Use current location</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={s.ghostBtn}
+                onPress={confirmPin}
+                disabled={busy}
+              >
+                <Text style={s.ghostText}>Confirm pin location</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* step 2 details */}
+          {step === "details" && (
+            <KeyboardAvoidingView
+              behavior={Platform.OS === "ios" ? "padding" : undefined}
+              style={s.sheetWrap}
+            >
+              <View
+                style={[
+                  s.sheet,
+                  {
+                    maxHeight: winH * 0.6,
+                    paddingBottom: Platform.OS === "ios" ? insets.bottom : 2,
+                  },
+                ]}
+              >
+                <View style={s.handle} />
+                <ScrollView
+                  style={{ flexShrink: 1 }}
+                  showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                >
+                  <View style={s.locRow}>
+                    <Ionicons
+                      name="location"
+                      size={18}
+                      color={Colors.primary}
+                    />
+                    <Text style={s.locText} numberOfLines={2}>
+                      {form.full_address || "Selected location"}
+                    </Text>
+                    <TouchableOpacity onPress={() => setStep("map")}>
+                      <Text
+                        style={{ color: Colors.primary, fontWeight: "800" }}
+                      >
+                        Change
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={s.chipRow}>
+                    {(["home", "work", "other"] as const).map((l) => (
+                      <TouchableOpacity
+                        key={l}
+                        style={[s.chip, form.label === l && s.chipActive]}
+                        onPress={() => setField("label", l)}
+                      >
+                        <Text
+                          style={[
+                            s.chipText,
+                            form.label === l && { color: "#fff" },
+                          ]}
+                        >
+                          {l.charAt(0).toUpperCase() + l.slice(1)}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  <View style={s.row2}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.lbl}>Flat / House no. *</Text>
+                      <TextInput
+                        style={s.input}
+                        value={form.flat}
+                        onChangeText={(v) => setField("flat", v)}
+                        placeholder="e.g. 868"
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.lbl}>Building / Society *</Text>
+                      <TextInput
+                        style={s.input}
+                        value={form.building}
+                        onChangeText={(v) => setField("building", v)}
+                        placeholder="e.g. Tower B"
+                      />
+                    </View>
+                  </View>
+
+                  <Text style={s.lbl}>Area</Text>
+                  <TextInput
+                    style={s.input}
+                    value={form.area}
+                    onChangeText={(v) => setField("area", v)}
+                  />
+
+                  <View style={s.row2}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.lbl}>City</Text>
+                      <TextInput
+                        style={s.input}
+                        value={form.city}
+                        onChangeText={(v) => setField("city", v)}
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.lbl}>Pincode</Text>
+                      <TextInput
+                        style={s.input}
+                        value={form.pincode}
+                        onChangeText={(v) =>
+                          setField("pincode", v.replace(/\D/g, "").slice(0, 6))
+                        }
+                        keyboardType="number-pad"
+                        maxLength={6}
+                      />
+                    </View>
+                  </View>
+
+                  <Text style={s.lbl}>Landmark (optional)</Text>
+                  <TextInput
+                    style={s.input}
+                    value={form.landmark}
+                    onChangeText={(v) => setField("landmark", v)}
+                  />
+
+                  <View style={s.row2}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.lbl}>Latitude</Text>
+                      <TextInput
+                        style={[s.input, s.readonly]}
+                        value={
+                          form.lat != null ? Number(form.lat).toFixed(6) : ""
+                        }
+                        editable={false}
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.lbl}>Longitude</Text>
+                      <TextInput
+                        style={[s.input, s.readonly]}
+                        value={
+                          form.lng != null ? Number(form.lng).toFixed(6) : ""
+                        }
+                        editable={false}
+                      />
+                    </View>
+                  </View>
+
+                  <TouchableOpacity
+                    style={s.defRow}
+                    onPress={() => setField("is_default", !form.is_default)}
+                  >
+                    <View
+                      style={[
+                        s.check,
+                        form.is_default && { backgroundColor: Colors.primary },
+                      ]}
+                    >
+                      {form.is_default && (
+                        <Ionicons name="checkmark" size={14} color="#fff" />
+                      )}
+                    </View>
+                    <Text style={{ fontWeight: "700", color: "#111" }}>
+                      Set as default address
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[s.primaryBtn, { marginTop: 14 }]}
+                    onPress={saveAddress}
+                    disabled={saving}
+                  >
+                    {saving ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text style={s.primaryText}>Save address</Text>
+                    )}
+                  </TouchableOpacity>
+                </ScrollView>
+              </View>
+            </KeyboardAvoidingView>
+          )}
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
+const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F4F6F8" },
   header: {
     flexDirection: "row",
@@ -403,16 +779,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   title: { fontSize: 18, fontWeight: "900", color: "#111827" },
-  subtitle: { marginTop: 2, fontSize: 12, fontWeight: "600", color: "#6B7280" },
-  addTopBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: Colors.primary,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  content: { padding: 16, gap: 14 },
+
   requiredCard: {
     flexDirection: "row",
     alignItems: "center",
@@ -422,74 +789,103 @@ const styles = StyleSheet.create({
     backgroundColor: "#FEF2F2",
     borderWidth: 1,
     borderColor: "#FECACA",
+    marginBottom: 14,
   },
   requiredText: { flex: 1, fontSize: 13, fontWeight: "800", color: "#991B1B" },
-  defaultCard: {
+
+  searchBox: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    padding: 14,
+    gap: 8,
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    height: 48,
+    borderWidth: 1,
+    borderColor: "#EEF0F3",
+    marginBottom: 12,
+  },
+  searchInput: { flex: 1, fontSize: 14, color: "#111" },
+  addBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: Colors.primary,
+    borderRadius: 16,
+    paddingVertical: 14,
+  },
+  addBtnText: { color: "#fff", fontWeight: "800", fontSize: 15 },
+  section: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#999",
+    letterSpacing: 1,
+    marginTop: 22,
+    marginBottom: 10,
+  },
+  emptyCard: {
+    alignItems: "center",
+    padding: 24,
     borderRadius: 16,
     backgroundColor: "#fff",
     borderWidth: 1,
-    borderColor: "#E7F2EA",
+    borderStyle: "dashed",
+    borderColor: "#BFD7C7",
   },
-  defaultIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: "#EEF8F1",
-    alignItems: "center",
-    justifyContent: "center",
+  emptyTitle: {
+    marginTop: 10,
+    fontSize: 15,
+    fontWeight: "900",
+    color: "#111827",
   },
-  defaultLabel: { fontSize: 12, fontWeight: "900", color: Colors.primary },
-  defaultText: { marginTop: 3, fontSize: 13, fontWeight: "700", color: "#111827", lineHeight: 18 },
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+  emptyText: {
+    marginTop: 4,
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#6B7280",
+    textAlign: "center",
   },
-  sectionTitle: { fontSize: 15, fontWeight: "900", color: "#111827" },
-  newInlineBtn: { flexDirection: "row", alignItems: "center", gap: 5 },
-  newInlineText: { fontSize: 12, fontWeight: "900", color: Colors.primary },
-  addressList: { gap: 12 },
-  addressCard: {
-    padding: 14,
-    borderRadius: 16,
+
+  addrCard: {
     backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: "#EEF0F3",
   },
-  addressTop: {
+  addrTop: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    gap: 8,
     marginBottom: 8,
   },
-  typeBadge: {
+  badge: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
+    gap: 5,
     backgroundColor: "#EEF8F1",
-  },
-  typeText: { fontSize: 11, fontWeight: "900", color: Colors.primary },
-  defaultBadge: {
-    paddingHorizontal: 9,
-    paddingVertical: 5,
     borderRadius: 999,
-    backgroundColor: "#ECFDF5",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
   },
-  defaultBadgeText: { fontSize: 10, fontWeight: "900", color: "#047857" },
-  addressText: { fontSize: 13, fontWeight: "700", color: "#374151", lineHeight: 19 },
-  actions: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginTop: 12,
+  badgeText: { fontSize: 10, fontWeight: "900", color: Colors.primary },
+  defBadge: {
+    backgroundColor: Colors.primary,
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
   },
+  defText: { fontSize: 10, fontWeight: "900", color: "#fff" },
+  addrText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#111827",
+    lineHeight: 20,
+  },
+  sub: { fontSize: 12, color: "#64748B", marginTop: 4 },
+  actions: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 },
   actionBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -500,62 +896,141 @@ const styles = StyleSheet.create({
     backgroundColor: "#F9FAFB",
   },
   actionText: { fontSize: 12, fontWeight: "900", color: Colors.primary },
-  emptyCard: {
-    alignItems: "center",
-    padding: 24,
-    borderRadius: 16,
-    backgroundColor: "#fff",
-    borderWidth: 1,
-    borderStyle: "dashed",
-    borderColor: "#BFD7C7",
+
+  // map modal
+  pinWrap: {
+    position: "absolute",
+    top: "50%",
+    left: "50%",
+    marginLeft: -21,
+    marginTop: -42,
   },
-  emptyTitle: { marginTop: 10, fontSize: 15, fontWeight: "900", color: "#111827" },
-  emptyText: { marginTop: 4, fontSize: 12, fontWeight: "600", color: "#6B7280", textAlign: "center" },
-  formCard: {
-    padding: 14,
-    borderRadius: 18,
-    backgroundColor: "#fff",
-    borderWidth: 1,
-    borderColor: "#DDEFE3",
-  },
-  formHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 12,
-  },
-  formTitle: { fontSize: 16, fontWeight: "900", color: "#111827" },
-  typeRow: { flexDirection: "row", gap: 8, marginBottom: 12 },
-  typeChip: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: "#F3F8F5",
-    borderWidth: 1,
-    borderColor: "#DDEFE3",
-  },
-  typeChipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  typeChipText: { fontSize: 12, fontWeight: "900", color: Colors.primary },
-  typeChipTextActive: { color: "#fff" },
-  defaultRow: {
+  topBar: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    marginVertical: 12,
+    paddingHorizontal: 14,
   },
-  checkBox: {
+  roundBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+    elevation: 4,
+    shadowColor: "#000",
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+  },
+  mapSearchBox: {
+    flex: 1,
+    height: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#fff",
+    borderRadius: 22,
+    paddingHorizontal: 14,
+    elevation: 4,
+    shadowColor: "#000",
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+  },
+  bottom: { position: "absolute", left: 16, right: 16, gap: 10 },
+  primaryBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: Colors.primary,
+    borderRadius: 16,
+    paddingVertical: 15,
+  },
+  primaryText: { color: "#fff", fontWeight: "800", fontSize: 15 },
+  ghostBtn: {
+    alignItems: "center",
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    paddingVertical: 13,
+    elevation: 3,
+  },
+  ghostText: { color: Colors.primary, fontWeight: "800", fontSize: 14 },
+
+  sheetWrap: { position: "absolute", left: 0, right: 0, bottom: 0 },
+  sheet: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: 20,
+    maxHeight: "65%",
+  },
+  handle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#E5E7EB",
+    alignSelf: "center",
+    marginBottom: 14,
+  },
+  locRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#F8FBF7",
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 12,
+  },
+  locText: { flex: 1, fontSize: 13, fontWeight: "600", color: "#111827" },
+  chipRow: { flexDirection: "row", gap: 8, marginBottom: 6 },
+  chip: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 9,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.primary + "33",
+    backgroundColor: Colors.primary + "08",
+  },
+  chipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  chipText: { fontSize: 12, fontWeight: "800", color: Colors.primary },
+  row2: { flexDirection: "row", gap: 10 },
+  lbl: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#888",
+    marginTop: 12,
+    marginBottom: 5,
+  },
+  input: {
+    backgroundColor: "#F8F8FA",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    fontSize: 14,
+    color: "#111",
+    borderWidth: 1,
+    borderColor: "#eee",
+  },
+  readonly: { color: "#94A3B8" },
+  defRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 16,
+  },
+  check: {
     width: 22,
     height: 22,
     borderRadius: 7,
-    borderWidth: 2,
-    borderColor: "#CBD5E1",
+    borderWidth: 1.5,
+    borderColor: Colors.primary,
     alignItems: "center",
     justifyContent: "center",
   },
-  checkBoxActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  defaultRowText: { fontSize: 13, fontWeight: "800", color: "#111827" },
 });

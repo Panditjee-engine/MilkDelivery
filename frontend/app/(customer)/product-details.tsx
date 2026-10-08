@@ -288,7 +288,7 @@ export default function ProductDetailsScreen() {
     // ── BUY ONCE = just add to cart, don't place order here ──
     if (pattern === "buy_once") {
       if (quantity > stock) {
-        setFeedback(`Only ${stock} item available.`);
+        setFeedback("Maximum available quantity reached.");
         setFeedbackType(null);
         return;
       }
@@ -465,7 +465,15 @@ export default function ProductDetailsScreen() {
             <View style={s.infoBox}>
               <Ionicons name="cube-outline" size={18} color={Colors.primary} />
               <Text style={s.infoLabel}>Stock</Text>
-              <Text style={s.infoValue}>{product.stock ?? "Available"}</Text>
+              <Text
+                style={[
+                  s.infoValue,
+                  { color: isUnavailable ? "#DC2626" : "#16A34A" },
+                ]}
+              >
+                {isUnavailable ? "Out of stock" : "In stock"}
+              </Text>
+              <Text style={s.infoValue}>{"Available"}</Text>
             </View>
             <View style={s.infoBox}>
               <Ionicons
@@ -473,7 +481,7 @@ export default function ProductDetailsScreen() {
                 size={18}
                 color={Colors.primary}
               />
-              <Text style={s.infoLabel}>Order</Text>
+              <Text style={s.infoLabel}>Order/Subcribe</Text>
               <Text style={s.infoValue}>Subscribe or cart</Text>
             </View>
           </View>
@@ -490,38 +498,38 @@ export default function ProductDetailsScreen() {
             {feedbackSummary?.total_reviews > 0 ? (
               <>
                 <View
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        gap: 8,
-                        marginBottom: 10,
-                      }}
-                    >
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 8,
+                    marginBottom: 10,
+                  }}
+                >
                   <Text
-                        style={{
-                          fontSize: 22,
-                          fontWeight: "900",
-                          color: "#111827",
-                        }}
-                      >
+                    style={{
+                      fontSize: 22,
+                      fontWeight: "900",
+                      color: "#111827",
+                    }}
+                  >
                     {feedbackSummary.average_rating.toFixed(1)}
                   </Text>
                   <View>
                     <StarRating
-                          value={Math.round(feedbackSummary.average_rating)}
-                          readOnly
-                          size={16}
-                        />
+                      value={Math.round(feedbackSummary.average_rating)}
+                      readOnly
+                      size={16}
+                    />
                     <Text
-                          style={{
-                            fontSize: 12,
-                            color: "#6B7280",
-                            fontWeight: "700",
-                            marginTop: 2,
-                          }}
-                        >
+                      style={{
+                        fontSize: 12,
+                        color: "#6B7280",
+                        fontWeight: "700",
+                        marginTop: 2,
+                      }}
+                    >
                       {feedbackSummary.total_reviews} review
-                          {feedbackSummary.total_reviews > 1 ? "s" : ""}
+                      {feedbackSummary.total_reviews > 1 ? "s" : ""}
                     </Text>
                   </View>
                 </View>
@@ -535,32 +543,32 @@ export default function ProductDetailsScreen() {
                     }}
                   >
                     <View
-                          style={{
-                            flexDirection: "row",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                          }}
-                        >
+                      style={{
+                        flexDirection: "row",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
                       <Text
-                            style={{
-                              fontSize: 13,
-                              fontWeight: "800",
-                              color: "#111827",
-                            }}
-                          >
+                        style={{
+                          fontSize: 13,
+                          fontWeight: "800",
+                          color: "#111827",
+                        }}
+                      >
                         {fb.customer_name || "Customer"}
                       </Text>
                       <StarRating value={fb.rating} readOnly size={13} />
                     </View>
                     {fb.comment ? (
                       <Text
-                            style={{
-                              fontSize: 13,
-                              color: "#6B7280",
-                              marginTop: 4,
-                              lineHeight: 18,
-                            }}
-                          >
+                        style={{
+                          fontSize: 13,
+                          color: "#6B7280",
+                          marginTop: 4,
+                          lineHeight: 18,
+                        }}
+                      >
                         {fb.comment}
                       </Text>
                     ) : null}
@@ -569,12 +577,12 @@ export default function ProductDetailsScreen() {
               </>
             ) : (
               <Text
-                    style={{
-                      fontSize: 13,
-                      color: "#9CA3AF",
-                      fontWeight: "600",
-                    }}
-                  >
+                style={{
+                  fontSize: 13,
+                  color: "#9CA3AF",
+                  fontWeight: "600",
+                }}
+              >
                 No reviews yet for this product.
               </Text>
             )}

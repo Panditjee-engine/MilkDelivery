@@ -12,12 +12,14 @@ const MAX_TRANSLATE = WIDTH - THUMB_SIZE - 4;
 type Props = {
   text?: string;
   disabled?: boolean;
+  color?: string;
   onSwipeSuccess: () => void;
 };
 
 export default function SwipeToConfirm({
   text = 'Swipe → Confirm',
   disabled = false,
+  color = '#16a34a',
   onSwipeSuccess,
 }: Props) {
   const translateX = useRef(new Animated.Value(0)).current;
@@ -37,7 +39,7 @@ export default function SwipeToConfirm({
 
   const fillColor = translateX.interpolate({
     inputRange: [0, MAX_TRANSLATE],
-    outputRange: ['#e5e7eb', '#22c55e'],
+    outputRange: ['#e5e7eb', '#e5e7eb'],
   });
 
   const panResponder = useRef(
@@ -89,15 +91,14 @@ export default function SwipeToConfirm({
         <Animated.View style={[styles.fill, { width: fillWidth, backgroundColor: fillColor }]} />
 
         <Text style={[styles.text, disabled && styles.textDisabled]}>{text}</Text>
-
-        <Animated.View
-          {...panResponder.panHandlers}
-          style={[
-            styles.thumb,
-            { transform: [{ translateX }] },
-            disabled && styles.thumbDisabled,
-          ]}
-        >
+<Animated.View
+  {...panResponder.panHandlers}
+  style={[
+    styles.thumb,
+    { transform: [{ translateX }] },
+    disabled && styles.thumbDisabled,
+  ]}
+>
           <Ionicons name="chevron-forward" size={24} color="#fff" />
         </Animated.View>
       </View>

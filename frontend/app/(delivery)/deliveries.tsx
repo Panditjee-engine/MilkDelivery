@@ -1,4 +1,5 @@
 import { useCachedScreenState } from "../../src/hooks/useCachedScreenState";
+import SwipeToConfirm from "../../src/components/SwipeToConfirm";
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
@@ -18,10 +19,19 @@ import { useRouter } from "expo-router";
 import { api } from "../../src/services/api";
 import LoadingScreen from "../../src/components/LoadingScreen";
 
+import { useRiderLocation } from "../../src/hooks/useRiderLocation";
+import {
+  distanceKm,
+  formatDistance,
+  openRouteInMaps,
+  openAddressInMaps,
+} from "../../src/utils/geo";
+
 //helper for adresss
-  function formatOrderAddress(address?: any): string {
+function formatOrderAddress(address?: any): string {
   if (!address) return "Address not available";
-  const isOnlineShape = !address.line1 && (address.tower || address.flat || address.area);
+  const isOnlineShape =
+    !address.line1 && (address.tower || address.flat || address.area);
   if (isOnlineShape) {
     const firstLine = [address.flat, address.tower].filter(Boolean).join(", ");
     const lines = [
@@ -58,13 +68,26 @@ type TabType = "active" | "completed";
 
 export default function DeliveriesScreen() {
   const router = useRouter();
-  const [loading, setLoading] = useState(() => api.getScreenSnapshot("screen:(delivery)/deliveries:myOrders") === undefined);
+  const [loading, setLoading] = useState(
+    () =>
+      api.getScreenSnapshot("screen:(delivery)/deliveries:myOrders") ===
+      undefined,
+  );
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>("active");
-  const [checkinStatus, setCheckinStatus] = useCachedScreenState<any>("screen:(delivery)/deliveries:checkinStatus", null);
+  const [checkinStatus, setCheckinStatus] = useCachedScreenState<any>(
+    "screen:(delivery)/deliveries:checkinStatus",
+    null,
+  );
 
-  const [availableOrders, setAvailableOrders] = useCachedScreenState<any[]>("screen:(delivery)/deliveries:availableOrders", []);
-  const [myOrders, setMyOrders] = useCachedScreenState<any[]>("screen:(delivery)/deliveries:myOrders", []);
+  const [availableOrders, setAvailableOrders] = useCachedScreenState<any[]>(
+    "screen:(delivery)/deliveries:availableOrders",
+    [],
+  );
+  const [myOrders, setMyOrders] = useCachedScreenState<any[]>(
+    "screen:(delivery)/deliveries:myOrders",
+    [],
+  );
 
   const [otpModalVisible, setOtpModalVisible] = useState(false);
   const [otpType, setOtpType] = useState<"pickup" | "delivery">("pickup");
@@ -129,8 +152,6 @@ export default function DeliveriesScreen() {
     ]).start(() => setShowSuccessToast(false));
   };
 
-
-  
   const handleAcceptOrder = async (order: any) => {
     try {
       const orderId = order.id || order._id;
@@ -258,9 +279,12 @@ export default function DeliveriesScreen() {
     ]);
   };
 
-  if (loading) return <LoadingScreen />;
+    const needsLocation = myOrders.some((o) =>
+    ["picked_up", "out_for_delivery"].includes(o.status),
+  );
+  const { coords: riderCoords } = useRiderLocation(needsLocation);
 
-  
+  if (loading) return <LoadingScreen />;
 
   const activeOrders = myOrders.filter((o) =>
     ["assigned", "picked_up", "out_for_delivery"].includes(o.status),
@@ -353,6 +377,7 @@ export default function DeliveriesScreen() {
                       <OrderCard
                         key={order.id || order._id}
                         order={order}
+                        riderCoords={riderCoords}
                         onPickup={() => handleStartPickup(order)}
                         onDeliver={() => handleStartDelivery(order)}
                         onCancel={() => handleCancelOrder(order)}
@@ -556,6 +581,7 @@ function OrderCard({
   onDeliver,
   onCancel,
   isAvailable,
+  riderCoords,
 }: {
   order: any;
   onAccept?: () => void;
@@ -563,82 +589,147 @@ function OrderCard({
   onDeliver?: () => void;
   onCancel?: () => void;
   isAvailable?: boolean;
+  riderCoords?: { latitude: number; longitude: number } | null;
 }) {
+  const [expanded, setExpanded] = useState(false);
+
   const isPrePickup = isAvailable || order.status === "assigned";
-  const contactName = order.display_name || (isPrePickup ? "Admin" : order.customer_name || "Customer");
+  const contactName =
+    order.display_name ||
+    (isPrePickup ? "Admin" : order.customer_name || "Customer");
   const contactPhone = order.display_phone || order.customer_phone || "N/A";
   const addressText = formatOrderAddress(order.display_address || order.address);
   const items: any[] = order.items || [];
   const isWalletPayment =
     String(order.payment_method || "").toLowerCase().trim() === "wallet";
 
+  const destLat = Number(order.address?.lat);
+  const destLng = Number(order.address?.lng);
+  const hasDest = !isNaN(destLat) && !isNaN(destLng) && !!order.address?.lat;
+  const distText =
+    !isPrePickup && hasDest && riderCoords
+      ? formatDistance(
+          distanceKm(riderCoords.latitude, riderCoords.longitude, destLat, destLng),
+        )
+      : null;
+
+  const canOpenMap =
+    (!isPrePickup && hasDest) || addressText !== "Address not available";
+  const openMap = () =>
+    !isPrePickup && hasDest
+      ? openRouteInMaps(destLat, destLng)
+      : openAddressInMaps(addressText);
+
   return (
     <View style={styles.card}>
-      <View style={styles.cardHeader}>
+      {/* ── Collapsed row: Name, contact, map icon ── */}
+      <TouchableOpacity
+        style={styles.collapsedRow}
+        activeOpacity={0.8}
+        onPress={() => setExpanded((v) => !v)}
+      >
         <View style={{ flex: 1 }}>
-          <View style={styles.stageTag}>
-            <Ionicons
-              name={isPrePickup ? "storefront-outline" : "home-outline"}
-              size={11}
-              color={C.dark}
-            />
-            <Text style={styles.stageTagText}>
-              {isPrePickup ? "Pickup from Admin" : "Deliver to Customer"}
-            </Text>
-          </View>
-          <Text style={styles.customerName}>{contactName}</Text>
+          <Text style={styles.customerName} numberOfLines={1}>
+            {contactName}
+          </Text>
+          <Text style={styles.phone}>{contactPhone}</Text>
         </View>
-        {!isWalletPayment && (
-          <Text style={styles.amount}>₹{order.total_amount || 0}</Text>
-        )}
-      </View>
 
-      <Text style={styles.phone}> {contactPhone}</Text>
-      <Text style={styles.address}> {addressText}</Text>
-
-      {items.length > 0 && (
-        <View style={styles.itemsBox}>
-          <Text style={styles.itemsBoxTitle}>Order Items</Text>
-          {items.map((item, idx) => (
-            <View key={idx} style={styles.itemRow}>
-              <Text style={styles.itemName} numberOfLines={1}>
-                {item.product_name || "Product"} × {item.quantity}
-              </Text>
-              {!isWalletPayment && (
-                <Text style={styles.itemAmount}>
-                  ₹{item.amount ?? (item.price || 0) * (item.quantity || 0)}
-                </Text>
-              )}
-            </View>
-          ))}
-        </View>
-      )}
-
-      <View style={styles.cardFooter}>
-        {isAvailable ? (
-          <TouchableOpacity style={styles.actionButton} onPress={onAccept}>
-            <Text style={styles.actionButtonText}>Accept Order</Text>
+        {canOpenMap && (
+          <TouchableOpacity style={styles.mapIconBtn} onPress={openMap}>
+            <Ionicons name="map-outline" size={18} color="#fff" />
           </TouchableOpacity>
-        ) : (
-          <View style={styles.buttonGroup}>
-            {order.status === "assigned" ? (
-              <TouchableOpacity style={styles.pickupButton} onPress={onPickup}>
-                <Text style={styles.pickupButtonText}>Verify Pickup</Text>
-              </TouchableOpacity>
+        )}
+        <Ionicons
+          name={expanded ? "chevron-up" : "chevron-down"}
+          size={18}
+          color={C.textLight}
+        />
+      </TouchableOpacity>
+
+      {/* ── Expanded body ── */}
+      {expanded && (
+        <View style={styles.expandedBody}>
+          <View style={styles.cardHeader}>
+            <View style={styles.stageTag}>
+              <Ionicons
+                name={isPrePickup ? "storefront-outline" : "home-outline"}
+                size={11}
+                color={C.dark}
+              />
+              <Text style={styles.stageTagText}>
+                {isPrePickup ? "Pickup from Admin" : "Deliver to Customer"}
+              </Text>
+            </View>
+            {!isWalletPayment && (
+              <Text style={styles.amount}>₹{order.total_amount || 0}</Text>
+            )}
+          </View>
+
+          <Text style={styles.address}>{addressText}</Text>
+
+          {!isPrePickup && hasDest && (
+            <View style={styles.distanceBox}>
+              <View style={styles.distanceRow}>
+                <Ionicons name="navigate-outline" size={16} color={C.dark} />
+                <Text style={styles.distanceText}>
+                  {distText
+                    ? `${distText} from you (customer)`
+                    : "Getting your location..."}
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {items.length > 0 && (
+            <View style={styles.itemsBox}>
+              <Text style={styles.itemsBoxTitle}>Order Items</Text>
+              {items.map((item, idx) => (
+                <View key={idx} style={styles.itemRow}>
+                  <Text style={styles.itemName} numberOfLines={1}>
+                    {item.product_name || "Product"} × {item.quantity}
+                  </Text>
+                  {!isWalletPayment && (
+                    <Text style={styles.itemAmount}>
+                      ₹{item.amount ?? (item.price || 0) * (item.quantity || 0)}
+                    </Text>
+                  )}
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* ── Swipe actions ── */}
+          <View style={{ marginTop: 4, alignItems: "center" }}>
+            {isAvailable ? (
+              <SwipeToConfirm
+                text="Swipe to Accept Order"
+                color="#2563EB" // blue
+                onSwipeSuccess={() => onAccept?.()}
+              />
+            ) : order.status === "assigned" ? (
+              <SwipeToConfirm
+                text="Swipe to Verify Pickup"
+                color="#F59E0B" // yellow
+                onSwipeSuccess={() => onPickup?.()}
+              />
             ) : (
-              <TouchableOpacity
-                style={styles.deliverButton}
-                onPress={onDeliver}
-              >
-                <Text style={styles.deliverButtonText}>Complete Delivery</Text>
+              <SwipeToConfirm
+                text="Swipe to Complete Delivery"
+                color="#16A34A" // green
+                onSwipeSuccess={() => onDeliver?.()}
+              />
+            )}
+
+            {/* cancel only before pickup */}
+            {!isAvailable && order.status === "assigned" && (
+              <TouchableOpacity style={styles.cancelLink} onPress={onCancel}>
+                <Text style={styles.cancelLinkText}>Cancel Order</Text>
               </TouchableOpacity>
             )}
-            <TouchableOpacity style={styles.cancelButton} onPress={onCancel}>
-              <Text style={styles.cancelButtonText}>Cancel</Text>
-            </TouchableOpacity>
           </View>
-        )}
-      </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -876,37 +967,75 @@ const styles = StyleSheet.create({
   },
   successToastText: { color: "#FFFFFF", fontWeight: "600", fontSize: 14 },
   stageTag: {
-  flexDirection: "row",
-  alignItems: "center",
-  gap: 4,
-  alignSelf: "flex-start",
-  backgroundColor: C.light,
-  paddingHorizontal: 8,
-  paddingVertical: 3,
-  borderRadius: 8,
-  marginBottom: 4,
-},
-stageTagText: { fontSize: 10, fontWeight: "700", color: C.dark },
-itemsBox: {
-  backgroundColor: C.bg,
-  borderRadius: 10,
-  padding: 10,
-  marginBottom: 12,
-  borderWidth: 1,
-  borderColor: C.border,
-},
-itemsBoxTitle: {
-  fontSize: 11,
-  fontWeight: "700",
-  color: C.textMuted,
-  textTransform: "uppercase",
-  marginBottom: 6,
-},
-itemRow: {
-  flexDirection: "row",
-  justifyContent: "space-between",
-  paddingVertical: 3,
-},
-itemName: { flex: 1, fontSize: 13, color: C.text, fontWeight: "500" },
-itemAmount: { fontSize: 13, color: C.dark, fontWeight: "700" },
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    alignSelf: "flex-start",
+    backgroundColor: C.light,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    marginBottom: 4,
+  },
+  stageTagText: { fontSize: 10, fontWeight: "700", color: C.dark },
+  itemsBox: {
+    backgroundColor: C.bg,
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  itemsBoxTitle: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: C.textMuted,
+    textTransform: "uppercase",
+    marginBottom: 6,
+  },
+  itemRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 3,
+  },
+  itemName: { flex: 1, fontSize: 13, color: C.text, fontWeight: "500" },
+  itemAmount: { fontSize: 13, color: C.dark, fontWeight: "700" },
+  distanceBox: {
+    backgroundColor: C.bg,
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: C.border,
+    gap: 8,
+  },
+  distanceRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  distanceText: { fontSize: 13, fontWeight: "600", color: C.dark },
+  mapButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: C.dark,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  mapButtonText: { color: "#FFFFFF", fontWeight: "600", fontSize: 13 },
+    collapsedRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  mapIconBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: C.dark,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  expandedBody: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: C.border,
+  },
+  cancelLink: { marginTop: 10, padding: 6 },
+  cancelLinkText: { color: "#D64545", fontWeight: "600", fontSize: 13 },
 });
