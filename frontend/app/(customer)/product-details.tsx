@@ -163,25 +163,22 @@ export default function ProductDetailsScreen() {
     };
   }, [initialProduct, productId]);
 
-  useEffect(() => {
-    const adminId = product?.admin_id;
-    if (!adminId) return;
-    let mounted = true;
-    const loadCutoffs = async () => {
-      try {
-        const data = await api.getCatalogOrderCutoffs(String(adminId));
-        if (mounted) setOrderCutoffs(data || []);
-      } catch {
-        if (mounted) setOrderCutoffs([]);
-      }
-    };
-    loadCutoffs();
-    const interval = setInterval(loadCutoffs, 2000);
-    return () => {
-      mounted = false;
-      clearInterval(interval);
-    };
-  }, [product?.admin_id]);
+useEffect(() => {
+  const adminId = product?.admin_id;
+  if (!adminId) return;
+  let mounted = true;
+  (async () => {
+    try {
+      const data = await api.getCatalogOrderCutoffs(String(adminId));
+      if (mounted) setOrderCutoffs(data || []);
+    } catch {
+      if (mounted) setOrderCutoffs([]);
+    }
+  })();
+  return () => {
+    mounted = false;
+  };
+}, [product?.admin_id]);
 
   useEffect(() => {
     if (!productId) return;
@@ -465,16 +462,8 @@ export default function ProductDetailsScreen() {
             <View style={s.infoBox}>
               <Ionicons name="cube-outline" size={18} color={Colors.primary} />
               <Text style={s.infoLabel}>Stock</Text>
-              <Text
-                style={[
-                  s.infoValue,
-                  { color: isUnavailable ? "#DC2626" : "#16A34A" },
-                ]}
-              >
-                {isUnavailable ? "Out of stock" : "In stock"}
-              </Text>
-              <Text style={s.infoValue}>{"Available"}</Text>
-            </View>
+              <Text style={s.infoValue}>{ "Available"}</Text>
+           </View>
             <View style={s.infoBox}>
               <Ionicons
                 name="repeat-outline"

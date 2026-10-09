@@ -165,12 +165,12 @@ export interface AdminNotificationItem {
   admin_id?: string;
   event?: string;
   category:
-    | "order"
-    | "subscription"
-    | "wallet"
-    | "vacation"
-    | "general"
-    | string;
+  | "order"
+  | "subscription"
+  | "wallet"
+  | "vacation"
+  | "general"
+  | string;
   title: string;
   body: string;
   data?: Record<string, any>;
@@ -575,6 +575,18 @@ export interface ProductFeedbackSummary {
   feedback: ProductFeedback[];
 }
 
+export interface ServerCartRow {
+  product_id: string;
+  quantity: number;
+  product: any | null;
+}
+
+export interface ServerCartRow {
+  product_id: string;
+  quantity: number;
+  product: any | null;
+}
+
 class ApiService {
   async getReferralDirectory(): Promise<
     Array<{
@@ -599,6 +611,11 @@ class ApiService {
     return this.request("/catalog/search-history", { method: "DELETE" });
   }
   private token: string | null = null;
+  private cartFlusher: (() => Promise<void>) | null = null;
+  setCartFlusher(fn: (() => Promise<void>) | null) { this.cartFlusher = fn; }
+  async flushCart() {
+    try { await this.cartFlusher?.(); } catch { }
+  }
   private snapshotSession = 0;
   getSnapshotSession() { return this.snapshotSession; }
   private screenSnapshots = new Map<string, unknown>();
@@ -673,7 +690,8 @@ class ApiService {
           if (oldest) this.readCache.delete(oldest);
         }
         // Avoid retaining large image/base64 payloads in the navigation cache.
-        if (JSON.stringify(value).length <= 500000) {
+        const cachedPayload = value == null ? "" : JSON.stringify(value);
+        if (cachedPayload.length <= 500000) {
           this.readCache.set(key, { value, expires: Date.now() + ttl });
         }
       }
@@ -773,7 +791,15 @@ class ApiService {
       (error as Error & { status?: number; url?: string }).url = url;
       throw error;
     }
-    return response.json();
+
+    const text = await response.text();
+    if (!text) return undefined as T;
+
+    try {
+      return JSON.parse(text) as T;
+    } catch {
+      return text as unknown as T;
+    }
   }
 
   async login(
@@ -869,7 +895,7 @@ class ApiService {
       phone?: string;
       address?: any;
       location?: string;
-      profile_image?: string; 
+      profile_image?: string;
     }>("/auth/assigned-admin");
   }
 
@@ -927,6 +953,40 @@ class ApiService {
 
   async getMe() {
     return this.request<any>("/auth/me");
+  }
+
+  async getCart(): Promise<ServerCartRow[]> {
+    return this.fetchRequest<ServerCartRow[]>("/cart", { silentErrorLog: true });
+  }
+
+  async saveCart(items: Array<{ product_id: string; quantity: number }>) {
+    return this.fetchRequest<{ success: boolean }>("/cart", {
+      method: "PUT",
+      body: JSON.stringify({ items }),
+      silentErrorLog: true,
+    });
+  }
+
+  async addCartItem(product_id: string, quantity = 1) {
+  return this.fetchRequest<{ success: boolean; items: any[] }>("/cart/items", {
+    method: "POST",
+    body: JSON.stringify({ product_id, quantity }),
+    silentErrorLog: true,
+  });
+}
+
+async removeCartItem(product_id: string) {
+  return this.fetchRequest<{ success: boolean }>(
+    `/cart/items/${encodeURIComponent(product_id)}`,
+    { method: "DELETE", silentErrorLog: true },
+  );
+}
+
+  async clearCart() {
+    return this.fetchRequest<{ success: boolean }>("/cart", {
+      method: "DELETE",
+      silentErrorLog: true,
+    });
   }
 
   async updateProfile(data: any) {
@@ -2593,12 +2653,12 @@ class ApiService {
         const trimmed = text.trim();
         const data = trimmed
           ? (() => {
-              try {
-                return JSON.parse(trimmed);
-              } catch {
-                return null;
-              }
-            })()
+            try {
+              return JSON.parse(trimmed);
+            } catch {
+              return null;
+            }
+          })()
           : null;
 
         if (response.ok && data) return data;
@@ -2610,9 +2670,9 @@ class ApiService {
 
         throw new Error(
           (data &&
-          typeof data === "object" &&
-          "detail" in data &&
-          typeof data.detail === "string"
+            typeof data === "object" &&
+            "detail" in data &&
+            typeof data.detail === "string"
             ? data.detail
             : trimmed) || "Failed to fetch worker points",
         );
@@ -4453,6 +4513,7 @@ class ApiService {
 
   // Logout
   logout = async () => {
+    await this.flushCart(); 
     this.setToken(null);
     await AsyncStorage.removeItem("worker_token");
     await AsyncStorage.removeItem("worker_data");

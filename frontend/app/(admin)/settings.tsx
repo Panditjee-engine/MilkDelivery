@@ -34,6 +34,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { APP_VERSION } from "../../src/services/useVersionCheck";
+import Svg, { Path, Circle, Ellipse, Rect, G } from "react-native-svg";
 import CropModal from "../../src/components/CropModal";
 
 // ── Palette
@@ -134,6 +135,106 @@ type AlertCfg = {
   message?: string;
   buttons: AlertBtn[];
 };
+
+// ── Hero Milk Background
+function HeroMilkBackground({ tint = "#fff" }: { tint?: string }) {
+  return (
+    <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+      <Svg width="100%" height="100%" viewBox="0 0 400 260" preserveAspectRatio="xMidYMid slice">
+        {/* base tint */}
+        <Rect x="0" y="0" width="400" height="260" fill="#fff" opacity={0.05} />
+
+        {/* soft wave bands */}
+        <Path
+          d="M0 45 Q100 15 200 40 Q300 65 400 30 L400 0 L0 0 Z"
+          fill="#fff"
+          opacity={0.08}
+        />
+        <Path
+          d="M0 225 Q100 200 200 220 Q300 240 400 210 L400 260 L0 260 Z"
+          fill="#fff"
+          opacity={0.07}
+        />
+
+        {/* milk bottle - left of center */}
+        <G transform="translate(120, 70)">
+          <Path
+            d="M0 5 h14 v10 l6 8 v50 a6 6 0 0 1 -6 6 h-14 a6 6 0 0 1 -6 -6 v-50 l6 -8 z"
+            fill="#fff"
+            opacity={0.14}
+          />
+          <Rect x="2" y="7" width="10" height="8" rx="1.5" fill="#fff" opacity={0.2} />
+        </G>
+
+        {/* milk bottle - right of center, bigger */}
+        <G transform="translate(290, 40)">
+          <Path
+            d="M0 20 h20 v14 l8 10 v70 a8 8 0 0 1 -8 8 h-20 a8 8 0 0 1 -8 -8 v-70 l8 -10 z"
+            fill="#fff"
+            opacity={0.12}
+          />
+          <Rect x="3" y="23" width="14" height="10" rx="2" fill="#fff" opacity={0.18} />
+        </G>
+
+        {/* milk drops */}
+        <Path
+          d="M130 35 q6 10 0 16 a6 6 0 0 1 -6 -16 z"
+          fill="#fff"
+          opacity={0.18}
+        />
+        <Circle cx="220" cy="190" r="7" fill="#fff" opacity={0.13} />
+        <Circle cx="150" cy="205" r="5" fill="#fff" opacity={0.16} />
+        <Circle cx="280" cy="65" r="4" fill="#fff" opacity={0.18} />
+
+        {/* leaf accents */}
+        <Ellipse cx="200" cy="25" rx="10" ry="5" fill="#fff" opacity={0.1} />
+        <Ellipse cx="140" cy="235" rx="12" ry="5" fill="#fff" opacity={0.08} />
+      </Svg>
+    </View>
+  );
+}
+
+function ScreenBackground() {
+  return (
+    <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+      <Svg width="100%" height="100%" viewBox="0 0 400 800" preserveAspectRatio="xMidYMid slice">
+        {/* big soft circles */}
+        <Circle cx="390" cy="300" r="120" fill={C.primary} opacity={0.07} />
+        <Circle cx="-20" cy="520" r="110" fill={C.amber} opacity={0.09} />
+        <Circle cx="380" cy="740" r="120" fill={C.primary} opacity={0.06} />
+
+        {/* bottom waves */}
+        <Path d="M0 730 Q100 700 200 725 Q300 750 400 715 L400 800 L0 800 Z" fill={C.amber} opacity={0.1} />
+        <Path d="M0 765 Q120 740 220 762 Q320 784 400 752 L400 800 L0 800 Z" fill={C.primary} opacity={0.1} />
+
+        {/* milk bottles */}
+        <G transform="translate(14, 420) rotate(-12)">
+          <Path d="M0 5 h14 v10 l6 8 v50 a6 6 0 0 1 -6 6 h-14 a6 6 0 0 1 -6 -6 v-50 l6 -8 z" fill={C.primary} opacity={0.14} />
+          <Rect x="2" y="7" width="10" height="8" rx="1.5" fill={C.primary} opacity={0.2} />
+        </G>
+        <G transform="translate(345, 600) rotate(10)">
+          <Path d="M0 5 h14 v10 l6 8 v50 a6 6 0 0 1 -6 6 h-14 a6 6 0 0 1 -6 -6 v-50 l6 -8 z" fill={C.amber} opacity={0.18} />
+          <Rect x="2" y="7" width="10" height="8" rx="1.5" fill={C.amber} opacity={0.25} />
+        </G>
+
+        {/* milk drops */}
+        <Path d="M60 330 q7 12 0 19 a7 7 0 0 1 -7 -19 z" fill={C.primary} opacity={0.16} />
+        <Path d="M350 420 q6 10 0 16 a6 6 0 0 1 -6 -16 z" fill={C.amber} opacity={0.2} />
+        <Path d="M90 660 q7 12 0 19 a7 7 0 0 1 -7 -19 z" fill={C.primary} opacity={0.14} />
+
+        {/* leaves */}
+        <Ellipse cx="45" cy="580" rx="14" ry="6" fill={C.amber} opacity={0.18} transform="rotate(-30 45 580)" />
+        <Ellipse cx="360" cy="520" rx="14" ry="6" fill={C.primary} opacity={0.14} transform="rotate(25 360 520)" />
+
+        {/* dots */}
+        <Circle cx="120" cy="380" r="3" fill={C.primary} opacity={0.22} />
+        <Circle cx="270" cy="470" r="4" fill={C.amber} opacity={0.28} />
+        <Circle cx="150" cy="620" r="3" fill={C.amber} opacity={0.28} />
+        <Circle cx="320" cy="700" r="3" fill={C.primary} opacity={0.22} />
+      </Svg>
+    </View>
+  );
+}
 
 function CustomAlert({
   cfg,
@@ -316,7 +417,7 @@ function SettingModal({
         style={{ flex: 1 }}
       >
         <Pressable style={mS.overlay} onPress={onClose}>
-          <Pressable style={mS.sheet} onPress={() => {}}>
+          <Pressable style={mS.sheet} onPress={() => { }}>
             <View style={mS.drag} />
             <View style={mS.header}>
               <View style={mS.headerLeft}>
@@ -469,18 +570,18 @@ function ShareModal({
                 >
                   <View style={qrS.card}>
                     <View style={qrS.cardHeader}>
-                      <View style={qrS.leafBadge}>
-                        <Ionicons name="leaf" size={14} color="#fff" />
-                      </View>
+                      <Image
+                        source={require("../../assets/images/adaptive-icon.png")}
+                        style={qrS.logoImg}
+                        resizeMode="contain"
+                      />
                       <Text style={qrS.gaushaalaName}>{displayName}</Text>
                     </View>
                     <Text style={qrS.cardTitle}>
                       Scan Our QR To Connect With Us
                     </Text>
                     <Text style={qrS.cardSubtitle}>
-                      Scan the QR code to download our app and use the referral
-                      code to connect directly with the{"\n"}farm and explore
-                      fresh products.
+                      Use the referral code to connect with the farm.
                     </Text>
                     <View style={qrS.qrBox}>
                       <QRCode
@@ -506,7 +607,7 @@ function ShareModal({
                   </View>
                 </ViewShot>
                 <View style={qrS.codeRow}>
-                  <Text style={qrS.codeLabel}>Your Referral - Code:</Text>
+                  <Text style={qrS.codeLabel}>Your Referral Code:</Text>
                   <View style={qrS.codePill}>
                     <Text style={qrS.codeValue}>{shortCode}</Text>
                   </View>
@@ -680,12 +781,12 @@ export default function AdminSettingsScreen() {
   const referralCode = buildReferralCode(user);
 
   const [profileImage, setProfileImage] = useState<string | null>(
-  (user as any)?.profile_image || null,
-);
-const [uploadingImage, setUploadingImage] = useState(false);
-const [cropVisible, setCropVisible] = useState(false);
-const [rawImageUri, setRawImageUri] = useState<string | null>(null);
-const [rawImageSize, setRawImageSize] = useState<{ w: number; h: number } | null>(null);
+    (user as any)?.profile_image || null,
+  );
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [cropVisible, setCropVisible] = useState(false);
+  const [rawImageUri, setRawImageUri] = useState<string | null>(null);
+  const [rawImageSize, setRawImageSize] = useState<{ w: number; h: number } | null>(null);
 
   const [activeModal, setActiveModal] = useState<ModalType>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -1551,79 +1652,79 @@ const [rawImageSize, setRawImageSize] = useState<{ w: number; h: number } | null
     );
   };
 
-const pickImage = async (fromCamera: boolean) => {
-  try {
-    const permissionResult = fromCamera
-      ? await ImagePicker.requestCameraPermissionsAsync()
-      : await ImagePicker.requestMediaLibraryPermissionsAsync();
+  const pickImage = async (fromCamera: boolean) => {
+    try {
+      const permissionResult = fromCamera
+        ? await ImagePicker.requestCameraPermissionsAsync()
+        : await ImagePicker.requestMediaLibraryPermissionsAsync();
 
-    if (!permissionResult.granted) {
-      showAlert(
-        "Permission Needed",
-        fromCamera ? "Camera permission is required." : "Gallery permission is required.",
-        undefined,
-        "camera-outline",
-        C.deepPeach,
-        C.dark,
-      );
-      return;
-    }
+      if (!permissionResult.granted) {
+        showAlert(
+          "Permission Needed",
+          fromCamera ? "Camera permission is required." : "Gallery permission is required.",
+          undefined,
+          "camera-outline",
+          C.deepPeach,
+          C.dark,
+        );
+        return;
+      }
 
-    const result = fromCamera
-      ? await ImagePicker.launchCameraAsync({
+      const result = fromCamera
+        ? await ImagePicker.launchCameraAsync({
           mediaTypes: ImagePicker.MediaTypeOptions.Images,
           allowsEditing: false,
           quality: 1,
         })
-      : await ImagePicker.launchImageLibraryAsync({
+        : await ImagePicker.launchImageLibraryAsync({
           mediaTypes: ImagePicker.MediaTypeOptions.Images,
           allowsEditing: false,
           quality: 1,
         });
 
-    if (result.canceled || !result.assets?.length) return;
+      if (result.canceled || !result.assets?.length) return;
 
-    const asset = result.assets[0];
-    setRawImageUri(asset.uri);
-    setRawImageSize({ w: asset.width, h: asset.height });
-    setCropVisible(true);
-  } catch (error: any) {
-    showAlert("Error", error?.message || "Could not open picker");
-  }
-};
+      const asset = result.assets[0];
+      setRawImageUri(asset.uri);
+      setRawImageSize({ w: asset.width, h: asset.height });
+      setCropVisible(true);
+    } catch (error: any) {
+      showAlert("Error", error?.message || "Could not open picker");
+    }
+  };
 
-const handleCropDone = async (croppedUri: string) => {
-  setCropVisible(false);
-  setUploadingImage(true);
-  setProfileImage(croppedUri);
-  try {
-    const uploaded = await api.uploadProfileImage(croppedUri);
-    updateUser({ profile_image: uploaded.url } as any);
-    setProfileImage(uploaded.url);
-    showAlert("Updated", "Profile photo updated", undefined, "checkmark-circle", "#E8F5E9", "#388E3C");
-  } catch (error: any) {
-    showAlert("Failed", error?.message || "Could not update photo");
-  } finally {
-    setUploadingImage(false);
-    setRawImageUri(null);
-  }
-};
+  const handleCropDone = async (croppedUri: string) => {
+    setCropVisible(false);
+    setUploadingImage(true);
+    setProfileImage(croppedUri);
+    try {
+      const uploaded = await api.uploadProfileImage(croppedUri);
+      updateUser({ profile_image: uploaded.url } as any);
+      setProfileImage(uploaded.url);
+      showAlert("Updated", "Profile photo updated", undefined, "checkmark-circle", "#E8F5E9", "#388E3C");
+    } catch (error: any) {
+      showAlert("Failed", error?.message || "Could not update photo");
+    } finally {
+      setUploadingImage(false);
+      setRawImageUri(null);
+    }
+  };
 
-const handleChangePhoto = () => {
-  showAlert(
-    "Change Profile Photo",
-    "Choose a source for your new profile photo.",
-    [
-      { text: "Camera", onPress: () => pickImage(true) },
-      { text: "Gallery", onPress: () => pickImage(false) },
-      { text: "Cancel", style: "cancel" },
-    ],
-    "camera-outline",
-    C.deepPeach,
-    C.primary,
-  );
-};
-  
+  const handleChangePhoto = () => {
+    showAlert(
+      "Change Profile Photo",
+      "Choose a source for your new profile photo.",
+      [
+        { text: "Camera", onPress: () => pickImage(true) },
+        { text: "Gallery", onPress: () => pickImage(false) },
+        { text: "Cancel", style: "cancel" },
+      ],
+      "camera-outline",
+      C.deepPeach,
+      C.primary,
+    );
+  };
+
   const handleDeleteAccount = () => {
     setDeletePassword("");
     setDeleteModal(true);
@@ -1701,6 +1802,7 @@ const handleChangePhoto = () => {
   return (
     <SafeAreaView style={s.container} edges={["top"]}>
       <StatusBar barStyle="dark-content" backgroundColor={C.bg} />
+      <ScreenBackground />
       <CustomAlert cfg={alertCfg} onDismiss={dismissAlert} />
 
       <ScrollView
@@ -1732,89 +1834,90 @@ const handleChangePhoto = () => {
         </Animated.View>
 
         {/* ── Hero Profile Card */}
-       <Animated.View
-  style={[
-    s.heroCard,
-    {
-      opacity: headerAnim,
-      transform: [
-        {
-          translateY: headerAnim.interpolate({
-            inputRange: [0, 1],
-            outputRange: [20, 0],
-          }),
-        },
-      ],
-    },
-  ]}
->
-  <View style={s.heroRow}>
-    {/* Left: avatar + camera */}
-    <TouchableOpacity
-      style={s.heroAvatarWrap}
-      activeOpacity={0.85}
-      onPress={handleChangePhoto}
-      disabled={uploadingImage}
-    >
-      <View style={s.heroAvatarRing}>
-        {profileImage ? (
-          <Image
-            key={profileImage}
-            source={{ uri: profileImage }}
-            style={s.heroAvatarImg}
-            resizeMode="cover"
-          />
-        ) : (
-          <View style={s.heroAvatar}>
-            <Text style={s.heroAvatarTxt}>{initials}</Text>
-          </View>
-        )}
-      </View>
-      <View style={s.heroCameraBadge}>
-        <Ionicons
-          name={uploadingImage ? "hourglass-outline" : "camera"}
-          size={11}
-          color="#fff"
-        />
-      </View>
-    </TouchableOpacity>
-
-    {/* Right: name, email, edit */}
-    <View style={s.heroInfo}>
-      <View style={s.heroNameRow}>
-        <Text style={s.heroName} numberOfLines={1}>
-          {user?.name ?? "Administrator"}
-        </Text>
-        <TouchableOpacity
-          style={s.heroEditBtn}
-          activeOpacity={0.85}
-          onPress={() => openModal("profile")}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        <Animated.View
+          style={[
+            s.heroCard,
+            {
+              opacity: headerAnim,
+              transform: [
+                {
+                  translateY: headerAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [20, 0],
+                  }),
+                },
+              ],
+            },
+          ]}
         >
-          <Ionicons name="pencil-outline" size={14} color="#fff" />
-        </TouchableOpacity>
-      </View>
-      <Text style={s.heroEmail} numberOfLines={1}>
-        {user?.email ?? ""}
-      </Text>
-      <View style={s.heroBadge}>
-        <Ionicons name="shield-checkmark" size={10} color="#fff" />
-        <Text style={s.heroBadgeTxt}>Admin</Text>
-      </View>
-    </View>
-  </View>
+          <HeroMilkBackground />
+          <View style={s.heroRow}>
+            {/* Left: avatar + camera */}
+            <TouchableOpacity
+              style={s.heroAvatarWrap}
+              activeOpacity={0.85}
+              onPress={handleChangePhoto}
+              disabled={uploadingImage}
+            >
+              <View style={s.heroAvatarRing}>
+                {profileImage ? (
+                  <Image
+                    key={profileImage}
+                    source={{ uri: profileImage }}
+                    style={s.heroAvatarImg}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <View style={s.heroAvatar}>
+                    <Text style={s.heroAvatarTxt}>{initials}</Text>
+                  </View>
+                )}
+              </View>
+              <View style={s.heroCameraBadge}>
+                <Ionicons
+                  name={uploadingImage ? "hourglass-outline" : "camera"}
+                  size={11}
+                  color="#fff"
+                />
+              </View>
+            </TouchableOpacity>
 
-  <View style={s.heroDivider} />
+            {/* Right: name, email, edit */}
+            <View style={s.heroInfo}>
+              <View style={s.heroNameRow}>
+                <Text style={s.heroName} numberOfLines={1}>
+                  {user?.name ?? "Administrator"}
+                </Text>
+                <TouchableOpacity
+                  style={s.heroEditBtn}
+                  activeOpacity={0.85}
+                  onPress={() => openModal("profile")}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Ionicons name="pencil-outline" size={14} color="#fff" />
+                </TouchableOpacity>
+              </View>
+              <Text style={s.heroEmail} numberOfLines={1}>
+                {user?.email ?? ""}
+              </Text>
+              <View style={s.heroBadge}>
+                <Ionicons name="shield-checkmark" size={10} color="#fff" />
+                <Text style={s.heroBadgeTxt}>Admin</Text>
+              </View>
+            </View>
+          </View>
 
-  <TouchableOpacity
-    style={s.heroPwBtn}
-    onPress={() => openModal("password")}
-    activeOpacity={0.85}
-  >
-    <Ionicons name="lock-closed-outline" size={14} color="rgba(255,255,255,0.9)" />
-    <Text style={s.heroPwBtnTxt}>Change Password</Text>
-  </TouchableOpacity>
-</Animated.View>
+          <View style={s.heroDivider} />
+
+          <TouchableOpacity
+            style={s.heroPwBtn}
+            onPress={() => openModal("password")}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="lock-closed-outline" size={14} color="rgba(255,255,255,0.9)" />
+            <Text style={s.heroPwBtnTxt}>Change Password</Text>
+          </TouchableOpacity>
+        </Animated.View>
 
         {/* ── Referral & Share */}
         <View style={s.referralCard}>
@@ -2411,7 +2514,7 @@ const handleChangePhoto = () => {
         title="Business Locations"
         icon="location-outline"
         onClose={closeModal}
-        onSave={() => {}}
+        onSave={() => { }}
       >
         {locationsLoading ? (
           <ActivityIndicator color={C.primary} style={{ marginVertical: 24 }} />
@@ -2573,6 +2676,7 @@ const handleChangePhoto = () => {
         onSave={saveProfile}
       >
         <View style={mS.profilePreview}>
+          <HeroMilkBackground tint={C.primary} />
           <View style={mS.profilePreviewAvatar}>
             <Text style={mS.profilePreviewInitials}>{initials}</Text>
           </View>
@@ -2653,7 +2757,7 @@ const handleChangePhoto = () => {
         title={pwStepTitle}
         icon="lock-closed-outline"
         onClose={closeModal}
-        onSave={() => {}}
+        onSave={() => { }}
       >
         {/* Step indicator */}
         <View style={mS.stepRow}>
@@ -2879,16 +2983,16 @@ const handleChangePhoto = () => {
         )}
       </SettingModal>
       <CropModal
-  visible={cropVisible}
-  imageUri={rawImageUri}
-  imageSize={rawImageSize}
-  onCancel={() => {
-    setCropVisible(false);
-    setRawImageUri(null);
-    setRawImageSize(null);
-  }}
-  onDone={handleCropDone}
-/>
+        visible={cropVisible}
+        imageUri={rawImageUri}
+        imageSize={rawImageSize}
+        onCancel={() => {
+          setCropVisible(false);
+          setRawImageUri(null);
+          setRawImageSize(null);
+        }}
+        onDone={handleCropDone}
+      />
     </SafeAreaView>
   );
 }
@@ -3109,6 +3213,8 @@ const mS = StyleSheet.create({
     borderRadius: 16,
     padding: 14,
     marginBottom: 20,
+    overflow: "hidden",
+    minHeight: 76,
   },
   profilePreviewAvatar: {
     width: 44,
@@ -3420,17 +3526,17 @@ const s = StyleSheet.create({
     bottom: -20,
     left: 20,
   },
-heroBadge: {
-  flexDirection: "row",
-  alignItems: "center",
-  gap: 4,
-  backgroundColor: "rgba(187,107,63,0.55)",
-  paddingHorizontal: 9,
-  paddingVertical: 3,
-  borderRadius: 10,
-  alignSelf: "flex-start",
-  marginTop: 2,
-},
+  heroBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "rgba(187,107,63,0.55)",
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: 10,
+    alignSelf: "flex-start",
+    marginTop: 2,
+  },
   heroBadgeTxt: {
     fontSize: 10,
     fontWeight: "800",
@@ -3456,83 +3562,83 @@ heroBadge: {
     marginVertical: 16,
   },
   heroRow: {
-  flexDirection: "row",
-  alignItems: "center",
-  gap: 16,
-  width: "100%",
-},
-heroAvatarWrap: {
-  width: 72,
-  height: 72,
-},
-heroAvatarRing: {
-  width: 72,
-  height: 72,
-  borderRadius: 36,
-  borderWidth: 2.5,
-  borderColor: "rgba(255,255,255,0.35)",
-  justifyContent: "center",
-  alignItems: "center",
-  overflow: "hidden",
-},
-heroAvatar: {
-  width: 62,
-  height: 62,
-  borderRadius: 31,
-  backgroundColor: "rgba(255,255,255,0.22)",
-  justifyContent: "center",
-  alignItems: "center",
-},
-heroAvatarImg: { width: 62, height: 62, borderRadius: 31 },
-heroAvatarTxt: {
-  fontSize: 22,
-  fontWeight: "900",
-  color: "#fff",
-  letterSpacing: -0.5,
-},
-heroCameraBadge: {
-  position: "absolute",
-  bottom: -2,
-  right: -2,
-  width: 24,
-  height: 24,
-  borderRadius: 12,
-  backgroundColor: C.dark,
-  borderWidth: 2,
-  borderColor: C.primary,
-  justifyContent: "center",
-  alignItems: "center",
-},
-heroInfo: { flex: 1, gap: 4 },
-heroNameRow: {
-  flexDirection: "row",
-  alignItems: "center",
-  justifyContent: "space-between",
-  gap: 8,
-},
-heroEditBtn: {
-  width: 28,
-  height: 28,
-  borderRadius: 9,
-  backgroundColor: "rgba(255,255,255,0.18)",
-  justifyContent: "center",
-  alignItems: "center",
-},
-heroPwBtn: {
-  flexDirection: "row",
-  alignItems: "center",
-  justifyContent: "center",
-  gap: 8,
-  backgroundColor: "rgba(255,255,255,0.15)",
-  borderRadius: 14,
-  paddingVertical: 12,
-  width: "100%",
-},
-heroPwBtnTxt: {
-  fontSize: 13,
-  fontWeight: "700",
-  color: "rgba(255,255,255,0.9)",
-},
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
+    width: "100%",
+  },
+  heroAvatarWrap: {
+    width: 72,
+    height: 72,
+  },
+  heroAvatarRing: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    borderWidth: 2.5,
+    borderColor: "rgba(255,255,255,0.35)",
+    justifyContent: "center",
+    alignItems: "center",
+    overflow: "hidden",
+  },
+  heroAvatar: {
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    backgroundColor: "rgba(255,255,255,0.22)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  heroAvatarImg: { width: 62, height: 62, borderRadius: 31 },
+  heroAvatarTxt: {
+    fontSize: 22,
+    fontWeight: "900",
+    color: "#fff",
+    letterSpacing: -0.5,
+  },
+  heroCameraBadge: {
+    position: "absolute",
+    bottom: -2,
+    right: -2,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: C.dark,
+    borderWidth: 2,
+    borderColor: C.primary,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  heroInfo: { flex: 1, gap: 4 },
+  heroNameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  heroEditBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 9,
+    backgroundColor: "rgba(255,255,255,0.18)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  heroPwBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    borderRadius: 14,
+    paddingVertical: 12,
+    width: "100%",
+  },
+  heroPwBtnTxt: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "rgba(255,255,255,0.9)",
+  },
   referralCard: {
     backgroundColor: "#fff",
     marginHorizontal: 16,
@@ -3824,14 +3930,11 @@ const qrS = StyleSheet.create({
     gap: 8,
     marginBottom: 14,
   },
-  leafBadge: {
-    width: 28,
-    height: 28,
-    borderRadius: 9,
-    backgroundColor: C.primary,
-    justifyContent: "center",
-    alignItems: "center",
-  },
+  logoImg: {
+  width: 36,
+  height: 36,
+  borderRadius: 10,
+},
   gaushaalaName: {
     fontSize: 16,
     fontWeight: "800",

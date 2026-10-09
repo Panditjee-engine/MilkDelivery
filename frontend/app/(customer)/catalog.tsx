@@ -357,19 +357,40 @@ interface CartItem {
   customDays: number[];
 }
 
+function isUnavailable(p: any): boolean {
+  return !p?.is_available || (p?.stock ?? 0) <= 0;
+}
+function getPayableTotal(cart: CartItem[]): number {
+  return cart
+    .filter((i) => !isUnavailable(i.product))
+    .reduce((s, i) => s + i.product.price * i.quantity, 0);
+}
+function clampToStock(product: any, qty: number): number {
+  if (isUnavailable(product)) return qty; // quantity yaad rakho, stock aane par wapas mil jayegi
+  return Math.max(1, Math.min(qty, product.stock ?? qty));
+}
+
 function isDairyProduct(p: any): boolean {
   return DAIRY_CATEGORIES.includes(p?.category?.toLowerCase());
 }
-
-function isProductUnavailable(p: any): boolean {
-  return !p?.is_available || (p?.stock ?? 0) === 0;
-}
+const CATEGORY_ORDER = [
+  "milk",
+  "dairy",
+  "bakery",
+  "fruits",
+  "vegetables",
+  "essentials",
+  "edible_oil",
+  "ayurved",
+  "water",
+  "nursery",
+  "gifting",
+  "oil",
+];
 
 function categoryRank(category: string): number {
-  const normalized = category?.toLowerCase();
-  if (normalized === "milk") return 0;
-  if (normalized === "dairy") return 1;
-  return 2;
+  const idx = CATEGORY_ORDER.indexOf(category?.toLowerCase());
+  return idx === -1 ? CATEGORY_ORDER.length : idx;
 }
 function getCategoryTheme(cat: string) {
   return CATEGORY_THEMES[cat?.toLowerCase()] || CATEGORY_THEMES.other;
@@ -1159,6 +1180,7 @@ function ProductCard({
   cartQty,
   cutoffRule,
   deliveryWindow,
+  rating,
 }: {
   product: any;
   onOpenDetails: () => void;
@@ -1168,6 +1190,7 @@ function ProductCard({
   cartQty: number;
   cutoffRule?: OrderCutoffRule | null;
   deliveryWindow?: DeliveryWindowRule | null;
+  rating?: { average: number; total: number } | null;
 }) {
   const theme = getCategoryTheme(product.category);
   const isDairy = isDairyProduct(product);
@@ -1237,9 +1260,17 @@ function ProductCard({
         )}
       </View>
       <View style={cardS.body}>
-        <Text style={cardS.name} numberOfLines={2}>
-          {product.name}
-        </Text>
+        <View style={cardS.nameRow}>
+          <Text style={cardS.name} numberOfLines={2}>
+            {product.name}
+          </Text>
+          {rating && rating.total > 0 ? (
+            <View style={cardS.ratingPill}>
+              <Ionicons name="star" size={9} color="#F59E0B" />
+              <Text style={cardS.ratingTxt}>{rating.average.toFixed(1)}</Text>
+            </View>
+          ) : null}
+        </View>
         <View style={cardS.priceRow}>
           <Text style={[cardS.price, { color: theme.accent }]}>
             ₹{product.price}
@@ -1441,14 +1472,34 @@ const cardS = StyleSheet.create({
   },
   qtyBadgeTxt: { fontSize: 9, fontWeight: "800", color: "#fff" },
   body: { padding: 10, paddingBottom: 7 },
+  nameRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 5,
+    marginBottom: 5,
+  },
   name: {
+    flex: 1,
     minHeight: 32,
     fontSize: 12,
     fontWeight: "700",
     color: T.text,
-    marginBottom: 5,
     lineHeight: 16,
   },
+
+  ratingPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+    backgroundColor: "#FFFBEB",
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+    borderRadius: T.radius.full,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    marginTop: 1,
+  },
+  ratingTxt: { fontSize: 9, fontWeight: "900", color: "#B45309" },
   priceRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -1562,6 +1613,7 @@ function CategorySection({
   cart,
   cutoffRules,
   deliveryWindows,
+  ratings,
 }: {
   value: string;
   label: string;
@@ -1573,6 +1625,7 @@ function CategorySection({
   cart: CartItem[];
   cutoffRules: OrderCutoffRule[];
   deliveryWindows: DeliveryWindowRule[];
+  ratings: Record<string, { average: number; total: number }>;
 }) {
   const theme = getCategoryTheme(value);
   const isDairyCat = DAIRY_CATEGORIES.includes(value.toLowerCase());
@@ -1607,6 +1660,7 @@ function CategorySection({
               onAddToCart={() => onAddToCart(item)}
               cutoffRule={getOrderCutoffForProduct(item, cutoffRules)}
               deliveryWindow={getDeliveryWindowForProduct(item, deliveryWindows)}
+              rating={ratings[String(resolveProductId(item))] || null}
             />
           );
         })}
@@ -3094,7 +3148,9 @@ function CartSheet({
     }
   }, [visible, paymentMethods]);
 
-  const cartTotal = cart.reduce((s, i) => s + i.product.price * i.quantity, 0);
+  const unavailableItems = cart.filter((i) => isUnavailable(i.product));
+  const hasUnavailable = unavailableItems.length > 0;
+  const cartTotal = getPayableTotal(cart);
   const canAfford = walletBalance >= cartTotal;
   if (!visible) return null;
 
@@ -3109,6 +3165,7 @@ function CartSheet({
   };
 
   const requestPlaceOrder = () => {
+    if (hasUnavailable) return;
     console.log("[Cart] place order tapped", {
       paymentMethod,
       itemCount: cart.length,
@@ -3229,8 +3286,9 @@ function CartSheet({
                 <View>
                   {cart.map((item) => {
                     const theme = getCategoryTheme(item.product.category);
+                    const out = isUnavailable(item.product);
                     return (
-                      <View key={item.id} style={cartS.item}>
+                      <View key={item.id} style={[cartS.item, out && { opacity: 0.55 }]}>
                         <View style={[cartS.icon, { backgroundColor: theme.bg }]}>
                           <Ionicons
                             name={theme.icon as any}
@@ -3242,9 +3300,15 @@ function CartSheet({
                           <Text style={cartS.itemName} numberOfLines={2}>
                             {item.product.name}
                           </Text>
-                          <Text style={cartS.itemPrice}>
-                            ₹{(item.product.price * item.quantity).toFixed(2)}
-                          </Text>
+                          {out ? (
+                            <Text style={{ fontSize: 11, fontWeight: "800", color: T.red }}>
+                              item Out of stock · Stock updates when available
+                            </Text>
+                          ) : (
+                            <Text style={cartS.itemPrice}>
+                              ₹{(item.product.price * item.quantity).toFixed(2)}
+                            </Text>
+                          )}
                         </View>
                         <View style={cartS.qtyRow}>
                           <TouchableOpacity
@@ -3270,6 +3334,7 @@ function CartSheet({
                               { backgroundColor: theme.accent },
                             ]}
                             onPress={() => {
+                              if (out) return;
                               const m = item.product.stock ?? 0;
                               if (item.quantity >= m) {
                                 alert(`Only ${m} available`);
@@ -3302,6 +3367,14 @@ function CartSheet({
                     ₹{cartTotal.toFixed(2)}
                   </Text>
                 </View>
+                {hasUnavailable && (
+                  <View style={cartS.lowBal}>
+                    <Ionicons name="alert-circle-outline" size={12} color={T.red} />
+                    <Text style={[cartS.lowBalTxt, { color: T.red }]}>
+                      {unavailableItems.length} item unavailable hai. Remove it or wait for the stock to be available.
+                    </Text>
+                  </View>
+                )}
                 <PaymentMethodSelector
                   value={paymentMethod}
                   onChange={setPaymentMethod}
@@ -3330,13 +3403,15 @@ function CartSheet({
                 )}
                 <Button
                   title={
-                    submitting
-                      ? "Placing Order…"
-                      : `Place Order · ₹${cartTotal.toFixed(2)}`
+                    hasUnavailable
+                      ? "RemoveUnavailable items"
+                      : submitting
+                        ? "Placing Order…"
+                        : `Place Order · ₹${cartTotal.toFixed(2)}`
                   }
                   onPress={requestPlaceOrder}
                   loading={submitting}
-                  disabled={submitting}
+                  disabled={submitting || hasUnavailable}
                 />
               </View>
             )}
@@ -3628,7 +3703,7 @@ function MiniCartPill({
   const bounce = useRef(new Animated.Value(1)).current;
   const prev = useRef(0);
   const total = cart.reduce((s, c) => s + c.quantity, 0);
-  const sum = cart.reduce((s, i) => s + i.product.price * i.quantity, 0);
+  const sum = getPayableTotal(cart);
 
   useEffect(() => {
     if (total > 0) {
@@ -3955,12 +4030,13 @@ const bannerModalS = StyleSheet.create({
 export default function CatalogScreen() {
   const router = useRouter();
   const { user, updateUser } = useAuth();
-  const [linkedAdminId, setLinkedAdminId] = useState<string | null>(() => (user as any)?.admin_id ?? (user as any)?.referral_admin_id ?? null);
-  const catalogSnapshotKey = `customer-catalog:${linkedAdminId || "default"}`;
-  const [products, setProducts] = useState<any[]>(() => api.getScreenSnapshot<any[]>(catalogSnapshotKey) || []);
-  const [categories, setCategories] = useState<any[]>(() => api.getScreenSnapshot<any[]>("catalog-categories") || []);
+const [linkedAdminId, setLinkedAdminId] = useState<string | null>(
+  (user as any)?.admin_id ?? (user as any)?.referral_admin_id ?? null,
+);
+  const [products, setProducts] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [loading, setLoading] = useState(() => !api.getScreenSnapshot(catalogSnapshotKey));
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const [quickAddVisible, setQuickAddVisible] = useState(false);
@@ -3973,6 +4049,26 @@ export default function CatalogScreen() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartVisible, setCartVisible] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  const cartHydratedRef = useRef(false);
+  const cutoffsLoadedRef = useRef(false);
+  const lastSavedRef = useRef("");
+  const userId = (user as any)?.id ?? (user as any)?._id;
+  const userIdRef = useRef(userId);
+
+  const cartSignature = (items: CartItem[]) =>
+    JSON.stringify(
+      items
+        .map((i) => [String(resolveProductId(i.product)), i.quantity])
+        .sort(),
+    );
+
+  useEffect(() => {
+    userIdRef.current = userId;
+    cartHydratedRef.current = false;
+    lastSavedRef.current = "";
+    setCart([]);
+  }, [userId]);
 
   const [subSheetVisible, setSubSheetVisible] = useState(false);
   const [activeSubscriptions, setActiveSubscriptions] = useState<any[]>([]);
@@ -3987,6 +4083,7 @@ export default function CatalogScreen() {
     useState<PaymentMethodSettings>(DEFAULT_PAYMENT_METHODS);
   const [orderCutoffs, setOrderCutoffs] = useState<OrderCutoffRule[]>([]);
   const [deliveryWindows, setDeliveryWindows] = useState<DeliveryWindowRule[]>([]);
+  const [ratings, setRatings] = useState<Record<string, { average: number; total: number }>>({});
   const [toastVisible, setToastVisible] = useState(false);
   const [toastProduct, setToastProduct] = useState("");
   const [toastIsSub, setToastIsSub] = useState(false);
@@ -3995,48 +4092,13 @@ export default function CatalogScreen() {
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
   const [selectedBannerSlide, setSelectedBannerSlide] = useState<CatalogSlide | null>(null);
   const [bannerModalVisible, setBannerModalVisible] = useState(false);
-
-// Collapsible header (hides on scroll down, reveals on scroll up)
-const [headerHeight, setHeaderHeight] = useState<number | null>(null);
-const headerAnim = useRef(new Animated.Value(1)).current;
-const lastScrollY = useRef(0);
-
-const animateHeader = useCallback(
-  (toValue: number) => {
-    Animated.timing(headerAnim, {
-      toValue,
-      duration: 200,
-      useNativeDriver: false,
-    }).start();
-  },
-  [headerAnim],
-);
-
-const handleCatalogScroll = useCallback(
-  (event: any) => {
-    const currentY = event.nativeEvent.contentOffset.y;
-    const diff = currentY - lastScrollY.current;
-    if (currentY <= 10) {
-      animateHeader(1); // always show near top
-    } else if (diff > 8) {
-      animateHeader(0); // scrolling down → hide
-    } else if (diff < -8) {
-      animateHeader(1); // scrolling up → show
-    }
-    lastScrollY.current = currentY;
-  },
-  [animateHeader],
-);
-
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const newSlidesScrollRef = useRef<ScrollView>(null);
   const activeNewSlideRef = useRef(0);
   const isFocused = useIsFocused();
-  const { addToCartProduct, addToCartQty, openSubscribeProduct, openSubscribeTs } = useLocalSearchParams<{
+  const { addToCartProduct, addToCartQty } = useLocalSearchParams<{
     addToCartProduct?: string;
     addToCartQty?: string;
-    openSubscribeProduct?: string;
-    openSubscribeTs?: string;
   }>();
 
   const tomorrow = useMemo(() => {
@@ -4127,12 +4189,134 @@ const handleCatalogScroll = useCallback(
     }
   }, [products, linkedAdminId]);
 
+  const ratedIdsRef = useRef<Set<string>>(new Set());
+
+  const fetchRatings = useCallback(async (list: any[]) => {
+  const fresh = (list || []).filter((p) => {
+    const id = resolveProductId(p);
+    return id && !ratedIdsRef.current.has(String(id));
+  });
+  if (!fresh.length) return;
+  fresh.forEach((p) => ratedIdsRef.current.add(String(resolveProductId(p))));
+  const entries = await Promise.all(
+    fresh.map(async (p) => {
+      const id = String(resolveProductId(p));
+      try {
+        const fb = await api.getCatalogProductFeedback(id);
+        if (!fb?.total_reviews) return null;
+        return [id, { average: fb.average_rating ?? 0, total: fb.total_reviews ?? 0 }] as const;
+      } catch {
+        return null;
+      }
+    }),
+  );
+  setRatings((prev) => ({ ...prev, ...Object.fromEntries(entries.filter(Boolean) as any) }));
+}, []);
+
   useEffect(() => {
     const id = (user as any)?.admin_id ?? (user as any)?.referral_admin_id;
     setLinkedAdminId(id ?? null);
   }, [user]);
 
   const getProductId = useCallback(resolveProductId, []);
+
+  const cartRef = useRef<CartItem[]>([]);
+  cartRef.current = cart;
+
+  const saveCartNow = useCallback(async () => {
+    if (!cartHydratedRef.current || !userIdRef.current) return;
+    const current = cartRef.current;
+    const sig = cartSignature(current);
+    if (sig === lastSavedRef.current) return;      
+    try {
+      await api.saveCart(
+        current.map((i) => ({
+          product_id: String(getProductId(i.product)),
+          quantity: i.quantity,
+        })),
+      );
+      lastSavedRef.current = sig;
+    } catch (e) {
+      console.log("[Cart] save failed", e);      
+    }
+  }, [getProductId]);
+
+  const syncCartFromServer = useCallback(async () => {
+    const requestedFor = userIdRef.current;
+    const rows = await api.getCart();
+    if (userIdRef.current !== requestedFor) return;  
+    const list = Array.isArray(rows) ? rows : [];
+    const byId = new Map(list.map((r) => [String(r.product_id), r]));
+    const isFirstLoad = !cartHydratedRef.current;
+
+    if (isFirstLoad) {
+      const fromDb: CartItem[] = list
+        .filter((r) => r.product)
+        .map((r) => ({
+          id: String(r.product_id),
+          product: r.product,
+          quantity: clampToStock(r.product, r.quantity),
+          pattern: "buy_once",
+          customDays: [],
+        }));
+
+      lastSavedRef.current = cartSignature(fromDb);
+
+      setCart((prev) => {
+        const map = new Map(fromDb.map((i) => [getProductId(i.product), i]));
+        prev.forEach((p) => {
+          const pid = getProductId(p.product);
+          const ex = map.get(pid);
+          if (ex) ex.quantity = clampToStock(ex.product, ex.quantity + p.quantity);
+          else map.set(pid, p);
+        });
+        return Array.from(map.values());
+      });
+      cartHydratedRef.current = true;
+      return;
+    }
+
+    setCart((prev) =>
+      prev.map((item) => {
+        const row = byId.get(String(getProductId(item.product)));
+        if (!row) return item;
+        const product = row.product
+          ? row.product
+          : { ...item.product, is_available: false, stock: 0 };
+        return { ...item, product, quantity: clampToStock(product, item.quantity) };
+      }),
+    );
+  }, [getProductId]);
+
+useEffect(() => {
+  if (!isFocused || !userId) return;
+  void syncCartFromServer().catch((e) =>
+    console.log("[Cart] sync failed", e),
+  );
+}, [isFocused, userId, syncCartFromServer]);
+  // debounce save
+  useEffect(() => {
+    if (!cartHydratedRef.current) return;
+    const t = setTimeout(() => void saveCartNow(), 300);
+    return () => clearTimeout(t);
+  }, [cart, saveCartNow]);
+
+  useEffect(() => {
+    if (!isFocused) void saveCartNow();
+  }, [isFocused, saveCartNow]);
+
+  useEffect(() => {
+    api.setCartFlusher(saveCartNow);
+    const sub = AppState.addEventListener("change", (s) => {
+      if (s !== "active") void saveCartNow();
+    });
+    return () => {
+      sub.remove();
+      void saveCartNow();
+      api.setCartFlusher(null);
+    };
+  }, [saveCartNow]);
+
 
   const fetchData = useCallback(async () => {
     try {
@@ -4148,16 +4332,24 @@ const handleCatalogScroll = useCallback(
           payment_methods: DEFAULT_PAYMENT_METHODS,
         })),
       ]);
-      if (!selectedCategory) api.setScreenSnapshot(catalogSnapshotKey, prods);
-      api.setScreenSnapshot("catalog-categories", cats);
-      setProducts(prev => JSON.stringify(prev) === JSON.stringify(prods) ? prev : prods);
-      setCategories(prev => JSON.stringify(prev) === JSON.stringify(cats) ? prev : cats);
+if (!cutoffsLoadedRef.current) {
+  cutoffsLoadedRef.current = true;
+  try {
+    const cutoffs = await fetchCutoffsForProducts(prods || [], linkedAdminId);
+    setOrderCutoffs(cutoffs || []);
+  } catch {
+    cutoffsLoadedRef.current = false;
+  }
+}
+      // const cutoffs = await fetchCutoffsForProducts(prods || [], linkedAdminId);
+      const windows = await fetchDeliveryWindowsForProducts(prods || [], linkedAdminId);
+      setProducts(prods);
+      void fetchRatings(prods || []);
+      setCategories(cats);
       setWalletBalance(wallet.balance ?? 0);
       setCatalogSlides(mapContentToSlides(content?.data || []));
       setPaymentMethods(normalizePaymentMethods(appSettings));
-      const cutoffs = await fetchCutoffsForProducts(prods || [], linkedAdminId);
-      const windows = await fetchDeliveryWindowsForProducts(prods || [], linkedAdminId);
-      setOrderCutoffs(cutoffs || []);
+      // setOrderCutoffs(cutoffs || []);
       setDeliveryWindows(windows || []);
       await fetchSubs();
     } catch {
@@ -4165,7 +4357,7 @@ const handleCatalogScroll = useCallback(
       setLoading(false);
       setRefreshing(false);
     }
-  }, [selectedCategory, fetchSubs, linkedAdminId, catalogSnapshotKey]);
+  }, [selectedCategory, fetchSubs, linkedAdminId, fetchRatings]);
 
   useEffect(() => {
     if (!products.length) return;
@@ -4197,27 +4389,15 @@ const handleCatalogScroll = useCallback(
     void fetchData().catch(() => undefined);
   }, [isFocused, fetchData]);
 
-  useEffect(() => {
-    if (!isFocused) return;
-    void fetchPaymentMethods().catch(() => undefined);
-    const sub = AppState.addEventListener("change", (state) => {
-      if (state === "active") void fetchPaymentMethods().catch(() => undefined);
-    });
-    return () => {
-      sub.remove();
-    };
-  }, [isFocused, fetchPaymentMethods]);
+useEffect(() => {
+  if (!isFocused) return;
+  // payment methods are already loaded in fetchData
+}, [isFocused]);
 
-  useEffect(() => {
-    if (!isFocused) return;
-    void fetchDeliveryWindows().catch(() => undefined);
-    const sub = AppState.addEventListener("change", (state) => {
-      if (state === "active") void fetchDeliveryWindows().catch(() => undefined);
-    });
-    return () => {
-      sub.remove();
-    };
-  }, [isFocused, fetchDeliveryWindows]);
+useEffect(() => {
+  if (!isFocused) return;
+  // delivery windows are already loaded in fetchData, no refetch here
+}, [isFocused]);
 
   useEffect(() => {
     if (!addToCartProduct) return;
@@ -4252,19 +4432,7 @@ const handleCatalogScroll = useCallback(
     } catch { }
   }, [addToCartProduct, addToCartQty, getProductId]);
 
-  useEffect(() => {
-    if (!openSubscribeProduct) return;
-    try {
-      const p = JSON.parse(decodeURIComponent(String(openSubscribeProduct)));
-      if (!p) return;
-      setSubscribeProduct(p);
-      setSubscribeVisible(true);
-      router.setParams({ openSubscribeProduct: undefined, openSubscribeTs: undefined } as any);
-    } catch { }
-  }, [openSubscribeProduct, openSubscribeTs]);
-
   const onRefresh = () => {
-    api.refreshLists();
     setRefreshing(true);
     void fetchData().catch(() => {
       setRefreshing(false);
@@ -4440,7 +4608,7 @@ const handleCatalogScroll = useCallback(
     );
   };
 
-  const cartTotal = cart.reduce((s, i) => s + i.product.price * i.quantity, 0);
+  const cartTotal = getPayableTotal(cart);
 
   // ── FIXED: All cart items go as ONE buy_once subscription
   const handlePlaceOrder = async (paymentMethod: PaymentMethod) => {
@@ -4450,6 +4618,16 @@ const handleCatalogScroll = useCallback(
       cartTotal,
       selectedAddressId: selectedAddress?.id ?? null,
     });
+    const bad = cart.filter(
+      (i) => isUnavailable(i.product) || i.quantity > (i.product.stock ?? 0),
+    );
+    if (bad.length) {
+      Alert.alert(
+        "Cart me unavailable items",
+        `${bad.map((i) => i.product.name).join(", ")} abhi available nahi hain. Inhe remove karein ya stock aane ka wait karein.`,
+      );
+      return;
+    }
     const blockedItem = cart.find((item) => {
       const rule = getOrderCutoffForProduct(item.product, orderCutoffs);
       return Boolean(rule && isOrderCutoffPassed(rule));
@@ -4563,6 +4741,7 @@ const handleCatalogScroll = useCallback(
 
       setSuccessItemCount(placedCount);
       setCart([]);
+      api.clearCart().catch(() => undefined);
       setCartVisible(false);
       setSuccessIsSub(false);
       api
@@ -4640,16 +4819,12 @@ const handleCatalogScroll = useCallback(
     setTimeout(() => setSelectedBannerSlide(null), 300);
   };
 
-    const grouped = useMemo(() => {
-    const sortByAvailability = (items: any[]) =>
-      [...items].sort(
-        (a, b) => Number(isProductUnavailable(a)) - Number(isProductUnavailable(b)),
-      );
+  const grouped = useMemo(() => {
     if (selectedCategory) {
       const label =
         categories.find((c) => c.value === selectedCategory)?.label ||
         selectedCategory;
-      return [{ value: selectedCategory, label, items: sortByAvailability(products) }];
+      return [{ value: selectedCategory, label, items: products }];
     }
     const map: Record<string, any[]> = {};
     products.forEach((p) => {
@@ -4661,7 +4836,7 @@ const handleCatalogScroll = useCallback(
       .map(([v, items]) => ({
         value: v,
         label: categories.find((c) => c.value === v)?.label || v,
-        items: sortByAvailability(items),
+        items,
       }))
       .sort((a, b) => {
         const rankDiff = categoryRank(a.value) - categoryRank(b.value);
@@ -4674,6 +4849,7 @@ const handleCatalogScroll = useCallback(
     () => (catalogSlides.length > 0 ? catalogSlides : NEWLY_ADDED_SLIDES),
     [catalogSlides],
   );
+  const hasUploadedSlides = catalogSlides.length > 0;
 
   useEffect(() => {
     activeNewSlideRef.current = activeNewSlide;
@@ -4692,55 +4868,65 @@ const handleCatalogScroll = useCallback(
     return () => clearInterval(iv);
   }, [newSlides.length]);
 
+  
+  const sortedCategories = useMemo(
+  () =>
+    [...categories].sort(
+      (a, b) =>
+        categoryRank(a.value) - categoryRank(b.value) ||
+        String(a.label).localeCompare(String(b.label)),
+    ),
+  [categories],
+);
+
   if (loading) return <LoadingScreen />;
 
-  const TopHeaderContent = (
-    <View style={mainS.pageHeader}>
-      <View style={mainS.headerTop}>
-        <Text style={mainS.pageTitle}>Shop</Text>
-        <View style={mainS.headerBtns}>
-          <TouchableOpacity
-            style={mainS.iconBtn}
-            onPress={() => router.push("/(customer)/product-search" as any)}
-          >
-            <Ionicons name="search-outline" size={18} color="#111111" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={mainS.iconBtn}
-            onPress={() => setSubSheetVisible(true)}
-          >
-            <Ionicons name="repeat-outline" size={17} color={T.amber} />
-            {activeSubscriptions.length > 0 && (
-              <View style={[mainS.dot, { backgroundColor: T.amber }]}>
-                <Text style={mainS.dotTxt}>{activeSubscriptions.length}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={mainS.iconBtn}
-            onPress={() => setCartVisible(true)}
-          >
-            <Ionicons name="cart-outline" size={19} color={Colors.primary} />
-            {cart.length > 0 && (
-              <View style={[mainS.dot, { backgroundColor: Colors.primary }]}>
-                <Text style={mainS.dotTxt}>{cart.length}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        </View>
-      </View>
-      <View style={mainS.headerSub}>
-        <Text style={mainS.productCount}>{products.length} products</Text>
-        <View style={mainS.walletPill}>
-          <Ionicons name="wallet-outline" size={10} color={Colors.primary} />
-          <Text style={mainS.walletTxt}>₹{walletBalance.toFixed(2)}</Text>
-        </View>
-      </View>
-    </View>
-  );
 
   const ListHeader = (
     <>
+      <View style={mainS.pageHeader}>
+        <View style={mainS.headerTop}>
+          <Text style={mainS.pageTitle}>Shop</Text>
+          <View style={mainS.headerBtns}>
+            <TouchableOpacity
+              style={mainS.iconBtn}
+              onPress={() => router.push("/(customer)/product-search" as any)}
+            >
+              <Ionicons name="search-outline" size={18} color="#111111" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={mainS.iconBtn}
+              onPress={() => setSubSheetVisible(true)}
+            >
+              <Ionicons name="repeat-outline" size={17} color={T.amber} />
+              {activeSubscriptions.length > 0 && (
+                <View style={[mainS.dot, { backgroundColor: T.amber }]}>
+                  <Text style={mainS.dotTxt}>{activeSubscriptions.length}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={mainS.iconBtn}
+              onPress={() => setCartVisible(true)}
+            >
+              <Ionicons name="cart-outline" size={19} color={Colors.primary} />
+              {cart.length > 0 && (
+                <View style={[mainS.dot, { backgroundColor: Colors.primary }]}>
+                  <Text style={mainS.dotTxt}>{cart.length}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+        <View style={mainS.headerSub}>
+          <Text style={mainS.productCount}>{products.length} products</Text>
+          <View style={mainS.walletPill}>
+            <Ionicons name="wallet-outline" size={10} color={Colors.primary} />
+            <Text style={mainS.walletTxt}>₹{walletBalance.toFixed(2)}</Text>
+          </View>
+        </View>
+      </View>
+
       <View style={mainS.newSection}>
         <ScrollView
           ref={newSlidesScrollRef}
@@ -4762,26 +4948,45 @@ const handleCatalogScroll = useCallback(
                 activeOpacity={0.88}
                 onPress={() => openBannerDetails(slide)}
               >
-                <LinearGradient
-                  colors={slide.colors as [string, string]}
-                  style={mainS.newCard}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                >
-                  <View style={mainS.newTextBox}>
-                    <Text style={mainS.newKicker} numberOfLines={1}>{slide.kicker}</Text>
-                    <Text style={mainS.newCardTitle} numberOfLines={1}>{slide.title}</Text>
-                    <Text style={mainS.newCardSub} numberOfLines={2} ellipsizeMode="tail">
-                      {slide.subtitle}
-                    </Text>
-                  </View>
-                  <Image
-                    source={slide.image}
-                    style={mainS.newImage}
-                    resizeMode="contain"
-                  />
-                  <View style={mainS.newGlow} />
-                </LinearGradient>
+                <View style={mainS.newCard}>
+                  {hasUploadedSlides ? (
+                    <View style={mainS.newCardFull}>
+                      <Image
+                        source={slide.image}
+                        style={mainS.newImageFull}
+                        resizeMode="cover"
+                      />
+                      <LinearGradient
+                        colors={["transparent", "rgba(0,0,0,0.7)"]}
+                        style={mainS.newCardScrim}
+                      />
+                      <View style={mainS.newTextBoxFull}>
+                        <Text style={mainS.newKicker} numberOfLines={1}>{slide.kicker}</Text>
+                        <Text style={mainS.newCardTitle} numberOfLines={1}>{slide.title}</Text>
+                        <Text style={mainS.newCardSub} numberOfLines={2} ellipsizeMode="tail">
+                          {slide.subtitle}
+                        </Text>
+                      </View>
+                    </View>
+                  ) : (
+                    <LinearGradient
+                      colors={slide.colors as [string, string]}
+                      style={mainS.newCardInner}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                    >
+                      <View style={mainS.newTextBox}>
+                        <Text style={mainS.newKicker} numberOfLines={1}>{slide.kicker}</Text>
+                        <Text style={mainS.newCardTitle} numberOfLines={1}>{slide.title}</Text>
+                        <Text style={mainS.newCardSub} numberOfLines={2} ellipsizeMode="tail">
+                          {slide.subtitle}
+                        </Text>
+                      </View>
+                      <Image source={slide.image} style={mainS.newImage} resizeMode="contain" />
+                      <View style={mainS.newGlow} />
+                    </LinearGradient>
+                  )}
+                </View>
               </TouchableOpacity>
             </View>
           ))}
@@ -4839,39 +5044,18 @@ const handleCatalogScroll = useCallback(
   );
 
   return (
-   <SafeAreaView style={mainS.container} edges={["top"]}>
-      <Animated.View
-        onLayout={(e) => {
-          const h = e.nativeEvent.layout.height;
-          if (h && headerHeight === null) setHeaderHeight(h);
-        }}
-        style={[
-          { overflow: "hidden" },
-          { opacity: headerAnim },
-          headerHeight !== null && {
-            height: headerAnim.interpolate({
-              inputRange: [0, 1],
-              outputRange: [0, headerHeight],
-            }),
-          },
-        ]}
-      >
-        {TopHeaderContent}
-      </Animated.View>
-
+    <SafeAreaView style={mainS.container}>
       <FlatList
         data={grouped}
         keyExtractor={(i) => i.value}
         ListHeaderComponent={ListHeader}
-        onScroll={handleCatalogScroll}
-        scrollEventThrottle={16}
         ListEmptyComponent={
           <View style={mainS.empty}>
             <Ionicons name="cube-outline" size={32} color={T.faint} />
             <Text style={mainS.emptyTxt}>No products found</Text>
           </View>
         }
-       contentContainerStyle={{ paddingBottom: cart.length > 0 ? 100 : 24 }}
+        contentContainerStyle={{ paddingBottom: 120 }}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
@@ -4888,6 +5072,7 @@ const handleCatalogScroll = useCallback(
             onOpenDetails={openProductDetails}
             cutoffRules={orderCutoffs}
             deliveryWindows={deliveryWindows}
+            ratings={ratings}
           />
         )}
       />
@@ -5041,15 +5226,30 @@ const mainS = StyleSheet.create({
     height: 150,
     borderRadius: 24,
     overflow: "hidden",
-    paddingHorizontal: 18,
-    paddingVertical: 16,
-    flexDirection: "row",
-    alignItems: "flex-start",
     shadowColor: "#123524",
     shadowOpacity: 0.16,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 6 },
     elevation: 4,
+  },
+  newCardInner: {
+    flex: 1,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+  newCardFull: { flex: 1 },
+  newImageFull: { width: "100%", height: "100%" },
+  newCardScrim: {
+    position: "absolute",
+    left: 0, right: 0, bottom: 0,
+    height: 90,
+  },
+  newTextBoxFull: {
+    position: "absolute",
+    left: 18, right: 18, bottom: 14,
+    zIndex: 2,
   },
   newTextBox: { flex: 1, zIndex: 2 },
   newKicker: {
@@ -5118,5 +5318,6 @@ const mainS = StyleSheet.create({
   chipTxtActive: { color: "#fff" },
   empty: { alignItems: "center", paddingTop: 70, gap: 8 },
   emptyTxt: { fontSize: 13, color: T.faint, fontWeight: "500" },
+  
 });
 // add pop-up to confirm order placement - 02-09-26

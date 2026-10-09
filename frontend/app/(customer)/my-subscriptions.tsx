@@ -311,7 +311,7 @@ function MiniCalendar({
                   calS.dayNum,
                   isSel && { color: "#fff", fontWeight: "800" },
                   isToday &&
-                    !isSel && { color: accentColor, fontWeight: "700" },
+                  !isSel && { color: accentColor, fontWeight: "700" },
                 ]}
               >
                 {day}
@@ -1200,20 +1200,20 @@ function EditModal({
     icon: string;
     hint: string;
   }> = [
-    { key: "daily", label: "Daily", icon: "sunny-outline", hint: "Every day" },
-    {
-      key: "alternate",
-      label: "Alternate",
-      icon: "git-compare-outline",
-      hint: "Every other day",
-    },
-    {
-      key: "custom",
-      label: "Custom",
-      icon: "calendar-outline",
-      hint: "Specific days",
-    },
-  ];
+      { key: "daily", label: "Daily", icon: "sunny-outline", hint: "Every day" },
+      {
+        key: "alternate",
+        label: "Alternate",
+        icon: "git-compare-outline",
+        hint: "Every other day",
+      },
+      {
+        key: "custom",
+        label: "Custom",
+        icon: "calendar-outline",
+        hint: "Specific days",
+      },
+    ];
 
   return (
     <Modal visible={visible} transparent animationType="none">
@@ -1854,6 +1854,12 @@ function DeliveryCalendarModal({
           </View>
 
           <ScrollView style={M.body} showsVerticalScrollIndicator={false}>
+            <View style={CAL.noticeBanner}>
+              <Ionicons name="megaphone-outline" size={16} color={Colors.primary} />
+              <Text style={CAL.noticeText}>
+                Please rate our product every day — your feedback matters to us! {'\n'} Click on a delivered date to submit your feedback.
+              </Text>
+            </View>
             <View style={calS.header}>
               <TouchableOpacity onPress={prevMo} style={calS.nav}>
                 <Ionicons name="chevron-back" size={14} color="#666" />
@@ -1955,6 +1961,25 @@ function DeliveryCalendarModal({
 }
 
 const CAL = StyleSheet.create({
+  noticeBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    backgroundColor: "#FFF4E8",
+    borderWidth: 1,
+    borderColor: "#FFE0BD",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 14,
+  },
+  noticeText: {
+    flex: 1,
+    fontSize: 12.5,
+    fontWeight: "700",
+    color: Colors.primary,
+    lineHeight: 18,
+  },
   dot: {
     width: 14,
     height: 14,

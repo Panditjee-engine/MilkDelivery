@@ -24,7 +24,7 @@ import { api } from "../../src/services/api";
 import { hasCompleteDeliveryAddress } from "../../src/utils/address";
 import { useFocusEffect } from "expo-router"; // or "@react-navigation/native"
 import { BackHandler } from "react-native";
-
+import { fuzzyScoreProduct } from "../../src/utils/fuzzySearch";
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const GRID_GAP = 12;
 const CARD_WIDTH = (SCREEN_WIDTH - 40 - GRID_GAP) / 2;
@@ -188,21 +188,15 @@ export default function ProductSearchScreen() {
   }, [query, isFocused, user?.id]);
 
   const filteredProducts = useMemo(() => {
-    const text = query.trim().toLowerCase();
-    if (!text) return products;
-    return products.filter((product) => {
-      const haystack = [
-        product.name,
-        product.category,
-        product.description,
-        product.unit,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-      return text.split(/\s+/).every((term) => haystack.includes(term));
-    });
-  }, [products, query]);
+  const text = query.trim();
+  if (!text) return products;
+
+  return products
+    .map((product) => ({ product, score: fuzzyScoreProduct(product, text) }))
+    .filter((x) => x.score !== null)
+    .sort((a, b) => (a.score as number) - (b.score as number)) // best match pehle
+    .map((x) => x.product);
+}, [products, query]);
 
   const groupedProducts = useMemo(() => {
     const map: Record<string, any[]> = {};

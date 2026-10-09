@@ -23,6 +23,7 @@ import Button from "../../src/components/Button";
 import Input from "../../src/components/Input";
 import { APP_VERSION } from "../../src/services/useVersionCheck";
 import CropModal from "../../src/components/CropModal";
+import Svg, { Path, Circle, Ellipse, Rect, G } from "react-native-svg";
 
 import {
   formatDeliveryAddress,
@@ -84,6 +85,135 @@ const normalizeAddressBook = (user: any) => {
   return withIds;
 };
 
+// ─── Hero Milk Background ──────────────────────────────────────────────────
+function HeroMilkBackground() {
+  return (
+    <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+      <Svg width="100%" height="100%" viewBox="0 0 400 220" preserveAspectRatio="xMidYMid slice">
+        {/* base tint */}
+        <Rect x="0" y="0" width="400" height="220" fill="#FF8E57" opacity={0.06} />
+
+        {/* soft wave band */}
+        <Path
+          d="M0 40 Q100 10 200 35 Q300 60 400 25 L400 0 L0 0 Z"
+          fill="#FF8E57"
+          opacity={0.1}
+        />
+        <Path
+          d="M0 190 Q100 165 200 185 Q300 205 400 175 L400 220 L0 220 Z"
+          fill="#FF8E57"
+          opacity={0.08}
+        />
+
+        {/* milk bottle - left of center */}
+        <G transform="translate(100, 55)">
+          <Path
+            d="M0 5 h14 v10 l6 8 v50 a6 6 0 0 1 -6 6 h-14 a6 6 0 0 1 -6 -6 v-50 l6 -8 z"
+            fill="#FF8E57"
+            opacity={0.16}
+          />
+          <Rect x="2" y="7" width="10" height="8" rx="1.5" fill="#FF8E57" opacity={0.22} />
+        </G>
+
+        {/* milk bottle - right of center, bigger */}
+        <G transform="translate(280, 30)">
+          <Path
+            d="M0 20 h20 v14 l8 10 v70 a8 8 0 0 1 -8 8 h-20 a8 8 0 0 1 -8 -8 v-70 l8 -10 z"
+            fill="#FF8E57"
+            opacity={0.14}
+          />
+          <Rect x="3" y="23" width="14" height="10" rx="2" fill="#FF8E57" opacity={0.2} />
+        </G>
+
+        {/* milk drops */}
+        <Path
+          d="M130 30 q6 10 0 16 a6 6 0 0 1 -6 -16 z"
+          fill="#FF8E57"
+          opacity={0.2}
+        />
+        <Circle cx="220" cy="150" r="7" fill="#FF8E57" opacity={0.15} />
+        <Circle cx="160" cy="165" r="5" fill="#FF8E57" opacity={0.18} />
+        <Circle cx="270" cy="55" r="4" fill="#FF8E57" opacity={0.2} />
+
+        {/* leaf accents */}
+        <Ellipse cx="200" cy="20" rx="10" ry="5" fill="#FF8E57" opacity={0.12} />
+        <Ellipse cx="140" cy="195" rx="12" ry="5" fill="#FF8E57" opacity={0.1} />
+      </Svg>
+    </View>
+  );
+}
+
+// ─── Screen Background ─────────────────────────────────────────────────────
+function ScreenBackground() {
+  const ORANGE = "#FF8E57";
+  const GREEN = "#4CAF50";
+  return (
+    <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+      <Svg
+        width="100%"
+        height="100%"
+        viewBox="0 0 400 800"
+        preserveAspectRatio="xMidYMid slice"
+      >
+        {/* big soft circles */}
+        <Circle cx="380" cy="60" r="130" fill={ORANGE} opacity={0.07} />
+        <Circle cx="-20" cy="420" r="110" fill={GREEN} opacity={0.06} />
+        <Circle cx="400" cy="640" r="120" fill={ORANGE} opacity={0.06} />
+
+        {/* bottom wave */}
+        <Path
+          d="M0 730 Q100 700 200 725 Q300 750 400 715 L400 800 L0 800 Z"
+          fill={GREEN}
+          opacity={0.07}
+        />
+        <Path
+          d="M0 765 Q120 740 220 762 Q320 784 400 752 L400 800 L0 800 Z"
+          fill={ORANGE}
+          opacity={0.08}
+        />
+
+        {/* milk bottle – left */}
+        <G transform="translate(18, 300) rotate(-12)">
+          <Path
+            d="M0 5 h14 v10 l6 8 v50 a6 6 0 0 1 -6 6 h-14 a6 6 0 0 1 -6 -6 v-50 l6 -8 z"
+            fill={ORANGE}
+            opacity={0.13}
+          />
+          <Rect x="2" y="7" width="10" height="8" rx="1.5" fill={ORANGE} opacity={0.2} />
+        </G>
+
+        {/* milk bottle – right */}
+        <G transform="translate(340, 500) rotate(10)">
+          <Path
+            d="M0 5 h14 v10 l6 8 v50 a6 6 0 0 1 -6 6 h-14 a6 6 0 0 1 -6 -6 v-50 l6 -8 z"
+            fill={GREEN}
+            opacity={0.12}
+          />
+          <Rect x="2" y="7" width="10" height="8" rx="1.5" fill={GREEN} opacity={0.18} />
+        </G>
+
+        {/* milk drops */}
+        <Path d="M60 170 q7 12 0 19 a7 7 0 0 1 -7 -19 z" fill={ORANGE} opacity={0.16} />
+        <Path d="M350 250 q6 10 0 16 a6 6 0 0 1 -6 -16 z" fill={GREEN} opacity={0.15} />
+        <Path d="M90 620 q7 12 0 19 a7 7 0 0 1 -7 -19 z" fill={ORANGE} opacity={0.14} />
+        <Path d="M300 700 q6 10 0 16 a6 6 0 0 1 -6 -16 z" fill={GREEN} opacity={0.13} />
+
+        {/* leaves */}
+        <Ellipse cx="40" cy="480" rx="14" ry="6" fill={GREEN} opacity={0.12} transform="rotate(-30 40 480)" />
+        <Ellipse cx="360" cy="380" rx="14" ry="6" fill={GREEN} opacity={0.12} transform="rotate(25 360 380)" />
+        <Ellipse cx="200" cy="580" rx="12" ry="5" fill={ORANGE} opacity={0.1} transform="rotate(-15 200 580)" />
+
+        {/* small dots */}
+        <Circle cx="120" cy="260" r="3" fill={ORANGE} opacity={0.22} />
+        <Circle cx="270" cy="330" r="4" fill={GREEN} opacity={0.2} />
+        <Circle cx="150" cy="450" r="3" fill={GREEN} opacity={0.2} />
+        <Circle cx="320" cy="590" r="3" fill={ORANGE} opacity={0.22} />
+        <Circle cx="70" cy="700" r="4" fill={ORANGE} opacity={0.2} />
+        <Circle cx="250" cy="120" r="3" fill={GREEN} opacity={0.2} />
+      </Svg>
+    </View>
+  );
+}
 function CustomAlert({
   config,
   onDismiss,
@@ -146,7 +276,7 @@ function CustomAlert({
                 style={[
                   alertStyles.actionBtn,
                   action.style === "destructive" &&
-                    alertStyles.actionDestructive,
+                  alertStyles.actionDestructive,
                   action.style === "cancel" && alertStyles.actionCancel,
                   action.style === "default" && alertStyles.actionDefault,
                 ]}
@@ -159,7 +289,7 @@ function CustomAlert({
                   style={[
                     alertStyles.actionText,
                     action.style === "destructive" &&
-                      alertStyles.actionTextDestructive,
+                    alertStyles.actionTextDestructive,
                     action.style === "cancel" && alertStyles.actionTextCancel,
                     action.style === "default" && alertStyles.actionTextDefault,
                   ]}
@@ -472,7 +602,7 @@ export default function ProfileScreen() {
             image: info.profile_image || null,
           }),
         )
-        .catch(() => {});
+        .catch(() => { });
     }
   }, [isFocused, (user as any)?.admin_id]);
 
@@ -538,15 +668,15 @@ export default function ProfileScreen() {
 
       const result = fromCamera
         ? await ImagePicker.launchCameraAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            allowsEditing: false, // ← custom cropper handles this now
-            quality: 1,
-          })
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: false, // ← custom cropper handles this now
+          quality: 1,
+        })
         : await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            allowsEditing: false,
-            quality: 1,
-          });
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: false,
+          quality: 1,
+        });
 
       if (result.canceled || !result.assets?.length) return;
 
@@ -627,7 +757,7 @@ export default function ProfileScreen() {
             image: info.profile_image || null,
           }),
         )
-        .catch(() => {});
+        .catch(() => { });
 
       setConnectModal(false);
       showToast(`Connected with ${result.admin_name || "Gaushala"}`, "success");
@@ -819,10 +949,10 @@ export default function ProfileScreen() {
     try {
       const nextBook = editingAddressId
         ? addressBook.map((address) =>
-            address.id === editingAddressId
-              ? { ...address, ...normalizedAddress }
-              : address,
-          )
+          address.id === editingAddressId
+            ? { ...address, ...normalizedAddress }
+            : address,
+        )
         : [...addressBook, normalizedAddress];
       const normalizedBook = nextBook.map((address) => ({
         ...address,
@@ -967,6 +1097,7 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
+      <ScreenBackground />
       <Toast
         visible={toast.visible}
         message={toast.message}
@@ -979,8 +1110,8 @@ export default function ProfileScreen() {
         contentContainerStyle={{ paddingBottom: 40 }}
       >
         {/* ── Hero ── */}
-        {/* ── Hero ── */}
         <View style={styles.hero}>
+          <HeroMilkBackground />
           <TouchableOpacity
             style={styles.avatarRing}
             activeOpacity={0.85}
@@ -1126,7 +1257,7 @@ export default function ProfileScreen() {
                   order.product?.name ||
                   (order.items?.length > 0
                     ? order.items[0]?.name ||
-                      `Order #${String(order.id).slice(-4)}`
+                    `Order #${String(order.id).slice(-4)}`
                     : `Order #${String(order.id).slice(-4)}`);
                 return (
                   <View
@@ -1576,14 +1707,14 @@ export default function ProfileScreen() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F4F4F6" },
+  container: { flex: 1, backgroundColor: "#FAF7F3" },
 
   // Hero
   hero: {
     flexDirection: "row",
     alignItems: "center",
     gap: 14,
-    backgroundColor: "#fff",
+    backgroundColor: "#FFF9F5",
     marginHorizontal: 16,
     marginTop: 10,
     marginBottom: 14,

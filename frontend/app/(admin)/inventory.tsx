@@ -291,6 +291,11 @@ const CATEGORIES = [
   "fruits",
   "vegetables",
   "essentials",
+  "edible_oil",
+  "ayurved",
+  "water",
+  "nursery",
+  "gifting",
 ];
 // ── Fixed unit options — dairy-focused, dropdown/chip selection only (no free text)
 const UNITS = ["ml", "L", "g", "kg" , "pcs", "dozen", "bottle", "pack", "box", "jar", "can"];

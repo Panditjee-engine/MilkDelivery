@@ -295,6 +295,7 @@ function HomeBannerSlider({
 }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const slides = banners.length > 0 ? banners : homeBanners;
+  const isUploaded = banners.length > 0;
   const scrollRef = useRef<ScrollView>(null);
   const activeIndexRef = useRef(0);
 
@@ -336,26 +337,41 @@ function HomeBannerSlider({
             activeOpacity={0.9}
             onPress={() => onBannerPress(banner)}
           >
-            <LinearGradient
-              colors={["#123524", "#1f6f43"]}
-              style={s.bannerCard}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            >
-              <View style={s.bannerTextBox}>
-                <Text style={s.bannerKicker} numberOfLines={1}>Gau Satva</Text>
-                <Text style={s.bannerTitle} numberOfLines={1}>{banner.title}</Text>
-                <Text style={s.bannerSubtitle} numberOfLines={2} ellipsizeMode="tail">
-                  {banner.subtitle}
-                </Text>
-              </View>
-              <Image
-                source={banner.image}
-                style={s.bannerImage}
-                resizeMode="contain"
-              />
-              <View style={s.bannerGlow} />
-            </LinearGradient>
+            <View style={s.bannerCard}>
+              {isUploaded ? (
+                <View style={s.bannerCardFull}>
+                  <Image source={banner.image} style={s.bannerImageFull} resizeMode="cover" />
+                  <LinearGradient
+                    colors={["transparent", "rgba(0,0,0,0.7)"]}
+                    style={s.bannerCardScrim}
+                  />
+                  <View style={s.bannerTextBoxFull}>
+                    <Text style={s.bannerKicker} numberOfLines={1}>Gau Satva</Text>
+                    <Text style={s.bannerTitle} numberOfLines={1}>{banner.title}</Text>
+                    <Text style={s.bannerSubtitle} numberOfLines={2} ellipsizeMode="tail">
+                      {banner.subtitle}
+                    </Text>
+                  </View>
+                </View>
+              ) : (
+                <LinearGradient
+                  colors={["#123524", "#1f6f43"]}
+                  style={s.bannerCardInner}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                >
+                  <View style={s.bannerTextBox}>
+                    <Text style={s.bannerKicker} numberOfLines={1}>Gau Satva</Text>
+                    <Text style={s.bannerTitle} numberOfLines={1}>{banner.title}</Text>
+                    <Text style={s.bannerSubtitle} numberOfLines={2} ellipsizeMode="tail">
+                      {banner.subtitle}
+                    </Text>
+                  </View>
+                  <Image source={banner.image} style={s.bannerImage} resizeMode="contain" />
+                  <View style={s.bannerGlow} />
+                </LinearGradient>
+              )}
+            </View>
           </TouchableOpacity>
         ))}
       </ScrollView>
@@ -2292,15 +2308,30 @@ const s = StyleSheet.create({
     height: 150,
     borderRadius: 24,
     overflow: "hidden",
-    paddingHorizontal: 18,
-    paddingVertical: 16,
-    flexDirection: "row",
-    alignItems: "flex-start",
     shadowColor: "#123524",
     shadowOpacity: 0.16,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 6 },
     elevation: 4,
+  },
+  bannerCardInner: {
+    flex: 1,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+  bannerCardFull: { flex: 1 },
+  bannerImageFull: { width: "100%", height: "100%" },
+  bannerCardScrim: {
+    position: "absolute",
+    left: 0, right: 0, bottom: 0,
+    height: 90,
+  },
+  bannerTextBoxFull: {
+    position: "absolute",
+    left: 18, right: 18, bottom: 14,
+    zIndex: 2,
   },
   bannerTextBox: { flex: 1, zIndex: 2 },
   bannerKicker: {
