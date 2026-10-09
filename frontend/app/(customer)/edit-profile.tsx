@@ -194,6 +194,48 @@ export default function EditProfileScreen() {
   const { user, updateUser } = useAuth();
   const [name, setName] = useState(user?.name || "");
   const [phone, setPhone] = useState(user?.phone || "");
+  const [email, setEmail] = useState(user?.email || "");
+  const [initialPassword, setInitialPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [canSetPassword, setCanSetPassword] = useState(user?.password_login_enabled === false);
+  const passwordSaveLock = useRef(false);
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    void api.getMe().then(profile => {
+      if (active) setCanSetPassword(profile.password_login_enabled === false);
+    }).catch(() => {});
+    return () => { active = false; };
+  }, [user?.id]));
+  const [farms, setFarms] = useState<Awaited<ReturnType<typeof api.getReferralDirectory>>>([]);
+  const [farmOpen, setFarmOpen] = useState(false);
+  const [farmLoading, setFarmLoading] = useState(false);
+  const [farmError, setFarmError] = useState("");
+  const farmLock = useRef(false);
+  const linkedFarmId = user?.admin_id || user?.referral_admin_id;
+  const linkedFarm = farms.find(farm => farm.admin_id === linkedFarmId);
+  const loadFarms = useCallback(async () => {
+    setFarmLoading(true); setFarmError("");
+    try { setFarms(await api.getReferralDirectory()); }
+    catch { setFarmError("Could not load gaushalas. Tap to retry."); }
+    finally { setFarmLoading(false); }
+  }, []);
+  useEffect(() => { void loadFarms(); }, [loadFarms]);
+  const connectFarm = (farm: (typeof farms)[number]) => {
+    Alert.alert("Connect with Gaushala?", `Connect your account with ${farm.admin_name}?`, [
+      { text: "Cancel", style: "cancel" },
+      { text: "Connect", onPress: async () => {
+        if (farmLock.current) return;
+        farmLock.current = true; setFarmLoading(true);
+        try {
+          const result = await api.connectGaushala(farm.referral_code);
+          updateUser({ admin_id: result.admin_id, referral_admin_id: result.admin_id });
+          setFarmOpen(false);
+        } catch (error: any) { Alert.alert("Could not connect", error?.message || "Please try again."); }
+        finally { farmLock.current = false; setFarmLoading(false); }
+      } },
+    ]);
+  };
   const [password, setPassword] = useState("");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -292,7 +334,41 @@ const choosePhotoSource = (fromCamera: boolean) => {
   setTimeout(() => pickImage(fromCamera), 200);
 };
 
+  const saveInitialPassword = async () => {
+    if (saving || passwordSaveLock.current || !canSetPassword) return;
+    if (initialPassword.length < 5) {
+      Alert.alert("Password too short", "Use at least 5 characters.");
+      return;
+    }
+    if (initialPassword !== confirmPassword) {
+      Alert.alert("Passwords do not match", "Enter the same password in both fields.");
+      return;
+    }
+    passwordSaveLock.current = true;
+    setSaving(true);
+    try {
+      await api.setCustomerInitialPassword(initialPassword);
+      setCanSetPassword(false);
+      setInitialPassword(""); setConfirmPassword(""); setShowPassword(false);
+      updateUser({ password_login_enabled: true });
+      Alert.alert("Password set", "You can now sign in using your mobile number and password.");
+    } catch (error: any) {
+      Alert.alert("Could not set password", error?.message || "Please try again.");
+    } finally { passwordSaveLock.current = false; setSaving(false); }
+  };
+
   const saveProfile = async () => {
+    if (saving) return;
+    if (canSetPassword && (initialPassword || confirmPassword)) {
+      if (initialPassword.length < 5) {
+        Alert.alert("Password too short", "Use at least 5 characters.");
+        return;
+      }
+      if (initialPassword !== confirmPassword) {
+        Alert.alert("Passwords do not match", "Enter the same password in both fields.");
+        return;
+      }
+    }
     if (!name.trim()) {
       Alert.alert("Name required", "Please enter your name.");
       return;
@@ -302,8 +378,14 @@ const choosePhotoSource = (fromCamera: boolean) => {
       await api.updateProfile({
         name: name.trim(),
         phone: phone.trim(),
+        ...(email.trim() ? { email: email.trim() } : {}),
       });
-      updateUser({ name: name.trim(), phone: phone.trim() } as any);
+      if (canSetPassword && initialPassword) {
+        await api.setCustomerInitialPassword(initialPassword);
+        setCanSetPassword(false);
+        setInitialPassword(""); setConfirmPassword(""); setShowPassword(false);
+      }
+      updateUser({ name: name.trim(), phone: phone.trim(), email: email.trim(), ...(initialPassword ? { password_login_enabled: true } : {}) } as any);
       Alert.alert("Profile updated", "Your profile has been saved.", [
         { text: "OK", onPress: () => goBack() },
       ]);
@@ -420,7 +502,15 @@ const choosePhotoSource = (fromCamera: boolean) => {
               onChangeText={setPhone}
               placeholder="Phone number"
               keyboardType="phone-pad"
+              editable={false}
             />
+            <Input label="Email (optional)" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" placeholder="Your email" />
+            {canSetPassword && <>
+              <Input label="Set Password" value={initialPassword} onChangeText={setInitialPassword} secureTextEntry={!showPassword} autoCapitalize="none" autoCorrect={false} editable={!saving} placeholder="Minimum 5 characters" />
+              <Input label="Confirm Password" value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry={!showPassword} autoCapitalize="none" autoCorrect={false} editable={!saving} placeholder="Re-enter your password" />
+              <TouchableOpacity accessibilityLabel={showPassword ? "Hide passwords" : "Show passwords"} onPress={() => setShowPassword(!showPassword)} style={{ alignSelf: "flex-end", padding: 12 }}><Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={22} color={Colors.primary} /></TouchableOpacity>
+              <Button title="Set Password" onPress={saveInitialPassword} disabled={saving || !initialPassword || !confirmPassword} />
+            </>}
             <Button
               title={saving ? "Saving..." : "Save Changes"}
               onPress={saveProfile}
@@ -428,6 +518,15 @@ const choosePhotoSource = (fromCamera: boolean) => {
               disabled={saving}
               style={{ marginTop: 10 }}
             />
+          </View>
+
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Gaushala</Text>
+            {!!farmError && <TouchableOpacity onPress={() => void loadFarms()}><Text style={{ color: "#B42318", paddingVertical: 12 }}>{farmError}</Text></TouchableOpacity>}
+            {linkedFarmId ? <Text style={{ paddingVertical: 12, color: Colors.primary }}>{linkedFarm ? `${linkedFarm.admin_name} · ${linkedFarm.referral_code}` : "Your account is connected with a gaushala."}</Text> : <>
+              <TouchableOpacity disabled={farmLoading} accessibilityRole="button" accessibilityState={{ expanded: farmOpen }} onPress={() => setFarmOpen(!farmOpen)} style={{ flexDirection: "row", alignItems: "center", paddingVertical: 14, gap: 10 }}><Text style={{ flex: 1 }}>{farmLoading ? "Loading..." : "Select Gaushala / Referral"}</Text><Ionicons name={farmOpen ? "chevron-up" : "chevron-down"} size={20} color={Colors.primary} /></TouchableOpacity>
+              {farmOpen && <ScrollView nestedScrollEnabled style={{ maxHeight: 220 }}>{farms.map(farm => <TouchableOpacity key={farm.admin_id} disabled={farmLoading} onPress={() => connectFarm(farm)} style={{ paddingVertical: 12, borderBottomWidth: 1, borderColor: "#eee" }}><Text>{farm.admin_name} · {farm.referral_code}</Text></TouchableOpacity>)}{!farms.length && <Text>No active gaushalas available.</Text>}</ScrollView>}
+            </>}
           </View>
 
           <View style={[styles.card, styles.dangerCard]}>

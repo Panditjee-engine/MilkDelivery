@@ -599,6 +599,20 @@ class ApiService {
     return this.request("/catalog/search-history", { method: "DELETE" });
   }
   private token: string | null = null;
+  getReturnRequests() { return this.request<any[]>("/returns"); }
+  getReturnPhoto(id: string) { return this.request<{ uri: string }>(`/returns/${encodeURIComponent(id)}/photo`); }
+  uploadReturnPhoto(id: string, image: string) { return this.request(`/returns/${encodeURIComponent(id)}/photo`, { method: "PUT", body: JSON.stringify({ image }) }); }
+  getReturnEligibleOrders() { return this.request<any[]>("/returns/orders"); }
+  getBottleReturnOrders() { return this.request<any[]>("/returns/bottles/orders"); }
+  collectReturnBottles(order_id: string, collected_total: number) {
+    return this.request<any>("/returns/bottles/collect", { method: "POST", body: JSON.stringify({ order_id, collected_total }) });
+  }
+  createReturnRequest(data: { order_id: string; kind: string; reason: string }) {
+    return this.request<any>("/returns", { method: "POST", body: JSON.stringify(data) });
+  }
+  updateReturnRequest(id: string, action: string, delivery_partner_id?: string) {
+    return this.request<any>(`/returns/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ action, delivery_partner_id }) });
+  }
   private snapshotSession = 0;
   getSnapshotSession() { return this.snapshotSession; }
   private screenSnapshots = new Map<string, unknown>();
@@ -888,6 +902,18 @@ class ApiService {
       method: "POST",
       body: JSON.stringify(userData),
     });
+    this.setToken(data.access_token);
+    return data;
+  }
+
+  sendCustomerOtp(phone: string) {
+    return this.request<any>("/auth/customer/send-otp", { method: "POST", body: JSON.stringify({ phone }) });
+  }
+  setCustomerInitialPassword(password: string) {
+    return this.request<any>("/auth/customer/initial-password", { method: "PUT", body: JSON.stringify({ password }) });
+  }
+  async verifyCustomerOtp(phone: string, otp: string, device: Record<string, any> = {}) {
+    const data = await this.request<any>("/auth/customer/verify-otp", { method: "POST", body: JSON.stringify({ ...device, phone, otp }) });
     this.setToken(data.access_token);
     return data;
   }

@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import ServiceSlotPicker, { isServiceProduct } from "../../src/components/ServiceSlotPicker";
 import { useIsFocused } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
@@ -133,6 +134,7 @@ export default function ProductSearchScreen() {
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [quantity, setQuantity] = useState(1);
   const [pattern, setPattern] = useState("daily");
+  const [serviceSlot, setServiceSlot] = useState("06:00-07:00");
   const [customDays, setCustomDays] = useState<number[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState("");
@@ -316,7 +318,7 @@ export default function ProductSearchScreen() {
         custom_days: pattern === "custom" ? customDays : null,
         start_date: startDate,
         end_date: pattern === "buy_once" ? startDate : null,
-        delivery_slot: "morning",
+        delivery_slot: isServiceProduct(selectedProduct) ? serviceSlot : "morning",
       });
       setFeedback(pattern === "buy_once" ? "Order placed successfully." : "Subscription activated successfully.");
       setTimeout(() => setSelectedProduct(null), 700);
@@ -474,7 +476,7 @@ export default function ProductSearchScreen() {
               {isDairyProduct(selectedProduct) ? "Delivery Option" : "Order Type"}
             </Text>
             <View style={s.patternGrid}>
-              {(isDairyProduct(selectedProduct) ? subscriptionPatterns : [subscriptionPatterns[3]]).map((item) => {
+              {(isDairyProduct(selectedProduct) || isServiceProduct(selectedProduct) ? subscriptionPatterns : [subscriptionPatterns[3]]).map((item) => {
                 const active = pattern === item.value;
                 return (
                   <TouchableOpacity
@@ -510,6 +512,7 @@ export default function ProductSearchScreen() {
               </View>
             )}
 
+            {isServiceProduct(selectedProduct) && <ServiceSlotPicker value={serviceSlot} onChange={setServiceSlot} />}
             <View style={s.totalRow}>
               <Text style={s.totalLabel}>Total</Text>
               <Text style={s.totalValue}>₹{((selectedProduct?.price ?? 0) * quantity).toFixed(2)}</Text>

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import ServiceSlotPicker, { isServiceProduct, productStock } from "../../src/components/ServiceSlotPicker";
 import {
   ActivityIndicator,
   Image,
@@ -109,6 +110,7 @@ export default function ProductDetailsScreen() {
   const [buySheetVisible, setBuySheetVisible] = useState(false);
   const [quantity, setQuantity] = useState(1);
   const [pattern, setPattern] = useState("buy_once");
+  const [serviceSlot, setServiceSlot] = useState("06:00-07:00");
   const [customDays, setCustomDays] = useState<number[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState("");
@@ -192,8 +194,8 @@ export default function ProductDetailsScreen() {
   }, [productId]);
 
   const theme = useMemo(() => getTheme(product?.category), [product?.category]);
-  const isUnavailable = !product?.is_available || (product?.stock ?? 1) === 0;
-  const isDairy = isDairyProduct(product);
+  const isUnavailable = !product?.is_available || productStock(product, 1) === 0;
+  const isDairy = isDairyProduct(product) || isServiceProduct(product);
   const orderTotal = (Number(product?.price) || 0) * quantity;
 
   const handleAddToCart = () => {
@@ -283,7 +285,7 @@ export default function ProductDetailsScreen() {
       return;
     }
 
-    const stock = product.stock ?? Infinity;
+    const stock = productStock(product, Infinity);
 
     // ── BUY ONCE = just add to cart, don't place order here ──
     if (pattern === "buy_once") {
@@ -339,7 +341,7 @@ export default function ProductDetailsScreen() {
         custom_days: pattern === "custom" ? customDays : null,
         start_date: startDate,
         end_date: null,
-        delivery_slot: "morning",
+        delivery_slot: isServiceProduct(product) ? serviceSlot : "morning",
       });
       setFeedback("Subscription activated.");
       setFeedbackType(null);
@@ -739,6 +741,7 @@ export default function ProductDetailsScreen() {
               </View>
             ) : null}
 
+            {isServiceProduct(product) && pattern !== "buy_once" && <ServiceSlotPicker value={serviceSlot} onChange={setServiceSlot} />}
             <View style={s.totalRow}>
               <Text style={s.totalLabel}>Total</Text>
               <Text style={s.totalValue}>₹{orderTotal.toFixed(2)}</Text>

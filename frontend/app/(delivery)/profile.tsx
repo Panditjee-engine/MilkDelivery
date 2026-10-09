@@ -467,6 +467,16 @@ export default function DeliveryProfileScreen() {
 
         {/* Help & Support */}
         <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Returns & Exchanges</Text>
+          <View style={styles.infoCard}>
+            <TouchableOpacity style={styles.infoRow} onPress={() => router.push("/(delivery)/returns" as any)}>
+              <View style={styles.infoIcon}><Ionicons name="swap-horizontal-outline" size={20} color={C.primary} /></View>
+              <View style={styles.infoContent}><Text style={styles.infoLabel}>Pickup Requests</Text><Text style={styles.infoValue}>Bottles, returns & pickup photos</Text></View>
+              <Ionicons name="chevron-forward" size={18} color={C.textLight} />
+            </TouchableOpacity>
+          </View>
+        </View>
+        <View style={styles.section}>
           <Text style={styles.sectionTitle}>Help & Support</Text>
 
           <View style={styles.infoCard}>

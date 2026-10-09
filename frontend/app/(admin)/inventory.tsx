@@ -285,6 +285,7 @@ const EMPTY_FORM: FormData = {
 };
 
 const CATEGORIES = [
+  "service",
   "milk",
   "dairy",
   "bakery",
@@ -293,7 +294,7 @@ const CATEGORIES = [
   "essentials",
 ];
 // ── Fixed unit options — dairy-focused, dropdown/chip selection only (no free text)
-const UNITS = ["ml", "L", "g", "kg" , "pcs", "dozen", "bottle", "pack", "box", "jar", "can"];
+const UNITS = ["visit", "ml", "L", "g", "kg" , "pcs", "dozen", "bottle", "pack", "box", "jar", "can"];
 const DIETARY_OPTIONS = ["Veg", "Non-Veg", "Vegan", "Gluten-Free"];
 const TABS = ["Details", "Highlights", "Information"];
 
@@ -940,7 +941,7 @@ const openDetail = (product: Product) => {
 
           <View style={styles.row}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.fieldLabel}>Price (₹)</Text>
+              <Text style={styles.fieldLabel}>{data.category === "service" ? "Price per booking (₹)" : "Price (₹)"}</Text>
               <TextInput
                 style={styles.input}
                 placeholder="e.g. 60"
@@ -1089,15 +1090,15 @@ const openDetail = (product: Product) => {
             ))}
           </View>
 
-          <Text style={styles.fieldLabel}>Stock (optional)</Text>
-          <TextInput
+          <Text style={styles.fieldLabel}>{data.category === "service" ? "Booking capacity: Unlimited" : "Stock (optional)"}</Text>
+          {data.category !== "service" && <TextInput
             style={styles.input}
             placeholder="0"
             placeholderTextColor={C.textLight}
             keyboardType="numeric"
             value={data.stock}
             onChangeText={(v) => update("stock", v)}
-          />
+          />}
         </View>
       );
     }
