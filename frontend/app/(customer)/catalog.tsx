@@ -1,3 +1,4 @@
+import ServiceSlotPicker, { isServiceProduct, productStock } from "../../src/components/ServiceSlotPicker";
 import React, {
   useState,
   useEffect,
@@ -1193,8 +1194,8 @@ function ProductCard({
   rating?: { average: number; total: number } | null;
 }) {
   const theme = getCategoryTheme(product.category);
-  const isDairy = isDairyProduct(product);
-  const noStock = !product.is_available || (product.stock ?? 0) === 0;
+  const isDairy = isDairyProduct(product) || isServiceProduct(product);
+  const noStock = !product.is_available || productStock(product) === 0;
   const cutoffText = getOrderCutoffBadgeText(cutoffRule);
   const cutoffPassed = isOrderCutoffPassed(cutoffRule);
   const deliveryText = getDeliveryWindowBadgeText(deliveryWindow);
@@ -1786,7 +1787,7 @@ function QuickAddModal({
             <TouchableOpacity
               style={[sheetS.qtyBtn, { backgroundColor: theme.accent }]}
               onPress={() => {
-                const m = product?.stock ?? Infinity;
+                const m = productStock(product, Infinity);
                 if (qty >= m) {
                   alert(`Only ${m} available`);
                   return;
@@ -1916,7 +1917,7 @@ function SubscribeModal({
       setQty(1);
       setPattern("daily");
       setCustomDays([]);
-      setSlot("morning");
+      setSlot(isServiceProduct(product) ? "06:00-07:00" : "morning");
       setStartDate(tomorrow);
       setEndDate(null);
       setPaymentMethod(getFirstEnabledPaymentMethod(paymentMethods));
@@ -2172,7 +2173,7 @@ function SubscribeModal({
                   <TouchableOpacity
                     style={[sheetS.qtyBtn, { backgroundColor: theme.accent }]}
                     onPress={() => {
-                      const m = product?.stock ?? Infinity;
+                      const m = productStock(product, Infinity);
                       if (qty >= m) {
                         alert(`Only ${m} available`);
                         return;
@@ -2271,7 +2272,7 @@ function SubscribeModal({
                   </>
                 )}
 
-                <Text style={sheetS.sectionLabel}>Delivery Slot</Text>
+                {isServiceProduct(product) ? <ServiceSlotPicker value={slot} onChange={setSlot} /> : <><Text style={sheetS.sectionLabel}>Delivery Slot</Text>
                 <View style={subModalS.slotRow}>
                   {DELIVERY_SLOTS.map((s) => {
                     const active = slot === s.value;
@@ -2307,6 +2308,7 @@ function SubscribeModal({
                 </View>
 
                 <View style={{ height: 16 }} />
+                </>}
                 <Button title="Next: Choose Dates →" onPress={step1Next} />
                 <View style={{ height: 16 }} />
               </ScrollView>
@@ -2455,7 +2457,7 @@ function SubscribeModal({
                     ],
                     [
                       "Slot",
-                      DELIVERY_SLOTS.find((s) => s.value === slot)?.label +
+                      isServiceProduct(product) ? slot : DELIVERY_SLOTS.find((s) => s.value === slot)?.label +
                       " (" +
                       DELIVERY_SLOTS.find((s) => s.value === slot)?.time +
                       ")",
@@ -3103,12 +3105,13 @@ function CartSheet({
   onClose: () => void;
   onRemove: (id: string) => void;
   onUpdateQty: (id: string, q: number) => void;
-  onPlaceOrder: (paymentMethod: PaymentMethod) => void;
+  onPlaceOrder: (paymentMethod: PaymentMethod, serviceSlot?: string) => void;
   submitting: boolean;
 }) {
   const router = useRouter();
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("wallet");
   const [addressPickerVisible, setAddressPickerVisible] = useState(false);
+  const [serviceSlot, setServiceSlot] = useState("06:00-07:00");
   const slide = useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const overlay = useRef(new Animated.Value(0)).current;
 
@@ -3161,7 +3164,7 @@ function CartSheet({
       cartTotal,
       walletBalance,
     });
-    onPlaceOrder(paymentMethod);
+    onPlaceOrder(paymentMethod, cart.some(item => isServiceProduct(item.product)) ? serviceSlot : undefined);
   };
 
   const requestPlaceOrder = () => {
@@ -3254,6 +3257,7 @@ function CartSheet({
                 </Text>
               </TouchableOpacity>
 
+              {cart.some(item => isServiceProduct(item.product)) && <ServiceSlotPicker value={serviceSlot} onChange={setServiceSlot} />}
               <View style={cartS.walletStrip}>
                 <View
                   style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
@@ -4463,7 +4467,7 @@ useEffect(() => {
 
   const handleAddToCart = (p: any) => {
     if (showCutoffPopupIfBlocked(p)) return;
-    if ((p.stock ?? 0) === 0) {
+    if (productStock(p) === 0) {
       alert("Out of stock");
       return;
     }
@@ -4483,7 +4487,7 @@ useEffect(() => {
         const updatedCart = [...prev];
         const nextQty = updatedCart[existingIndex].quantity + 1;
 
-        if (nextQty > (p.stock ?? Infinity)) {
+        if (nextQty > productStock(p, Infinity)) {
           alert(`Only ${p.stock} items available`);
           return prev;
         }
@@ -4521,7 +4525,7 @@ useEffect(() => {
 
   const handleDairyBuyOnce = (p: any) => {
     if (showCutoffPopupIfBlocked(p)) return;
-    if ((p.stock ?? 0) === 0) {
+    if (productStock(p) === 0) {
       alert("Out of stock");
       return;
     }
@@ -4530,7 +4534,7 @@ useEffect(() => {
   };
   const handleSubscribe = (p: any) => {
     if (showCutoffPopupIfBlocked(p)) return;
-    if ((p.stock ?? 0) === 0) {
+    if (productStock(p) === 0) {
       alert("Out of stock");
       return;
     }
@@ -4541,7 +4545,7 @@ useEffect(() => {
   const handleQuickAddConfirm = async (qty: number) => {
     if (!quickAddProduct) return;
     if (showCutoffPopupIfBlocked(quickAddProduct)) return;
-    const avail = quickAddProduct.stock ?? 0;
+    const avail = productStock(quickAddProduct);
     if (qty > avail) {
       alert(`Only ${avail} available`);
       return;
@@ -4564,7 +4568,7 @@ useEffect(() => {
         const updatedCart = [...prev];
         const newQty = updatedCart[existingIndex].quantity + qty;
 
-        if (newQty > (quickAddProduct.stock ?? Infinity)) {
+        if (newQty > productStock(quickAddProduct, Infinity)) {
           alert(`Only ${quickAddProduct.stock} items available`);
           return prev;
         }
@@ -4598,7 +4602,7 @@ useEffect(() => {
     setCart((p) =>
       p.map((c) => {
         if (c.id !== id) return c;
-        const m = c.product.stock ?? Infinity;
+        const m = productStock(c.product, Infinity);
         if (qty > m) {
           alert(`Only ${m} available`);
           return c;
@@ -4611,7 +4615,7 @@ useEffect(() => {
   const cartTotal = getPayableTotal(cart);
 
   // ── FIXED: All cart items go as ONE buy_once subscription
-  const handlePlaceOrder = async (paymentMethod: PaymentMethod) => {
+  const handlePlaceOrder = async (paymentMethod: PaymentMethod, serviceSlot?: string) => {
     console.log("[Cart] handlePlaceOrder started", {
       paymentMethod,
       itemCount: cart.length,
@@ -4706,7 +4710,7 @@ useEffect(() => {
         custom_days: null,
         start_date: tomorrow,
         end_date: tomorrow,
-        delivery_slot: "morning",
+        delivery_slot: serviceSlot || "morning",
         payment_method: paymentMethod,
       };
       // Single subscription with all cart items bundled together

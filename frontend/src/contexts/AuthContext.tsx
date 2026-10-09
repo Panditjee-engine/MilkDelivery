@@ -6,6 +6,7 @@ import { notificationService } from '../services/notificationService'; // ← NE
 import { getAuthDevicePayload, saveNhRegistrationId, clearNhRegistrationId } from '../utils/deviceToken';
 
 interface User {
+  password_login_enabled?: boolean;
   id: string;
   email: string;
   name: string;
@@ -141,7 +142,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const register = async (data: any) => {
     const devicePayload = await getAuthDevicePayload();
-    const response = await api.register({ ...data, ...devicePayload });
+    const response = data.customerOtp
+      ? await api.verifyCustomerOtp(data.phone, data.otp, devicePayload)
+      : await api.register({ ...data, ...devicePayload });
     await saveNhRegistrationId(response.nh_registration_id); 
     await AsyncStorage.setItem('access_token', response.access_token);
     setToken(response.access_token);

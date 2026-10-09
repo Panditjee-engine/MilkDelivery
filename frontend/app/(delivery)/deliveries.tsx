@@ -743,6 +743,7 @@ function CompletedOrderCard({ order }: { order: any }) {
         </Text>
         <Text style={styles.completedBadge}>Delivered</Text>
       </View>
+      {!!order.delivery_slot && <Text style={styles.address}>Time: {order.delivery_slot}</Text>}
       <Text style={styles.address}>
         📍 {formatOrderAddress(order.display_address || order.address)}
       </Text>

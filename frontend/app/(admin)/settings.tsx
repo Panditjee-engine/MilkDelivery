@@ -1997,6 +1997,25 @@ export default function AdminSettingsScreen() {
           </TouchableOpacity>
         </View>
 
+        <View style={s.contentCard}>
+          <View style={s.contentCardHeader}>
+            <View style={s.contentIconWrap}>
+              <Ionicons name="swap-horizontal-outline" size={18} color={C.dark} />
+            </View>
+            <View style={s.contentCardBody}>
+              <Text style={s.contentCardTitle}>Returns & Exchanges</Text>
+              <Text style={s.contentCardSubtitle}>Bottle returns, product requests and pickups.</Text>
+            </View>
+            <View style={s.contentCountPill}>
+              <Ionicons name="cube-outline" size={16} color={C.dark} />
+            </View>
+          </View>
+          <TouchableOpacity style={s.contentManageBtn} activeOpacity={0.85}
+            onPress={() => router.push({ pathname: "/(admin)/returns", params: { from: "settings" } } as any)}>
+            <Ionicons name="swap-horizontal-outline" size={15} color="#fff" />
+            <Text style={s.contentManageText}>Manage Returns</Text>
+          </TouchableOpacity>
+        </View>
         {/* ── Wallet Payment */}
         <View style={s.contentCard}>
           <View style={s.contentCardHeader}>
