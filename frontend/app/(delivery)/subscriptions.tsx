@@ -17,6 +17,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { api } from "../../src/services/api";
 import LoadingScreen from "../../src/components/LoadingScreen";
 
+import { openRouteInMaps, openAddressInMaps } from "../../src/utils/geo";
+
 if (
   Platform.OS === "android" &&
   UIManager.setLayoutAnimationEnabledExperimental
@@ -776,11 +778,24 @@ function SubCard({
     bg: C.border,
   };
   const address = formatAddress(sub.customer_address || sub.address);
+
+  const rawAddr = sub.customer_address || sub.address;
+const latRaw = rawAddr?.lat ?? rawAddr?.latitude;
+const lngRaw = rawAddr?.lng ?? rawAddr?.longitude;
+const hasCoords =
+  latRaw != null && lngRaw != null && !isNaN(Number(latRaw)) && !isNaN(Number(lngRaw));
+const openMap = () =>
+  hasCoords ? openRouteInMaps(Number(latRaw), Number(lngRaw)) : openAddressInMaps(address);
+
   const items = sub.items ?? [];
   const daysLeft = daysUntilEnd(sub.end_date);
   const withinSlot = isWithinSlot(sub.delivery_slot);
   // In the Expired tab, a cancelled subscription is shown as "Cancelled", not "Expired"
   const expired = context === "expired" ? true : isEffectivelyExpired;
+
+  const showMap =
+  context === "today" && !expired && address !== "Address not available";
+
   const trueExpired = isExpired(sub);
   const showStartMsg =
     isAccepted && deliversToday && !isDeliveredToday && !withinSlot && !expired;
@@ -922,6 +937,7 @@ function SubCard({
               </Text>
             </View>
           )}
+
           <View style={[styles.patternPill, { backgroundColor: pattern.bg }]}>
             <Ionicons name={pattern.icon} size={10} color={pattern.color} />
             <Text style={[styles.patternPillText, { color: pattern.color }]}>
@@ -1003,6 +1019,12 @@ function SubCard({
                 />
                 <Text style={styles.quickRowText}>Delivery: {dateLabel}</Text>
               </>
+                
+            )}
+            {showMap && (
+              <TouchableOpacity style={styles.mapIconBtn} onPress={openMap}>
+                <Ionicons name="map-outline" size={16} color={C.dark} />
+              </TouchableOpacity>
             )}
           </View>
         )}
@@ -1039,11 +1061,16 @@ function SubCard({
             </View>
           </View>
 
-          <View style={styles.addressRow}>
+                   <View style={styles.addressRow}>
             <Ionicons name="location-outline" size={13} color={C.primary} />
             <Text style={styles.addressText}>{address}</Text>
+            {showMap && (
+              <TouchableOpacity style={styles.mapLinkBtn} onPress={openMap}>
+                <Ionicons name="map-outline" size={13} color="#fff" />
+                <Text style={styles.mapLinkText}>View in Map</Text>
+              </TouchableOpacity>
+            )}
           </View>
-
           <View style={styles.metaRow}>
             <View style={styles.metaChip}>
               <Ionicons name="time-outline" size={13} color={C.dark} />
@@ -1815,5 +1842,25 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: "center",
   },
+  mapIconBtn: {
+    marginLeft: "auto",
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: C.light + "55",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  mapLinkBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: C.dark,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 8,
+    alignSelf: "center",
+  },
+  mapLinkText: { fontSize: 11, fontWeight: "700", color: "#fff" },
 });
 //for confirmation 22 august

@@ -1,3 +1,4 @@
+import ServiceSlotPicker, { isServiceProduct, productStock } from "../../src/components/ServiceSlotPicker";
 import React, {
   useState,
   useEffect,
@@ -373,11 +374,24 @@ function clampToStock(product: any, qty: number): number {
 function isDairyProduct(p: any): boolean {
   return DAIRY_CATEGORIES.includes(p?.category?.toLowerCase());
 }
+const CATEGORY_ORDER = [
+  "milk",
+  "dairy",
+  "bakery",
+  "fruits",
+  "vegetables",
+  "essentials",
+  "edible_oil",
+  "ayurved",
+  "water",
+  "nursery",
+  "gifting",
+  "oil",
+];
+
 function categoryRank(category: string): number {
-  const normalized = category?.toLowerCase();
-  if (normalized === "milk") return 0;
-  if (normalized === "dairy") return 1;
-  return 2;
+  const idx = CATEGORY_ORDER.indexOf(category?.toLowerCase());
+  return idx === -1 ? CATEGORY_ORDER.length : idx;
 }
 function getCategoryTheme(cat: string) {
   return CATEGORY_THEMES[cat?.toLowerCase()] || CATEGORY_THEMES.other;
@@ -1180,8 +1194,8 @@ function ProductCard({
   rating?: { average: number; total: number } | null;
 }) {
   const theme = getCategoryTheme(product.category);
-  const isDairy = isDairyProduct(product);
-  const noStock = !product.is_available || (product.stock ?? 0) === 0;
+  const isDairy = isDairyProduct(product) || isServiceProduct(product);
+  const noStock = !product.is_available || productStock(product) === 0;
   const cutoffText = getOrderCutoffBadgeText(cutoffRule);
   const cutoffPassed = isOrderCutoffPassed(cutoffRule);
   const deliveryText = getDeliveryWindowBadgeText(deliveryWindow);
@@ -1773,7 +1787,7 @@ function QuickAddModal({
             <TouchableOpacity
               style={[sheetS.qtyBtn, { backgroundColor: theme.accent }]}
               onPress={() => {
-                const m = product?.stock ?? Infinity;
+                const m = productStock(product, Infinity);
                 if (qty >= m) {
                   alert(`Only ${m} available`);
                   return;
@@ -1903,7 +1917,7 @@ function SubscribeModal({
       setQty(1);
       setPattern("daily");
       setCustomDays([]);
-      setSlot("morning");
+      setSlot(isServiceProduct(product) ? "06:00-07:00" : "morning");
       setStartDate(tomorrow);
       setEndDate(null);
       setPaymentMethod(getFirstEnabledPaymentMethod(paymentMethods));
@@ -2159,7 +2173,7 @@ function SubscribeModal({
                   <TouchableOpacity
                     style={[sheetS.qtyBtn, { backgroundColor: theme.accent }]}
                     onPress={() => {
-                      const m = product?.stock ?? Infinity;
+                      const m = productStock(product, Infinity);
                       if (qty >= m) {
                         alert(`Only ${m} available`);
                         return;
@@ -2258,7 +2272,7 @@ function SubscribeModal({
                   </>
                 )}
 
-                <Text style={sheetS.sectionLabel}>Delivery Slot</Text>
+                {isServiceProduct(product) ? <ServiceSlotPicker value={slot} onChange={setSlot} /> : <><Text style={sheetS.sectionLabel}>Delivery Slot</Text>
                 <View style={subModalS.slotRow}>
                   {DELIVERY_SLOTS.map((s) => {
                     const active = slot === s.value;
@@ -2294,6 +2308,7 @@ function SubscribeModal({
                 </View>
 
                 <View style={{ height: 16 }} />
+                </>}
                 <Button title="Next: Choose Dates →" onPress={step1Next} />
                 <View style={{ height: 16 }} />
               </ScrollView>
@@ -2442,7 +2457,7 @@ function SubscribeModal({
                     ],
                     [
                       "Slot",
-                      DELIVERY_SLOTS.find((s) => s.value === slot)?.label +
+                      isServiceProduct(product) ? slot : DELIVERY_SLOTS.find((s) => s.value === slot)?.label +
                       " (" +
                       DELIVERY_SLOTS.find((s) => s.value === slot)?.time +
                       ")",
@@ -3090,12 +3105,13 @@ function CartSheet({
   onClose: () => void;
   onRemove: (id: string) => void;
   onUpdateQty: (id: string, q: number) => void;
-  onPlaceOrder: (paymentMethod: PaymentMethod) => void;
+  onPlaceOrder: (paymentMethod: PaymentMethod, serviceSlot?: string) => void;
   submitting: boolean;
 }) {
   const router = useRouter();
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("wallet");
   const [addressPickerVisible, setAddressPickerVisible] = useState(false);
+  const [serviceSlot, setServiceSlot] = useState("06:00-07:00");
   const slide = useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const overlay = useRef(new Animated.Value(0)).current;
 
@@ -3148,7 +3164,7 @@ function CartSheet({
       cartTotal,
       walletBalance,
     });
-    onPlaceOrder(paymentMethod);
+    onPlaceOrder(paymentMethod, cart.some(item => isServiceProduct(item.product)) ? serviceSlot : undefined);
   };
 
   const requestPlaceOrder = () => {
@@ -3241,6 +3257,7 @@ function CartSheet({
                 </Text>
               </TouchableOpacity>
 
+              {cart.some(item => isServiceProduct(item.product)) && <ServiceSlotPicker value={serviceSlot} onChange={setServiceSlot} />}
               <View style={cartS.walletStrip}>
                 <View
                   style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
@@ -4017,7 +4034,9 @@ const bannerModalS = StyleSheet.create({
 export default function CatalogScreen() {
   const router = useRouter();
   const { user, updateUser } = useAuth();
-  const [linkedAdminId, setLinkedAdminId] = useState<string | null>(null);
+const [linkedAdminId, setLinkedAdminId] = useState<string | null>(
+  (user as any)?.admin_id ?? (user as any)?.referral_admin_id ?? null,
+);
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -4036,6 +4055,7 @@ export default function CatalogScreen() {
   const [submitting, setSubmitting] = useState(false);
 
   const cartHydratedRef = useRef(false);
+  const cutoffsLoadedRef = useRef(false);
   const lastSavedRef = useRef("");
   const userId = (user as any)?.id ?? (user as any)?._id;
   const userIdRef = useRef(userId);
@@ -4173,25 +4193,29 @@ export default function CatalogScreen() {
     }
   }, [products, linkedAdminId]);
 
+  const ratedIdsRef = useRef<Set<string>>(new Set());
+
   const fetchRatings = useCallback(async (list: any[]) => {
-    const entries = await Promise.all(
-      (list || []).map(async (p) => {
-        const id = resolveProductId(p);
-        if (!id) return null;
-        try {
-          const fb = await api.getCatalogProductFeedback(String(id));
-          if (!fb?.total_reviews) return null;
-          return [
-            String(id),
-            { average: fb.average_rating ?? 0, total: fb.total_reviews ?? 0 },
-          ] as const;
-        } catch {
-          return null;
-        }
-      }),
-    );
-    setRatings(Object.fromEntries(entries.filter(Boolean) as any));
-  }, []);
+  const fresh = (list || []).filter((p) => {
+    const id = resolveProductId(p);
+    return id && !ratedIdsRef.current.has(String(id));
+  });
+  if (!fresh.length) return;
+  fresh.forEach((p) => ratedIdsRef.current.add(String(resolveProductId(p))));
+  const entries = await Promise.all(
+    fresh.map(async (p) => {
+      const id = String(resolveProductId(p));
+      try {
+        const fb = await api.getCatalogProductFeedback(id);
+        if (!fb?.total_reviews) return null;
+        return [id, { average: fb.average_rating ?? 0, total: fb.total_reviews ?? 0 }] as const;
+      } catch {
+        return null;
+      }
+    }),
+  );
+  setRatings((prev) => ({ ...prev, ...Object.fromEntries(entries.filter(Boolean) as any) }));
+}, []);
 
   useEffect(() => {
     const id = (user as any)?.admin_id ?? (user as any)?.referral_admin_id;
@@ -4268,26 +4292,12 @@ export default function CatalogScreen() {
     );
   }, [getProductId]);
 
-  useEffect(() => {
-    if (!isFocused || !userId) return;
-    const run = () =>
-      void syncCartFromServer().catch((e) =>
-        console.log("[Cart] sync failed", e),
-      );
-    run();
-    const sub = AppState.addEventListener("change", (s) => {
-      if (s === "active") run();
-    });
-    const iv = setInterval(
-      run,
-      cartHydratedRef.current && !cartVisible ? 60000 : cartVisible ? 30000 : 5000,
-    );
-    return () => {
-      sub.remove();
-      clearInterval(iv);
-    };
-  }, [isFocused, userId, cartVisible, syncCartFromServer]);
-
+useEffect(() => {
+  if (!isFocused || !userId) return;
+  void syncCartFromServer().catch((e) =>
+    console.log("[Cart] sync failed", e),
+  );
+}, [isFocused, userId, syncCartFromServer]);
   // debounce save
   useEffect(() => {
     if (!cartHydratedRef.current) return;
@@ -4311,6 +4321,7 @@ export default function CatalogScreen() {
     };
   }, [saveCartNow]);
 
+
   const fetchData = useCallback(async () => {
     try {
       const [prods, cats, wallet, content, appSettings] = await Promise.all([
@@ -4325,7 +4336,16 @@ export default function CatalogScreen() {
           payment_methods: DEFAULT_PAYMENT_METHODS,
         })),
       ]);
-      const cutoffs = await fetchCutoffsForProducts(prods || [], linkedAdminId);
+if (!cutoffsLoadedRef.current) {
+  cutoffsLoadedRef.current = true;
+  try {
+    const cutoffs = await fetchCutoffsForProducts(prods || [], linkedAdminId);
+    setOrderCutoffs(cutoffs || []);
+  } catch {
+    cutoffsLoadedRef.current = false;
+  }
+}
+      // const cutoffs = await fetchCutoffsForProducts(prods || [], linkedAdminId);
       const windows = await fetchDeliveryWindowsForProducts(prods || [], linkedAdminId);
       setProducts(prods);
       void fetchRatings(prods || []);
@@ -4333,7 +4353,7 @@ export default function CatalogScreen() {
       setWalletBalance(wallet.balance ?? 0);
       setCatalogSlides(mapContentToSlides(content?.data || []));
       setPaymentMethods(normalizePaymentMethods(appSettings));
-      setOrderCutoffs(cutoffs || []);
+      // setOrderCutoffs(cutoffs || []);
       setDeliveryWindows(windows || []);
       await fetchSubs();
     } catch {
@@ -4373,27 +4393,15 @@ export default function CatalogScreen() {
     void fetchData().catch(() => undefined);
   }, [isFocused, fetchData]);
 
-  useEffect(() => {
-    if (!isFocused) return;
-    void fetchPaymentMethods().catch(() => undefined);
-    const sub = AppState.addEventListener("change", (state) => {
-      if (state === "active") void fetchPaymentMethods().catch(() => undefined);
-    });
-    return () => {
-      sub.remove();
-    };
-  }, [isFocused, fetchPaymentMethods]);
+useEffect(() => {
+  if (!isFocused) return;
+  // payment methods are already loaded in fetchData
+}, [isFocused]);
 
-  useEffect(() => {
-    if (!isFocused) return;
-    void fetchDeliveryWindows().catch(() => undefined);
-    const sub = AppState.addEventListener("change", (state) => {
-      if (state === "active") void fetchDeliveryWindows().catch(() => undefined);
-    });
-    return () => {
-      sub.remove();
-    };
-  }, [isFocused, fetchDeliveryWindows]);
+useEffect(() => {
+  if (!isFocused) return;
+  // delivery windows are already loaded in fetchData, no refetch here
+}, [isFocused]);
 
   useEffect(() => {
     if (!addToCartProduct) return;
@@ -4459,7 +4467,7 @@ export default function CatalogScreen() {
 
   const handleAddToCart = (p: any) => {
     if (showCutoffPopupIfBlocked(p)) return;
-    if ((p.stock ?? 0) === 0) {
+    if (productStock(p) === 0) {
       alert("Out of stock");
       return;
     }
@@ -4479,7 +4487,7 @@ export default function CatalogScreen() {
         const updatedCart = [...prev];
         const nextQty = updatedCart[existingIndex].quantity + 1;
 
-        if (nextQty > (p.stock ?? Infinity)) {
+        if (nextQty > productStock(p, Infinity)) {
           alert(`Only ${p.stock} items available`);
           return prev;
         }
@@ -4517,7 +4525,7 @@ export default function CatalogScreen() {
 
   const handleDairyBuyOnce = (p: any) => {
     if (showCutoffPopupIfBlocked(p)) return;
-    if ((p.stock ?? 0) === 0) {
+    if (productStock(p) === 0) {
       alert("Out of stock");
       return;
     }
@@ -4526,7 +4534,7 @@ export default function CatalogScreen() {
   };
   const handleSubscribe = (p: any) => {
     if (showCutoffPopupIfBlocked(p)) return;
-    if ((p.stock ?? 0) === 0) {
+    if (productStock(p) === 0) {
       alert("Out of stock");
       return;
     }
@@ -4537,7 +4545,7 @@ export default function CatalogScreen() {
   const handleQuickAddConfirm = async (qty: number) => {
     if (!quickAddProduct) return;
     if (showCutoffPopupIfBlocked(quickAddProduct)) return;
-    const avail = quickAddProduct.stock ?? 0;
+    const avail = productStock(quickAddProduct);
     if (qty > avail) {
       alert(`Only ${avail} available`);
       return;
@@ -4560,7 +4568,7 @@ export default function CatalogScreen() {
         const updatedCart = [...prev];
         const newQty = updatedCart[existingIndex].quantity + qty;
 
-        if (newQty > (quickAddProduct.stock ?? Infinity)) {
+        if (newQty > productStock(quickAddProduct, Infinity)) {
           alert(`Only ${quickAddProduct.stock} items available`);
           return prev;
         }
@@ -4594,7 +4602,7 @@ export default function CatalogScreen() {
     setCart((p) =>
       p.map((c) => {
         if (c.id !== id) return c;
-        const m = c.product.stock ?? Infinity;
+        const m = productStock(c.product, Infinity);
         if (qty > m) {
           alert(`Only ${m} available`);
           return c;
@@ -4607,7 +4615,7 @@ export default function CatalogScreen() {
   const cartTotal = getPayableTotal(cart);
 
   // ── FIXED: All cart items go as ONE buy_once subscription
-  const handlePlaceOrder = async (paymentMethod: PaymentMethod) => {
+  const handlePlaceOrder = async (paymentMethod: PaymentMethod, serviceSlot?: string) => {
     console.log("[Cart] handlePlaceOrder started", {
       paymentMethod,
       itemCount: cart.length,
@@ -4702,7 +4710,7 @@ export default function CatalogScreen() {
         custom_days: null,
         start_date: tomorrow,
         end_date: tomorrow,
-        delivery_slot: "morning",
+        delivery_slot: serviceSlot || "morning",
         payment_method: paymentMethod,
       };
       // Single subscription with all cart items bundled together
@@ -4864,7 +4872,19 @@ export default function CatalogScreen() {
     return () => clearInterval(iv);
   }, [newSlides.length]);
 
+  
+  const sortedCategories = useMemo(
+  () =>
+    [...categories].sort(
+      (a, b) =>
+        categoryRank(a.value) - categoryRank(b.value) ||
+        String(a.label).localeCompare(String(b.label)),
+    ),
+  [categories],
+);
+
   if (loading) return <LoadingScreen />;
+
 
   const ListHeader = (
     <>
@@ -5302,5 +5322,6 @@ const mainS = StyleSheet.create({
   chipTxtActive: { color: "#fff" },
   empty: { alignItems: "center", paddingTop: 70, gap: 8 },
   emptyTxt: { fontSize: 13, color: T.faint, fontWeight: "500" },
+  
 });
 // add pop-up to confirm order placement - 02-09-26

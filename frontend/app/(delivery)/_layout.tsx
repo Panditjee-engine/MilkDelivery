@@ -58,6 +58,7 @@ export default function DeliveryLayout() {
       <Tabs.Screen name="delivery-guidelines" options={{ href: null }} />
       <Tabs.Screen name="contact-support" options={{ href: null }} />
       <Tabs.Screen name="faqs" options={{ href: null }} />
+      <Tabs.Screen name="returns" options={{ href: null }} />
     </Tabs>
   );
 }

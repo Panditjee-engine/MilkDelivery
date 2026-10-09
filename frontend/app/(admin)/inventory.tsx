@@ -285,6 +285,7 @@ const EMPTY_FORM: FormData = {
 };
 
 const CATEGORIES = [
+  "service",
   "milk",
   "dairy",
   "bakery",
@@ -298,7 +299,7 @@ const CATEGORIES = [
   "gifting",
 ];
 // ── Fixed unit options — dairy-focused, dropdown/chip selection only (no free text)
-const UNITS = ["ml", "L", "g", "kg" , "pcs", "dozen", "bottle", "pack", "box", "jar", "can"];
+const UNITS = ["visit", "ml", "L", "g", "kg" , "pcs", "dozen", "bottle", "pack", "box", "jar", "can"];
 const DIETARY_OPTIONS = ["Veg", "Non-Veg", "Vegan", "Gluten-Free"];
 const TABS = ["Details", "Highlights", "Information"];
 
@@ -945,7 +946,7 @@ const openDetail = (product: Product) => {
 
           <View style={styles.row}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.fieldLabel}>Price (₹)</Text>
+              <Text style={styles.fieldLabel}>{data.category === "service" ? "Price per booking (₹)" : "Price (₹)"}</Text>
               <TextInput
                 style={styles.input}
                 placeholder="e.g. 60"
@@ -999,7 +1000,7 @@ const openDetail = (product: Product) => {
             ))}
 
             {/* Show current custom category as its own selected chip if it's not a preset */}
-            {data.category && !CATEGORIES.includes(data.category) && (
+            {!!data.category && !CATEGORIES.includes(data.category) && (
               <View style={[styles.catChip, styles.catChipActive]}>
                 <Text style={[styles.catChipText, styles.catChipTextActive]}>
                   {data.category}
@@ -1094,15 +1095,15 @@ const openDetail = (product: Product) => {
             ))}
           </View>
 
-          <Text style={styles.fieldLabel}>Stock (optional)</Text>
-          <TextInput
+          <Text style={styles.fieldLabel}>{data.category === "service" ? "Booking capacity: Unlimited" : "Stock (optional)"}</Text>
+          {data.category !== "service" && <TextInput
             style={styles.input}
             placeholder="0"
             placeholderTextColor={C.textLight}
             keyboardType="numeric"
             value={data.stock}
             onChangeText={(v) => update("stock", v)}
-          />
+          />}
         </View>
       );
     }
@@ -1679,24 +1680,37 @@ const openDetail = (product: Product) => {
         </View>
       </View>
 
-      {/* ── Summary Strip ── */}
-      <View style={styles.summaryStrip}>
+      {/* ── Product List ── */}
+            <FlatList
+        data={filteredProducts}
+        keyExtractor={(item) => getProductId(item) || item.name}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={C.primary}
+            colors={[C.primary, C.accent]}
+          />
+        }
+        contentContainerStyle={styles.listContent}
+      ListHeaderComponent={
+    <View>
+      <View style={[styles.summaryStrip, { marginHorizontal: 4 }]}>
         <View style={styles.summaryItem}>
           <Text style={styles.summaryVal}>{products.length}</Text>
           <Text style={styles.summaryLabel}>Total</Text>
         </View>
         <View style={styles.summaryDivider} />
         <View style={styles.summaryItem}>
-          <Text style={[styles.summaryVal, { color: C.success }]}>
-            {available}
-          </Text>
+          <Text style={[styles.summaryVal, { color: C.success }]}>{available}</Text>
           <Text style={styles.summaryLabel}>Active</Text>
         </View>
         <View style={styles.summaryDivider} />
         <View style={styles.summaryItem}>
-          <Text style={[styles.summaryVal, { color: "#F59E0B" }]}>
-            {lowStock}
-          </Text>
+          <Text style={[styles.summaryVal, { color: "#F59E0B" }]}>{lowStock}</Text>
           <Text style={styles.summaryLabel}>Low Stock</Text>
         </View>
         <View style={styles.summaryDivider} />
@@ -1708,9 +1722,8 @@ const openDetail = (product: Product) => {
         </View>
       </View>
 
-      {/* ── Order Summary Card ── */}
       <TouchableOpacity
-        style={styles.orderSummaryCard}
+        style={[styles.orderSummaryCard, { marginHorizontal: 4 }]}
         activeOpacity={0.82}
         onPress={() => router.push("/(admin)/order-summary" as any)}
       >
@@ -1728,47 +1741,15 @@ const openDetail = (product: Product) => {
         <Ionicons name="chevron-forward" size={18} color={C.dark} />
       </TouchableOpacity>
 
-      {/* ── Product List ── */}
-     <FlatList
-  data={filteredProducts}
-  keyExtractor={(item) => getProductId(item) || item.name}
-  showsVerticalScrollIndicator={false}
-  keyboardShouldPersistTaps="handled"
-  keyboardDismissMode="on-drag"
-  refreshControl={
-    <RefreshControl
-      refreshing={refreshing}
-      onRefresh={onRefresh}
-      tintColor={C.primary}
-      colors={[C.primary, C.accent]}
-    />
-  }
-  contentContainerStyle={styles.listContent}
-  ListHeaderComponent={
-    searchQuery.trim() ? (
-      <Text style={styles.orderSummarySub} accessibilityLiveRegion="polite">
-        {filteredProducts.length}{" "}
-        {filteredProducts.length === 1 ? "product" : "products"} found
-      </Text>
-    ) : null
-  }
-  ListEmptyComponent={
-    <View style={styles.emptyState}>
-      <View style={styles.emptyIconWrap}>
-        <Ionicons
-          name={searchQuery ? "search-outline" : "cube-outline"}
-          size={48}
-          color={C.textLight}
-        />
-      </View>
-      <Text style={styles.emptyTitle}>
-        {searchQuery ? "No matching products" : "No products yet"}
-      </Text>
-      <Text style={styles.emptyDesc}>
-        {searchQuery
-          ? "Try a different search term"
-          : "Tap + to add your first product"}
-      </Text>
+      {searchQuery.trim() ? (
+        <Text
+          style={[styles.orderSummarySub, { marginBottom: 8 }]}
+          accessibilityLiveRegion="polite"
+        >
+          {filteredProducts.length}{" "}
+          {filteredProducts.length === 1 ? "product" : "products"} found
+        </Text>
+      ) : null}
     </View>
   }
   renderItem={({ item: product }) => {
@@ -1801,9 +1782,9 @@ const openDetail = (product: Product) => {
           </Text>
           <View style={styles.productPriceRow}>
             <Text style={styles.productPrice}>₹{product.price}</Text>
-            {product.mrp && product.mrp > product.price && (
-              <Text style={styles.productMrp}>₹{product.mrp}</Text>
-            )}
+            {!!product.mrp && product.mrp > product.price && (
+  <Text style={styles.productMrp}>₹{product.mrp}</Text>
+)}
           </View>
           <Text style={styles.productMeta}>
             {product.unit || product.category
@@ -1922,7 +1903,7 @@ const openDetail = (product: Product) => {
       </TouchableOpacity>
     );
   }}
-/>
+      />
       {/* ── ADD PRODUCT MODAL (Tabbed) ── */}
       <Modal visible={addModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>

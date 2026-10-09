@@ -1321,6 +1321,21 @@ export default function ProfileScreen() {
         </View>
 
         {/* ── Connect with Gaushala ── */}
+        <TouchableOpacity style={styles.card} activeOpacity={0.88} accessibilityRole="button"
+          onPress={() => router.push("/(customer)/returns" as any)}>
+          <View style={[styles.cardHeader, { marginBottom: 0 }]}>
+            <View style={[styles.cardIconBox, { backgroundColor: "#FFF4E6" }]}>
+              <Ionicons name="swap-horizontal-outline" size={19} color={Colors.primary} />
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={[styles.cardTitle, { flex: 0 }]}>Returns & Exchanges</Text>
+              <Text style={{ color: "#888", fontSize: 12, lineHeight: 18, marginTop: 4 }}>Bottle returns, product requests & pickups</Text>
+            </View>
+            <View style={styles.addIconBtn}>
+              <Ionicons name="chevron-forward" size={18} color={Colors.primary} />
+            </View>
+          </View>
+        </TouchableOpacity>
         <TouchableOpacity
           style={[
             styles.card,

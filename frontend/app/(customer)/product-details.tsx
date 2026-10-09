@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import ServiceSlotPicker, { isServiceProduct, productStock } from "../../src/components/ServiceSlotPicker";
 import {
   ActivityIndicator,
   Image,
@@ -109,6 +110,7 @@ export default function ProductDetailsScreen() {
   const [buySheetVisible, setBuySheetVisible] = useState(false);
   const [quantity, setQuantity] = useState(1);
   const [pattern, setPattern] = useState("buy_once");
+  const [serviceSlot, setServiceSlot] = useState("06:00-07:00");
   const [customDays, setCustomDays] = useState<number[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState("");
@@ -163,25 +165,22 @@ export default function ProductDetailsScreen() {
     };
   }, [initialProduct, productId]);
 
-  useEffect(() => {
-    const adminId = product?.admin_id;
-    if (!adminId) return;
-    let mounted = true;
-    const loadCutoffs = async () => {
-      try {
-        const data = await api.getCatalogOrderCutoffs(String(adminId));
-        if (mounted) setOrderCutoffs(data || []);
-      } catch {
-        if (mounted) setOrderCutoffs([]);
-      }
-    };
-    loadCutoffs();
-    const interval = setInterval(loadCutoffs, 2000);
-    return () => {
-      mounted = false;
-      clearInterval(interval);
-    };
-  }, [product?.admin_id]);
+useEffect(() => {
+  const adminId = product?.admin_id;
+  if (!adminId) return;
+  let mounted = true;
+  (async () => {
+    try {
+      const data = await api.getCatalogOrderCutoffs(String(adminId));
+      if (mounted) setOrderCutoffs(data || []);
+    } catch {
+      if (mounted) setOrderCutoffs([]);
+    }
+  })();
+  return () => {
+    mounted = false;
+  };
+}, [product?.admin_id]);
 
   useEffect(() => {
     if (!productId) return;
@@ -192,8 +191,8 @@ export default function ProductDetailsScreen() {
   }, [productId]);
 
   const theme = useMemo(() => getTheme(product?.category), [product?.category]);
-  const isUnavailable = !product?.is_available || (product?.stock ?? 1) === 0;
-  const isDairy = isDairyProduct(product);
+  const isUnavailable = !product?.is_available || productStock(product, 1) === 0;
+  const isDairy = isDairyProduct(product) || isServiceProduct(product);
   const orderTotal = (Number(product?.price) || 0) * quantity;
 
   const handleAddToCart = () => {
@@ -283,12 +282,12 @@ export default function ProductDetailsScreen() {
       return;
     }
 
-    const stock = product.stock ?? Infinity;
+    const stock = productStock(product, Infinity);
 
     // ── BUY ONCE = just add to cart, don't place order here ──
     if (pattern === "buy_once") {
       if (quantity > stock) {
-        setFeedback(`Only ${stock} item available.`);
+        setFeedback("Maximum available quantity reached.");
         setFeedbackType(null);
         return;
       }
@@ -339,7 +338,7 @@ export default function ProductDetailsScreen() {
         custom_days: pattern === "custom" ? customDays : null,
         start_date: startDate,
         end_date: null,
-        delivery_slot: "morning",
+        delivery_slot: isServiceProduct(product) ? serviceSlot : "morning",
       });
       setFeedback("Subscription activated.");
       setFeedbackType(null);
@@ -462,18 +461,18 @@ export default function ProductDetailsScreen() {
           ) : null}
 
           <View style={s.infoGrid}>
-            {/*<View style={s.infoBox}>
+            <View style={s.infoBox}>
               <Ionicons name="cube-outline" size={18} color={Colors.primary} />
               <Text style={s.infoLabel}>Stock</Text>
-              <Text style={s.infoValue}>{product.stock ?? "Available"}</Text>
-           </View>*/}
+              <Text style={s.infoValue}>{ "Available"}</Text>
+           </View>
             <View style={s.infoBox}>
               <Ionicons
                 name="repeat-outline"
                 size={18}
                 color={Colors.primary}
               />
-              <Text style={s.infoLabel}>Order</Text>
+              <Text style={s.infoLabel}>Order/Subcribe</Text>
               <Text style={s.infoValue}>Subscribe or cart</Text>
             </View>
           </View>
@@ -490,38 +489,38 @@ export default function ProductDetailsScreen() {
             {feedbackSummary?.total_reviews > 0 ? (
               <>
                 <View
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        gap: 8,
-                        marginBottom: 10,
-                      }}
-                    >
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 8,
+                    marginBottom: 10,
+                  }}
+                >
                   <Text
-                        style={{
-                          fontSize: 22,
-                          fontWeight: "900",
-                          color: "#111827",
-                        }}
-                      >
+                    style={{
+                      fontSize: 22,
+                      fontWeight: "900",
+                      color: "#111827",
+                    }}
+                  >
                     {feedbackSummary.average_rating.toFixed(1)}
                   </Text>
                   <View>
                     <StarRating
-                          value={Math.round(feedbackSummary.average_rating)}
-                          readOnly
-                          size={16}
-                        />
+                      value={Math.round(feedbackSummary.average_rating)}
+                      readOnly
+                      size={16}
+                    />
                     <Text
-                          style={{
-                            fontSize: 12,
-                            color: "#6B7280",
-                            fontWeight: "700",
-                            marginTop: 2,
-                          }}
-                        >
+                      style={{
+                        fontSize: 12,
+                        color: "#6B7280",
+                        fontWeight: "700",
+                        marginTop: 2,
+                      }}
+                    >
                       {feedbackSummary.total_reviews} review
-                          {feedbackSummary.total_reviews > 1 ? "s" : ""}
+                      {feedbackSummary.total_reviews > 1 ? "s" : ""}
                     </Text>
                   </View>
                 </View>
@@ -535,32 +534,32 @@ export default function ProductDetailsScreen() {
                     }}
                   >
                     <View
-                          style={{
-                            flexDirection: "row",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                          }}
-                        >
+                      style={{
+                        flexDirection: "row",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
                       <Text
-                            style={{
-                              fontSize: 13,
-                              fontWeight: "800",
-                              color: "#111827",
-                            }}
-                          >
+                        style={{
+                          fontSize: 13,
+                          fontWeight: "800",
+                          color: "#111827",
+                        }}
+                      >
                         {fb.customer_name || "Customer"}
                       </Text>
                       <StarRating value={fb.rating} readOnly size={13} />
                     </View>
                     {fb.comment ? (
                       <Text
-                            style={{
-                              fontSize: 13,
-                              color: "#6B7280",
-                              marginTop: 4,
-                              lineHeight: 18,
-                            }}
-                          >
+                        style={{
+                          fontSize: 13,
+                          color: "#6B7280",
+                          marginTop: 4,
+                          lineHeight: 18,
+                        }}
+                      >
                         {fb.comment}
                       </Text>
                     ) : null}
@@ -569,12 +568,12 @@ export default function ProductDetailsScreen() {
               </>
             ) : (
               <Text
-                    style={{
-                      fontSize: 13,
-                      color: "#9CA3AF",
-                      fontWeight: "600",
-                    }}
-                  >
+                style={{
+                  fontSize: 13,
+                  color: "#9CA3AF",
+                  fontWeight: "600",
+                }}
+              >
                 No reviews yet for this product.
               </Text>
             )}
@@ -739,6 +738,7 @@ export default function ProductDetailsScreen() {
               </View>
             ) : null}
 
+            {isServiceProduct(product) && pattern !== "buy_once" && <ServiceSlotPicker value={serviceSlot} onChange={setServiceSlot} />}
             <View style={s.totalRow}>
               <Text style={s.totalLabel}>Total</Text>
               <Text style={s.totalValue}>₹{orderTotal.toFixed(2)}</Text>

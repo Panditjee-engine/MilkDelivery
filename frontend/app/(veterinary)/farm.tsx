@@ -292,7 +292,7 @@ function HealthModal({
     }
   };
 
-  if (!animal) return null;
+  if (!animal || animal.isLeasedOut) return null;
 
   return (
     <Modal
@@ -565,9 +565,13 @@ function MilkFeedModal({
   onClose: () => void;
   onSaved: () => void; // tells the parent card to refresh its expanded data
 }) {
-  const [shift, setShift] = useState<"morning" | "evening">("morning");
-  const [quantity, setQuantity] = useState("");
-  const [savingMilk, setSavingMilk] = useState(false);
+  const [openShift, setOpenShift] = useState<"morning" | "evening" | null>(
+    "morning",
+  );
+  const [qty, setQty] = useState({ morning: "", evening: "" });
+  const [savingShift, setSavingShift] = useState<"morning" | "evening" | null>(
+    null,
+  );
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const [feedStatus, setFeedStatus] = useState<{
@@ -610,31 +614,32 @@ function MilkFeedModal({
 
   useEffect(() => {
     if (visible) {
-      setQuantity("");
-      setShift("morning");
+      setQty({ morning: "", evening: "" });
+      setOpenShift("morning");
       loadData();
     }
   }, [visible, loadData]);
 
-  const saveMilk = async () => {
-    if (!animal || !quantity || Number(quantity) <= 0) return;
-    setSavingMilk(true);
+  const saveMilk = async (sh: "morning" | "evening") => {
+    const value = qty[sh];
+    if (!animal || !value || Number(value) <= 0) return;
+    setSavingShift(sh);
     try {
       await api.vetAddMilk({
         cow_id: animal.id,
         cow_name: animal.name,
         cow_tag: animal.tag_number,
-        quantity: parseFloat(quantity),
-        shift,
+        quantity: parseFloat(value),
+        shift: sh,
         date: TODAY,
       });
-      setQuantity("");
+      setQty((p) => ({ ...p, [sh]: "" }));
       await loadData();
       onSaved();
     } catch (e: any) {
       console.error("Vet milk entry error:", e.message);
     } finally {
-      setSavingMilk(false);
+      setSavingShift(null);
     }
   };
 
@@ -677,7 +682,7 @@ function MilkFeedModal({
     }
   };
 
-  if (!animal) return null;
+  if (!animal || animal.isLeasedOut) return null;
 
   return (
     <Modal
@@ -711,133 +716,193 @@ function MilkFeedModal({
               </View>
             </View>
 
-            {/* ── Add Milk ── */}
-            <SectionHead
-              icon="water-outline"
-              label="ADD MILK RECORD"
-              color={C.milkBlue}
-            />
-
-            <View style={mf.shiftRow}>
-              {(["morning", "evening"] as const).map((sh) => {
-                const active = shift === sh;
-                return (
-                  <TouchableOpacity
-                    key={sh}
-                    onPress={() => setShift(sh)}
-                    style={[mf.shiftChip, active && mf.shiftChipActive]}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons
-                      name={sh === "morning" ? "sunny-outline" : "moon-outline"}
-                      size={14}
-                      color={active ? "#fff" : C.textMuted}
-                    />
-                    <Text
-                      style={[
-                        mf.shiftChipText,
-                        active && mf.shiftChipTextActive,
-                      ]}
-                    >
-                      {sh === "morning" ? "Morning" : "Evening"}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            <TextInput
-              style={mf.input}
-              placeholder="Quantity in litres"
-              placeholderTextColor={C.textLight}
-              keyboardType="decimal-pad"
-              value={quantity}
-              onChangeText={setQuantity}
-            />
-
-            <TouchableOpacity
-              style={[
-                hm.saveBtn,
-                (savingMilk || !quantity) && { opacity: 0.6 },
-              ]}
-              onPress={saveMilk}
-              disabled={savingMilk || !quantity}
-              activeOpacity={0.85}
-            >
-              {savingMilk ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Text style={hm.saveBtnText}>Save Milk Entry</Text>
-              )}
-            </TouchableOpacity>
-
-            {/* ── Today's entries with Undo ── */}
-            <View style={{ marginTop: 18 }}>
-              <SectionHead
-                icon="time-outline"
-                label="TODAY'S MILK ENTRIES"
-                color={C.dark}
-              />
-              {loadingData ? (
-                <ActivityIndicator
-                  size="small"
-                  color={C.primary}
-                  style={{ marginVertical: 10 }}
+            {animal.milkEligible && (
+              <>
+                {/* ── Add Milk ── */}
+                <SectionHead
+                  icon="water-outline"
+                  label="ADD MILK RECORD"
+                  color={C.milkBlue}
                 />
-              ) : entries.length === 0 ? (
-                <Text style={mf.emptyRow}>No milk entries logged today</Text>
-              ) : (
-                entries
-                  .slice()
-                  .sort((a, b) =>
-                    a.shift === b.shift ? 0 : a.shift === "morning" ? -1 : 1,
-                  )
-                  .map((e) => (
-                    <View key={e.id} style={mf.entryRow}>
-                      <View style={mf.entryIcon}>
+
+                {(["morning", "evening"] as const).map((sh) => {
+                  const open = openShift === sh;
+                  const existing = entries.find((e) => e.shift === sh);
+                  const busy = savingShift === sh;
+                  return (
+                    <View key={sh} style={{ marginBottom: 8 }}>
+                      <TouchableOpacity
+                        onPress={() => setOpenShift(open ? null : sh)}
+                        activeOpacity={0.8}
+                        style={[
+                          mf.shiftChip,
+                          open && mf.shiftChipActive,
+                          {
+                            flex: undefined,
+                            width: "100%",
+                            justifyContent: "flex-start",
+                            paddingHorizontal: 14,
+                          },
+                        ]}
+                      >
                         <Ionicons
                           name={
-                            e.shift === "morning"
-                              ? "sunny-outline"
-                              : "moon-outline"
+                            sh === "morning" ? "sunny-outline" : "moon-outline"
                           }
                           size={14}
-                          color={C.milkBlue}
+                          color={open ? "#fff" : C.textMuted}
                         />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={mf.entryQty}>{e.quantity} L</Text>
-                        <Text style={mf.entryMeta}>
-                          {e.shift === "morning" ? "Morning" : "Evening"}
-                          {e.worker_name ? ` · ${e.worker_name}` : ""}
+                        <Text
+                          style={[
+                            mf.shiftChipText,
+                            open && mf.shiftChipTextActive,
+                          ]}
+                        >
+                          {sh === "morning" ? "Morning" : "Evening"}
                         </Text>
-                      </View>
-                      <TouchableOpacity
-                        style={mf.undoBtn}
-                        onPress={() => undoMilk(e.id)}
-                        disabled={deletingId === e.id}
-                        activeOpacity={0.8}
-                      >
-                        {deletingId === e.id ? (
-                          <ActivityIndicator size="small" color={C.sick} />
-                        ) : (
-                          <>
-                            <Ionicons
-                              name="arrow-undo-outline"
-                              size={12}
-                              color={C.sick}
-                            />
-                            <Text style={mf.undoBtnText}>Undo</Text>
-                          </>
-                        )}
+                        <Text
+                          style={[
+                            mf.shiftChipText,
+                            { marginLeft: "auto" },
+                            open && mf.shiftChipTextActive,
+                          ]}
+                        >
+                          {existing ? `${existing.quantity} L ✓` : "Not added"}
+                        </Text>
+                        <Ionicons
+                          name={open ? "chevron-up" : "chevron-down"}
+                          size={14}
+                          color={open ? "#fff" : C.textMuted}
+                        />
                       </TouchableOpacity>
+
+                      {open &&
+                        (existing ? (
+                          <Text
+                            style={[
+                              mf.emptyRow,
+                              { textAlign: "left", paddingHorizontal: 4 },
+                            ]}
+                          >
+                            Already added. Undo it below to enter a new value.
+                          </Text>
+                        ) : (
+                          <View style={{ marginTop: 8 }}>
+                            <TextInput
+                              style={mf.input}
+                              placeholder={`${sh === "morning" ? "Morning" : "Evening"} litres`}
+                              placeholderTextColor={C.textLight}
+                              keyboardType="decimal-pad"
+                              value={qty[sh]}
+                              onChangeText={(t) =>
+                                setQty((p) => ({ ...p, [sh]: t }))
+                              }
+                            />
+                            <TouchableOpacity
+                              style={[
+                                hm.saveBtn,
+                                (busy || !qty[sh]) && { opacity: 0.6 },
+                              ]}
+                              onPress={() => saveMilk(sh)}
+                              disabled={busy || !qty[sh]}
+                              activeOpacity={0.85}
+                            >
+                              {busy ? (
+                                <ActivityIndicator size="small" color="#fff" />
+                              ) : (
+                                <Text style={hm.saveBtnText}>
+                                  Save{" "}
+                                  {sh === "morning" ? "Morning" : "Evening"}{" "}
+                                  Milk
+                                </Text>
+                              )}
+                            </TouchableOpacity>
+                          </View>
+                        ))}
                     </View>
-                  ))
-              )}
-            </View>
+                  );
+                })}
+
+                {/* ── Today's entries with Undo ── */}
+                <View style={{ marginTop: 18 }}>
+                  <SectionHead
+                    icon="time-outline"
+                    label="TODAY'S MILK ENTRIES"
+                    color={C.dark}
+                  />
+                  {loadingData ? (
+                    <ActivityIndicator
+                      size="small"
+                      color={C.primary}
+                      style={{ marginVertical: 10 }}
+                    />
+                  ) : entries.length === 0 ? (
+                    <Text style={mf.emptyRow}>
+                      No milk entries logged today
+                    </Text>
+                  ) : (
+                    entries
+                      .slice()
+                      .sort((a, b) =>
+                        a.shift === b.shift
+                          ? 0
+                          : a.shift === "morning"
+                            ? -1
+                            : 1,
+                      )
+                      .map((e) => (
+                        <View key={e.id} style={mf.entryRow}>
+                          <View style={mf.entryIcon}>
+                            <Ionicons
+                              name={
+                                e.shift === "morning"
+                                  ? "sunny-outline"
+                                  : "moon-outline"
+                              }
+                              size={14}
+                              color={C.milkBlue}
+                            />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={mf.entryQty}>{e.quantity} L</Text>
+                            <Text style={mf.entryMeta}>
+                              {e.shift === "morning" ? "Morning" : "Evening"}
+                              {e.worker_name ? ` · ${e.worker_name}` : ""}
+                            </Text>
+                          </View>
+                          <TouchableOpacity
+                            style={mf.undoBtn}
+                            onPress={() => undoMilk(e.id)}
+                            disabled={deletingId === e.id}
+                            activeOpacity={0.8}
+                          >
+                            {deletingId === e.id ? (
+                              <ActivityIndicator size="small" color={C.sick} />
+                            ) : (
+                              <>
+                                <Ionicons
+                                  name="arrow-undo-outline"
+                                  size={12}
+                                  color={C.sick}
+                                />
+                                <Text style={mf.undoBtnText}>Undo</Text>
+                              </>
+                            )}
+                          </TouchableOpacity>
+                        </View>
+                      ))
+                  )}
+                </View>
+              </>
+            )}
 
             {/* ── Feed status ── */}
-            <View style={{ marginTop: 18, marginBottom: 4 }}>
+            <View
+              style={{
+                marginTop: animal.milkEligible ? 18 : 0,
+                marginBottom: 4,
+              }}
+            >
               <SectionHead
                 icon="leaf-outline"
                 label="TODAY'S FEED"
@@ -905,6 +970,210 @@ function MilkFeedModal({
               </View>
             </View>
           </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const qs = StyleSheet.create({
+  stepRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 16,
+    marginVertical: 14,
+  },
+  stepBtn: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: C.milkBlue + "18",
+    borderWidth: 1.5,
+    borderColor: C.milkBlue + "55",
+  },
+  valueBox: {
+    minWidth: 110,
+    borderWidth: 1.5,
+    borderColor: C.cardBorder,
+    borderRadius: 16,
+    backgroundColor: "#fff",
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+  valueInput: {
+    fontSize: 28,
+    fontWeight: "900",
+    color: C.milkBlue,
+    textAlign: "center",
+    minWidth: 90,
+    padding: 0,
+  },
+  unit: { fontSize: 11, fontWeight: "700", color: C.textMuted, marginTop: 2 },
+  note: {
+    fontSize: 11,
+    color: C.textMuted,
+    fontStyle: "italic",
+    textAlign: "center",
+    marginBottom: 8,
+  },
+});
+
+function MilkStepperSheet({
+  visible,
+  animal,
+  existing,
+  onClose,
+  onSaved,
+}: {
+  visible: boolean;
+  animal: AnimalRow;
+  existing: { morning: number; evening: number };
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const STEP = 0.5;
+  const [shift, setShift] = useState<"morning" | "evening">("morning");
+  const [val, setVal] = useState("0");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (visible) {
+      setVal("0");
+      setShift(
+        existing.morning > 0 && existing.evening === 0 ? "evening" : "morning",
+      );
+    }
+  }, [visible]);
+
+  const adjust = (d: number) =>
+    setVal(
+      String(Math.max(0, Math.round(((parseFloat(val) || 0) + d) * 10) / 10)),
+    );
+
+  const already = existing[shift] > 0;
+  const num = parseFloat(val) || 0;
+  const disabled = saving || already || num <= 0;
+
+  const save = async () => {
+    if (disabled) return;
+    setSaving(true);
+    try {
+      await api.vetAddMilk({
+        cow_id: animal.id,
+        cow_name: animal.name,
+        cow_tag: animal.tag_number,
+        quantity: num,
+        shift,
+        date: TODAY,
+      });
+      onSaved();
+      onClose();
+    } catch (e: any) {
+      console.error("Quick milk error:", e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <View style={hm.overlay}>
+        <TouchableOpacity
+          style={StyleSheet.absoluteFillObject}
+          onPress={onClose}
+        />
+        <View style={hm.sheet}>
+          <View style={hm.handle} />
+          <SectionHead
+            icon="water-outline"
+            label={`ADD MILK · ${animal.name}`}
+            color={C.milkBlue}
+          />
+
+          <View style={mf.shiftRow}>
+            {(["morning", "evening"] as const).map((sh) => {
+              const active = shift === sh;
+              return (
+                <TouchableOpacity
+                  key={sh}
+                  onPress={() => setShift(sh)}
+                  style={[mf.shiftChip, active && mf.shiftChipActive]}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons
+                    name={sh === "morning" ? "sunny-outline" : "moon-outline"}
+                    size={14}
+                    color={active ? "#fff" : C.textMuted}
+                  />
+                  <Text
+                    style={[mf.shiftChipText, active && mf.shiftChipTextActive]}
+                  >
+                    {sh === "morning" ? "Morning" : "Evening"}
+                    {existing[sh] > 0 ? ` · ${existing[sh]} L` : ""}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          <View style={qs.stepRow}>
+            <TouchableOpacity
+              style={qs.stepBtn}
+              onPress={() => adjust(-STEP)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="remove" size={26} color={C.milkBlue} />
+            </TouchableOpacity>
+
+            <View style={qs.valueBox}>
+              <TextInput
+                style={qs.valueInput}
+                value={val}
+                onChangeText={setVal}
+                keyboardType="decimal-pad"
+                selectTextOnFocus
+              />
+              <Text style={qs.unit}>LITRES</Text>
+            </View>
+
+            <TouchableOpacity
+              style={qs.stepBtn}
+              onPress={() => adjust(STEP)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="add" size={26} color={C.milkBlue} />
+            </TouchableOpacity>
+          </View>
+
+          {already && (
+            <Text style={qs.note}>
+              {shift === "morning" ? "Morning" : "Evening"} milk already added.
+              Undo it from Log Milk/Feed first.
+            </Text>
+          )}
+
+          <TouchableOpacity
+            style={[hm.saveBtn, disabled && { opacity: 0.5 }]}
+            onPress={save}
+            disabled={disabled}
+            activeOpacity={0.85}
+          >
+            {saving ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={hm.saveBtnText}>
+                Save {num > 0 ? `${num} L` : "Milk"}
+              </Text>
+            )}
+          </TouchableOpacity>
         </View>
       </View>
     </Modal>
@@ -1017,6 +1286,7 @@ function AnimalCard({
 }) {
   const [expanded, setExpanded] = useState(false);
   const [loadingExtra, setLoadingExtra] = useState(false);
+  const [quickMilkOpen, setQuickMilkOpen] = useState(false);
   const [extraData, setExtraData] = useState<{
     milk?: {
       morning: number;
@@ -1086,8 +1356,12 @@ function AnimalCard({
       const todayFeedRows = feedArr.filter((f: any) =>
         (f.date || "").startsWith(TODAY),
       );
-      const morningRow = todayFeedRows.find((f: any) => f.shift === "morning");
-      const eveningRow = todayFeedRows.find((f: any) => f.shift === "evening");
+      const morningRow = todayFeedRows.find(
+        (f: any) => f.shift === "morning" && f.fed_at,
+      );
+      const eveningRow = todayFeedRows.find(
+        (f: any) => f.shift === "evening" && f.fed_at,
+      );
       const feedMorning = !!morningRow;
       const feedEvening = !!eveningRow;
       const feedWorker =
@@ -1103,6 +1377,34 @@ function AnimalCard({
       setExtraData({});
     } finally {
       setLoadingExtra(false);
+    }
+  };
+
+  const [feedBusy, setFeedBusy] = useState<"morning" | "evening" | null>(null);
+
+  const quickFeed = async (sh: "morning" | "evening") => {
+    if (item.isLeasedOut) return;
+    setFeedBusy(sh);
+    try {
+      const key = sh === "morning" ? "feedMorning" : "feedEvening";
+      const isFed = !!extraData?.[key];
+      if (isFed) {
+        await api.vetUnmarkFed(item.id, TODAY, sh);
+      } else {
+        await api.vetMarkFed({
+          cow_id: item.id,
+          cow_name: item.name,
+          cow_tag: item.tag_number,
+          date: TODAY,
+          shift: sh,
+        });
+      }
+      // update locally so the card doesn't flash a loading spinner
+      setExtraData((prev) => ({ ...(prev ?? {}), [key]: !isFed }));
+    } catch (e: any) {
+      console.error("Quick feed error:", e.message);
+    } finally {
+      setFeedBusy(null);
     }
   };
 
@@ -1302,7 +1604,23 @@ function AnimalCard({
           )}
 
           {/* Log Milk/Feed button */}
-          {item.milkEligible && (
+          {item.isLeasedOut ? (
+            <View
+              style={[
+                ac.updateBtn,
+                { backgroundColor: C.card, borderColor: C.cardBorder },
+              ]}
+            >
+              <Ionicons
+                name="lock-closed-outline"
+                size={12}
+                color={C.textMuted}
+              />
+              <Text style={[ac.updateBtnText, { color: C.textMuted }]}>
+                View only
+              </Text>
+            </View>
+          ) : (
             <TouchableOpacity
               style={[
                 ac.updateBtn,
@@ -1314,9 +1632,13 @@ function AnimalCard({
               onPress={() => onMilkFeedPress(item)}
               activeOpacity={0.8}
             >
-              <Ionicons name="water-outline" size={12} color={C.milkBlue} />
+              <Ionicons
+                name={item.milkEligible ? "water-outline" : "leaf-outline"}
+                size={12}
+                color={C.milkBlue}
+              />
               <Text style={[ac.updateBtnText, { color: C.milkBlue }]}>
-                Log Milk/Feed
+                {item.milkEligible ? "Log Milk/Feed" : "Mark Feed"}
               </Text>
             </TouchableOpacity>
           )}
@@ -1435,163 +1757,193 @@ function AnimalCard({
                 {/* Today's Milk */}
                 {item.milkEligible && (
                   <>
-                    <SectionHead
-                      icon="water-outline"
-                      label="TODAY'S MILK"
-                      color={C.milkBlue}
-                    />
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      disabled={item.isLeasedOut}
+                      onPress={() => setQuickMilkOpen(true)}
+                    >
+                      <SectionHead
+                        icon="water-outline"
+                        label="TODAY'S MILK"
+                        color={C.milkBlue}
+                      />
+                    </TouchableOpacity>
+
                     {extraData?.milk ? (
-                      <View style={ac.milkGrid}>
-                        <View
-                          style={[ac.milkBox, { backgroundColor: "#eff6ff" }]}
-                        >
-                          <Ionicons
-                            name="sunny-outline"
-                            size={14}
-                            color={C.milkBlue}
-                          />
-                          <Text style={ac.milkVal}>
-                            {extraData.milk.morning} L
-                          </Text>
-                          <Text style={ac.milkLbl}>Morning</Text>
-                          {extraData.milk.mWorker ? (
-                            <Text style={ac.milkWorker}>
-                              {extraData.milk.mWorker}
+                      <TouchableOpacity
+                        activeOpacity={0.85}
+                        disabled={item.isLeasedOut}
+                        onPress={() => setQuickMilkOpen(true)}
+                      >
+                        <View style={ac.milkGrid}>
+                          <View
+                            style={[ac.milkBox, { backgroundColor: "#eff6ff" }]}
+                          >
+                            <Ionicons
+                              name="sunny-outline"
+                              size={14}
+                              color={C.milkBlue}
+                            />
+                            <Text style={ac.milkVal}>
+                              {extraData.milk.morning} L
                             </Text>
-                          ) : null}
-                        </View>
-                        <View
-                          style={[ac.milkBox, { backgroundColor: "#f0f9ff" }]}
-                        >
-                          <Ionicons
-                            name="moon-outline"
-                            size={14}
-                            color="#0891b2"
-                          />
-                          <Text style={ac.milkVal}>
-                            {extraData.milk.evening} L
-                          </Text>
-                          <Text style={ac.milkLbl}>Evening</Text>
-                          {extraData.milk.eWorker ? (
-                            <Text style={ac.milkWorker}>
-                              {extraData.milk.eWorker}
+                            <Text style={ac.milkLbl}>Morning</Text>
+                            {extraData.milk.mWorker ? (
+                              <Text style={ac.milkWorker}>
+                                {extraData.milk.mWorker}
+                              </Text>
+                            ) : null}
+                          </View>
+                          <View
+                            style={[ac.milkBox, { backgroundColor: "#f0f9ff" }]}
+                          >
+                            <Ionicons
+                              name="moon-outline"
+                              size={14}
+                              color="#0891b2"
+                            />
+                            <Text style={ac.milkVal}>
+                              {extraData.milk.evening} L
                             </Text>
-                          ) : null}
-                        </View>
-                        <View
-                          style={[
-                            ac.milkBox,
-                            { backgroundColor: C.card, flex: 1.2 },
-                          ]}
-                        >
-                          <Ionicons
-                            name="flask-outline"
-                            size={14}
-                            color={C.dark}
-                          />
-                          <Text
+                            <Text style={ac.milkLbl}>Evening</Text>
+                            {extraData.milk.eWorker ? (
+                              <Text style={ac.milkWorker}>
+                                {extraData.milk.eWorker}
+                              </Text>
+                            ) : null}
+                          </View>
+                          <View
                             style={[
-                              ac.milkVal,
-                              { color: C.dark, fontSize: 18 },
+                              ac.milkBox,
+                              { backgroundColor: C.card, flex: 1.2 },
                             ]}
                           >
-                            {extraData.milk.total} L
-                          </Text>
-                          <Text style={[ac.milkLbl, { color: C.accent }]}>
-                            Total Today
-                          </Text>
+                            <Ionicons
+                              name="flask-outline"
+                              size={14}
+                              color={C.dark}
+                            />
+                            <Text
+                              style={[
+                                ac.milkVal,
+                                { color: C.dark, fontSize: 18 },
+                              ]}
+                            >
+                              {extraData.milk.total} L
+                            </Text>
+                            <Text style={[ac.milkLbl, { color: C.accent }]}>
+                              Total Today
+                            </Text>
+                          </View>
                         </View>
-                      </View>
+
+                        {!item.isLeasedOut && (
+                          <View
+                            style={{
+                              position: "absolute",
+                              top: -6,
+                              right: -2,
+                              backgroundColor: C.milkBlue,
+                              borderRadius: 12,
+                              width: 24,
+                              height: 24,
+                              alignItems: "center",
+                              justifyContent: "center",
+                            }}
+                          >
+                            <Ionicons name="add" size={16} color="#fff" />
+                          </View>
+                        )}
+                      </TouchableOpacity>
                     ) : (
-                      <Text style={ac.noDataTxt}>
-                        No milk records for today
-                      </Text>
+                      <TouchableOpacity
+                        disabled={item.isLeasedOut}
+                        onPress={() => setQuickMilkOpen(true)}
+                      >
+                        <Text style={ac.noDataTxt}>
+                          No milk records for today. Tap to add
+                        </Text>
+                      </TouchableOpacity>
                     )}
                   </>
                 )}
 
                 {/* Today's Feed */}
-                <SectionHead
-                  icon="leaf-outline"
-                  label="TODAY'S FEED"
-                  color={C.feedGreen}
-                />
                 {extraData !== null ? (
                   <View style={ac.feedRow}>
-                    <View
-                      style={[
-                        ac.feedBox,
-                        extraData.feedMorning
-                          ? {
-                              backgroundColor: "#f0fdf4",
-                              borderColor: "#86efac",
-                            }
-                          : {
-                              backgroundColor: "#fff5f5",
-                              borderColor: "#fca5a5",
-                            },
-                      ]}
-                    >
-                      <Ionicons
-                        name={
-                          extraData.feedMorning
-                            ? "checkmark-circle"
-                            : "close-circle"
-                        }
-                        size={18}
-                        color={extraData.feedMorning ? C.feedGreen : C.sick}
-                      />
-                      <Text
-                        style={[
-                          ac.feedLabel,
-                          {
-                            color: extraData.feedMorning ? C.feedGreen : C.sick,
-                          },
-                        ]}
-                      >
-                        Morning
-                      </Text>
-                      <Text style={ac.feedStatus}>
-                        {extraData.feedMorning ? "Fed" : "Not Fed"}
-                      </Text>
-                    </View>
-                    <View
-                      style={[
-                        ac.feedBox,
-                        extraData.feedEvening
-                          ? {
-                              backgroundColor: "#f0fdf4",
-                              borderColor: "#86efac",
-                            }
-                          : {
-                              backgroundColor: "#fff5f5",
-                              borderColor: "#fca5a5",
-                            },
-                      ]}
-                    >
-                      <Ionicons
-                        name={
-                          extraData.feedEvening
-                            ? "checkmark-circle"
-                            : "close-circle"
-                        }
-                        size={18}
-                        color={extraData.feedEvening ? C.feedGreen : C.sick}
-                      />
-                      <Text
-                        style={[
-                          ac.feedLabel,
-                          {
-                            color: extraData.feedEvening ? C.feedGreen : C.sick,
-                          },
-                        ]}
-                      >
-                        Evening
-                      </Text>
-                      <Text style={ac.feedStatus}>
-                        {extraData.feedEvening ? "Fed" : "Not Fed"}
-                      </Text>
-                    </View>
+                    {(["morning", "evening"] as const).map((sh) => {
+                      const fed =
+                        sh === "morning"
+                          ? !!extraData.feedMorning
+                          : !!extraData.feedEvening;
+                      const busy = feedBusy === sh;
+                      return (
+                        <View
+                          key={sh}
+                          style={[
+                            ac.feedBox,
+                            fed
+                              ? {
+                                  backgroundColor: "#f0fdf4",
+                                  borderColor: "#86efac",
+                                }
+                              : {
+                                  backgroundColor: "#fff5f5",
+                                  borderColor: "#fca5a5",
+                                },
+                          ]}
+                        >
+                          <Ionicons
+                            name={fed ? "checkmark-circle" : "close-circle"}
+                            size={18}
+                            color={fed ? C.feedGreen : C.sick}
+                          />
+                          <Text
+                            style={[
+                              ac.feedLabel,
+                              { color: fed ? C.feedGreen : C.sick },
+                            ]}
+                          >
+                            {sh === "morning" ? "Morning" : "Evening"}
+                          </Text>
+                          <Text style={ac.feedStatus}>
+                            {fed ? "Fed" : "Not Fed"}
+                          </Text>
+
+                          {!item.isLeasedOut && (
+                            <TouchableOpacity
+                              onPress={() => quickFeed(sh)}
+                              disabled={busy}
+                              activeOpacity={0.7}
+                              style={{
+                                marginTop: 4,
+                                width: 34,
+                                height: 34,
+                                borderRadius: 17,
+                                alignItems: "center",
+                                justifyContent: "center",
+                                borderWidth: 1.5,
+                                borderColor: C.feedGreen,
+                                backgroundColor: fed ? C.feedGreen : "#fff",
+                              }}
+                            >
+                              {busy ? (
+                                <ActivityIndicator
+                                  size="small"
+                                  color={fed ? "#fff" : C.feedGreen}
+                                />
+                              ) : (
+                                <Ionicons
+                                  name="checkmark"
+                                  size={20}
+                                  color={fed ? "#fff" : C.feedGreen}
+                                />
+                              )}
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      );
+                    })}
                     {extraData.feedWorker ? (
                       <View style={ac.feedWorkerPill}>
                         <Ionicons
@@ -1611,6 +1963,19 @@ function AnimalCard({
               </>
             )}
           </View>
+        )}
+
+        {item.milkEligible && !item.isLeasedOut && (
+          <MilkStepperSheet
+            visible={quickMilkOpen}
+            animal={item}
+            existing={{
+              morning: extraData?.milk?.morning ?? 0,
+              evening: extraData?.milk?.evening ?? 0,
+            }}
+            onClose={() => setQuickMilkOpen(false)}
+            onSaved={() => loadExtra(true)}
+          />
         )}
       </View>
     </Animated.View>

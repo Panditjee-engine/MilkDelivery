@@ -29,6 +29,13 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { api } from "../../src/services/api";
 import StarRating from "../../src/components/StarRating";
 import LoadingScreen from "../../src/components/LoadingScreen";
+import { useRiderLocation } from "../../src/hooks/useRiderLocation";
+import {
+  distanceKm,
+  formatDistance,
+  openRouteInMaps,
+  openAddressInMaps,
+} from "../../src/utils/geo";
 
 if (
   Platform.OS === "android" &&
@@ -1328,7 +1335,89 @@ const fm = StyleSheet.create({
   comment: { fontSize: 12, color: "#8B6854", marginTop: 6 },
 });
 
-// ─── Subscription Row
+function LocationRow({
+  address,
+  adminCoords,
+}: {
+  address: any;
+  adminCoords: { latitude: number; longitude: number } | null;
+}) {
+  const latRaw = address?.lat ?? address?.latitude;
+  const lngRaw = address?.lng ?? address?.longitude;
+  const hasCoords =
+    latRaw != null &&
+    lngRaw != null &&
+    !isNaN(Number(latRaw)) &&
+    !isNaN(Number(lngRaw));
+  const text = buildAddressText(address);
+  if (!hasCoords && !text) return null;
+
+  const distText =
+    hasCoords && adminCoords
+      ? formatDistance(
+          distanceKm(
+            adminCoords.latitude,
+            adminCoords.longitude,
+            Number(latRaw),
+            Number(lngRaw),
+          ),
+        )
+      : null;
+
+  return (
+    <View style={lr.box}>
+      <View style={lr.row}>
+        <Ionicons name="navigate-outline" size={15} color="#BB6B3F" />
+        <Text style={lr.text}>
+          {!hasCoords
+            ? "Exact location not saved"
+            : distText
+              ? `${distText} from you`
+              : "Getting your location..."}
+        </Text>
+      </View>
+      <TouchableOpacity
+        style={lr.btn}
+        activeOpacity={0.8}
+        onPress={() =>
+          hasCoords
+            ? openRouteInMaps(Number(latRaw), Number(lngRaw))
+            : openAddressInMaps(text)
+        }
+      >
+        <Ionicons name="map-outline" size={14} color="#fff" />
+        <Text style={lr.btnText}>View Route</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+const lr = StyleSheet.create({
+  box: {
+    marginTop: 10,
+    backgroundColor: "#FFF8F4",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#FFE8DC",
+    padding: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  row: { flex: 1, flexDirection: "row", alignItems: "center", gap: 6 },
+  text: { flex: 1, fontSize: 12.5, fontWeight: "700", color: "#BB6B3F" },
+  btn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "#BB6B3F",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  btnText: { fontSize: 12, fontWeight: "700", color: "#fff" },
+});
 
 // ─── Subscription Row
 
@@ -1718,6 +1807,7 @@ function SubscriptionRow({
 
 export default function AdminOrdersScreen() {
   const isFocused = useIsFocused();
+  const { coords: adminCoords } = useRiderLocation(isFocused);
   const params = useLocalSearchParams<{ tab?: string }>();
 
   const router = useRouter();
@@ -2740,12 +2830,12 @@ export default function AdminOrdersScreen() {
 
             {address ? (
               <>
-                <View style={styles.divider} />
-                <Text style={styles.colLabel}>ADDRESS</Text>
+                             <Text style={styles.colLabel}>ADDRESS</Text>
                 <View style={styles.detailRow}>
                   <Ionicons name="location-outline" size={13} color="#8B6854" />
                   <Text style={styles.detailText}>{address}</Text>
                 </View>
+                <LocationRow address={item.address} adminCoords={adminCoords} />
               </>
             ) : null}
 
@@ -2917,316 +3007,305 @@ export default function AdminOrdersScreen() {
         </View>
       </View>
 
-      {/* Tab Switcher */}
-      <View style={tabStyles.tabContainer}>
-        <Animated.View
-          style={[tabStyles.tabIndicator, { left: tabIndicatorLeft }]}
-        />
-        <TouchableOpacity
-          style={tabStyles.tabBtn}
-          onPress={() => switchTab("orders")}
-          activeOpacity={0.8}
-        >
-          <Ionicons
-            name="receipt-outline"
-            size={14}
-            color={activeTab === "orders" ? "#fff" : "#8B6854"}
-          />
-          <Text
-            style={[
-              tabStyles.tabText,
-              activeTab === "orders" && tabStyles.tabTextActive,
-            ]}
-          >
-            Orders
-          </Text>
-          {ordersCount > 0 && activeTab !== "orders" && (
-            <View style={tabStyles.tabDot} />
-          )}
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={tabStyles.tabBtn}
-          onPress={() => switchTab("subscriptions")}
-          activeOpacity={0.8}
-        >
-          <Ionicons
-            name="repeat-outline"
-            size={14}
-            color={activeTab === "subscriptions" ? "#fff" : "#8B6854"}
-          />
-          <Text
-            style={[
-              tabStyles.tabText,
-              activeTab === "subscriptions" && tabStyles.tabTextActive,
-            ]}
-          >
-            Subscriptions
-          </Text>
-        </TouchableOpacity>
-      </View>
+      {(() => {
+        const isOrdersTab = activeTab === "orders";
+        const loadingList = isOrdersTab
+          ? ordersLoading && !ordersRefreshing
+          : subsLoading && !subsRefreshing;
 
-      <View style={styles.bulkBar}>
-        <View style={styles.bulkHeaderRow}>
-          <Text style={styles.bulkHeading}>
-            {activeTab === "orders"
-              ? "Orders Mark Delivered"
-              : "Subscriptions Mark Delivered"}
-          </Text>
-          <TouchableOpacity
-            style={[
-              styles.bulkDeliveredBtn,
-              (selectedCount === 0 || bulkLoading) && styles.bulkBtnDisabled,
-            ]}
-            onPress={handleBulkDelivered}
-            disabled={selectedCount === 0 || bulkLoading}
-          >
-            {bulkLoading ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <Ionicons name="checkmark-circle" size={15} color="#fff" />
-            )}
-            <Text style={styles.bulkDeliveredText}>Mark Delivered</Text>
-          </TouchableOpacity>
-        </View>
-        <View style={styles.bulkInfo}>
-          <Ionicons name="checkmark-done-outline" size={15} color="#BB6B3F" />
-          <Text style={styles.bulkInfoText}>{selectedCount} selected</Text>
-        </View>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.bulkActions}
-        >
-          <TouchableOpacity
-            style={styles.bulkChip}
-            onPress={() =>
-              activeTab === "orders"
-                ? setSelectedOrders(
-                    selectableTodayOrders.map((item) => item.id),
-                  )
-                : setSelectedSubs(selectableTodaySubs.map((item) => item.id))
-            }
-            disabled={todaySelectableCount === 0 || bulkLoading}
-          >
-            <Text style={styles.bulkChipText}>
-              Select Today ({todaySelectableCount})
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.bulkChip}
-            onPress={() =>
-              activeTab === "orders"
-                ? setSelectedOrders(selectableOrders.map((item) => item.id))
-                : setSelectedSubs(selectableSubs.map((item) => item.id))
-            }
-            disabled={visibleSelectableCount === 0 || bulkLoading}
-          >
-            <Text style={styles.bulkChipText}>
-              Select Visible ({visibleSelectableCount})
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.bulkChip}
-            onPress={() =>
-              activeTab === "orders"
-                ? setSelectedOrderIds(new Set())
-                : setSelectedSubIds(new Set())
-            }
-            disabled={selectedCount === 0 || bulkLoading}
-          >
-            <Text style={styles.bulkChipText}>Clear</Text>
-          </TouchableOpacity>
-        </ScrollView>
-      </View>
-
-      {/* ORDERS TAB */}
-      {activeTab === "orders" && (
-        <>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.productFilterScroll}
-            contentContainerStyle={styles.productFilterContent}
-          >
-            {productTabs.map((product) => (
+        const listHeader = (
+          <View style={{ marginHorizontal: -16 }}>
+            {/* Tab Switcher */}
+            <View style={tabStyles.tabContainer}>
+              <Animated.View
+                style={[tabStyles.tabIndicator, { left: tabIndicatorLeft }]}
+              />
               <TouchableOpacity
-                key={product}
-                style={[
-                  styles.productFilterChip,
-                  productFilter === product && styles.productFilterChipActive,
-                ]}
-                onPress={() => setProductFilter(product)}
-                activeOpacity={0.82}
+                style={tabStyles.tabBtn}
+                onPress={() => switchTab("orders")}
+                activeOpacity={0.8}
               >
+                <Ionicons
+                  name="receipt-outline"
+                  size={14}
+                  color={activeTab === "orders" ? "#fff" : "#8B6854"}
+                />
                 <Text
                   style={[
-                    styles.productFilterText,
-                    productFilter === product && styles.productFilterTextActive,
+                    tabStyles.tabText,
+                    activeTab === "orders" && tabStyles.tabTextActive,
                   ]}
                 >
-                  {product}
+                  Orders
+                </Text>
+                {ordersCount > 0 && activeTab !== "orders" && (
+                  <View style={tabStyles.tabDot} />
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={tabStyles.tabBtn}
+                onPress={() => switchTab("subscriptions")}
+                activeOpacity={0.8}
+              >
+                <Ionicons
+                  name="repeat-outline"
+                  size={14}
+                  color={activeTab === "subscriptions" ? "#fff" : "#8B6854"}
+                />
+                <Text
+                  style={[
+                    tabStyles.tabText,
+                    activeTab === "subscriptions" && tabStyles.tabTextActive,
+                  ]}
+                >
+                  Subscriptions
                 </Text>
               </TouchableOpacity>
-            ))}
-          </ScrollView>
-
-          {ordersLoading && !ordersRefreshing ? (
-            <View style={styles.loadingWrapper}>
-              <ActivityIndicator size="large" color="#FF9675" />
-              <Text style={styles.loadingText}>Loading orders…</Text>
             </View>
-          ) : (
-            <FlatList
-              style={styles.orderList}
-              data={filteredOrders}
-              keyExtractor={(item) => item.id}
-              contentContainerStyle={styles.list}
-              showsVerticalScrollIndicator={false}
-              refreshControl={
-                <RefreshControl
-                  refreshing={ordersRefreshing}
-                  onRefresh={onOrdersRefresh}
-                  tintColor="#FF9675"
+
+            {/* Bulk bar */}
+            <View style={styles.bulkBar}>
+              <View style={styles.bulkHeaderRow}>
+                <Text style={styles.bulkHeading}>
+                  {isOrdersTab
+                    ? "Orders Mark Delivered"
+                    : "Subscriptions Mark Delivered"}
+                </Text>
+                <TouchableOpacity
+                  style={[
+                    styles.bulkDeliveredBtn,
+                    (selectedCount === 0 || bulkLoading) &&
+                      styles.bulkBtnDisabled,
+                  ]}
+                  onPress={handleBulkDelivered}
+                  disabled={selectedCount === 0 || bulkLoading}
+                >
+                  {bulkLoading ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <Ionicons name="checkmark-circle" size={15} color="#fff" />
+                  )}
+                  <Text style={styles.bulkDeliveredText}>Mark Delivered</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.bulkInfo}>
+                <Ionicons
+                  name="checkmark-done-outline"
+                  size={15}
+                  color="#BB6B3F"
                 />
-              }
-              ListEmptyComponent={
-                <View style={styles.emptyState}>
-                  <View style={styles.emptyIconCircle}>
-                    <Ionicons
-                      name="receipt-outline"
-                      size={36}
-                      color="#FF9675"
-                    />
-                  </View>
-                  <Text style={styles.emptyTitle}>No orders found</Text>
-                  <Text style={styles.emptyDesc}>
-                    {filter !== "ALL" ||
-                    dateFilter !== "ALL" ||
-                    selectedCustomer !== "ALL"
-                      ? "Try changing customer, product or date filter."
-                      : "One-time orders placed by your customers will appear here."}
+                <Text style={styles.bulkInfoText}>{selectedCount} selected</Text>
+              </View>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.bulkActions}
+              >
+                <TouchableOpacity
+                  style={styles.bulkChip}
+                  onPress={() =>
+                    isOrdersTab
+                      ? setSelectedOrders(
+                          selectableTodayOrders.map((item) => item.id),
+                        )
+                      : setSelectedSubs(
+                          selectableTodaySubs.map((item) => item.id),
+                        )
+                  }
+                  disabled={todaySelectableCount === 0 || bulkLoading}
+                >
+                  <Text style={styles.bulkChipText}>
+                    Select Today ({todaySelectableCount})
                   </Text>
-                </View>
-              }
-              renderItem={renderOrder}
-            />
-          )}
-        </>
-      )}
-
-      {/* SUBSCRIPTIONS TAB */}
-      {/* SUBSCRIPTIONS TAB */}
-      {activeTab === "subscriptions" && (
-        <>
-          {subsLoading && !subsRefreshing ? (
-            <View style={styles.loadingWrapper}>
-              <ActivityIndicator size="large" color="#FF9675" />
-              <Text style={styles.loadingText}>Loading subscriptions…</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.bulkChip}
+                  onPress={() =>
+                    isOrdersTab
+                      ? setSelectedOrders(selectableOrders.map((item) => item.id))
+                      : setSelectedSubs(selectableSubs.map((item) => item.id))
+                  }
+                  disabled={visibleSelectableCount === 0 || bulkLoading}
+                >
+                  <Text style={styles.bulkChipText}>
+                    Select Visible ({visibleSelectableCount})
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.bulkChip}
+                  onPress={() =>
+                    isOrdersTab
+                      ? setSelectedOrderIds(new Set())
+                      : setSelectedSubIds(new Set())
+                  }
+                  disabled={selectedCount === 0 || bulkLoading}
+                >
+                  <Text style={styles.bulkChipText}>Clear</Text>
+                </TouchableOpacity>
+              </ScrollView>
             </View>
-          ) : (
-            <FlatList
-              data={filteredSubs}
-              keyExtractor={(item) => item.id}
-              contentContainerStyle={styles.list}
-              showsVerticalScrollIndicator={false}
-              refreshControl={
-                <RefreshControl
-                  refreshing={subsRefreshing}
-                  onRefresh={onSubsRefresh}
-                  tintColor="#FF9675"
-                />
-              }
-              ListHeaderComponent={
-                <View style={styles.subscriptionSummaryWrap}>
-                  <View style={styles.subscriptionSummaryGrid}>
-                    <View style={styles.subscriptionSummaryCard}>
-                      <Text style={styles.subscriptionSummaryValue}>
-                        {subscriptionSummary.total}
-                      </Text>
-                      <Text style={styles.subscriptionSummaryLabel}>
-                        Total Subs
-                      </Text>
-                    </View>
-                    <View style={styles.subscriptionSummaryCard}>
-                      <Text style={styles.subscriptionSummaryValue}>
-                        {subscriptionSummary.milkSubscriptions}
-                      </Text>
-                      <Text style={styles.subscriptionSummaryLabel}>
-                        Milk Subs
-                      </Text>
-                    </View>
-                    <View style={styles.subscriptionSummaryCard}>
-                      <Text style={styles.subscriptionSummaryValue}>
-                        {subscriptionSummary.gheeSubscriptions}
-                      </Text>
-                      <Text style={styles.subscriptionSummaryLabel}>
-                        Ghee Subs
-                      </Text>
-                    </View>
-                    <View style={styles.subscriptionSummaryCard}>
-                      <Text style={styles.subscriptionSummaryValue}>
-                        {subscriptionSummary.fullCreamMilk?.subscriptions || 0}
-                      </Text>
-                      <Text style={styles.subscriptionSummaryLabel}>
-                        Full Cream Milk
-                      </Text>
-                    </View>
-                  </View>
 
-                  {subscriptionSummary.productsSummary.length > 0 ? (
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      contentContainerStyle={styles.subscriptionProductChips}
+            {/* Orders: product chips */}
+            {isOrdersTab && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.productFilterScroll}
+                contentContainerStyle={styles.productFilterContent}
+              >
+                {productTabs.map((product) => (
+                  <TouchableOpacity
+                    key={product}
+                    style={[
+                      styles.productFilterChip,
+                      productFilter === product &&
+                        styles.productFilterChipActive,
+                    ]}
+                    onPress={() => setProductFilter(product)}
+                    activeOpacity={0.82}
+                  >
+                    <Text
+                      style={[
+                        styles.productFilterText,
+                        productFilter === product &&
+                          styles.productFilterTextActive,
+                      ]}
                     >
-                      {subscriptionSummary.productsSummary
-                        .slice(0, 6)
-                        .map((item) => (
-                          <View
-                            key={item.name}
-                            style={styles.subscriptionProductChip}
-                          >
-                            <Text
-                              style={styles.subscriptionProductName}
-                              numberOfLines={1}
-                            >
-                              {item.name}
-                            </Text>
-                            <Text style={styles.subscriptionProductMeta}>
-                              {item.subscriptions} subs ·{" "}
-                              {formatBaseMetric(
-                                item.quantity *
-                                  (parseUnitDescriptor(item.unit)?.packSize ||
-                                    1),
-                                parseUnitDescriptor(item.unit)?.kind,
-                              )}
-                            </Text>
-                          </View>
-                        ))}
-                    </ScrollView>
-                  ) : null}
-                </View>
-              }
-              ListEmptyComponent={
-                <View style={styles.emptyState}>
-                  <View style={styles.emptyIconCircle}>
-                    <Ionicons name="repeat-outline" size={36} color="#FF9675" />
+                      {product}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
+
+            {/* Subscriptions: summary */}
+            {!isOrdersTab && (
+              <View style={styles.subscriptionSummaryWrap}>
+                <View style={styles.subscriptionSummaryGrid}>
+                  <View style={styles.subscriptionSummaryCard}>
+                    <Text style={styles.subscriptionSummaryValue}>
+                      {subscriptionSummary.total}
+                    </Text>
+                    <Text style={styles.subscriptionSummaryLabel}>
+                      Total Subs
+                    </Text>
                   </View>
-                  <Text style={styles.emptyTitle}>No subscriptions found</Text>
-                  <Text style={styles.emptyDesc}>
-                    {subFilter !== "ALL" ||
+                  <View style={styles.subscriptionSummaryCard}>
+                    <Text style={styles.subscriptionSummaryValue}>
+                      {subscriptionSummary.milkSubscriptions}
+                    </Text>
+                    <Text style={styles.subscriptionSummaryLabel}>
+                      Milk Subs
+                    </Text>
+                  </View>
+                  <View style={styles.subscriptionSummaryCard}>
+                    <Text style={styles.subscriptionSummaryValue}>
+                      {subscriptionSummary.gheeSubscriptions}
+                    </Text>
+                    <Text style={styles.subscriptionSummaryLabel}>
+                      Ghee Subs
+                    </Text>
+                  </View>
+                  <View style={styles.subscriptionSummaryCard}>
+                    <Text style={styles.subscriptionSummaryValue}>
+                      {subscriptionSummary.fullCreamMilk?.subscriptions || 0}
+                    </Text>
+                    <Text style={styles.subscriptionSummaryLabel}>
+                      Full Cream Milk
+                    </Text>
+                  </View>
+                </View>
+                {subscriptionSummary.productsSummary.length > 0 ? (
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.subscriptionProductChips}
+                  >
+                    {subscriptionSummary.productsSummary
+                      .slice(0, 6)
+                      .map((item) => (
+                        <View
+                          key={item.name}
+                          style={styles.subscriptionProductChip}
+                        >
+                          <Text
+                            style={styles.subscriptionProductName}
+                            numberOfLines={1}
+                          >
+                            {item.name}
+                          </Text>
+                          <Text style={styles.subscriptionProductMeta}>
+                            {item.subscriptions} subs ·{" "}
+                            {formatBaseMetric(
+                              item.quantity *
+                                (parseUnitDescriptor(item.unit)?.packSize || 1),
+                              parseUnitDescriptor(item.unit)?.kind,
+                            )}
+                          </Text>
+                        </View>
+                      ))}
+                  </ScrollView>
+                ) : null}
+              </View>
+            )}
+          </View>
+        );
+
+        const emptyView = loadingList ? (
+          <View style={styles.loadingWrapper}>
+            <ActivityIndicator size="large" color="#FF9675" />
+            <Text style={styles.loadingText}>
+              {isOrdersTab ? "Loading orders…" : "Loading subscriptions…"}
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.emptyState}>
+            <View style={styles.emptyIconCircle}>
+              <Ionicons
+                name={isOrdersTab ? "receipt-outline" : "repeat-outline"}
+                size={36}
+                color="#FF9675"
+              />
+            </View>
+            <Text style={styles.emptyTitle}>
+              {isOrdersTab ? "No orders found" : "No subscriptions found"}
+            </Text>
+            <Text style={styles.emptyDesc}>
+              {isOrdersTab
+                ? filter !== "ALL" ||
+                  dateFilter !== "ALL" ||
+                  selectedCustomer !== "ALL"
+                  ? "Try changing customer, product or date filter."
+                  : "One-time orders placed by your customers will appear here."
+                : subFilter !== "ALL" ||
                     dateFilter !== "ALL" ||
                     selectedCustomer !== "ALL"
-                      ? "Try changing customer, status or date filter."
-                      : "Recurring subscriptions (daily, alternate, custom) appear here."}
-                  </Text>
-                </View>
-              }
-              renderItem={renderSubscription}
-            />
-          )}
-        </>
-      )}
+                  ? "Try changing customer, status or date filter."
+                  : "Recurring subscriptions (daily, alternate, custom) appear here."}
+            </Text>
+          </View>
+        );
+
+        return (
+          <FlatList
+            style={styles.orderList}
+            data={(loadingList ? [] : isOrdersTab ? filteredOrders : filteredSubs) as any[]}
+            keyExtractor={(item: any) => item.id}
+            contentContainerStyle={styles.list}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={isOrdersTab ? ordersRefreshing : subsRefreshing}
+                onRefresh={isOrdersTab ? onOrdersRefresh : onSubsRefresh}
+                tintColor="#FF9675"
+              />
+            }
+            ListHeaderComponent={listHeader}
+            ListEmptyComponent={emptyView}
+            renderItem={(isOrdersTab ? renderOrder : renderSubscription) as any}
+          />
+        );
+      })()}
 
       {/* Filter Sheet Modal */}
       <Modal

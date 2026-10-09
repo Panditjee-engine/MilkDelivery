@@ -171,6 +171,7 @@ export default function AdminLayout() {
             href: null,
           }}
         />
+        <Tabs.Screen name="returns" options={{ href: null }} />
       </Tabs>
     </NotificationProvider>
   );
