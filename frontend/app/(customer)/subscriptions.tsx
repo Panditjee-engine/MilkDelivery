@@ -30,6 +30,7 @@ import { api } from "../../src/services/api";
 import { Colors } from "../../src/constants/colors";
 import LoadingScreen from "../../src/components/LoadingScreen";
 import OrderItemFeedback from "../../src/components/OrderItemFeedback";
+import RatingPopup from "../../src/components/RatingPopup";
 
 if (
   Platform.OS === "android" &&
@@ -2258,6 +2259,7 @@ export default function OrdersScreen() {
           setCancelOrder(null);
         }}
       />
+      <RatingPopup orders={orders} />
       <FilterModal
         visible={filterModalVisible}
         orders={orders}
