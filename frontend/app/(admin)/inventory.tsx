@@ -20,6 +20,7 @@ import {
   Animated,
   Easing,
   Dimensions,
+  ActivityIndicator,
 } from "react-native";
 import {
   SafeAreaView,
@@ -237,6 +238,7 @@ type Product = {
   seller_name?: string;
   seller_address?: string;
   shelf_life?: string;
+  purchase_type?: "one_time" | "subscription" | "both";
 };
 
 const getProductId = (product?: Product | null) =>
@@ -261,6 +263,8 @@ type FormData = {
   seller_address: string;
   shelf_life: string;
   quantityValue: string;
+  purchase_type: string;
+
 };
 
 const EMPTY_FORM: FormData = {
@@ -282,6 +286,7 @@ const EMPTY_FORM: FormData = {
   seller_address: "",
   shelf_life: "",
   quantityValue: "",
+  purchase_type: "both",
 };
 
 const CATEGORIES = [
@@ -302,6 +307,12 @@ const CATEGORIES = [
 const UNITS = ["visit", "ml", "L", "g", "kg" , "pcs", "dozen", "bottle", "pack", "box", "jar", "can"];
 const DIETARY_OPTIONS = ["Veg", "Non-Veg", "Vegan", "Gluten-Free"];
 const TABS = ["Details", "Highlights", "Information"];
+
+const PURCHASE_TYPES = [
+  { value: "one_time", label: "Buy Once" },
+  { value: "subscription", label: "Subscription" },
+  { value: "both", label: "Both" },
+] as const;
 
 // ── Animated Success Tick Component
 function SuccessTick({
@@ -448,6 +459,8 @@ export default function InventoryScreen() {
   const [formData, setFormData] = useState<FormData>({ ...EMPTY_FORM });
   const [showSuccessTick, setShowSuccessTick] = useState(false);
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   // ── Detail / Edit Modal State
   const [detailModal, setDetailModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -553,8 +566,10 @@ export default function InventoryScreen() {
     return missing;
   }, [formData]);
 
-  const handleAddProduct = async () => {
-    try {
+const handleAddProduct = async () => {
+  if (isSubmitting) return;
+  setIsSubmitting(true);
+  try {
       const images: string[] = [];
       if (formData.image2) images.push(formData.image2);
       if (formData.image3) images.push(formData.image3);
@@ -582,10 +597,13 @@ export default function InventoryScreen() {
         seller_name: formData.seller_name || undefined,
         seller_address: formData.seller_address || undefined,
         shelf_life: formData.shelf_life || undefined,
+        purchase_type: formData.purchase_type || "both",
       });
 
+      setIsSubmitting(false);
       setShowSuccessTick(true);
     } catch (e: any) {
+      setIsSubmitting(false);
       const message = e?.message || "Could not add product";
       showAlert("Something went wrong", message);
       showSnackbar(message, "error");
@@ -631,6 +649,7 @@ const openDetail = (product: Product) => {
       seller_address: product.seller_address || "",
       shelf_life: product.shelf_life || "",
       quantityValue: parsedQuantity,
+      purchase_type: product.purchase_type || "both",
     });
   };
 
@@ -700,6 +719,7 @@ const openDetail = (product: Product) => {
         seller_name: editForm.seller_name || undefined,
         seller_address: editForm.seller_address || undefined,
         shelf_life: editForm.shelf_life || undefined,
+        purchase_type: editForm.purchase_type || "both",
       });
       setShowEditSuccessTick(true);
     } catch (e: any) {
@@ -986,6 +1006,7 @@ const openDetail = (product: Product) => {
                 onPress={() => {
                   setShowCustomCat(false);
                   update("category", cat);
+                  if (cat === "service") update("purchase_type", "one_time");
                 }}
               >
                 <Text
@@ -1061,6 +1082,27 @@ const openDetail = (product: Product) => {
               </TouchableOpacity>
             </View>
           )}
+        <Text style={styles.fieldLabel}>Purchase Type</Text>
+<View style={styles.purchaseRow}>
+  {PURCHASE_TYPES.map((opt) => {
+    const isActive = (data.purchase_type || "both") === opt.value;
+    return (
+      <TouchableOpacity
+        key={opt.value}
+        style={[styles.purchaseChip, isActive && styles.purchaseChipActive]}
+        onPress={() => update("purchase_type", opt.value)}
+      >
+        <Text
+          style={[styles.purchaseChipText, isActive && styles.purchaseChipTextActive]}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+        >
+          {opt.label}
+        </Text>
+      </TouchableOpacity>
+    );
+  })}
+</View>
 
           {/* ── Quantity: numeric amount, unit chips below ── */}
           <Text style={styles.fieldLabel}>Quantity</Text>
@@ -1359,7 +1401,16 @@ const openDetail = (product: Product) => {
                 <Ionicons name="scale-outline" size={12} color={C.dark} />
                 <Text style={styles.metaChipText}>{p.unit}</Text>
               </View>
+              
             ) : null}
+            {p.purchase_type ? (
+  <View style={styles.metaChip}>
+    <Ionicons name="repeat-outline" size={12} color={C.dark} />
+    <Text style={styles.metaChipText}>
+      {p.purchase_type === "one_time" ? "Buy once" : p.purchase_type === "subscription" ? "Subscription only" : "Buy / Subscribe"}
+    </Text>
+  </View>
+) : null}
             <View
               style={[
                 styles.metaChip,
@@ -1959,6 +2010,15 @@ const openDetail = (product: Product) => {
                 <Text style={styles.cancelBtnText}>Cancel</Text>
               </TouchableOpacity>
             </ScrollView>
+
+            {isSubmitting && (
+  <View style={styles.loadingOverlay}>
+    <View style={styles.loadingBox}>
+      <ActivityIndicator size="large" color={C.dark} />
+      <Text style={styles.loadingText}>Adding product...</Text>
+    </View>
+  </View>
+)}
 
             <SuccessTick visible={showSuccessTick} onDone={onTickDone} />
           </View>
@@ -2943,4 +3003,43 @@ detailFeedbackBtnText: {
   fontWeight: "800",
   color: "#B45309",
 },
+purchaseRow: {
+  flexDirection: "row",
+  gap: 6,
+  marginBottom: 16,
+},
+purchaseChip: {
+  alignItems: "center",
+  justifyContent: "center",
+  paddingVertical: 5,
+  paddingHorizontal: 10,
+  borderRadius: 8,
+  backgroundColor: C.inputBg,
+  borderWidth: 1,
+  borderColor: C.border,
+},
+purchaseChipActive: {
+  backgroundColor: C.primary + "20",
+  borderColor: C.primary,
+},
+purchaseChipText: { fontSize: 11, fontWeight: "600", color: C.textMuted },
+purchaseChipTextActive: { color: C.dark },
+loadingOverlay: {
+  ...StyleSheet.absoluteFillObject,
+  backgroundColor: "rgba(61,31,10,0.55)",
+  justifyContent: "center",
+  alignItems: "center",
+  zIndex: 998,
+  borderTopLeftRadius: 28,
+  borderTopRightRadius: 28,
+},
+loadingBox: {
+  backgroundColor: C.bg,
+  paddingVertical: 24,
+  paddingHorizontal: 32,
+  borderRadius: 20,
+  alignItems: "center",
+  gap: 12,
+},
+loadingText: { fontSize: 14, fontWeight: "700", color: C.text },
 });

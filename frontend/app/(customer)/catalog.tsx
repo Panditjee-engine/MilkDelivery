@@ -1,4 +1,7 @@
-import ServiceSlotPicker, { isServiceProduct, productStock } from "../../src/components/ServiceSlotPicker";
+import ServiceSlotPicker, {
+  isServiceProduct,
+  productStock,
+} from "../../src/components/ServiceSlotPicker";
 import React, {
   useState,
   useEffect,
@@ -28,7 +31,10 @@ import {
 import { useIsFocused } from "@react-navigation/native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import Constants from "expo-constants";
 import { api } from "../../src/services/api";
@@ -57,6 +63,7 @@ const SCREEN_WIDTH = Dimensions.get("window").width;
 const GRID_PADDING = 20;
 const GRID_GAP = 12;
 const CARD_WIDTH = Math.floor((SCREEN_WIDTH - GRID_PADDING * 2 - GRID_GAP) / 2);
+const IMG_W = CARD_WIDTH - 2;
 const NEW_BANNER_WIDTH = SCREEN_WIDTH - 40;
 const DAIRY_CATEGORIES = ["milk", "dairy"];
 const resolveProductId = (product: any) =>
@@ -200,7 +207,8 @@ function mapContentToSlides(content: any[]): CatalogSlide[] {
       return images.map((img: string, imageIndex: number) => ({
         id: `${item?.id || item?._id || itemIndex}-${imageIndex}`,
         title: item?.title || "Fresh dairy, every day",
-        subtitle: item?.description || "Newly added products from trusted farms",
+        subtitle:
+          item?.description || "Newly added products from trusted farms",
         kicker: "New Arrival",
         colors:
           SLIDE_GRADIENTS[(itemIndex + imageIndex) % SLIDE_GRADIENTS.length],
@@ -216,17 +224,16 @@ async function fetchCutoffsForProducts(
 ): Promise<OrderCutoffRule[]> {
   const adminIds = Array.from(
     new Set(
-      [
-        fallbackAdminId,
-        ...(products || []).map((product) => product?.admin_id),
-      ]
+      [fallbackAdminId, ...(products || []).map((product) => product?.admin_id)]
         .filter(Boolean)
         .map(String),
     ),
   );
   if (!adminIds.length) return [];
   const results = await Promise.all(
-    adminIds.map((adminId) => api.getCatalogOrderCutoffs(adminId).catch(() => [])),
+    adminIds.map((adminId) =>
+      api.getCatalogOrderCutoffs(adminId).catch(() => []),
+    ),
   );
   return results.flat();
 }
@@ -237,17 +244,16 @@ async function fetchDeliveryWindowsForProducts(
 ): Promise<DeliveryWindowRule[]> {
   const adminIds = Array.from(
     new Set(
-      [
-        fallbackAdminId,
-        ...(products || []).map((product) => product?.admin_id),
-      ]
+      [fallbackAdminId, ...(products || []).map((product) => product?.admin_id)]
         .filter(Boolean)
         .map(String),
     ),
   );
   if (!adminIds.length) return [];
   const results = await Promise.all(
-    adminIds.map((adminId) => api.getCatalogDeliveryWindows(adminId).catch(() => [])),
+    adminIds.map((adminId) =>
+      api.getCatalogDeliveryWindows(adminId).catch(() => []),
+    ),
   );
   return results.flat();
 }
@@ -405,7 +411,9 @@ function formatUnit(unit: string): string {
   const lMatch = l.match(/^(\d+\.?\d*)\s*(l|litre|litres|liter|liters)$/);
   const kgMatch = l.match(/^(\d+\.?\d*)\s*(kg|kilogram|kilograms)s?$/);
   const gMatch = l.match(/^(\d+\.?\d*)\s*(g|gram|grams)s?$/);
-  const pcMatch = l.match(/^(\d+\.?\d*)\s*(pc|pcs|piece|pieces|unit|units|nos|no)s?$/);
+  const pcMatch = l.match(
+    /^(\d+\.?\d*)\s*(pc|pcs|piece|pieces|unit|units|nos|no)s?$/,
+  );
 
   if (mlMatch) return `${mlMatch[1]}ml`;
   if (lMatch) return `${lMatch[1]}L`;
@@ -572,8 +580,8 @@ function MiniCalendar({
                   calS.day,
                   (isS || isE) && { color: "#fff", fontWeight: "800" },
                   isTod &&
-                  !isS &&
-                  !isE && { color: accentColor, fontWeight: "700" },
+                    !isS &&
+                    !isE && { color: accentColor, fontWeight: "700" },
                 ]}
               >
                 {day}
@@ -1196,6 +1204,19 @@ function ProductCard({
   const theme = getCategoryTheme(product.category);
   const isDairy = isDairyProduct(product) || isServiceProduct(product);
   const noStock = !product.is_available || productStock(product) === 0;
+
+  const purchaseType = product.purchase_type || "both";
+  const showOnce =
+    purchaseType === "one_time" || (purchaseType === "both" && isDairy);
+  const showSub =
+    purchaseType === "subscription" || (purchaseType === "both" && isDairy);
+  const showAdd = purchaseType === "both" && !isDairy;
+
+  const images = [product.image, ...(product.images || [])].filter(
+    Boolean,
+  ) as string[];
+  const [imgIndex, setImgIndex] = useState(0);
+
   const cutoffText = getOrderCutoffBadgeText(cutoffRule);
   const cutoffPassed = isOrderCutoffPassed(cutoffRule);
   const deliveryText = getDeliveryWindowBadgeText(deliveryWindow);
@@ -1211,12 +1232,39 @@ function ProductCard({
       onPress={onOpenDetails}
     >
       <View style={[cardS.imgBox, { backgroundColor: theme.bg }]}>
-        {product.image ? (
-          <Image
-            source={{ uri: product.image }}
-            style={cardS.img}
-            resizeMode="cover"
-          />
+        {images.length > 0 ? (
+          <>
+            <ScrollView
+              horizontal
+              pagingEnabled
+              nestedScrollEnabled
+              showsHorizontalScrollIndicator={false}
+              style={{ width: IMG_W, height: 112 }}
+              onMomentumScrollEnd={(e) =>
+                setImgIndex(Math.round(e.nativeEvent.contentOffset.x / IMG_W))
+              }
+            >
+              {images.map((uri, i) => (
+                <TouchableWithoutFeedback key={i} onPress={onOpenDetails}>
+                  <Image
+                    source={{ uri }}
+                    style={{ width: IMG_W, height: 112 }}
+                    resizeMode="cover"
+                  />
+                </TouchableWithoutFeedback>
+              ))}
+            </ScrollView>
+            {images.length > 1 && (
+              <View style={cardS.imgDots} pointerEvents="none">
+                {images.map((_, i) => (
+                  <View
+                    key={i}
+                    style={[cardS.imgDot, i === imgIndex && cardS.imgDotActive]}
+                  />
+                ))}
+              </View>
+            )}
+          </>
         ) : (
           <View
             style={[cardS.iconBox, { backgroundColor: theme.accent + "18" }]}
@@ -1230,7 +1278,12 @@ function ProductCard({
           </View>
         )}
         {cutoffText ? (
-          <View style={[cardS.cutoffRibbon, cutoffPassed && cardS.cutoffRibbonBlocked]}>
+          <View
+            style={[
+              cardS.cutoffRibbon,
+              cutoffPassed && cardS.cutoffRibbonBlocked,
+            ]}
+          >
             <Ionicons
               name={cutoffPassed ? "alert-circle" : "time"}
               size={10}
@@ -1249,12 +1302,12 @@ function ProductCard({
             </Text>
           </View>
         ) : null}
-        {isDairy && !noStock && (
+        {showSub && !noStock && (
           <View style={cardS.subBadge}>
             <Ionicons name="repeat-outline" size={8} color="#fff" />
           </View>
         )}
-        {!isDairy && cartQty > 0 && (
+        {showAdd && cartQty > 0 && (
           <View style={[cardS.qtyBadge, { backgroundColor: theme.accent }]}>
             <Text style={cardS.qtyBadgeTxt}>{cartQty}</Text>
           </View>
@@ -1281,14 +1334,22 @@ function ProductCard({
           </Text>
         </View>
         {cutoffText ? (
-          <View style={[cardS.cutoffBadge, cutoffPassed && cardS.cutoffBadgeBlocked]}>
+          <View
+            style={[
+              cardS.cutoffBadge,
+              cutoffPassed && cardS.cutoffBadgeBlocked,
+            ]}
+          >
             <Ionicons
               name={cutoffPassed ? "alert-circle-outline" : "time-outline"}
               size={9}
               color={cutoffPassed ? T.red : T.amber}
             />
             <Text
-              style={[cardS.cutoffText, cutoffPassed && cardS.cutoffTextBlocked]}
+              style={[
+                cardS.cutoffText,
+                cutoffPassed && cardS.cutoffTextBlocked,
+              ]}
               numberOfLines={1}
             >
               {cutoffText}
@@ -1310,41 +1371,7 @@ function ProductCard({
             <Text style={cardS.oosBtnTxt}>Unavailable</Text>
           </View>
         </View>
-      ) : isDairy ? (
-        <View style={cardS.actionRow}>
-          <TouchableOpacity
-            style={[
-              cardS.halfBtn,
-              cardS.onceBtn,
-            ]}
-            onPress={(event) => {
-              event.stopPropagation?.();
-              onBuyOnce();
-            }}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="flash-outline" size={10} color="#fff" />
-            <Text style={[cardS.halfTxt, { color: "#fff" }]}>Once</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[cardS.halfBtn, { backgroundColor: T.amber }]}
-            onPress={(event) => {
-              event.stopPropagation?.();
-              onSubscribe();
-            }}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="repeat-outline" size={10} color="#fff" />
-            <Text
-              style={[cardS.halfTxt, cardS.actionTextEllipsis, { color: "#fff" }]}
-              numberOfLines={1}
-              ellipsizeMode="tail"
-            >
-              Subscription Complete
-            </Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
+      ) : showAdd ? (
         <View style={cardS.actionRow}>
           <TouchableOpacity
             style={[cardS.fullBtn, { backgroundColor: theme.accent }]}
@@ -1357,6 +1384,47 @@ function ProductCard({
             <Ionicons name="add" size={12} color="#fff" />
             <Text style={cardS.fullTxt}>Add</Text>
           </TouchableOpacity>
+        </View>
+      ) : (
+        <View style={cardS.actionRow}>
+          {showOnce && (
+            <TouchableOpacity
+              style={[cardS.halfBtn, cardS.onceBtn]}
+              onPress={(event) => {
+                event.stopPropagation?.();
+                onBuyOnce();
+              }}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="flash-outline" size={10} color="#fff" />
+              <Text style={[cardS.halfTxt, { color: "#fff" }]}>
+                Add to cart
+              </Text>
+            </TouchableOpacity>
+          )}
+          {showSub && (
+            <TouchableOpacity
+              style={[cardS.halfBtn, { backgroundColor: T.amber }]}
+              onPress={(event) => {
+                event.stopPropagation?.();
+                onSubscribe();
+              }}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="repeat-outline" size={10} color="#fff" />
+              <Text
+                style={[
+                  cardS.halfTxt,
+                  cardS.actionTextEllipsis,
+                  { color: "#fff" },
+                ]}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
+                Subscribe
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
     </TouchableOpacity>
@@ -1600,6 +1668,22 @@ const cardS = StyleSheet.create({
     alignItems: "center",
   },
   oosBtnTxt: { fontSize: 10, fontWeight: "700", color: T.faint },
+  imgDots: {
+    position: "absolute",
+    bottom: 5,
+    left: 0,
+    right: 0,
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 4,
+  },
+  imgDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: "rgba(255,255,255,0.55)",
+  },
+  imgDotActive: { backgroundColor: "#fff", width: 12 },
 });
 
 // ─── Category Section ────────────────────────────────────────────────────────
@@ -1660,7 +1744,10 @@ function CategorySection({
               onSubscribe={() => onSubscribe(item)}
               onAddToCart={() => onAddToCart(item)}
               cutoffRule={getOrderCutoffForProduct(item, cutoffRules)}
-              deliveryWindow={getDeliveryWindowForProduct(item, deliveryWindows)}
+              deliveryWindow={getDeliveryWindowForProduct(
+                item,
+                deliveryWindows,
+              )}
               rating={ratings[String(resolveProductId(item))] || null}
             />
           );
@@ -1737,7 +1824,11 @@ function QuickAddModal({
           <View style={sheetS.handle} />
           <View style={[sheetS.prodRow, { backgroundColor: theme.bg }]}>
             {product.image ? (
-              <Image source={{ uri: product.image }} style={sheetS.prodImg} resizeMode="cover" />
+              <Image
+                source={{ uri: product.image }}
+                style={sheetS.prodImg}
+                resizeMode="cover"
+              />
             ) : (
               <View
                 style={[
@@ -1886,6 +1977,7 @@ function SubscribeModal({
   onToast: (n: string, s: boolean) => void;
 }) {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [qty, setQty] = useState(1);
@@ -1928,7 +2020,9 @@ function SubscribeModal({
   useEffect(() => {
     if (!visible) return;
     setPaymentMethod((current) =>
-      paymentMethods[current] ? current : getFirstEnabledPaymentMethod(paymentMethods),
+      paymentMethods[current]
+        ? current
+        : getFirstEnabledPaymentMethod(paymentMethods),
     );
   }, [paymentMethods, visible]);
 
@@ -2079,7 +2173,8 @@ function SubscribeModal({
       if (isCutoffError(e)) {
         Alert.alert(
           "Order cut-off time passed",
-          e?.message || "Please place this order before the product cut-off time.",
+          e?.message ||
+            "Please place this order before the product cut-off time.",
           [{ text: "Got it" }],
         );
         return;
@@ -2118,9 +2213,21 @@ function SubscribeModal({
 
   return (
     <>
-      <Modal visible={visible} animationType="slide" transparent>
+      <Modal
+        visible={visible}
+        animationType="slide"
+        transparent
+        statusBarTranslucent
+        navigationBarTranslucent
+      >
         <View style={sheetS.overlay}>
-          <View style={[sheetS.sheet, step === 2 && { maxHeight: "96%" }]}>
+          <View
+            style={[
+              sheetS.sheet,
+              { paddingBottom: 16 + insets.bottom },
+              step === 2 && { maxHeight: "96%" },
+            ]}
+          >
             <View style={sheetS.handle} />
 
             <View style={[sheetS.prodRow, { backgroundColor: theme.bg }]}>
@@ -2216,13 +2323,22 @@ function SubscribeModal({
                           color={active ? "#fff" : theme.accent}
                         />
                         <View style={{ flex: 1 }}>
-                          <Text style={[subModalS.patternLabel, active && { color: "#fff" }]}>
+                          <Text
+                            style={[
+                              subModalS.patternLabel,
+                              active && { color: "#fff" },
+                            ]}
+                          >
                             {p.label}
                           </Text>
                           <Text
                             style={[
                               subModalS.patternHint,
-                              { color: active ? "rgba(255,255,255,0.7)" : T.faint },
+                              {
+                                color: active
+                                  ? "rgba(255,255,255,0.7)"
+                                  : T.faint,
+                              },
                             ]}
                           >
                             {p.hint}
@@ -2272,43 +2388,48 @@ function SubscribeModal({
                   </>
                 )}
 
-                {isServiceProduct(product) ? <ServiceSlotPicker value={slot} onChange={setSlot} /> : <><Text style={sheetS.sectionLabel}>Delivery Slot</Text>
-                <View style={subModalS.slotRow}>
-                  {DELIVERY_SLOTS.map((s) => {
-                    const active = slot === s.value;
-                    return (
-                      <TouchableOpacity
-                        key={s.value}
-                        style={[
-                          subModalS.slotCard,
-                          active && {
-                            borderColor: theme.accent,
-                            backgroundColor: theme.bg,
-                          },
-                        ]}
-                        onPress={() => setSlot(s.value)}
-                      >
-                        <Ionicons
-                          name={s.icon as any}
-                          size={15}
-                          color={active ? theme.accent : T.faint}
-                        />
-                        <Text
-                          style={[
-                            subModalS.slotLabel,
-                            active && { color: theme.accent },
-                          ]}
-                        >
-                          {s.label}
-                        </Text>
-                        <Text style={subModalS.slotTime}>{s.time}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
+                {isServiceProduct(product) ? (
+                  <ServiceSlotPicker value={slot} onChange={setSlot} />
+                ) : (
+                  <>
+                    <Text style={sheetS.sectionLabel}>Delivery Slot</Text>
+                    <View style={subModalS.slotRow}>
+                      {DELIVERY_SLOTS.map((s) => {
+                        const active = slot === s.value;
+                        return (
+                          <TouchableOpacity
+                            key={s.value}
+                            style={[
+                              subModalS.slotCard,
+                              active && {
+                                borderColor: theme.accent,
+                                backgroundColor: theme.bg,
+                              },
+                            ]}
+                            onPress={() => setSlot(s.value)}
+                          >
+                            <Ionicons
+                              name={s.icon as any}
+                              size={15}
+                              color={active ? theme.accent : T.faint}
+                            />
+                            <Text
+                              style={[
+                                subModalS.slotLabel,
+                                active && { color: theme.accent },
+                              ]}
+                            >
+                              {s.label}
+                            </Text>
+                            <Text style={subModalS.slotTime}>{s.time}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
 
-                <View style={{ height: 16 }} />
-                </>}
+                    <View style={{ height: 16 }} />
+                  </>
+                )}
                 <Button title="Next: Choose Dates →" onPress={step1Next} />
                 <View style={{ height: 16 }} />
               </ScrollView>
@@ -2451,26 +2572,28 @@ function SubscribeModal({
                       "Schedule",
                       subscriptionPatterns.find((p) => p.value === pattern)
                         ?.label +
-                      (pattern === "custom" && customDays.length > 0
-                        ? ` · ${customDays.map((d) => weekDays[d].label).join(", ")}`
-                        : ""),
+                        (pattern === "custom" && customDays.length > 0
+                          ? ` · ${customDays.map((d) => weekDays[d].label).join(", ")}`
+                          : ""),
                     ],
                     [
                       "Slot",
-                      isServiceProduct(product) ? slot : DELIVERY_SLOTS.find((s) => s.value === slot)?.label +
-                      " (" +
-                      DELIVERY_SLOTS.find((s) => s.value === slot)?.time +
-                      ")",
+                      isServiceProduct(product)
+                        ? slot
+                        : DELIVERY_SLOTS.find((s) => s.value === slot)?.label +
+                          " (" +
+                          DELIVERY_SLOTS.find((s) => s.value === slot)?.time +
+                          ")",
                     ],
                     ["Start", formatDate(startDate ?? "")],
                     ["End", endDate ? formatDate(endDate) : "Open-ended"],
                     ...(deliveries > 0
                       ? [
-                        [
-                          "Deliveries",
-                          `~${deliveries}${!endDate ? " (est.)" : ""}`,
-                        ],
-                      ]
+                          [
+                            "Deliveries",
+                            `~${deliveries}${!endDate ? " (est.)" : ""}`,
+                          ],
+                        ]
                       : []),
                   ].map(([k, v]) => (
                     <View key={k} style={reviewS.row}>
@@ -2557,9 +2680,14 @@ function SubscribeModal({
 
                 {paymentMethod === "wallet" && !canAfford && (
                   <View style={reviewS.warn}>
-                    <Ionicons name="information-circle-outline" size={13} color={T.orange} />
+                    <Ionicons
+                      name="information-circle-outline"
+                      size={13}
+                      color={T.orange}
+                    />
                     <Text style={reviewS.warnTxt}>
-                      Balance is below order amount. Choose online payment or recharge before confirming.
+                      Balance is below order amount. Choose online payment or
+                      recharge before confirming.
                     </Text>
                     <TouchableOpacity
                       style={reviewS.addMoneyBtn}
@@ -2569,7 +2697,11 @@ function SubscribeModal({
                       }}
                       activeOpacity={0.8}
                     >
-                      <Ionicons name="add-circle-outline" size={14} color="#fff" />
+                      <Ionicons
+                        name="add-circle-outline"
+                        size={14}
+                        color="#fff"
+                      />
                       <Text style={reviewS.addMoneyTxt}>Add Money</Text>
                     </TouchableOpacity>
                   </View>
@@ -2973,25 +3105,25 @@ function PaymentMethodSelector({
     sub: string;
     icon: keyof typeof Ionicons.glyphMap;
   }> = [
-      {
-        key: "wallet",
-        title: "Wallet",
-        sub: `Balance ₹${walletBalance.toFixed(2)}`,
-        icon: "wallet-outline",
-      },
-      {
-        key: "online",
-        title: "Online",
-        sub: "UPI, card, netbanking",
-        icon: "card-outline",
-      },
-      {
-        key: "cash_on_delivery",
-        title: "Cash on Delivery",
-        sub: "Pay at delivery",
-        icon: "cash-outline",
-      },
-    ];
+    {
+      key: "wallet",
+      title: "Wallet",
+      sub: `Balance ₹${walletBalance.toFixed(2)}`,
+      icon: "wallet-outline",
+    },
+    {
+      key: "online",
+      title: "Online",
+      sub: "UPI, card, netbanking",
+      icon: "card-outline",
+    },
+    {
+      key: "cash_on_delivery",
+      title: "Cash on Delivery",
+      sub: "Pay at delivery",
+      icon: "cash-outline",
+    },
+  ];
   const options = allOptions.filter((option) => enabledMethods[option.key]);
 
   return (
@@ -3164,7 +3296,12 @@ function CartSheet({
       cartTotal,
       walletBalance,
     });
-    onPlaceOrder(paymentMethod, cart.some(item => isServiceProduct(item.product)) ? serviceSlot : undefined);
+    onPlaceOrder(
+      paymentMethod,
+      cart.some((item) => isServiceProduct(item.product))
+        ? serviceSlot
+        : undefined,
+    );
   };
 
   const requestPlaceOrder = () => {
@@ -3237,7 +3374,11 @@ function CartSheet({
                   }
                 }}
               >
-                <Ionicons name="location-outline" size={14} color={Colors.primary} />
+                <Ionicons
+                  name="location-outline"
+                  size={14}
+                  color={Colors.primary}
+                />
                 {selectedAddress ? (
                   <>
                     <Text style={cartS.addressTypeText} numberOfLines={1}>
@@ -3257,7 +3398,12 @@ function CartSheet({
                 </Text>
               </TouchableOpacity>
 
-              {cart.some(item => isServiceProduct(item.product)) && <ServiceSlotPicker value={serviceSlot} onChange={setServiceSlot} />}
+              {cart.some((item) => isServiceProduct(item.product)) && (
+                <ServiceSlotPicker
+                  value={serviceSlot}
+                  onChange={setServiceSlot}
+                />
+              )}
               <View style={cartS.walletStrip}>
                 <View
                   style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
@@ -3292,8 +3438,13 @@ function CartSheet({
                     const theme = getCategoryTheme(item.product.category);
                     const out = isUnavailable(item.product);
                     return (
-                      <View key={item.id} style={[cartS.item, out && { opacity: 0.55 }]}>
-                        <View style={[cartS.icon, { backgroundColor: theme.bg }]}>
+                      <View
+                        key={item.id}
+                        style={[cartS.item, out && { opacity: 0.55 }]}
+                      >
+                        <View
+                          style={[cartS.icon, { backgroundColor: theme.bg }]}
+                        >
                           <Ionicons
                             name={theme.icon as any}
                             size={14}
@@ -3305,7 +3456,13 @@ function CartSheet({
                             {item.product.name}
                           </Text>
                           {out ? (
-                            <Text style={{ fontSize: 11, fontWeight: "800", color: T.red }}>
+                            <Text
+                              style={{
+                                fontSize: 11,
+                                fontWeight: "800",
+                                color: T.red,
+                              }}
+                            >
                               item Out of stock · Stock updates when available
                             </Text>
                           ) : (
@@ -3373,9 +3530,14 @@ function CartSheet({
                 </View>
                 {hasUnavailable && (
                   <View style={cartS.lowBal}>
-                    <Ionicons name="alert-circle-outline" size={12} color={T.red} />
+                    <Ionicons
+                      name="alert-circle-outline"
+                      size={12}
+                      color={T.red}
+                    />
                     <Text style={[cartS.lowBalTxt, { color: T.red }]}>
-                      {unavailableItems.length} item unavailable hai. Remove it or wait for the stock to be available.
+                      {unavailableItems.length} item unavailable hai. Remove it
+                      or wait for the stock to be available.
                     </Text>
                   </View>
                 )}
@@ -3388,7 +3550,11 @@ function CartSheet({
                 />
                 {paymentMethod === "wallet" && !canAfford && (
                   <View style={cartS.lowBal}>
-                    <Ionicons name="warning-outline" size={11} color={T.orange} />
+                    <Ionicons
+                      name="warning-outline"
+                      size={11}
+                      color={T.orange}
+                    />
                     <Text style={cartS.lowBalTxt}>
                       Insufficient balance. Recharge to order.
                     </Text>
@@ -3400,7 +3566,11 @@ function CartSheet({
                       }}
                       activeOpacity={0.8}
                     >
-                      <Ionicons name="add-circle-outline" size={13} color="#fff" />
+                      <Ionicons
+                        name="add-circle-outline"
+                        size={13}
+                        color="#fff"
+                      />
                       <Text style={cartS.addMoneyTxt}>Add Money</Text>
                     </TouchableOpacity>
                   </View>
@@ -3452,7 +3622,11 @@ function CartSheet({
                             {String(address.label || "home").toUpperCase()}
                           </Text>
                           {active && (
-                            <Ionicons name="checkmark-circle" size={18} color={Colors.primary} />
+                            <Ionicons
+                              name="checkmark-circle"
+                              size={18}
+                              color={Colors.primary}
+                            />
                           )}
                         </View>
                         <Text style={cartS.pickerAddressText}>
@@ -3468,7 +3642,11 @@ function CartSheet({
                       onAddAddress();
                     }}
                   >
-                    <Ionicons name="add-circle-outline" size={18} color="#fff" />
+                    <Ionicons
+                      name="add-circle-outline"
+                      size={18}
+                      color="#fff"
+                    />
                     <Text style={cartS.newAddressText}>New Address</Text>
                   </TouchableOpacity>
                 </ScrollView>
@@ -3543,7 +3721,11 @@ const cartS = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 7,
   },
-  changeAddressText: { fontSize: 10.5, fontWeight: "900", color: Colors.primary },
+  changeAddressText: {
+    fontSize: 10.5,
+    fontWeight: "900",
+    color: Colors.primary,
+  },
   addressTypeText: { fontSize: 9.5, fontWeight: "900", color: Colors.primary },
   addressText: { flex: 1, fontSize: 11.5, fontWeight: "700", color: T.text },
   addressMissing: { flex: 1, fontSize: 11.5, fontWeight: "800", color: T.red },
@@ -3678,8 +3860,17 @@ const cartS = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 5,
   },
-  pickerAddressLabel: { fontSize: 11, fontWeight: "900", color: Colors.primary },
-  pickerAddressText: { fontSize: 12, fontWeight: "700", color: T.text, lineHeight: 17 },
+  pickerAddressLabel: {
+    fontSize: 11,
+    fontWeight: "900",
+    color: Colors.primary,
+  },
+  pickerAddressText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: T.text,
+    lineHeight: 17,
+  },
   newAddressBtn: {
     minHeight: 44,
     borderRadius: 14,
@@ -3915,7 +4106,9 @@ function BannerDetailsModal({
           contentContainerStyle={{ paddingBottom: 32, paddingTop: 8 }}
         >
           <LinearGradient
-            colors={(slide.colors as [string, string]) ?? ["#123524", "#1f6f43"]}
+            colors={
+              (slide.colors as [string, string]) ?? ["#123524", "#1f6f43"]
+            }
             style={bannerModalS.imageBox}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
@@ -4034,9 +4227,9 @@ const bannerModalS = StyleSheet.create({
 export default function CatalogScreen() {
   const router = useRouter();
   const { user, updateUser } = useAuth();
-const [linkedAdminId, setLinkedAdminId] = useState<string | null>(
-  (user as any)?.admin_id ?? (user as any)?.referral_admin_id ?? null,
-);
+  const [linkedAdminId, setLinkedAdminId] = useState<string | null>(
+    (user as any)?.admin_id ?? (user as any)?.referral_admin_id ?? null,
+  );
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -4083,18 +4276,26 @@ const [linkedAdminId, setLinkedAdminId] = useState<string | null>(
   const [successItemCount, setSuccessItemCount] = useState(1);
   const [walletErrorVisible, setWalletErrorVisible] = useState(false);
   const [walletBalance, setWalletBalance] = useState(0);
-  const [paymentMethods, setPaymentMethods] =
-    useState<PaymentMethodSettings>(DEFAULT_PAYMENT_METHODS);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethodSettings>(
+    DEFAULT_PAYMENT_METHODS,
+  );
   const [orderCutoffs, setOrderCutoffs] = useState<OrderCutoffRule[]>([]);
-  const [deliveryWindows, setDeliveryWindows] = useState<DeliveryWindowRule[]>([]);
-  const [ratings, setRatings] = useState<Record<string, { average: number; total: number }>>({});
+  const [deliveryWindows, setDeliveryWindows] = useState<DeliveryWindowRule[]>(
+    [],
+  );
+  const [ratings, setRatings] = useState<
+    Record<string, { average: number; total: number }>
+  >({});
   const [toastVisible, setToastVisible] = useState(false);
   const [toastProduct, setToastProduct] = useState("");
   const [toastIsSub, setToastIsSub] = useState(false);
   const [activeNewSlide, setActiveNewSlide] = useState(0);
   const [catalogSlides, setCatalogSlides] = useState<CatalogSlide[]>([]);
-  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
-  const [selectedBannerSlide, setSelectedBannerSlide] = useState<CatalogSlide | null>(null);
+  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(
+    null,
+  );
+  const [selectedBannerSlide, setSelectedBannerSlide] =
+    useState<CatalogSlide | null>(null);
   const [bannerModalVisible, setBannerModalVisible] = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const newSlidesScrollRef = useRef<ScrollView>(null);
@@ -4172,7 +4373,7 @@ const [linkedAdminId, setLinkedAdminId] = useState<string | null>(
       setActiveSubscriptions(
         (subs || []).filter((s: any) => s.status === "active" || !s.status),
       );
-    } catch { }
+    } catch {}
   }, []);
 
   const fetchPaymentMethods = useCallback(async () => {
@@ -4186,7 +4387,10 @@ const [linkedAdminId, setLinkedAdminId] = useState<string | null>(
 
   const fetchDeliveryWindows = useCallback(async () => {
     try {
-      const windows = await fetchDeliveryWindowsForProducts(products, linkedAdminId);
+      const windows = await fetchDeliveryWindowsForProducts(
+        products,
+        linkedAdminId,
+      );
       setDeliveryWindows(windows || []);
     } catch {
       // Keep the current promise while the network settles.
@@ -4196,26 +4400,32 @@ const [linkedAdminId, setLinkedAdminId] = useState<string | null>(
   const ratedIdsRef = useRef<Set<string>>(new Set());
 
   const fetchRatings = useCallback(async (list: any[]) => {
-  const fresh = (list || []).filter((p) => {
-    const id = resolveProductId(p);
-    return id && !ratedIdsRef.current.has(String(id));
-  });
-  if (!fresh.length) return;
-  fresh.forEach((p) => ratedIdsRef.current.add(String(resolveProductId(p))));
-  const entries = await Promise.all(
-    fresh.map(async (p) => {
-      const id = String(resolveProductId(p));
-      try {
-        const fb = await api.getCatalogProductFeedback(id);
-        if (!fb?.total_reviews) return null;
-        return [id, { average: fb.average_rating ?? 0, total: fb.total_reviews ?? 0 }] as const;
-      } catch {
-        return null;
-      }
-    }),
-  );
-  setRatings((prev) => ({ ...prev, ...Object.fromEntries(entries.filter(Boolean) as any) }));
-}, []);
+    const fresh = (list || []).filter((p) => {
+      const id = resolveProductId(p);
+      return id && !ratedIdsRef.current.has(String(id));
+    });
+    if (!fresh.length) return;
+    fresh.forEach((p) => ratedIdsRef.current.add(String(resolveProductId(p))));
+    const entries = await Promise.all(
+      fresh.map(async (p) => {
+        const id = String(resolveProductId(p));
+        try {
+          const fb = await api.getCatalogProductFeedback(id);
+          if (!fb?.total_reviews) return null;
+          return [
+            id,
+            { average: fb.average_rating ?? 0, total: fb.total_reviews ?? 0 },
+          ] as const;
+        } catch {
+          return null;
+        }
+      }),
+    );
+    setRatings((prev) => ({
+      ...prev,
+      ...Object.fromEntries(entries.filter(Boolean) as any),
+    }));
+  }, []);
 
   useEffect(() => {
     const id = (user as any)?.admin_id ?? (user as any)?.referral_admin_id;
@@ -4231,7 +4441,7 @@ const [linkedAdminId, setLinkedAdminId] = useState<string | null>(
     if (!cartHydratedRef.current || !userIdRef.current) return;
     const current = cartRef.current;
     const sig = cartSignature(current);
-    if (sig === lastSavedRef.current) return;      
+    if (sig === lastSavedRef.current) return;
     try {
       await api.saveCart(
         current.map((i) => ({
@@ -4241,14 +4451,14 @@ const [linkedAdminId, setLinkedAdminId] = useState<string | null>(
       );
       lastSavedRef.current = sig;
     } catch (e) {
-      console.log("[Cart] save failed", e);      
+      console.log("[Cart] save failed", e);
     }
   }, [getProductId]);
 
   const syncCartFromServer = useCallback(async () => {
     const requestedFor = userIdRef.current;
     const rows = await api.getCart();
-    if (userIdRef.current !== requestedFor) return;  
+    if (userIdRef.current !== requestedFor) return;
     const list = Array.isArray(rows) ? rows : [];
     const byId = new Map(list.map((r) => [String(r.product_id), r]));
     const isFirstLoad = !cartHydratedRef.current;
@@ -4271,7 +4481,8 @@ const [linkedAdminId, setLinkedAdminId] = useState<string | null>(
         prev.forEach((p) => {
           const pid = getProductId(p.product);
           const ex = map.get(pid);
-          if (ex) ex.quantity = clampToStock(ex.product, ex.quantity + p.quantity);
+          if (ex)
+            ex.quantity = clampToStock(ex.product, ex.quantity + p.quantity);
           else map.set(pid, p);
         });
         return Array.from(map.values());
@@ -4287,17 +4498,21 @@ const [linkedAdminId, setLinkedAdminId] = useState<string | null>(
         const product = row.product
           ? row.product
           : { ...item.product, is_available: false, stock: 0 };
-        return { ...item, product, quantity: clampToStock(product, item.quantity) };
+        return {
+          ...item,
+          product,
+          quantity: clampToStock(product, item.quantity),
+        };
       }),
     );
   }, [getProductId]);
 
-useEffect(() => {
-  if (!isFocused || !userId) return;
-  void syncCartFromServer().catch((e) =>
-    console.log("[Cart] sync failed", e),
-  );
-}, [isFocused, userId, syncCartFromServer]);
+  useEffect(() => {
+    if (!isFocused || !userId) return;
+    void syncCartFromServer().catch((e) =>
+      console.log("[Cart] sync failed", e),
+    );
+  }, [isFocused, userId, syncCartFromServer]);
   // debounce save
   useEffect(() => {
     if (!cartHydratedRef.current) return;
@@ -4321,7 +4536,6 @@ useEffect(() => {
     };
   }, [saveCartNow]);
 
-
   const fetchData = useCallback(async () => {
     try {
       const [prods, cats, wallet, content, appSettings] = await Promise.all([
@@ -4336,17 +4550,23 @@ useEffect(() => {
           payment_methods: DEFAULT_PAYMENT_METHODS,
         })),
       ]);
-if (!cutoffsLoadedRef.current) {
-  cutoffsLoadedRef.current = true;
-  try {
-    const cutoffs = await fetchCutoffsForProducts(prods || [], linkedAdminId);
-    setOrderCutoffs(cutoffs || []);
-  } catch {
-    cutoffsLoadedRef.current = false;
-  }
-}
+      if (!cutoffsLoadedRef.current) {
+        cutoffsLoadedRef.current = true;
+        try {
+          const cutoffs = await fetchCutoffsForProducts(
+            prods || [],
+            linkedAdminId,
+          );
+          setOrderCutoffs(cutoffs || []);
+        } catch {
+          cutoffsLoadedRef.current = false;
+        }
+      }
       // const cutoffs = await fetchCutoffsForProducts(prods || [], linkedAdminId);
-      const windows = await fetchDeliveryWindowsForProducts(prods || [], linkedAdminId);
+      const windows = await fetchDeliveryWindowsForProducts(
+        prods || [],
+        linkedAdminId,
+      );
       setProducts(prods);
       void fetchRatings(prods || []);
       setCategories(cats);
@@ -4393,15 +4613,15 @@ if (!cutoffsLoadedRef.current) {
     void fetchData().catch(() => undefined);
   }, [isFocused, fetchData]);
 
-useEffect(() => {
-  if (!isFocused) return;
-  // payment methods are already loaded in fetchData
-}, [isFocused]);
+  useEffect(() => {
+    if (!isFocused) return;
+    // payment methods are already loaded in fetchData
+  }, [isFocused]);
 
-useEffect(() => {
-  if (!isFocused) return;
-  // delivery windows are already loaded in fetchData, no refetch here
-}, [isFocused]);
+  useEffect(() => {
+    if (!isFocused) return;
+    // delivery windows are already loaded in fetchData, no refetch here
+  }, [isFocused]);
 
   useEffect(() => {
     if (!addToCartProduct) return;
@@ -4433,7 +4653,7 @@ useEffect(() => {
       });
       showToast(p.name, false);
       setTimeout(() => setCartVisible(true), 400);
-    } catch { }
+    } catch {}
   }, [addToCartProduct, addToCartQty, getProductId]);
 
   const onRefresh = () => {
@@ -4476,7 +4696,10 @@ useEffect(() => {
       // Check if product is already in the cart
       const productId = getProductId(p);
       if (!productId) {
-        Alert.alert("Product unavailable", "This product could not be added. Please refresh and try again.");
+        Alert.alert(
+          "Product unavailable",
+          "This product could not be added. Please refresh and try again.",
+        );
         return prev;
       }
       const existingIndex = prev.findIndex(
@@ -4557,7 +4780,10 @@ useEffect(() => {
     setCart((prev) => {
       const productId = getProductId(quickAddProduct);
       if (!productId) {
-        Alert.alert("Product unavailable", "This product could not be added. Please refresh and try again.");
+        Alert.alert(
+          "Product unavailable",
+          "This product could not be added. Please refresh and try again.",
+        );
         return prev;
       }
       const existingIndex = prev.findIndex(
@@ -4615,7 +4841,10 @@ useEffect(() => {
   const cartTotal = getPayableTotal(cart);
 
   // ── FIXED: All cart items go as ONE buy_once subscription
-  const handlePlaceOrder = async (paymentMethod: PaymentMethod, serviceSlot?: string) => {
+  const handlePlaceOrder = async (
+    paymentMethod: PaymentMethod,
+    serviceSlot?: string,
+  ) => {
     console.log("[Cart] handlePlaceOrder started", {
       paymentMethod,
       itemCount: cart.length,
@@ -4669,7 +4898,10 @@ useEffect(() => {
       );
       return;
     }
-    if (selectedAddress?.id && selectedAddress.id !== (user?.address as any)?.id) {
+    if (
+      selectedAddress?.id &&
+      selectedAddress.id !== (user?.address as any)?.id
+    ) {
       const saved = await handleSelectDeliveryAddress(selectedAddress);
       if (!saved) return;
     }
@@ -4705,7 +4937,9 @@ useEffect(() => {
         return;
       }
       const payload: Parameters<typeof api.createSubscription>[0] = {
-        items: orderItems as Parameters<typeof api.createSubscription>[0]["items"],
+        items: orderItems as Parameters<
+          typeof api.createSubscription
+        >[0]["items"],
         pattern: "buy_once",
         custom_days: null,
         start_date: tomorrow,
@@ -4751,7 +4985,7 @@ useEffect(() => {
       api
         .getWallet()
         .then((w) => setWalletBalance(w.balance ?? 0))
-        .catch(() => { });
+        .catch(() => {});
       await fetchData();
       router.push({
         pathname: "/(customer)/order-success",
@@ -4767,7 +5001,8 @@ useEffect(() => {
       if (isCutoffError(e)) {
         Alert.alert(
           "Order cut-off time passed",
-          e?.message || "Please place this order before the product cut-off time.",
+          e?.message ||
+            "Please place this order before the product cut-off time.",
           [{ text: "Got it" }],
         );
         return;
@@ -4872,19 +5107,17 @@ useEffect(() => {
     return () => clearInterval(iv);
   }, [newSlides.length]);
 
-  
   const sortedCategories = useMemo(
-  () =>
-    [...categories].sort(
-      (a, b) =>
-        categoryRank(a.value) - categoryRank(b.value) ||
-        String(a.label).localeCompare(String(b.label)),
-    ),
-  [categories],
-);
+    () =>
+      [...categories].sort(
+        (a, b) =>
+          categoryRank(a.value) - categoryRank(b.value) ||
+          String(a.label).localeCompare(String(b.label)),
+      ),
+    [categories],
+  );
 
   if (loading) return <LoadingScreen />;
-
 
   const ListHeader = (
     <>
@@ -4965,9 +5198,17 @@ useEffect(() => {
                         style={mainS.newCardScrim}
                       />
                       <View style={mainS.newTextBoxFull}>
-                        <Text style={mainS.newKicker} numberOfLines={1}>{slide.kicker}</Text>
-                        <Text style={mainS.newCardTitle} numberOfLines={1}>{slide.title}</Text>
-                        <Text style={mainS.newCardSub} numberOfLines={2} ellipsizeMode="tail">
+                        <Text style={mainS.newKicker} numberOfLines={1}>
+                          {slide.kicker}
+                        </Text>
+                        <Text style={mainS.newCardTitle} numberOfLines={1}>
+                          {slide.title}
+                        </Text>
+                        <Text
+                          style={mainS.newCardSub}
+                          numberOfLines={2}
+                          ellipsizeMode="tail"
+                        >
                           {slide.subtitle}
                         </Text>
                       </View>
@@ -4980,13 +5221,25 @@ useEffect(() => {
                       end={{ x: 1, y: 1 }}
                     >
                       <View style={mainS.newTextBox}>
-                        <Text style={mainS.newKicker} numberOfLines={1}>{slide.kicker}</Text>
-                        <Text style={mainS.newCardTitle} numberOfLines={1}>{slide.title}</Text>
-                        <Text style={mainS.newCardSub} numberOfLines={2} ellipsizeMode="tail">
+                        <Text style={mainS.newKicker} numberOfLines={1}>
+                          {slide.kicker}
+                        </Text>
+                        <Text style={mainS.newCardTitle} numberOfLines={1}>
+                          {slide.title}
+                        </Text>
+                        <Text
+                          style={mainS.newCardSub}
+                          numberOfLines={2}
+                          ellipsizeMode="tail"
+                        >
                           {slide.subtitle}
                         </Text>
                       </View>
-                      <Image source={slide.image} style={mainS.newImage} resizeMode="contain" />
+                      <Image
+                        source={slide.image}
+                        style={mainS.newImage}
+                        resizeMode="contain"
+                      />
                       <View style={mainS.newGlow} />
                     </LinearGradient>
                   )}
@@ -5006,7 +5259,7 @@ useEffect(() => {
             />
           ))}
         </View>
-      </View >
+      </View>
 
       <ScrollView
         horizontal
@@ -5048,7 +5301,7 @@ useEffect(() => {
   );
 
   return (
-    <SafeAreaView style={mainS.container}>
+    <SafeAreaView style={mainS.container} edges={["top"]}>
       <FlatList
         data={grouped}
         keyExtractor={(i) => i.value}
@@ -5247,12 +5500,16 @@ const mainS = StyleSheet.create({
   newImageFull: { width: "100%", height: "100%" },
   newCardScrim: {
     position: "absolute",
-    left: 0, right: 0, bottom: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     height: 90,
   },
   newTextBoxFull: {
     position: "absolute",
-    left: 18, right: 18, bottom: 14,
+    left: 18,
+    right: 18,
+    bottom: 14,
     zIndex: 2,
   },
   newTextBox: { flex: 1, zIndex: 2 },
@@ -5322,6 +5579,5 @@ const mainS = StyleSheet.create({
   chipTxtActive: { color: "#fff" },
   empty: { alignItems: "center", paddingTop: 70, gap: 8 },
   emptyTxt: { fontSize: 13, color: T.faint, fontWeight: "500" },
-  
 });
 // add pop-up to confirm order placement - 02-09-26

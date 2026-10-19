@@ -1,5 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import ServiceSlotPicker, { isServiceProduct, productStock } from "../../src/components/ServiceSlotPicker";
+import ServiceSlotPicker, {
+  isServiceProduct,
+  productStock,
+} from "../../src/components/ServiceSlotPicker";
 import {
   ActivityIndicator,
   Image,
@@ -11,6 +14,7 @@ import {
   View,
   Alert,
   BackHandler,
+  Dimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -75,6 +79,9 @@ const subscriptionPatterns = [
   },
 ];
 
+const SCREEN_W = Dimensions.get("window").width;
+const HERO_W = SCREEN_W - 36; // hero has 18px margin each side
+
 const isDairyProduct = (product: any) =>
   DAIRY_CATEGORIES.includes(product?.category?.toLowerCase?.());
 
@@ -119,6 +126,7 @@ export default function ProductDetailsScreen() {
   >(null);
   const [orderCutoffs, setOrderCutoffs] = useState<OrderCutoffRule[]>([]);
   const [feedbackSummary, setFeedbackSummary] = useState<any>(null);
+  const [heroIndex, setHeroIndex] = useState(0);
   const productId = params.id?.toString() || product?.id || product?._id;
 
   useFocusEffect(
@@ -165,22 +173,22 @@ export default function ProductDetailsScreen() {
     };
   }, [initialProduct, productId]);
 
-useEffect(() => {
-  const adminId = product?.admin_id;
-  if (!adminId) return;
-  let mounted = true;
-  (async () => {
-    try {
-      const data = await api.getCatalogOrderCutoffs(String(adminId));
-      if (mounted) setOrderCutoffs(data || []);
-    } catch {
-      if (mounted) setOrderCutoffs([]);
-    }
-  })();
-  return () => {
-    mounted = false;
-  };
-}, [product?.admin_id]);
+  useEffect(() => {
+    const adminId = product?.admin_id;
+    if (!adminId) return;
+    let mounted = true;
+    (async () => {
+      try {
+        const data = await api.getCatalogOrderCutoffs(String(adminId));
+        if (mounted) setOrderCutoffs(data || []);
+      } catch {
+        if (mounted) setOrderCutoffs([]);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [product?.admin_id]);
 
   useEffect(() => {
     if (!productId) return;
@@ -191,8 +199,18 @@ useEffect(() => {
   }, [productId]);
 
   const theme = useMemo(() => getTheme(product?.category), [product?.category]);
-  const isUnavailable = !product?.is_available || productStock(product, 1) === 0;
+  const isUnavailable =
+    !product?.is_available || productStock(product, 1) === 0;
   const isDairy = isDairyProduct(product) || isServiceProduct(product);
+  const purchaseType = product?.purchase_type || "both";
+  const showOnce =
+    purchaseType === "one_time" || (purchaseType === "both" && isDairy);
+  const showSub =
+    purchaseType === "subscription" || (purchaseType === "both" && isDairy);
+  const showAdd = purchaseType === "both" && !isDairy;
+  const allImages = [product?.image, ...(product?.images || [])].filter(
+    Boolean,
+  ) as string[];
   const orderTotal = (Number(product?.price) || 0) * quantity;
 
   const handleAddToCart = () => {
@@ -402,12 +420,39 @@ useEffect(() => {
         </View>
 
         <View style={[s.hero, { backgroundColor: theme.bg }]}>
-          {product.image ? (
-            <Image
-              source={{ uri: product.image }}
-              style={s.heroImage}
-              resizeMode="cover"
-            />
+          {allImages.length > 0 ? (
+            <>
+              <ScrollView
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                style={{ width: HERO_W, height: 280 }}
+                onMomentumScrollEnd={(e) =>
+                  setHeroIndex(
+                    Math.round(e.nativeEvent.contentOffset.x / HERO_W),
+                  )
+                }
+              >
+                {allImages.map((uri, i) => (
+                  <Image
+                    key={i}
+                    source={{ uri }}
+                    style={{ width: HERO_W, height: 280 }}
+                    resizeMode="cover"
+                  />
+                ))}
+              </ScrollView>
+              {allImages.length > 1 && (
+                <View style={s.heroDots} pointerEvents="none">
+                  {allImages.map((_, i) => (
+                    <View
+                      key={i}
+                      style={[s.heroDot, i === heroIndex && s.heroDotActive]}
+                    />
+                  ))}
+                </View>
+              )}
+            </>
           ) : (
             <View
               style={[s.heroIcon, { backgroundColor: theme.accent + "22" }]}
@@ -464,16 +509,22 @@ useEffect(() => {
             <View style={s.infoBox}>
               <Ionicons name="cube-outline" size={18} color={Colors.primary} />
               <Text style={s.infoLabel}>Stock</Text>
-              <Text style={s.infoValue}>{ "Available"}</Text>
-           </View>
+              <Text style={s.infoValue}>{"Available"}</Text>
+            </View>
             <View style={s.infoBox}>
               <Ionicons
                 name="repeat-outline"
                 size={18}
                 color={Colors.primary}
               />
-              <Text style={s.infoLabel}>Order/Subcribe</Text>
-              <Text style={s.infoValue}>Subscribe or cart</Text>
+              <Text style={s.infoLabel}>Order Type</Text>
+              <Text style={s.infoValue}>
+                {purchaseType === "one_time"
+                  ? "Buy once"
+                  : purchaseType === "subscription"
+                    ? "Subscription only"
+                    : "Subscribe or cart"}
+              </Text>
             </View>
           </View>
 
@@ -594,35 +645,7 @@ useEffect(() => {
               <Text style={s.buyText}>Unavailable</Text>
             </LinearGradient>
           </View>
-        ) : isDairy ? (
-          <View style={s.footerRow}>
-            <TouchableOpacity
-              style={s.footerHalfBtn}
-              onPress={handleAddToCart}
-              activeOpacity={0.86}
-            >
-              <View style={[s.footerHalfInner, { backgroundColor: "#16A34A" }]}>
-                <Ionicons name="cart-outline" size={18} color="#fff" />
-                <Text style={s.buyText}>Add to Cart</Text>
-              </View>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={s.footerHalfBtn}
-              onPress={handleSubscribePress}
-              activeOpacity={0.86}
-            >
-              <LinearGradient
-                colors={[Colors.primary, "#F97316"]}
-                style={s.footerHalfInner}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-              >
-                <Ionicons name="repeat-outline" size={18} color="#fff" />
-                <Text style={s.buyText}>Subscribe</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
-        ) : (
+        ) : showAdd ? (
           <TouchableOpacity
             style={s.buyBtn}
             onPress={handleAddToCart}
@@ -638,6 +661,40 @@ useEffect(() => {
               <Text style={s.buyText}>Add to Cart</Text>
             </LinearGradient>
           </TouchableOpacity>
+        ) : (
+          <View style={s.footerRow}>
+            {showOnce && (
+              <TouchableOpacity
+                style={s.footerHalfBtn}
+                onPress={handleAddToCart}
+                activeOpacity={0.86}
+              >
+                <View
+                  style={[s.footerHalfInner, { backgroundColor: "#16A34A" }]}
+                >
+                  <Ionicons name="cart-outline" size={18} color="#fff" />
+                  <Text style={s.buyText}>Add to Cart</Text>
+                </View>
+              </TouchableOpacity>
+            )}
+            {showSub && (
+              <TouchableOpacity
+                style={s.footerHalfBtn}
+                onPress={handleSubscribePress}
+                activeOpacity={0.86}
+              >
+                <LinearGradient
+                  colors={[Colors.primary, "#F97316"]}
+                  style={s.footerHalfInner}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                >
+                  <Ionicons name="repeat-outline" size={18} color="#fff" />
+                  <Text style={s.buyText}>Subscribe</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            )}
+          </View>
         )}
       </View>
 
@@ -738,7 +795,12 @@ useEffect(() => {
               </View>
             ) : null}
 
-            {isServiceProduct(product) && pattern !== "buy_once" && <ServiceSlotPicker value={serviceSlot} onChange={setServiceSlot} />}
+            {isServiceProduct(product) && pattern !== "buy_once" && (
+              <ServiceSlotPicker
+                value={serviceSlot}
+                onChange={setServiceSlot}
+              />
+            )}
             <View style={s.totalRow}>
               <Text style={s.totalLabel}>Total</Text>
               <Text style={s.totalValue}>₹{orderTotal.toFixed(2)}</Text>
@@ -1118,4 +1180,20 @@ const s = StyleSheet.create({
     gap: 8,
     paddingVertical: 16,
   },
+  heroDots: {
+    position: "absolute",
+    bottom: 12,
+    left: 0,
+    right: 0,
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 5,
+  },
+  heroDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "rgba(255,255,255,0.55)",
+  },
+  heroDotActive: { backgroundColor: "#fff", width: 16 },
 });
