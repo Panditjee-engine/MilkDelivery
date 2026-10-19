@@ -1118,6 +1118,12 @@ export default function WalletScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
+      <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 6 }}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Go back" onPress={() => router.canGoBack() ? router.back() : router.replace("/(customer)/profile" as any)} style={{ width: 44, height: 44, justifyContent: "center", alignItems: "center" }}>
+          <Ionicons name="arrow-back" size={24} color={Colors.primary} />
+        </TouchableOpacity>
+        <Text style={{ fontSize: 18, fontWeight: "700", color: Colors.primary }}>My Wallet</Text>
+      </View>
       <ScrollView
         showsVerticalScrollIndicator={false}
         refreshControl={

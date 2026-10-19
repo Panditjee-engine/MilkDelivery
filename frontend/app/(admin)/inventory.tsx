@@ -31,6 +31,7 @@ import * as ImagePicker from "expo-image-picker";
 import { useFocusEffect, useRouter } from "expo-router";
 import SwipeToConfirm from "../../src/components/SwipeToConfirm";
 import { api } from "../../src/services/api";
+import { useProductVisibilitySync } from "../../src/hooks/useProductVisibilitySync";
 import AdminFeedbackModal from "../../src/components/productfeedback";
 import LoadingScreen from "../../src/components/LoadingScreen";
 import { useAuth } from "../../src/contexts/AuthContext";
@@ -230,6 +231,7 @@ type Product = {
   image?: string | null;
   images?: string[];
   is_available: boolean;
+  is_active?: boolean;
   product_type?: string;
   dietary_preference?: string;
   description?: string;
@@ -478,6 +480,13 @@ export default function InventoryScreen() {
   const [feedbackMap, setFeedbackMap] = useState<Record<string, { average_rating: number; total_reviews: number }>>({});
 
   // ── Fetch Data
+  useProductVisibilitySync(user?.id, async () => {
+    const data = await api.getProducts(undefined, undefined, true);
+    setProducts(data);
+    api.setScreenSnapshot("inventory-products", data);
+    setSelectedProduct(previous => previous ? data.find(item => getProductId(item) === getProductId(previous)) || null : null);
+  });
+
   const fetchData = useCallback(async () => {
     try {
       const [data, cutoffs, feedbackSummaries] = await Promise.all([
@@ -742,24 +751,25 @@ const openDetail = (product: Product) => {
     product: Product,
     productId: string,
     nextState: boolean,
+    field: "is_available" | "is_active" = "is_available",
   ) => {
     setProductAction({ id: productId, type: "availability" });
     try {
-      await api.updateProduct(productId, { is_available: nextState });
+      await api.updateProduct(productId, { [field]: nextState });
       setProducts((prev) =>
         prev.map((item) =>
           getProductId(item) === productId
-            ? { ...item, is_available: nextState }
+            ? { ...item, [field]: nextState }
             : item,
         ),
       );
       if (getProductId(selectedProduct) === productId) {
         setSelectedProduct((prev) =>
-          prev ? { ...prev, is_available: nextState } : prev,
+          prev ? { ...prev, [field]: nextState } : prev,
         );
       }
       showSnackbar(
-        nextState
+        field === "is_active" ? `${product.name} is now ${nextState ? "active" : "inactive"}` : nextState
           ? `${product.name} is now available`
           : `${product.name} is now unavailable`,
         "success",
@@ -807,8 +817,8 @@ const openDetail = (product: Product) => {
     Alert.alert(
       nextState ? "Make Product Available?" : "Make Product Unavailable?",
       nextState
-        ? `${product.name} will be visible for orders.`
-        : `${product.name} will be hidden from orders.`,
+        ? `${product.name} will be available. Inactive products remain hidden.`
+        : `${product.name} will be marked unavailable. Use Mark Inactive to hide it from customers.`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -1414,22 +1424,22 @@ const openDetail = (product: Product) => {
             <View
               style={[
                 styles.metaChip,
-                { backgroundColor: p.is_available ? C.successBg : "#FFF0F0" },
+                { backgroundColor: p.is_active !== false ? C.successBg : "#FFF0F0" },
               ]}
             >
               <View
                 style={[
                   styles.statusDot,
-                  { backgroundColor: p.is_available ? C.success : "#FF6B6B" },
+                  { backgroundColor: p.is_active !== false ? C.success : "#FF6B6B" },
                 ]}
               />
               <Text
                 style={[
                   styles.metaChipText,
-                  { color: p.is_available ? "#16A34A" : "#DC2626" },
+                  { color: p.is_active !== false ? "#16A34A" : "#DC2626" },
                 ]}
               >
-                {p.is_available ? "Available" : "Unavailable"}
+                {p.is_active === false ? "Inactive" : "Active"}
               </Text>
             </View>
           </View>
@@ -1588,6 +1598,21 @@ const openDetail = (product: Product) => {
               <Text style={styles.detailEditBtnText}>Edit Product</Text>
             </TouchableOpacity>
 
+            <TouchableOpacity
+              style={[styles.detailSmallBtn, { backgroundColor: selectedProduct?.is_active === false ? C.successBg : "#FFF0F0", marginBottom: 10 }]}
+              disabled={availabilityBusy || deleteBusy}
+              onPress={() => {
+                if (!selectedProduct || !selectedProductId) return;
+                const active = selectedProduct.is_active === false;
+                Alert.alert(active ? "Activate Product?" : "Make Product Inactive?",
+                  active ? "This product will appear in the customer catalog again." : "This product will be hidden from customers. Existing orders and subscriptions will not be changed.",
+                  [{ text: "Cancel", style: "cancel" }, { text: active ? "Activate" : "Make Inactive", style: active ? "default" : "destructive",
+                    onPress: () => performAvailabilityUpdate(selectedProduct, selectedProductId, active, "is_active") }]);
+              }}
+            >
+              <Ionicons name={selectedProduct?.is_active === false ? "eye-outline" : "eye-off-outline"} size={18} color={C.success} />
+              <Text style={styles.detailSmallBtnText}>{availabilityBusy ? "Updating..." : selectedProduct?.is_active === false ? "Mark Active" : "Mark Inactive"}</Text>
+            </TouchableOpacity>
             <View style={styles.detailSmallBtnsRow}>
               <TouchableOpacity
                 style={[
@@ -1879,7 +1904,7 @@ const openDetail = (product: Product) => {
             style={[
               styles.statusPill,
               {
-                backgroundColor: product.is_available
+                backgroundColor: product.is_active !== false
                   ? C.successBg
                   : "#FFF0F0",
               },
@@ -1889,7 +1914,7 @@ const openDetail = (product: Product) => {
               style={[
                 styles.statusDot,
                 {
-                  backgroundColor: product.is_available
+                  backgroundColor: product.is_active !== false
                     ? C.success
                     : "#FF6B6B",
                 },
@@ -1898,10 +1923,10 @@ const openDetail = (product: Product) => {
             <Text
               style={[
                 styles.statusText,
-                { color: product.is_available ? "#16A34A" : "#DC2626" },
+                { color: product.is_active !== false ? "#16A34A" : "#DC2626" },
               ]}
             >
-              {product.is_available ? "Available" : "Unavailable"}
+              {product.is_active === false ? "Inactive" : "Active"}
             </Text>
           </View>
         </View>

@@ -2175,6 +2175,20 @@ export default function AdminSettingsScreen() {
           </TouchableOpacity>
         </View>
 
+        <View style={s.section}>
+          <SectionHeader title="Gaumali" />
+          <View style={s.card}>
+            <SettingRow
+              icon="leaf-outline"
+              iconBg="#E8F5EE"
+              iconColor="#287A52"
+              label="Gaumali Management"
+              value="Services, appointments & Malis"
+              onPress={() => router.push("/(admin)/gaumali" as any)}
+            />
+          </View>
+        </View>
+
         {/* ── System Configuration */}
         <View style={s.section}>
           <SectionHeader title="System Configuration" />

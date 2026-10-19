@@ -123,6 +123,7 @@ export default function AdminLayout() {
             href: null,
           }}
         />
+        <Tabs.Screen name="gaumali" options={{ href: null }} />
         <Tabs.Screen
           name="content"
           options={{

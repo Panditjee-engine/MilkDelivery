@@ -1107,17 +1107,31 @@ class ApiService {
 
   async getCatalogProducts(adminId?: string, category?: string) {
     const params = new URLSearchParams();
+    params.append("fresh", "true");
 
     if (adminId) params.append("admin_id", adminId);
     if (category) params.append("category", category);
     params.append("_ts", Date.now().toString());
 
     const query = params.toString() ? `?${params.toString()}` : "";
-    return this.request<any[]>(`/catalog/products${query}`);
+    const rows = await this.request<any[]>(`/catalog/products${query}`);
+    return rows.filter(product => ![false, 0, "false", "0"].includes(product.is_active));
   }
 
-  async getProducts(adminId?: string, category?: string) {
+  async getProductVisibility(adminId?: string) {
+    return this.request<Array<{ id: string; is_active: boolean }>>(`/catalog/product-visibility${adminId ? `?admin_id=${encodeURIComponent(adminId)}` : ""}`);
+  }
+
+  async getPopularProductIds(adminId?: string) {
+    return this.request<string[]>(`/catalog/popular-products${adminId ? `?admin_id=${encodeURIComponent(adminId)}` : ""}`);
+  }
+
+  async getProducts(adminId?: string, category?: string, fresh = false) {
     const params = new URLSearchParams();
+    if (fresh) {
+      params.append("fresh", "true");
+      params.append("_ts", Date.now().toString());
+    }
 
     if (adminId) params.append("admin_id", adminId);
     if (category) params.append("category", category);

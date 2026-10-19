@@ -1,7 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
-import ServiceSlotPicker, { isServiceProduct } from "../../src/components/ServiceSlotPicker";
+import NewProductBadge from "../../src/components/NewProductBadge";
+import { useProductAgeClock } from "../../src/hooks/useProductAgeClock";
+import ServiceSlotPicker, { isServiceProduct, productStock } from "../../src/components/ServiceSlotPicker";
 import { useIsFocused } from "@react-navigation/native";
-import { useRouter } from "expo-router";
+import { useProductVisibilitySync } from "../../src/hooks/useProductVisibilitySync";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -77,16 +80,18 @@ function ProductSearchCard({
   product,
   onPress,
   onBuyNow,
+  compact = false,
 }: {
   product: any;
   onPress: () => void;
   onBuyNow: () => void;
+  compact?: boolean;
 }) {
   const theme = getCategoryTheme(product.category);
   const isDairy = DAIRY_CATEGORIES.includes(product.category?.toLowerCase());
 
   return (
-    <TouchableOpacity style={s.productCard} activeOpacity={0.88} onPress={onPress}>
+    <TouchableOpacity style={[s.productCard, compact && { width: Math.min(140, CARD_WIDTH) }]} activeOpacity={0.88} onPress={onPress}>
       <View style={[s.imageBox, { backgroundColor: theme.bg }]}>
         {product.image ? (
           <Image source={{ uri: product.image }} style={s.image} resizeMode="cover" />
@@ -103,6 +108,7 @@ function ProductSearchCard({
         )}
       </View>
       <View style={s.productBody}>
+        <NewProductBadge product={product} />
         <Text style={s.productName} numberOfLines={2}>{product.name}</Text>
         <View style={s.productFooter}>
           <Text style={[s.price, { color: theme.accent }]}>₹{product.price}</Text>
@@ -110,13 +116,14 @@ function ProductSearchCard({
         </View>
         <TouchableOpacity
           style={[s.buyNowBtn, { backgroundColor: theme.accent }]}
+          disabled={productStock(product) === 0}
           onPress={(event) => {
             event.stopPropagation?.();
             onBuyNow();
           }}
           activeOpacity={0.86}
         >
-          <Text style={s.buyNowText}>Buy Now</Text>
+          <Text style={s.buyNowText}>{productStock(product) === 0 ? "Out of Stock" : "Buy Now"}</Text>
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
@@ -127,7 +134,11 @@ export default function ProductSearchScreen() {
   const router = useRouter();
   const isFocused = useIsFocused();
   const { user } = useAuth();
+  useProductAgeClock();
   const [query, setQuery] = useState("");
+  const params = useLocalSearchParams<{ query?: string }>();
+  const [viewCategory, setViewCategory] = useState<string | null>(null);
+  useEffect(() => { if (typeof params.query === "string") setQuery(params.query); }, [params.query]);
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
@@ -151,6 +162,12 @@ export default function ProductSearchScreen() {
     return () => sub.remove();
   }, [router])
 );
+
+  useProductVisibilitySync((user as any)?.admin_id ?? (user as any)?.referral_admin_id, async () => {
+    const rows = await api.getCatalogProducts((user as any)?.admin_id ?? (user as any)?.referral_admin_id);
+    setProducts(rows);
+    setSelectedProduct(previous => previous ? rows.find(row => row.id === previous.id) || null : null);
+  });
 
   const loadData = useCallback(async () => {
     try {
@@ -282,6 +299,7 @@ export default function ProductSearchScreen() {
   };
   const handleCreateOrder = async () => {
     if (!selectedProduct) return;
+    if (productStock(selectedProduct) === 0) { setFeedback("This product is out of stock."); return; }
     if (pattern === "custom" && customDays.length === 0) {
       setFeedback("Please choose at least one custom delivery day.");
       return;
@@ -397,7 +415,7 @@ export default function ProductSearchScreen() {
   return (
     <SafeAreaView style={s.container} edges={["top"]}>
       <FlatList
-        data={groupedProducts}
+        data={viewCategory ? groupedProducts.filter(item => item.value === viewCategory) : groupedProducts}
         keyExtractor={(item) => item.value}
         ListHeaderComponent={ListHeader}
         contentContainerStyle={s.content}
@@ -412,21 +430,23 @@ export default function ProductSearchScreen() {
         renderItem={({ item }) => (
           <View style={s.categorySection}>
             <View style={s.categoryHeader}>
-              <Text style={s.categoryTitle}>{item.label}</Text>
+              <Text style={[s.categoryTitle, { flexShrink: 1 }]} numberOfLines={1}>{item.label}</Text>
               <View style={s.countBadge}>
                 <Text style={s.countText}>{item.items.length}</Text>
               </View>
+              <TouchableOpacity style={{ marginLeft: "auto", padding: 8 }} onPress={() => setViewCategory(viewCategory ? null : item.value)}><Text style={s.clearText}>{viewCategory ? "All Categories" : "View All"}</Text></TouchableOpacity>
             </View>
-            <View style={s.grid}>
-              {item.items.map((product: any) => (
+            <ScrollView horizontal={!viewCategory && !query.trim()} scrollEnabled={!viewCategory && !query.trim()} showsHorizontalScrollIndicator={false} contentContainerStyle={[s.grid, !viewCategory && !query.trim() && { flexWrap: "nowrap" }]}>
+              {(viewCategory || query.trim() ? item.items : item.items.slice(0, 10)).map((product: any) => (
                 <ProductSearchCard
+                  compact={!viewCategory && !query.trim()}
                   key={product.id?.toString()}
                   product={product}
                   onPress={() => openProductDetails(product)}
                   onBuyNow={() => openProduct(product)}
                 />
               ))}
-            </View>
+            </ScrollView>
           </View>
         )}
       />
@@ -628,7 +648,7 @@ const s = StyleSheet.create({
   productCard: {
     width: CARD_WIDTH,
     backgroundColor: "#fff",
-    borderRadius: 18,
+    borderRadius: 8,
     overflow: "hidden",
     shadowColor: "#000",
     shadowOpacity: 0.06,
@@ -636,7 +656,7 @@ const s = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
     elevation: 2,
   },
-  imageBox: { height: 112, justifyContent: "center", alignItems: "center" },
+  imageBox: { height: 76, justifyContent: "center", alignItems: "center" },
   image: { width: "100%", height: "100%" },
   iconCircle: { width: 48, height: 48, borderRadius: 24, justifyContent: "center", alignItems: "center" },
   subBadge: {
@@ -652,9 +672,9 @@ const s = StyleSheet.create({
     paddingVertical: 3,
   },
   subBadgeText: { fontSize: 8, fontWeight: "900", color: "#fff" },
-  productBody: { padding: 10, paddingBottom: 12 },
-  productName: { fontSize: 13, fontWeight: "900", color: "#111827", minHeight: 34 },
-  productFooter: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 8 },
+  productBody: { padding: 6, paddingBottom: 6 },
+  productName: { fontSize: 12, lineHeight: 16, fontWeight: "900", color: "#111827", minHeight: 32 },
+  productFooter: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 4 },
   price: { fontSize: 15, fontWeight: "900" },
   unit: { fontSize: 10.5, fontWeight: "800" },
   buyNowBtn: {
