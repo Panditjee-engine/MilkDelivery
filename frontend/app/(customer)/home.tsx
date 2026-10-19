@@ -1,4 +1,7 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import NewProductBadge from "../../src/components/NewProductBadge";
+import { newlyAddedProducts } from "../../src/utils/newProducts";
+import { useProductAgeClock } from "../../src/hooks/useProductAgeClock";
 import {
   View,
   Text,
@@ -21,6 +24,8 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useIsFocused } from "@react-navigation/native";
+import { useProductVisibilitySync } from "../../src/hooks/useProductVisibilitySync";
+import { productStock } from "../../src/components/ServiceSlotPicker";
 import Svg, {
   Rect,
   Circle,
@@ -427,7 +432,7 @@ const brandStyles = StyleSheet.create({
 });
 
 const POPULAR_GRID_GAP = 12;
-const POPULAR_CARD_WIDTH = (SCREEN_WIDTH - 40 - POPULAR_GRID_GAP) / 2;
+const POPULAR_CARD_WIDTH = Math.min(140, (SCREEN_WIDTH - 40 - POPULAR_GRID_GAP) / 2);
 
 // ─── Product Details Modal
 function ProductDetailsModal({
@@ -656,6 +661,7 @@ function ProductDetailsModal({
           <TouchableOpacity
             style={[modalStyles.buyNowBtn, { backgroundColor: theme.accent }]}
             onPress={onBuyNow}
+            disabled={productStock(product) === 0}
             activeOpacity={0.85}
           >
             <LinearGradient
@@ -665,7 +671,7 @@ function ProductDetailsModal({
               end={{ x: 1, y: 1 }}
             >
               <Ionicons name="cart-outline" size={18} color="#fff" />
-              <Text style={modalStyles.buyNowText}>Buy Now</Text>
+              <Text style={modalStyles.buyNowText}>{productStock(product) === 0 ? "Out of Stock" : "Buy Now"}</Text>
             </LinearGradient>
           </TouchableOpacity>
         </View>
@@ -1157,6 +1163,8 @@ function ProductGridCard({
           </View>
         </View>
         <View style={productGridStyles.info}>
+          <NewProductBadge product={product} />
+          {productStock(product) === 0 && <Text style={{ color: "#DC2626", fontWeight: "700", fontSize: 12 }}>Out of Stock</Text>}
           {adminName && (
             <View style={productGridStyles.adminBadge}>
               <Ionicons name="storefront-outline" size={10} color="#16a34a" />
@@ -1245,7 +1253,7 @@ const productGridStyles = StyleSheet.create({
   card: {
     width: POPULAR_CARD_WIDTH,
     backgroundColor: "#fff",
-    borderRadius: 18,
+    borderRadius: 8,
     overflow: "hidden",
     borderWidth: 1,
     borderColor: "transparent",
@@ -1265,13 +1273,13 @@ const productGridStyles = StyleSheet.create({
     shadowColor: "#dc2626",
   },
   imgBox: {
-    height: 105,
+    height: 76,
     justifyContent: "center",
     alignItems: "center",
     overflow: "hidden",
   },
   img: { width: "100%", height: "100%" },
-  info: { padding: 10, paddingBottom: 12 },
+  info: { padding: 6, paddingBottom: 6 },
   adminBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -1284,12 +1292,12 @@ const productGridStyles = StyleSheet.create({
     color: "#16a34a",
     maxWidth: 110,
   },
-  name: { fontSize: 13, fontWeight: "800", color: "#111", minHeight: 34 },
+  name: { fontSize: 12, lineHeight: 16, fontWeight: "800", color: "#111", minHeight: 32 },
   footer: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginTop: 8,
+    marginTop: 4,
   },
   unit: { fontSize: 10.5, color: "#aaa", fontWeight: "700", maxWidth: 58 },
   price: { fontSize: 15, fontWeight: "900", color: Colors.primary },
@@ -1443,6 +1451,30 @@ export default function CustomerHome() {
   const [walletBalance, setWalletBalance] = useState(0);
   const [recentOrder, setRecentOrder] = useState<any>(null);
   const [featuredProducts, setFeaturedProducts] = useState<any[]>([]);
+  const [browseProducts, setBrowseProducts] = useState<any[]>([]);
+  const [popularIds, setPopularIds] = useState<string[]>([]);
+  const [recentBoughtIds, setRecentBoughtIds] = useState<string[]>([]);
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  useEffect(() => {
+    if (!isFocused) return;
+    let active = true;
+    Promise.all([api.getPopularProductIds((user as any)?.admin_id ?? undefined).catch(() => []), api.getProductSearchHistory().catch(() => [])]).then(([popular, searches]) => {
+      if (active) { setPopularIds(popular); setRecentSearches(searches); }
+    });
+    return () => { active = false; };
+  }, [isFocused, user?.id, (user as any)?.admin_id]);
+  const productAgeNow = useProductAgeClock();
+  const homeSections = useMemo(() => {
+    const byId = new Map(browseProducts.map(product => [String(product.id), product]));
+    const groups: Record<string, any[]> = {};
+    browseProducts.forEach(product => { const key = product.category || 'other'; (groups[key] ||= []).push(product); });
+    return [
+      { key: '__new', label: 'Newly Added', items: newlyAddedProducts(browseProducts, productAgeNow) },
+      { key: '__popular', label: 'Popular Products', items: popularIds.map(id => byId.get(id)).filter(Boolean) },
+      { key: '__recent', label: 'Recently Bought', items: recentBoughtIds.map(id => byId.get(id)).filter(Boolean) },
+      ...Object.entries(groups).sort(([a], [b]) => Number(!['milk', 'dairy'].includes(a)) - Number(!['milk', 'dairy'].includes(b))).map(([key, items]) => ({ key, label: key.replace(/_/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase()), items })),
+    ].filter(section => section.items.length);
+  }, [browseProducts, popularIds, recentBoughtIds, productAgeNow]);
   const [adminsList, setAdminsList] = useState<any[]>([]);
   const [contentSlides, setContentSlides] = useState<BannerSlide[]>([]);
   const [orderCutoffs, setOrderCutoffs] = useState<OrderCutoffRule[]>([]);
@@ -1481,6 +1513,13 @@ export default function CustomerHome() {
   const walletAnim = useRef(new Animated.Value(0)).current;
   const headerAnim = useRef(new Animated.Value(0)).current;
 
+  useProductVisibilitySync((user as any)?.admin_id ?? undefined, async () => {
+    const rows = await api.getCatalogProducts((user as any)?.admin_id ?? undefined);
+    setFeaturedProducts(rows.slice(0, 3));
+    setBrowseProducts(rows);
+    setSelectedProduct(previous => previous ? rows.find(row => row.id === previous.id) || null : null);
+  });
+
   const fetchData = async (isInitial = false) => {
     try {
       const linkedAdminId = (user as any)?.admin_id ?? undefined;
@@ -1500,9 +1539,15 @@ export default function CustomerHome() {
         setAdminsList(adminsData.value.map((a: any) => ({ ...a, id: a.id || a._id })));
       }
       if (walletData.status === "fulfilled") setWalletBalance(walletData.value.balance);
-      if (ordersData.status === "fulfilled") setRecentOrder(ordersData.value?.[0] || null);
+      if (ordersData.status === "fulfilled") {
+        setRecentOrder(ordersData.value?.[0] || null);
+        const orders = [...(ordersData.value || [])].filter((order: any) => order.status === 'delivered' || (!['cancelled', 'canceled', 'rejected', 'skipped'].includes(order.status) && ['paid', 'settled'].includes(order.payment_status)))
+          .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        setRecentBoughtIds([...new Set<string>(orders.flatMap((order: any) => (order.items || []).map((item: any) => String(item.product_id))))]);
+      }
       if (productsData.status === "fulfilled") {
         const productList = productsData.value || [];
+        setBrowseProducts(productList);
         setFeaturedProducts(productList.slice(0, 3));
         setOrderCutoffs(await fetchCutoffsForProducts(productList, linkedAdminId));
         setDeliveryWindows(await fetchDeliveryWindowsForProducts(productList, linkedAdminId));
@@ -1781,34 +1826,12 @@ export default function CustomerHome() {
         </View>
 
         {/* ── Popular Items ── */}
-        {featuredProducts.length > 0 && (
-          <View style={s.sectionWrap}>
-            <View style={s.sectionHeaderRow}>
-              <Text style={s.sectionTitle}>Popular Items</Text>
-              <TouchableOpacity onPress={goToCatalog} activeOpacity={0.7}>
-                <Text style={s.seeAllText}>See all →</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={s.popularGrid}>
-              {featuredProducts.map((product, i) => {
-                const admin = adminsList.find((a) => a.id === product.admin_id);
-                const adminName = admin?.shop_name || admin?.name || undefined;
-                return (
-                  <ProductGridCard
-                    key={product.id}
-                    product={product}
-                    index={i}
-                    adminName={adminName}
-                    cutoffRule={getOrderCutoffForProduct(product, orderCutoffs)}
-                    deliveryWindow={getDeliveryWindowForProduct(product, deliveryWindows)}
-                    onOpenDetails={() => openProductDetails(product)}
-                  />
-                );
-              })}
-              <ExploreAllProductsCard onPress={goToCatalog} />
-            </View>
-          </View>
-        )}
+        {recentSearches.length > 0 && <View style={s.sectionWrap}><Text style={s.sectionTitle}>Recent Searches</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 10 }}>{recentSearches.slice(0, 8).map(term => <TouchableOpacity key={term} onPress={() => router.push({ pathname: '/(customer)/product-search', params: { query: term } } as any)} style={{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, backgroundColor: '#fff' }}><Text style={{ color: Colors.primary, fontSize: 12 }}>{term}</Text></TouchableOpacity>)}</ScrollView></View>}
+        {homeSections.map(section => <View key={section.key} style={s.sectionWrap}>
+          <View style={s.sectionHeaderRow}><Text style={s.sectionTitle}>{section.label}</Text><TouchableOpacity onPress={() => router.push({ pathname: '/(customer)/catalog', params: section.key.startsWith('__') ? { collection: section.key } : { category: section.key } } as any)}><Text style={s.seeAllText}>View All</Text></TouchableOpacity></View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingBottom: 6 }}>{section.items.slice(0, 10).map((product, index) => <ProductGridCard key={product.id} product={product} index={index} cutoffRule={getOrderCutoffForProduct(product, orderCutoffs)} deliveryWindow={getDeliveryWindowForProduct(product, deliveryWindows)} onOpenDetails={() => openProductDetails(product)} />)}</ScrollView>
+        </View>)}
+        <TouchableOpacity onPress={goToCatalog} style={{ marginHorizontal: 20, paddingVertical: 14, alignItems: 'center' }}><Text style={{ color: Colors.primary, fontWeight: '700' }}>Explore All Products</Text></TouchableOpacity>
 
         {/* ── Animated Brand Footer ── */}
         <BrandFooter />

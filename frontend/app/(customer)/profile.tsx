@@ -1177,6 +1177,22 @@ export default function ProfileScreen() {
           </View>
         </View>
         {/* ── Vacation Mode (Card visual design untouched) ── */}
+        <TouchableOpacity style={styles.card} accessibilityRole="button" onPress={() => router.push("/(customer)/gaumali-history" as any)} activeOpacity={0.85}>
+          <View style={[styles.cardHeader, { marginBottom: 0 }]}>
+            <View style={[styles.cardIconBox, { backgroundColor: "#EAF5EC" }]}><Ionicons name="calendar-outline" size={20} color={Colors.primary} /></View>
+            <Text style={[styles.cardTitle, { flex: 1 }]}>Gaumali Booking History</Text>
+            <Ionicons name="chevron-forward" size={20} color={Colors.primary} />
+          </View>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.card} accessibilityRole="button" onPress={() => router.push("/(customer)/wallet" as any)} activeOpacity={0.85}>
+          <View style={[styles.cardHeader, { marginBottom: 0 }]}>
+            <View style={[styles.cardIconBox, { backgroundColor: "#FFF4E6" }]}>
+              <Ionicons name="wallet-outline" size={20} color={Colors.primary} />
+            </View>
+            <Text style={[styles.cardTitle, { flex: 1 }]}>My Wallet</Text>
+            <Ionicons name="chevron-forward" size={20} color={Colors.primary} />
+          </View>
+        </TouchableOpacity>
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <View style={[styles.cardIconBox, { backgroundColor: "#FFF4E6" }]}>

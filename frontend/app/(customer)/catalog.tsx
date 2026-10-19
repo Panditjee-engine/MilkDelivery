@@ -1,4 +1,7 @@
 import ServiceSlotPicker, { isServiceProduct, productStock } from "../../src/components/ServiceSlotPicker";
+import NewProductBadge from "../../src/components/NewProductBadge";
+import { newlyAddedProducts } from "../../src/utils/newProducts";
+import { useProductAgeClock } from "../../src/hooks/useProductAgeClock";
 import React, {
   useState,
   useEffect,
@@ -26,6 +29,7 @@ import {
   AppState,
 } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
+import { useProductVisibilitySync } from "../../src/hooks/useProductVisibilitySync";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -1182,6 +1186,7 @@ function ProductCard({
   cutoffRule,
   deliveryWindow,
   rating,
+  compact = false,
 }: {
   product: any;
   onOpenDetails: () => void;
@@ -1192,6 +1197,7 @@ function ProductCard({
   cutoffRule?: OrderCutoffRule | null;
   deliveryWindow?: DeliveryWindowRule | null;
   rating?: { average: number; total: number } | null;
+  compact?: boolean;
 }) {
   const theme = getCategoryTheme(product.category);
   const isDairy = isDairyProduct(product) || isServiceProduct(product);
@@ -1204,6 +1210,7 @@ function ProductCard({
     <TouchableOpacity
       style={[
         cardS.card,
+        compact && { width: Math.min(140, CARD_WIDTH) },
         cutoffText && cardS.cutoffCard,
         cutoffPassed && cardS.cutoffCardBlocked,
       ]}
@@ -1261,6 +1268,7 @@ function ProductCard({
         )}
       </View>
       <View style={cardS.body}>
+        <NewProductBadge product={product} />
         <View style={cardS.nameRow}>
           <Text style={cardS.name} numberOfLines={2}>
             {product.name}
@@ -1307,7 +1315,7 @@ function ProductCard({
       {noStock ? (
         <View style={cardS.actionRow}>
           <View style={cardS.oosBtn}>
-            <Text style={cardS.oosBtnTxt}>Unavailable</Text>
+            <Text style={cardS.oosBtnTxt}>Out of Stock</Text>
           </View>
         </View>
       ) : isDairy ? (
@@ -1384,7 +1392,7 @@ const cardS = StyleSheet.create({
     borderColor: "#FECACA",
     shadowColor: T.red,
   },
-  imgBox: { height: 112, justifyContent: "center", alignItems: "center" },
+  imgBox: { height: 76, justifyContent: "center", alignItems: "center" },
   img: { width: "100%", height: "100%" },
   iconBox: {
     width: 44,
@@ -1472,7 +1480,7 @@ const cardS = StyleSheet.create({
     alignItems: "center",
   },
   qtyBadgeTxt: { fontSize: 9, fontWeight: "800", color: "#fff" },
-  body: { padding: 10, paddingBottom: 7 },
+  body: { padding: 6, paddingBottom: 4 },
   nameRow: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -1615,6 +1623,8 @@ function CategorySection({
   cutoffRules,
   deliveryWindows,
   ratings,
+  expanded = false,
+  onViewAll,
 }: {
   value: string;
   label: string;
@@ -1627,26 +1637,22 @@ function CategorySection({
   cutoffRules: OrderCutoffRule[];
   deliveryWindows: DeliveryWindowRule[];
   ratings: Record<string, { average: number; total: number }>;
+  expanded?: boolean;
+  onViewAll?: () => void;
 }) {
   const theme = getCategoryTheme(value);
-  const isDairyCat = DAIRY_CATEGORIES.includes(value.toLowerCase());
   return (
     <View style={secS.section}>
       <View style={secS.header}>
         <View style={[secS.dot, { backgroundColor: theme.accent }]} />
-        <Text style={secS.title}>{label}</Text>
+        <Text style={[secS.title, { flexShrink: 1 }]} numberOfLines={1}>{label}</Text>
         <Text style={[secS.count, { color: theme.accent }]}>
           {items.length}
         </Text>
-        {isDairyCat && (
-          <View style={secS.subPill}>
-            <Ionicons name="repeat-outline" size={8} color={T.amber} />
-            <Text style={secS.subPillTxt}>Sub</Text>
-          </View>
-        )}
+        {onViewAll && <TouchableOpacity onPress={onViewAll} accessibilityRole="button" style={{ marginLeft: "auto", paddingVertical: 8, paddingLeft: 10 }}><Text style={{ color: Colors.primary, fontSize: 12, fontWeight: "700" }}>View All</Text></TouchableOpacity>}
       </View>
-      <View style={secS.list}>
-        {items.map((item) => {
+      <ScrollView horizontal={!expanded} scrollEnabled={!expanded} showsHorizontalScrollIndicator={false} contentContainerStyle={[secS.list, !expanded && { flexWrap: "nowrap", paddingBottom: 4 }]}>
+        {(expanded ? items : items.slice(0, 10)).map((item) => {
           const qty = cart
             .filter((c) => c.product.id === item.id)
             .reduce((s, c) => s + c.quantity, 0);
@@ -1654,6 +1660,7 @@ function CategorySection({
             <ProductCard
               key={item.id?.toString()}
               product={item}
+              compact={!expanded}
               cartQty={qty}
               onOpenDetails={() => onOpenDetails(item)}
               onBuyOnce={() => onBuyOnce(item)}
@@ -1665,12 +1672,12 @@ function CategorySection({
             />
           );
         })}
-      </View>
+      </ScrollView>
     </View>
   );
 }
 const secS = StyleSheet.create({
-  section: { marginTop: 22 },
+  section: { marginTop: 16 },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -4040,6 +4047,10 @@ const [linkedAdminId, setLinkedAdminId] = useState<string | null>(
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [discoveryView, setDiscoveryView] = useState<string | null>(null);
+  const [popularIds, setPopularIds] = useState<string[]>([]);
+  const [recentBoughtIds, setRecentBoughtIds] = useState<string[]>([]);
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -4100,10 +4111,16 @@ const [linkedAdminId, setLinkedAdminId] = useState<string | null>(
   const newSlidesScrollRef = useRef<ScrollView>(null);
   const activeNewSlideRef = useRef(0);
   const isFocused = useIsFocused();
-  const { addToCartProduct, addToCartQty } = useLocalSearchParams<{
+  const { addToCartProduct, addToCartQty, category: routeCategory, collection } = useLocalSearchParams<{
     addToCartProduct?: string;
     addToCartQty?: string;
+    category?: string;
+    collection?: string;
   }>();
+  useEffect(() => {
+    if (collection === '__popular' || collection === '__recent' || collection === '__new') { setSelectedCategory(null); setDiscoveryView(collection); }
+    else if (typeof routeCategory === 'string') { setSelectedCategory(routeCategory || null); setDiscoveryView(null); }
+  }, [routeCategory, collection]);
 
   const tomorrow = useMemo(() => {
     const d = new Date();
@@ -4322,6 +4339,13 @@ useEffect(() => {
   }, [saveCartNow]);
 
 
+  useProductVisibilitySync(linkedAdminId ?? undefined, async () => {
+    const rows = await api.getCatalogProducts(linkedAdminId ?? undefined, selectedCategory || undefined);
+    setProducts(rows);
+    setQuickAddProduct(previous => previous ? rows.find(row => getProductId(row) === getProductId(previous)) || null : null);
+    setSubscribeProduct(previous => previous ? rows.find(row => getProductId(row) === getProductId(previous)) || null : null);
+  });
+
   const fetchData = useCallback(async () => {
     try {
       const [prods, cats, wallet, content, appSettings] = await Promise.all([
@@ -4362,6 +4386,24 @@ if (!cutoffsLoadedRef.current) {
       setRefreshing(false);
     }
   }, [selectedCategory, fetchSubs, linkedAdminId, fetchRatings]);
+
+  useEffect(() => {
+    if (!isFocused) return;
+    let current = true;
+    Promise.all([
+      api.getPopularProductIds(linkedAdminId ?? undefined).catch(() => []),
+      api.getOrders().catch(() => []),
+      api.getProductSearchHistory().catch(() => []),
+    ]).then(([popular, orders, searches]) => {
+      if (!current) return;
+      setPopularIds(popular);
+      const bought = [...orders].filter((order: any) => order.status === "delivered" || (!['cancelled', 'canceled', 'rejected', 'skipped'].includes(order.status) && ['paid', 'settled'].includes(order.payment_status)))
+        .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      setRecentBoughtIds([...new Set<string>(bought.flatMap((order: any) => (order.items || []).map((item: any) => String(item.product_id))))]);
+      setRecentSearches(searches);
+    });
+    return () => { current = false; };
+  }, [isFocused, linkedAdminId, user?.id]);
 
   useEffect(() => {
     if (!products.length) return;
@@ -4849,6 +4891,17 @@ useEffect(() => {
       });
   }, [products, selectedCategory, categories]);
 
+  const productAgeNow = useProductAgeClock();
+  const discoverySections = useMemo(() => {
+    const byId = new Map(products.map(product => [String(resolveProductId(product)), product]));
+    return [
+      { value: "__new", label: "Newly Added", items: newlyAddedProducts(products, productAgeNow) },
+      { value: "__popular", label: "Popular Products", items: popularIds.map(id => byId.get(id)).filter(Boolean) },
+      { value: "__recent", label: "Recently Bought", items: recentBoughtIds.map(id => byId.get(id)).filter(Boolean) },
+    ].filter(section => section.items.length > 0);
+  }, [products, popularIds, recentBoughtIds, productAgeNow]);
+  const sections = discoveryView ? discoverySections.filter(section => section.value === discoveryView) : selectedCategory ? grouped : [...discoverySections, ...grouped];
+
   const newSlides = useMemo(
     () => (catalogSlides.length > 0 ? catalogSlides : NEWLY_ADDED_SLIDES),
     [catalogSlides],
@@ -5016,7 +5069,7 @@ useEffect(() => {
       >
         <TouchableOpacity
           style={[mainS.chip, !selectedCategory && mainS.chipActive]}
-          onPress={() => setSelectedCategory(null)}
+          onPress={() => { setSelectedCategory(null); setDiscoveryView(null); }}
         >
           <Text
             style={[mainS.chipTxt, !selectedCategory && mainS.chipTxtActive]}
@@ -5031,7 +5084,7 @@ useEffect(() => {
               mainS.chip,
               selectedCategory === cat.value && mainS.chipActive,
             ]}
-            onPress={() => setSelectedCategory(cat.value)}
+            onPress={() => { setSelectedCategory(cat.value); setDiscoveryView(null); }}
           >
             <Text
               style={[
@@ -5044,13 +5097,19 @@ useEffect(() => {
           </TouchableOpacity>
         ))}
       </ScrollView>
+      {!selectedCategory && !discoveryView && recentSearches.length > 0 && <View style={{ paddingTop: 12 }}>
+        <Text style={{ paddingHorizontal: 20, fontSize: 14, fontWeight: "700", color: T.text }}>Recent Searches</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 10, gap: 8 }}>
+          {recentSearches.slice(0, 8).map(term => <TouchableOpacity key={term} style={mainS.chip} onPress={() => router.push({ pathname: "/(customer)/product-search", params: { query: term } } as any)}><Text style={mainS.chipTxt}>{term}</Text></TouchableOpacity>)}
+        </ScrollView>
+      </View>}
     </>
   );
 
   return (
     <SafeAreaView style={mainS.container}>
       <FlatList
-        data={grouped}
+        data={sections}
         keyExtractor={(i) => i.value}
         ListHeaderComponent={ListHeader}
         ListEmptyComponent={
@@ -5077,6 +5136,8 @@ useEffect(() => {
             cutoffRules={orderCutoffs}
             deliveryWindows={deliveryWindows}
             ratings={ratings}
+            expanded={Boolean(selectedCategory || discoveryView)}
+            onViewAll={!selectedCategory && !discoveryView ? () => { if (item.value.startsWith("__")) setDiscoveryView(item.value); else setSelectedCategory(item.value); } : undefined}
           />
         )}
       />
