@@ -68,6 +68,8 @@ export default function GaumaliScreen({ historyOnly = false, detailId, startBook
   const [step, setStep] = useState<"details" | "slot" | "payment">(startBooking ? "slot" : "details");
   const [collection, setCollection] = useState<"all" | "favorites" | "cart">("all");
   const [historyFilter, setHistoryFilter] = useState("All");
+  const [expandedBooking, setExpandedBooking] = useState<string | null>(null);
+  useEffect(() => { setExpandedBooking(null); }, [historyFilter, user?.id]);
   const historyGroup = (status: string) => status === "completed" ? "Completed" : ["cancelled", "canceled", "rejected", "expired"].includes(status) ? "Cancelled" : "Active";
   const [saved, setSaved] = useState<{ favorites: string[]; cart: string[] }>({ favorites: [], cart: [] });
   const [savedReady, setSavedReady] = useState(false);
@@ -374,6 +376,8 @@ export default function GaumaliScreen({ historyOnly = false, detailId, startBook
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{gap:8,paddingVertical:6}}>{["All","Active","Completed","Cancelled"].map(filter => <TouchableOpacity key={filter} accessibilityRole="button" accessibilityState={{selected:historyFilter===filter}} onPress={()=>setHistoryFilter(filter)} style={[s.historyFilter,historyFilter===filter && s.selected]}><Text style={[s.muted,historyFilter===filter && {color:Colors.primaryDark,fontWeight:"700"}]}>{filter} ({history.filter(a=>filter==="All" || historyGroup(a.status)===filter).length})</Text></TouchableOpacity>)}</ScrollView>
       {!loading && !error && !history.some(a=>historyFilter==="All" || historyGroup(a.status)===historyFilter) && <View style={s.historyEmpty}><Ionicons name="calendar-outline" size={42} color={Colors.primaryDark}/><Text style={s.title}>{history.length ? "No bookings in this view" : "No appointments yet"}</Text></View>}
       {history.filter(a=>historyFilter==="All" || historyGroup(a.status)===historyFilter).map(appointment => {
+        const expanded = expandedBooking === appointment.id;
+        const serviceName = appointment.service_name || services.find(row => row.id === appointment.service_id)?.name || "Gaumali appointment";
         const group = historyGroup(appointment.status);
         const statusColor = group === "Completed" ? "#15803D" : group === "Cancelled" ? "#B91C1C" : "#1D4ED8";
         const statusBackground = group === "Completed" ? "#F0FDF4" : group === "Cancelled" ? "#FEF2F2" : "#EFF6FF";
@@ -384,8 +388,18 @@ export default function GaumaliScreen({ historyOnly = false, detailId, startBook
         const manageCheckout = !!appointment.checkout_id && appointment.status === "awaiting_payment";
         const canCancel = cancellable && !manageCheckout;
         return <View key={appointment.id} style={[s.card,{gap:12}]}>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={`${serviceName}, ${label(appointment.status)}, ${expanded ? "hide" : "show"} booking details`}
+            accessibilityState={{ expanded }}
+            activeOpacity={0.75}
+            onPress={() => setExpandedBooking(current => current === appointment.id ? null : appointment.id)}
+            style={{ gap: 10, minHeight: 44 }}
+          >
           <View style={[s.row,{justifyContent:"space-between"}]}><Text style={s.muted}>#{appointment.id.slice(-8).toUpperCase()}</Text><View style={[s.statusBadge,{backgroundColor:statusBackground}]}><Text style={{fontSize:12,fontWeight:"700",color:statusColor}}>{label(appointment.status)}</Text></View></View>
-          <View style={[s.row,{flexWrap:"nowrap"}]}><View style={s.serviceIcon}><Ionicons name="leaf-outline" size={23} color={Colors.primaryDark}/></View><Text style={[s.title,{flex:1,lineHeight:21}]}>{appointment.service_name || services.find(row => row.id === appointment.service_id)?.name || "Gaumali appointment"}</Text></View>
+          <View style={[s.row,{flexWrap:"nowrap"}]}><View style={s.serviceIcon}><Ionicons name="leaf-outline" size={23} color={Colors.primaryDark}/></View><View style={{flex:1,minWidth:0,gap:4}}><Text numberOfLines={expanded ? undefined : 2} style={[s.title,{lineHeight:21}]}>{serviceName}</Text><Text style={s.muted}>{historyDate(appointment.date)} · {historyTime(appointment.start)}</Text></View><Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={20} color={Colors.primaryDark}/></View>
+          </TouchableOpacity>
+          {expanded && <>
           <View style={s.historySchedule}><View style={s.row}><Ionicons name="calendar-outline" size={16} color={Colors.textSecondary}/><Text style={s.muted}>{historyDate(appointment.date)}</Text></View><View style={s.row}><Ionicons name="time-outline" size={16} color={Colors.textSecondary}/><Text style={s.muted}>{historyTime(appointment.start)}{appointment.end ? ` - ${historyTime(appointment.end)}` : ""}</Text></View></View>
           <View style={[s.row,{justifyContent:"space-between"}]}><Text style={s.price}>{money(appointment.amount)}</Text><Text style={[s.muted,{color:appointment.payment_status==="paid"?"#15803D":Colors.textSecondary}]}>{appointment.payment_method === "cod" ? "COD" : label(appointment.payment_method)} · {label(appointment.payment_status)}</Text></View>
           {!!appointment.assigned_mali_name && <View style={s.row}><Ionicons name="person-circle-outline" size={20} color={Colors.primaryDark}/><Text style={[s.title,{flex:1,fontSize:13}]}>{appointment.assigned_mali_name}</Text></View>}
@@ -403,6 +417,7 @@ export default function GaumaliScreen({ historyOnly = false, detailId, startBook
             })}><Ionicons name="card-outline" size={16} color={Colors.primaryDark}/><Text style={s.historyActionText}>{pending?.receipt ? "Verify payment" : "Pay online"}</Text></TouchableOpacity>}
             {canCancel && <TouchableOpacity style={[s.historyAction,{borderColor:"#FECACA"},busy && s.disabled]} disabled={busy} accessibilityRole="button" onPress={() => cancel(appointment)}><Ionicons name="close-circle-outline" size={16} color={Colors.error}/><Text style={[s.historyActionText,{color:Colors.error}]}>Cancel booking</Text></TouchableOpacity>}
           </View>}
+          </>}
         </View>;
       })}
       </>}

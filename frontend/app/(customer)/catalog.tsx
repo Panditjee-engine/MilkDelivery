@@ -4592,7 +4592,7 @@ export default function CatalogScreen() {
       setProducts(prods);
       void fetchRatings(prods || []);
       setCategories(cats);
-      setWalletBalance(wallet.balance ?? 0);
+      setWalletBalance(wallet.available_balance ?? wallet.balance ?? 0);
       setCatalogSlides(mapContentToSlides(content?.data || []));
       setPaymentMethods(normalizePaymentMethods(appSettings));
       // setOrderCutoffs(cutoffs || []);
@@ -5024,7 +5024,7 @@ export default function CatalogScreen() {
       setSuccessIsSub(false);
       api
         .getWallet()
-        .then((w) => setWalletBalance(w.balance ?? 0))
+        .then((w) => setWalletBalance(w.available_balance ?? w.balance ?? 0))
         .catch(() => {});
       await fetchData();
       router.push({
@@ -5415,7 +5415,7 @@ export default function CatalogScreen() {
         onSuccess={async () => {
           await fetchSubs();
           const wallet = await api.getWallet();
-          setWalletBalance(wallet.balance ?? 0);
+          setWalletBalance(wallet.available_balance ?? wallet.balance ?? 0);
         }}
         onToast={showToast}
       />

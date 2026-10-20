@@ -24,6 +24,7 @@ export default function GaumaliManagement() {
   const lock = useRef(false);
   const generation = useRef(0);
   const [filter, setFilter] = useState("all");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
   const [formError, setFormError] = useState("");
   const [action, setAction] = useState<{ appointment: Appointment; status: AppointmentUpdate["status"] } | null>(null);
@@ -84,10 +85,25 @@ export default function GaumaliManagement() {
         {appointments.filter(a => filter === "all" || a.status === filter || (filter === "refund_pending" && (a.payment_status === "refund_pending" || a.refund_status === "pending"))).map(a => {
           const pending = ["pending", "requested"].includes(a.status);
           const active = ["approved", "assigned"].includes(a.status);
+          const expanded = expandedId === a.id;
           return <View key={a.id} style={s.card}>
-            <Text style={s.heading}>{a.customer_name || "Customer"}</Text>
-            {!!a.service_name && <Text style={s.body}>{a.service_name}</Text>}
-            <Text style={s.body}>{a.date} | {a.start} - {a.end}</Text>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityState={{ expanded }}
+              accessibilityLabel={`${a.customer_name || "Customer"}, ${a.service_name || "Gaumali appointment"}, ${expanded ? "hide" : "show"} details`}
+              activeOpacity={0.75}
+              onPress={() => setExpandedId(current => current === a.id ? null : a.id)}
+              style={s.cardHeader}
+            >
+              <View style={s.cardSummary}>
+                <Text numberOfLines={expanded ? undefined : 1} style={s.heading}>{a.customer_name || "Customer"}</Text>
+                {!!a.service_name && <Text numberOfLines={expanded ? undefined : 2} style={s.body}>{a.service_name}</Text>}
+                <Text style={s.body}>{a.date} | {a.start} - {a.end}</Text>
+                <Text style={s.status}>{label(a.status)}</Text>
+              </View>
+              <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={20} color="#287A52" />
+            </TouchableOpacity>
+            {expanded && <View style={s.cardDetails}>
             <Text style={s.body}>{formatDeliveryAddress(a.address) || "No address provided"}</Text>
             <Text style={s.status}>{label(a.status)} | {label(a.payment_status)} | INR {a.amount}</Text>
             <Text style={s.body}>Mali: {a.assigned_mali_name || "Unassigned"}</Text>
@@ -101,6 +117,7 @@ export default function GaumaliManagement() {
               {a.status === "assigned" && <Button title="Complete" disabled={busy || refreshing || !!error} onPress={() => openAction(a, "completed")} />}
               {(pending || active || a.status === "awaiting_payment") && <Button title="Cancel" danger disabled={busy || refreshing || !!error} onPress={() => openAction(a, "cancelled")} />}
             </View>
+            </View>}
           </View>;
         })}
         {!appointments.some(a => filter === "all" || a.status === filter || (filter === "refund_pending" && (a.payment_status === "refund_pending" || a.refund_status === "pending"))) && !error && <Text style={s.empty}>No appointments found.</Text>}
@@ -143,6 +160,9 @@ const s = StyleSheet.create({
   content: { padding: 16, paddingBottom: 40, gap: 12 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
   card: { padding: 16, gap: 8, borderRadius: 8, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#DCE4DF" },
+  cardHeader: { flexDirection: "row", alignItems: "center", gap: 12, minHeight: 44 },
+  cardSummary: { flex: 1, minWidth: 0, gap: 4 },
+  cardDetails: { gap: 8, paddingTop: 12, borderTopWidth: 1, borderTopColor: "#DCE4DF" },
   heading: { fontSize: 17, fontWeight: "700", color: "#24362D" },
   body: { fontSize: 14, lineHeight: 21, color: "#526158" },
   status: { fontSize: 13, lineHeight: 20, fontWeight: "600", color: "#287A52", textTransform: "capitalize" },

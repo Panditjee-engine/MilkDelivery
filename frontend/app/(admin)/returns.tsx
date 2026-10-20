@@ -14,6 +14,8 @@ const statuses = [
   { key: "approved", title: "Pickup", color: "#2864BD", bg: "#EAF2FF" },
   { key: "picked_up", title: "Collected", color: "#20825C", bg: "#E7F6EE" },
   { key: "rejected", title: "Rejected", color: "#B44145", bg: "#FCEDEE" },
+  { key: "lost", title: "Lost", color: "#B44145", bg: "#FCEDEE" },
+  { key: "cracked", title: "Cracked", color: "#B44145", bg: "#FCEDEE" },
 ];
 const kinds = [
   { key: "all", label: "All requests", icon: "albums-outline" },
@@ -75,7 +77,9 @@ export default function AdminReturns() {
     if (mutationLock.current) return;
     mutationLock.current = true; setBusy(id);
     try {
-      const updated = await api.updateReturnRequest(id, action, rider);
+      const updated = action === "lost" || action === "cracked"
+        ? await api.chargeBottleDamage(id, action)
+        : await api.updateReturnRequest(id, action, rider);
       setRows(previous => previous.map(row => row.id === id ? updated : row));
       setApproving(null);
     } catch (e: any) { Alert.alert("Request not updated", e?.message || "Please refresh and try again."); }
@@ -115,9 +119,10 @@ export default function AdminReturns() {
           <View style={s.orderRow}><Text style={s.caption}>Order #{row.order_id.slice(0, 8)}</Text>{row.kind === "bottle_return" && <Text style={s.quantity}>{row.bottle_count || 0} bottles</Text>}</View>
           <Text style={s.products} numberOfLines={open ? undefined : 2}>{(row.items || []).map(item => `${item.product_name || "Product"} × ${item.quantity}`).join(" · ")}</Text>
           {open && <View style={s.details}><Text style={s.detailLabel}>REASON</Text><Text style={s.detailText}>{row.reason || "Not provided"}</Text><Text style={s.detailLabel}>PICKUP ADDRESS</Text><Text style={s.detailText}>{formatDeliveryAddress(row.address) || "Address not available"}</Text></View>}
-          {open && row.status === "picked_up" && <Text style={s.notice}>Pickup confirmed. Refund or exchange completion is still pending.</Text>}
+          {open && row.status === "picked_up" && <Text style={s.notice}>{row.kind === "bottle_return" ? "Bottles collected. The deposit is released when no pending milk deliveries or outstanding bottles remain." : "Pickup confirmed. Refund or exchange completion is still pending."}</Text>}
           {open && <ReturnPhoto id={row.id} exists={!!row.has_pickup_photo} />}
           {open && (row.status === "requested" || row.status === "approved") && <View style={s.actions}>
+            {row.kind === "bottle_return" && <TouchableOpacity disabled={!!busy} style={s.reject} onPress={() => Alert.alert("Record bottle loss or damage?", "This closes the remaining bottles on this request and charges the held ₹50 once. A new ₹50 deposit is reserved when funds are available.", [{text:"Cancel",style:"cancel"},{text:"Lost",style:"destructive",onPress:()=>void update(row.id,"lost")},{text:"Cracked",style:"destructive",onPress:()=>void update(row.id,"cracked")}])}><Text style={s.rejectText}>Lost / Cracked</Text></TouchableOpacity>}
             {row.status === "requested" && <TouchableOpacity disabled={!!busy} style={[s.reject, !!busy && s.disabled]} onPress={() => confirm(row, "reject")}><Ionicons name="close" size={17} color="#B44145" /><Text style={s.rejectText}>Reject</Text></TouchableOpacity>}
             <TouchableOpacity disabled={!!busy} style={[s.primary, !!busy && s.disabled]} onPress={() => row.status === "requested" ? choosePartner(row) : confirm(row, "pickup")}>
               {busy === row.id ? <ActivityIndicator size="small" color="white" /> : <Ionicons name={row.status === "requested" ? "checkmark" : "bag-check-outline"} size={18} color="white" />}<Text style={s.primaryText}>{row.status === "requested" ? "Approve" : "Confirm Pickup"}</Text>
