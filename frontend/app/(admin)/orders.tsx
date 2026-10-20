@@ -356,28 +356,25 @@ const itemMatchesProduct = (
 const buildAddressText = (address: any) => {
   if (!address) return "";
   if (typeof address === "string") return address.trim();
-  const value = [
-    address.full_address,
-    address.address,
-    address.line1,
-    address.line2,
-    address.flat,
-    address.house,
-    address.house_no,
-    address.building,
-    address.tower,
-    address.floor,
-    address.society,
-    address.area,
-    address.landmark,
-    address.city,
-    address.state,
-    address.pincode,
-    address.pin_code,
+
+  const full = String(address.full_address || "").trim();
+  if (full) return full;
+
+  const parts = [
+    address.address, address.line1, address.line2, address.flat,
+    address.house, address.house_no, address.building, address.tower,
+    address.floor, address.society, address.area, address.landmark,
+    address.city, address.state, address.pincode, address.pin_code,
   ]
-    .filter(Boolean)
-    .join(", ");
-  return value;
+    .map((p) => String(p ?? "").trim())
+    .filter(Boolean);
+
+  const result: string[] = [];
+  for (const part of parts) {
+    const joined = result.join(", ").toLowerCase();
+    if (!joined.includes(part.toLowerCase())) result.push(part);
+  }
+  return result.join(", ");
 };
 
 const pickUserAddress = (user: any) => {
@@ -763,6 +760,44 @@ interface SubModalProps {
   onDismiss: () => void;
 }
 
+const getDeliveryDayState = (record: {
+  delivery_date: string;
+  status?: string;
+  skip_reason?: string | null;
+  cancel_reason?: string | null;
+}) => {
+  const status = String(record.status || "").toLowerCase();
+  const dateKey = getOrderDateKey(record.delivery_date);
+  const today = getLocalDateKey();
+
+  if (status === "delivered")
+    return { label: "Delivered", icon: "checkmark-circle", color: "#16A34A" };
+
+  if (status === "cancelled" || status === "canceled") {
+    const byAdmin = String(record.cancel_reason || "").includes("admin");
+    return {
+      label: byAdmin ? "Cancelled by admin" : "Cancelled by user",
+      icon: "close-circle",
+      color: "#FF5C5C",
+    };
+  }
+
+  if (status === "skipped") {
+    const reason = String(record.skip_reason || "vacation");
+    if (reason === "paused")
+      return { label: "Paused", icon: "pause-circle", color: "#8B6854" };
+    if (reason === "modification")
+      return { label: "Skipped", icon: "remove-circle", color: "#8B6854" };
+    return { label: "On vacation", icon: "airplane", color: "#B45309" };
+  }
+
+  if (dateKey < today)
+    return { label: "Not delivered", icon: "alert-circle", color: "#DC2626" };
+  if (dateKey === today)
+    return { label: "Pending", icon: "time-outline", color: "#FFBF55" };
+  return { label: "Upcoming", icon: "ellipse-outline", color: "#C9A882" };
+};
+
 function SubscriptionDetailModal({
   visible,
   subscription,
@@ -777,6 +812,8 @@ function SubscriptionDetailModal({
     order_id: string;
     delivery_date: string;
     status: string;
+    skip_reason?: string | null;
+    cancel_reason?: string | null;
     has_feedback?: boolean;
     rating?: number | null;
   };
@@ -818,25 +855,12 @@ function SubscriptionDetailModal({
     }
   }, [visible]);
 
-  const orderStatusByDate = useMemo(() => {
-    const map: Record<string, string> = {};
-    orderRecords.forEach((o) => {
-      map[o.delivery_date] = o.status;
-    });
-    return map;
-  }, [orderRecords]);
-
-  const orderRecordByDate = useMemo(() => {
-    const map: Record<string, OrderRecord> = {};
-    orderRecords.forEach((o) => {
-      map[o.delivery_date] = o;
-    });
-    return map;
-  }, [orderRecords]);
-
-  const scheduleDates = useMemo(
-    () => (subscription ? getSubscriptionDeliveryDates(subscription) : []),
-    [subscription],
+    const calendarRows = useMemo(
+    () =>
+      [...orderRecords]
+        .filter((o) => o.delivery_date)
+        .sort((a, b) => a.delivery_date.localeCompare(b.delivery_date)),
+    [orderRecords],
   );
 
   // ── ALL hooks are declared above this line. Nothing below may be a hook. ──
@@ -1072,99 +1096,53 @@ function SubscriptionDetailModal({
                     </View>
                   </View>
 
-                  {/* Delivery Calendar — one row per scheduled delivery date */}
+                  {/* Delivery Calendar — rows come from the orders table */}
                   <View style={sm.section}>
                     <Text style={sm.sectionLabel}>
                       DELIVERY CALENDAR{" "}
                       {ordersLoading
                         ? "· loading…"
-                        : `· ${scheduleDates.length} dates`}
+                        : `· ${calendarRows.length} dates`}
                     </Text>
                     <View style={sm.itemsCard}>
-                      {scheduleDates.length === 0 ? (
+                      {calendarRows.length === 0 ? (
                         <View style={{ padding: 14 }}>
                           <Text style={{ fontSize: 12, color: "#8B6854" }}>
-                            No scheduled dates found.
+                            {ordersLoading ? "Loading…" : "No orders generated yet."}
                           </Text>
                         </View>
                       ) : (
-                        scheduleDates.map((dateKey, i) => {
-                          const record = orderRecordByDate[dateKey];
-                          const status = (
-                            orderStatusByDate[dateKey] || ""
-                          ).toLowerCase();
-                          const isDelivered = status === "delivered";
-                          const isCancelled =
-                            status === "cancelled" || status === "skipped";
-                          const today = getLocalDateKey();
-                          const isFuture = dateKey > today;
-
-                          const icon = isDelivered
-                            ? "checkmark-circle"
-                            : isCancelled
-                              ? "close-circle"
-                              : isFuture
-                                ? "ellipse-outline"
-                                : "time-outline";
-                          const iconColor = isDelivered
-                            ? "#16A34A"
-                            : isCancelled
-                              ? "#FF5C5C"
-                              : isFuture
-                                ? "#C9A882"
-                                : "#FFBF55";
-                          const label = isDelivered
-                            ? "Delivered"
-                            : isCancelled
-                              ? status === "skipped"
-                                ? "Skipped"
-                                : "Cancelled"
-                              : isFuture
-                                ? "Upcoming"
-                                : "Pending";
-
+                        calendarRows.map((record, i) => {
+                          const st = getDeliveryDayState(record);
                           return (
                             <View
-                              key={dateKey}
+                              key={record.order_id || record.delivery_date}
                               style={[sm.itemRow, i > 0 && sm.itemRowBorder]}
                             >
                               <Ionicons
-                                name={icon as any}
+                                name={st.icon as any}
                                 size={16}
-                                color={iconColor}
+                                color={st.color}
                                 style={{ marginRight: 10 }}
                               />
                               <View style={{ flex: 1 }}>
-                                <Text style={sm.itemName}>{dateKey}</Text>
+                                <Text style={sm.itemName}>
+                                  {getOrderDateKey(record.delivery_date)}
+                                </Text>
                               </View>
-                              {record?.has_feedback && (
+                              {record.has_feedback && (
                                 <TouchableOpacity
-                                  onPress={() =>
-                                    setFeedbackOrderId(record.order_id)
-                                  }
+                                  onPress={() => setFeedbackOrderId(record.order_id)}
                                   style={sm.feedbackStarBtn}
-                                  hitSlop={{
-                                    top: 8,
-                                    bottom: 8,
-                                    left: 8,
-                                    right: 8,
-                                  }}
+                                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                                 >
-                                  <Ionicons
-                                    name="star"
-                                    size={14}
-                                    color="#f59e0b"
-                                  />
+                                  <Ionicons name="star" size={14} color="#f59e0b" />
                                 </TouchableOpacity>
                               )}
                               <Text
-                                style={{
-                                  fontSize: 11,
-                                  fontWeight: "700",
-                                  color: iconColor,
-                                }}
+                                style={{ fontSize: 11, fontWeight: "700", color: st.color }}
                               >
-                                {label}
+                                {st.label}
                               </Text>
                             </View>
                           );
@@ -2830,7 +2808,8 @@ export default function AdminOrdersScreen() {
 
             {address ? (
               <>
-                             <Text style={styles.colLabel}>ADDRESS</Text>
+                <View style={styles.divider} />
+                <Text style={styles.colLabel}>ADDRESS</Text>
                 <View style={styles.detailRow}>
                   <Ionicons name="location-outline" size={13} color="#8B6854" />
                   <Text style={styles.detailText}>{address}</Text>

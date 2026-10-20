@@ -165,12 +165,12 @@ export interface AdminNotificationItem {
   admin_id?: string;
   event?: string;
   category:
-  | "order"
-  | "subscription"
-  | "wallet"
-  | "vacation"
-  | "general"
-  | string;
+    | "order"
+    | "subscription"
+    | "wallet"
+    | "vacation"
+    | "general"
+    | string;
   title: string;
   body: string;
   data?: Record<string, any>;
@@ -611,27 +611,65 @@ class ApiService {
     return this.request("/catalog/search-history", { method: "DELETE" });
   }
   private token: string | null = null;
-  getReturnRequests() { return this.request<any[]>("/returns"); }
-  getReturnPhoto(id: string) { return this.request<{ uri: string }>(`/returns/${encodeURIComponent(id)}/photo`); }
-  uploadReturnPhoto(id: string, image: string) { return this.request(`/returns/${encodeURIComponent(id)}/photo`, { method: "PUT", body: JSON.stringify({ image }) }); }
-  getReturnEligibleOrders() { return this.request<any[]>("/returns/orders"); }
-  getBottleReturnOrders() { return this.request<any[]>("/returns/bottles/orders"); }
+  getReturnRequests() {
+    return this.request<any[]>("/returns");
+  }
+  getReturnPhoto(id: string) {
+    return this.request<{ uri: string }>(
+      `/returns/${encodeURIComponent(id)}/photo`,
+    );
+  }
+  uploadReturnPhoto(id: string, image: string) {
+    return this.request(`/returns/${encodeURIComponent(id)}/photo`, {
+      method: "PUT",
+      body: JSON.stringify({ image }),
+    });
+  }
+  getReturnEligibleOrders() {
+    return this.request<any[]>("/returns/orders");
+  }
+  getBottleReturnOrders() {
+    return this.request<any[]>("/returns/bottles/orders");
+  }
   collectReturnBottles(order_id: string, collected_total: number) {
-    return this.request<any>("/returns/bottles/collect", { method: "POST", body: JSON.stringify({ order_id, collected_total }) });
+    return this.request<any>("/returns/bottles/collect", {
+      method: "POST",
+      body: JSON.stringify({ order_id, collected_total }),
+    });
   }
-  createReturnRequest(data: { order_id: string; kind: string; reason: string }) {
-    return this.request<any>("/returns", { method: "POST", body: JSON.stringify(data) });
+  createReturnRequest(data: {
+    order_id: string;
+    kind: string;
+    reason: string;
+  }) {
+    return this.request<any>("/returns", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
   }
-  updateReturnRequest(id: string, action: string, delivery_partner_id?: string) {
-    return this.request<any>(`/returns/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ action, delivery_partner_id }) });
+  updateReturnRequest(
+    id: string,
+    action: string,
+    delivery_partner_id?: string,
+  ) {
+    return this.request<any>(`/returns/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ action, delivery_partner_id }),
+    });
   }
   private cartFlusher: (() => Promise<void>) | null = null;
-  setCartFlusher(fn: (() => Promise<void>) | null) { this.cartFlusher = fn; }
+  setCartFlusher(fn: (() => Promise<void>) | null) {
+    this.cartFlusher = fn;
+  }
   async flushCart() {
-    try { await this.cartFlusher?.(); } catch { }
+    try {
+      await this.cartFlusher?.();
+    } catch {}
   }
   private snapshotSession = 0;
-  getSnapshotSession() { return this.snapshotSession; }
+  getSnapshotSession() {
+    return this.snapshotSession;
+  }
   private screenSnapshots = new Map<string, unknown>();
   getScreenSnapshot<T>(key: string): T | undefined {
     return this.screenSnapshots.get(key) as T | undefined;
@@ -639,7 +677,9 @@ class ApiService {
   setScreenSnapshot(key: string, value: unknown) {
     this.screenSnapshots.set(key, value);
   }
-  refreshLists() { this.clearReadCache(); }
+  refreshLists() {
+    this.clearReadCache();
+  }
   private readCache = new Map<string, { value: unknown; expires: number }>();
   private pendingReads = new Map<string, Promise<any>>();
   private cacheGeneration = 0;
@@ -682,19 +722,24 @@ class ApiService {
     const method = (options.method || "GET").toUpperCase();
     if (method !== "GET") this.clearReadCache();
     const ttl = readCacheTtl(endpoint);
-    const eligible = method === "GET" && ttl > 0 && !options.signal && !options.headers;
+    const eligible =
+      method === "GET" && ttl > 0 && !options.signal && !options.headers;
     if (!eligible) {
-      try { return await this.fetchRequest<T>(endpoint, options); }
-      finally { if (method !== "GET") this.clearReadCache(); }
+      try {
+        return await this.fetchRequest<T>(endpoint, options);
+      } finally {
+        if (method !== "GET") this.clearReadCache();
+      }
     }
-    const token = this.token || await AsyncStorage.getItem("access_token");
+    const token = this.token || (await AsyncStorage.getItem("access_token"));
     const key = `${token || "anonymous"}:${endpoint}`;
     const cached = this.readCache.get(key);
-    if (cached && cached.expires > Date.now()) return JSON.parse(JSON.stringify(cached.value));
+    if (cached && cached.expires > Date.now())
+      return JSON.parse(JSON.stringify(cached.value));
     const existing = this.pendingReads.get(key);
     if (existing) return JSON.parse(JSON.stringify(await existing));
     const generation = this.cacheGeneration;
-    const pending = this.fetchRequest<T>(endpoint, options).then(value => {
+    const pending = this.fetchRequest<T>(endpoint, options).then((value) => {
       if (generation === this.cacheGeneration) {
         for (const [oldKey, entry] of this.readCache) {
           if (entry.expires <= Date.now()) this.readCache.delete(oldKey);
@@ -712,8 +757,11 @@ class ApiService {
       return value;
     });
     this.pendingReads.set(key, pending);
-    try { return JSON.parse(JSON.stringify(await pending)); }
-    finally { if (this.pendingReads.get(key) === pending) this.pendingReads.delete(key); }
+    try {
+      return JSON.parse(JSON.stringify(await pending));
+    } finally {
+      if (this.pendingReads.get(key) === pending) this.pendingReads.delete(key);
+    }
   }
 
   private async fetchRequest<T>(
@@ -844,8 +892,11 @@ class ApiService {
     method: "POST" | "PUT" = "POST",
   ): Promise<T> {
     this.clearReadCache();
-    try { return await this.fetchFormData<T>(endpoint, formData, method); }
-    finally { this.clearReadCache(); }
+    try {
+      return await this.fetchFormData<T>(endpoint, formData, method);
+    } finally {
+      this.clearReadCache();
+    }
   }
 
   private async fetchFormData<T>(
@@ -933,13 +984,26 @@ class ApiService {
   }
 
   sendCustomerOtp(phone: string) {
-    return this.request<any>("/auth/customer/send-otp", { method: "POST", body: JSON.stringify({ phone }) });
+    return this.request<any>("/auth/customer/send-otp", {
+      method: "POST",
+      body: JSON.stringify({ phone }),
+    });
   }
   setCustomerInitialPassword(password: string) {
-    return this.request<any>("/auth/customer/initial-password", { method: "PUT", body: JSON.stringify({ password }) });
+    return this.request<any>("/auth/customer/initial-password", {
+      method: "PUT",
+      body: JSON.stringify({ password }),
+    });
   }
-  async verifyCustomerOtp(phone: string, otp: string, device: Record<string, any> = {}) {
-    const data = await this.request<any>("/auth/customer/verify-otp", { method: "POST", body: JSON.stringify({ ...device, phone, otp }) });
+  async verifyCustomerOtp(
+    phone: string,
+    otp: string,
+    device: Record<string, any> = {},
+  ) {
+    const data = await this.request<any>("/auth/customer/verify-otp", {
+      method: "POST",
+      body: JSON.stringify({ ...device, phone, otp }),
+    });
     this.setToken(data.access_token);
     return data;
   }
@@ -982,7 +1046,9 @@ class ApiService {
   }
 
   async getCart(): Promise<ServerCartRow[]> {
-    return this.fetchRequest<ServerCartRow[]>("/cart", { silentErrorLog: true });
+    return this.fetchRequest<ServerCartRow[]>("/cart", {
+      silentErrorLog: true,
+    });
   }
 
   async saveCart(items: Array<{ product_id: string; quantity: number }>) {
@@ -994,19 +1060,22 @@ class ApiService {
   }
 
   async addCartItem(product_id: string, quantity = 1) {
-  return this.fetchRequest<{ success: boolean; items: any[] }>("/cart/items", {
-    method: "POST",
-    body: JSON.stringify({ product_id, quantity }),
-    silentErrorLog: true,
-  });
-}
+    return this.fetchRequest<{ success: boolean; items: any[] }>(
+      "/cart/items",
+      {
+        method: "POST",
+        body: JSON.stringify({ product_id, quantity }),
+        silentErrorLog: true,
+      },
+    );
+  }
 
-async removeCartItem(product_id: string) {
-  return this.fetchRequest<{ success: boolean }>(
-    `/cart/items/${encodeURIComponent(product_id)}`,
-    { method: "DELETE", silentErrorLog: true },
-  );
-}
+  async removeCartItem(product_id: string) {
+    return this.fetchRequest<{ success: boolean }>(
+      `/cart/items/${encodeURIComponent(product_id)}`,
+      { method: "DELETE", silentErrorLog: true },
+    );
+  }
 
   async clearCart() {
     return this.fetchRequest<{ success: boolean }>("/cart", {
@@ -1038,17 +1107,31 @@ async removeCartItem(product_id: string) {
 
   async getCatalogProducts(adminId?: string, category?: string) {
     const params = new URLSearchParams();
+    params.append("fresh", "true");
 
     if (adminId) params.append("admin_id", adminId);
     if (category) params.append("category", category);
     params.append("_ts", Date.now().toString());
 
     const query = params.toString() ? `?${params.toString()}` : "";
-    return this.request<any[]>(`/catalog/products${query}`);
+    const rows = await this.request<any[]>(`/catalog/products${query}`);
+    return rows.filter(product => ![false, 0, "false", "0"].includes(product.is_active));
   }
 
-  async getProducts(adminId?: string, category?: string) {
+  async getProductVisibility(adminId?: string) {
+    return this.request<Array<{ id: string; is_active: boolean }>>(`/catalog/product-visibility${adminId ? `?admin_id=${encodeURIComponent(adminId)}` : ""}`);
+  }
+
+  async getPopularProductIds(adminId?: string) {
+    return this.request<string[]>(`/catalog/popular-products${adminId ? `?admin_id=${encodeURIComponent(adminId)}` : ""}`);
+  }
+
+  async getProducts(adminId?: string, category?: string, fresh = false) {
     const params = new URLSearchParams();
+    if (fresh) {
+      params.append("fresh", "true");
+      params.append("_ts", Date.now().toString());
+    }
 
     if (adminId) params.append("admin_id", adminId);
     if (category) params.append("category", category);
@@ -1520,6 +1603,14 @@ async removeCartItem(product_id: string) {
       method: "DELETE",
     });
   }
+
+  async updateVacation(id: string, startDate: string, endDate: string) {
+    return this.request<any>(`/subscriptions/vacations/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ start_date: startDate, end_date: endDate }),
+    });
+  }
+
   async getWallet() {
     return this.request<any>("/wallet");
   }
@@ -1816,10 +1907,18 @@ async removeCartItem(product_id: string) {
         results.push({ order_id: orderId, success: true });
       } catch (error: any) {
         if (error?.message === "UNAUTHORIZED") throw error;
-        results.push({ order_id: orderId, success: false, error: error?.message || "Could not update this order." });
+        results.push({
+          order_id: orderId,
+          success: false,
+          error: error?.message || "Could not update this order.",
+        });
       }
     }
-    return { updated: results.filter(item => item.success).length, failed: results.filter(item => !item.success).length, results };
+    return {
+      updated: results.filter((item) => item.success).length,
+      failed: results.filter((item) => !item.success).length,
+      results,
+    };
   }
 
   // Recurring subscriptions whose customers are tagged to this rider
@@ -1864,10 +1963,18 @@ async removeCartItem(product_id: string) {
         results.push({ subscription_id: subscriptionId, success: true });
       } catch (error: any) {
         if (error?.message === "UNAUTHORIZED") throw error;
-        results.push({ subscription_id: subscriptionId, success: false, error: error?.message || "Could not update this subscription." });
+        results.push({
+          subscription_id: subscriptionId,
+          success: false,
+          error: error?.message || "Could not update this subscription.",
+        });
       }
     }
-    return { updated: results.filter(item => item.success).length, failed: results.filter(item => !item.success).length, results };
+    return {
+      updated: results.filter((item) => item.success).length,
+      failed: results.filter((item) => !item.success).length,
+      results,
+    };
   }
 
   async cancelUserOrder(orderId: string) {
@@ -2679,12 +2786,12 @@ async removeCartItem(product_id: string) {
         const trimmed = text.trim();
         const data = trimmed
           ? (() => {
-            try {
-              return JSON.parse(trimmed);
-            } catch {
-              return null;
-            }
-          })()
+              try {
+                return JSON.parse(trimmed);
+              } catch {
+                return null;
+              }
+            })()
           : null;
 
         if (response.ok && data) return data;
@@ -2696,9 +2803,9 @@ async removeCartItem(product_id: string) {
 
         throw new Error(
           (data &&
-            typeof data === "object" &&
-            "detail" in data &&
-            typeof data.detail === "string"
+          typeof data === "object" &&
+          "detail" in data &&
+          typeof data.detail === "string"
             ? data.detail
             : trimmed) || "Failed to fetch worker points",
         );
@@ -4539,7 +4646,7 @@ async removeCartItem(product_id: string) {
 
   // Logout
   logout = async () => {
-    await this.flushCart(); 
+    await this.flushCart();
     this.setToken(null);
     await AsyncStorage.removeItem("worker_token");
     await AsyncStorage.removeItem("worker_data");

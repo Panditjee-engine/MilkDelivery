@@ -2,7 +2,9 @@ import React from "react";
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 export const isServiceProduct = (product: any) => String(product?.category || "").toLowerCase() === "service";
-export const productStock = (product: any, fallback = 0) => isServiceProduct(product) ? Infinity : (product?.stock ?? fallback);
+export const productStock = (product: any, fallback = 0) =>
+  [false, 0, "false", "0"].includes(product?.is_active) || [false, 0, "false", "0"].includes(product?.is_available)
+    ? 0 : isServiceProduct(product) ? Infinity : Math.max(0, Number(product?.stock ?? fallback));
 const hourLabel = (hour: number) => `${hour % 12 || 12} ${hour < 12 ? "AM" : "PM"}`;
 export default function ServiceSlotPicker({ value, onChange }: { value: string; onChange: (slot: string) => void }) {
   const match = /^(\d{2}):00-(\d{2}):00$/.exec(value);

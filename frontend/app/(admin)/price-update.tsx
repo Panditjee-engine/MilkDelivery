@@ -15,8 +15,9 @@ import {
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useRouter , useFocusEffect} from "expo-router";
 import { api, getApiBaseUrl } from "../../src/services/api";
+import { BackHandler } from "react-native";
 
 const C = {
   primary: "#FF9675",
@@ -68,6 +69,19 @@ const parsePrice = (value: string) => {
 export default function PriceUpdateScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const goBack = useCallback(() => {
+  router.replace("/(admin)/inventory" as any);
+}, [router]);
+
+useFocusEffect(
+  useCallback(() => {
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      goBack();
+      return true;
+    });
+    return () => sub.remove();
+  }, [goBack]),
+);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -211,7 +225,7 @@ export default function PriceUpdateScreen() {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+          <TouchableOpacity style={styles.backBtn} onPress={goBack}>
             <Ionicons name="chevron-back" size={24} color={C.text} />
           </TouchableOpacity>
           <View style={{ flex: 1 }}>

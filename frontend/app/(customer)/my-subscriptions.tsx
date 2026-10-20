@@ -23,6 +23,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { api } from "../../src/services/api";
 import { Colors } from "../../src/constants/colors";
 import LoadingScreen from "../../src/components/LoadingScreen";
+import ServiceSlotPicker from "../../src/components/ServiceSlotPicker";
 
 // ─── Types
 
@@ -201,6 +202,17 @@ const SLOT_LABELS: Record<string, string> = {
   evening: "Evening (5–8 PM)",
 };
 
+const SLOT_OPTIONS = [
+  { value: "morning", label: "Morning", time: "6–9 AM", icon: "sunny-outline" },
+  {
+    value: "afternoon",
+    label: "Afternoon",
+    time: "12–3 PM",
+    icon: "partly-sunny-outline",
+  },
+  { value: "evening", label: "Evening", time: "5–8 PM", icon: "moon-outline" },
+];
+
 type CalendarDayInfo = {
   order_id: string;
   delivery_date: string;
@@ -311,7 +323,7 @@ function MiniCalendar({
                   calS.dayNum,
                   isSel && { color: "#fff", fontWeight: "800" },
                   isToday &&
-                  !isSel && { color: accentColor, fontWeight: "700" },
+                    !isSel && { color: accentColor, fontWeight: "700" },
                 ]}
               >
                 {day}
@@ -395,6 +407,7 @@ export default function MySubscriptionsScreen() {
     "daily" | "alternate" | "custom"
   >("daily");
   const [editEndDate, setEditEndDate] = useState<string | null>(null);
+  const [editSlot, setEditSlot] = useState<string>("morning");
   const [showCalendar, setShowCalendar] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [invoiceLoadingId, setInvoiceLoadingId] = useState<string | null>(null);
@@ -477,6 +490,7 @@ export default function MySubscriptionsScreen() {
       (sub.pattern as any) === "buy_once" ? "daily" : (sub.pattern as any),
     );
     setEditEndDate(sub.end_date ?? null);
+    setEditSlot(sub.delivery_slot || "morning");
     setShowCalendar(false);
     setShowEditModal(true);
   };
@@ -491,6 +505,9 @@ export default function MySubscriptionsScreen() {
         pattern: editPattern,
         end_date: editEndDate ?? null,
       };
+      if (editSlot && editSlot !== editingSub.delivery_slot) {
+        payload.delivery_slot = editSlot;
+      }
 
       // Build updated items array if we have items
       if (editingSub.items && editingSub.items.length > 0) {
@@ -683,6 +700,8 @@ export default function MySubscriptionsScreen() {
         qty={editQty}
         pattern={editPattern}
         endDate={editEndDate}
+        slot={editSlot}
+        onSlotChange={setEditSlot}
         showCalendar={showCalendar}
         tomorrow={tomorrow}
         loading={actionLoading}
@@ -1151,6 +1170,8 @@ function EditModal({
   qty,
   pattern,
   endDate,
+  slot,
+  onSlotChange,
   showCalendar,
   tomorrow,
   loading,
@@ -1177,6 +1198,8 @@ function EditModal({
   onClearEndDate: () => void;
   onSave: () => void;
   onClose: () => void;
+  slot: string;
+  onSlotChange: (s: string) => void;
 }) {
   const slide = useRef(new Animated.Value(400)).current;
 
@@ -1193,6 +1216,7 @@ function EditModal({
 
   const unitPrice = getProductPrice(sub);
   const previewTotal = unitPrice * qty;
+  const isServiceSlot = !!sub.delivery_slot && !SLOT_LABELS[sub.delivery_slot];
 
   const PATTERNS: Array<{
     key: "daily" | "alternate" | "custom";
@@ -1200,20 +1224,20 @@ function EditModal({
     icon: string;
     hint: string;
   }> = [
-      { key: "daily", label: "Daily", icon: "sunny-outline", hint: "Every day" },
-      {
-        key: "alternate",
-        label: "Alternate",
-        icon: "git-compare-outline",
-        hint: "Every other day",
-      },
-      {
-        key: "custom",
-        label: "Custom",
-        icon: "calendar-outline",
-        hint: "Specific days",
-      },
-    ];
+    { key: "daily", label: "Daily", icon: "sunny-outline", hint: "Every day" },
+    {
+      key: "alternate",
+      label: "Alternate",
+      icon: "git-compare-outline",
+      hint: "Every other day",
+    },
+    {
+      key: "custom",
+      label: "Custom",
+      icon: "calendar-outline",
+      hint: "Specific days",
+    },
+  ];
 
   return (
     <Modal visible={visible} transparent animationType="none">
@@ -1329,6 +1353,49 @@ function EditModal({
                   );
                 })}
               </View>
+            </View>
+
+            {/* ── Delivery Slot ── */}
+            <View style={M.section}>
+              <Text style={M.sectionLabel}>Delivery Slot</Text>
+              {isServiceSlot ? (
+                <ServiceSlotPicker value={slot} onChange={onSlotChange} />
+              ) : (
+                <View style={M.patternGrid}>
+                  {SLOT_OPTIONS.map((s) => {
+                    const active = slot === s.value;
+                    return (
+                      <TouchableOpacity
+                        key={s.value}
+                        style={[M.patternCard, active && M.patternCardActive]}
+                        onPress={() => onSlotChange(s.value)}
+                      >
+                        <Ionicons
+                          name={s.icon as any}
+                          size={18}
+                          color={active ? "#fff" : Colors.primary}
+                        />
+                        <Text
+                          style={[
+                            M.patternCardLabel,
+                            active && { color: "#fff" },
+                          ]}
+                        >
+                          {s.label}
+                        </Text>
+                        <Text
+                          style={[
+                            M.patternCardHint,
+                            active && { color: "rgba(255,255,255,0.75)" },
+                          ]}
+                        >
+                          {s.time}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
             </View>
 
             {/* ── End Date ── */}
@@ -1855,9 +1922,14 @@ function DeliveryCalendarModal({
 
           <ScrollView style={M.body} showsVerticalScrollIndicator={false}>
             <View style={CAL.noticeBanner}>
-              <Ionicons name="megaphone-outline" size={16} color={Colors.primary} />
+              <Ionicons
+                name="megaphone-outline"
+                size={16}
+                color={Colors.primary}
+              />
               <Text style={CAL.noticeText}>
-                Please rate our product every day — your feedback matters to us! {'\n'} Click on a delivered date to submit your feedback.
+                Please rate our product every day — your feedback matters to us!{" "}
+                {"\n"} Click on a delivered date to submit your feedback.
               </Text>
             </View>
             <View style={calS.header}>

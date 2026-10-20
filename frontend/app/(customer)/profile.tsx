@@ -89,9 +89,21 @@ const normalizeAddressBook = (user: any) => {
 function HeroMilkBackground() {
   return (
     <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
-      <Svg width="100%" height="100%" viewBox="0 0 400 220" preserveAspectRatio="xMidYMid slice">
+      <Svg
+        width="100%"
+        height="100%"
+        viewBox="0 0 400 220"
+        preserveAspectRatio="xMidYMid slice"
+      >
         {/* base tint */}
-        <Rect x="0" y="0" width="400" height="220" fill="#FF8E57" opacity={0.06} />
+        <Rect
+          x="0"
+          y="0"
+          width="400"
+          height="220"
+          fill="#FF8E57"
+          opacity={0.06}
+        />
 
         {/* soft wave band */}
         <Path
@@ -112,7 +124,15 @@ function HeroMilkBackground() {
             fill="#FF8E57"
             opacity={0.16}
           />
-          <Rect x="2" y="7" width="10" height="8" rx="1.5" fill="#FF8E57" opacity={0.22} />
+          <Rect
+            x="2"
+            y="7"
+            width="10"
+            height="8"
+            rx="1.5"
+            fill="#FF8E57"
+            opacity={0.22}
+          />
         </G>
 
         {/* milk bottle - right of center, bigger */}
@@ -122,7 +142,15 @@ function HeroMilkBackground() {
             fill="#FF8E57"
             opacity={0.14}
           />
-          <Rect x="3" y="23" width="14" height="10" rx="2" fill="#FF8E57" opacity={0.2} />
+          <Rect
+            x="3"
+            y="23"
+            width="14"
+            height="10"
+            rx="2"
+            fill="#FF8E57"
+            opacity={0.2}
+          />
         </G>
 
         {/* milk drops */}
@@ -136,8 +164,22 @@ function HeroMilkBackground() {
         <Circle cx="270" cy="55" r="4" fill="#FF8E57" opacity={0.2} />
 
         {/* leaf accents */}
-        <Ellipse cx="200" cy="20" rx="10" ry="5" fill="#FF8E57" opacity={0.12} />
-        <Ellipse cx="140" cy="195" rx="12" ry="5" fill="#FF8E57" opacity={0.1} />
+        <Ellipse
+          cx="200"
+          cy="20"
+          rx="10"
+          ry="5"
+          fill="#FF8E57"
+          opacity={0.12}
+        />
+        <Ellipse
+          cx="140"
+          cy="195"
+          rx="12"
+          ry="5"
+          fill="#FF8E57"
+          opacity={0.1}
+        />
       </Svg>
     </View>
   );
@@ -179,7 +221,15 @@ function ScreenBackground() {
             fill={ORANGE}
             opacity={0.13}
           />
-          <Rect x="2" y="7" width="10" height="8" rx="1.5" fill={ORANGE} opacity={0.2} />
+          <Rect
+            x="2"
+            y="7"
+            width="10"
+            height="8"
+            rx="1.5"
+            fill={ORANGE}
+            opacity={0.2}
+          />
         </G>
 
         {/* milk bottle – right */}
@@ -189,19 +239,67 @@ function ScreenBackground() {
             fill={GREEN}
             opacity={0.12}
           />
-          <Rect x="2" y="7" width="10" height="8" rx="1.5" fill={GREEN} opacity={0.18} />
+          <Rect
+            x="2"
+            y="7"
+            width="10"
+            height="8"
+            rx="1.5"
+            fill={GREEN}
+            opacity={0.18}
+          />
         </G>
 
         {/* milk drops */}
-        <Path d="M60 170 q7 12 0 19 a7 7 0 0 1 -7 -19 z" fill={ORANGE} opacity={0.16} />
-        <Path d="M350 250 q6 10 0 16 a6 6 0 0 1 -6 -16 z" fill={GREEN} opacity={0.15} />
-        <Path d="M90 620 q7 12 0 19 a7 7 0 0 1 -7 -19 z" fill={ORANGE} opacity={0.14} />
-        <Path d="M300 700 q6 10 0 16 a6 6 0 0 1 -6 -16 z" fill={GREEN} opacity={0.13} />
+        <Path
+          d="M60 170 q7 12 0 19 a7 7 0 0 1 -7 -19 z"
+          fill={ORANGE}
+          opacity={0.16}
+        />
+        <Path
+          d="M350 250 q6 10 0 16 a6 6 0 0 1 -6 -16 z"
+          fill={GREEN}
+          opacity={0.15}
+        />
+        <Path
+          d="M90 620 q7 12 0 19 a7 7 0 0 1 -7 -19 z"
+          fill={ORANGE}
+          opacity={0.14}
+        />
+        <Path
+          d="M300 700 q6 10 0 16 a6 6 0 0 1 -6 -16 z"
+          fill={GREEN}
+          opacity={0.13}
+        />
 
         {/* leaves */}
-        <Ellipse cx="40" cy="480" rx="14" ry="6" fill={GREEN} opacity={0.12} transform="rotate(-30 40 480)" />
-        <Ellipse cx="360" cy="380" rx="14" ry="6" fill={GREEN} opacity={0.12} transform="rotate(25 360 380)" />
-        <Ellipse cx="200" cy="580" rx="12" ry="5" fill={ORANGE} opacity={0.1} transform="rotate(-15 200 580)" />
+        <Ellipse
+          cx="40"
+          cy="480"
+          rx="14"
+          ry="6"
+          fill={GREEN}
+          opacity={0.12}
+          transform="rotate(-30 40 480)"
+        />
+        <Ellipse
+          cx="360"
+          cy="380"
+          rx="14"
+          ry="6"
+          fill={GREEN}
+          opacity={0.12}
+          transform="rotate(25 360 380)"
+        />
+        <Ellipse
+          cx="200"
+          cy="580"
+          rx="12"
+          ry="5"
+          fill={ORANGE}
+          opacity={0.1}
+          transform="rotate(-15 200 580)"
+        />
 
         {/* small dots */}
         <Circle cx="120" cy="260" r="3" fill={ORANGE} opacity={0.22} />
@@ -276,7 +374,7 @@ function CustomAlert({
                 style={[
                   alertStyles.actionBtn,
                   action.style === "destructive" &&
-                  alertStyles.actionDestructive,
+                    alertStyles.actionDestructive,
                   action.style === "cancel" && alertStyles.actionCancel,
                   action.style === "default" && alertStyles.actionDefault,
                 ]}
@@ -289,7 +387,7 @@ function CustomAlert({
                   style={[
                     alertStyles.actionText,
                     action.style === "destructive" &&
-                    alertStyles.actionTextDestructive,
+                      alertStyles.actionTextDestructive,
                     action.style === "cancel" && alertStyles.actionTextCancel,
                     action.style === "default" && alertStyles.actionTextDefault,
                   ]}
@@ -491,6 +589,14 @@ export default function ProfileScreen() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [selectingStart, setSelectingStart] = useState(true);
+  const [editingVac, setEditingVac] = useState<{
+    id: string;
+    field: "start" | "end";
+    start: string;
+    end: string;
+  } | null>(null);
+  const [pickedDate, setPickedDate] = useState("");
+  const [savingVac, setSavingVac] = useState(false);
   const [editName, setEditName] = useState(user?.name || "");
   const [editPhone, setEditPhone] = useState(user?.phone || "");
   const [addressBook, setAddressBook] = useState<any[]>(() =>
@@ -602,7 +708,7 @@ export default function ProfileScreen() {
             image: info.profile_image || null,
           }),
         )
-        .catch(() => { });
+        .catch(() => {});
     }
   }, [isFocused, (user as any)?.admin_id]);
 
@@ -668,15 +774,15 @@ export default function ProfileScreen() {
 
       const result = fromCamera
         ? await ImagePicker.launchCameraAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.Images,
-          allowsEditing: false, // ← custom cropper handles this now
-          quality: 1,
-        })
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: false, // ← custom cropper handles this now
+            quality: 1,
+          })
         : await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.Images,
-          allowsEditing: false,
-          quality: 1,
-        });
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: false,
+            quality: 1,
+          });
 
       if (result.canceled || !result.assets?.length) return;
 
@@ -757,7 +863,7 @@ export default function ProfileScreen() {
             image: info.profile_image || null,
           }),
         )
-        .catch(() => { });
+        .catch(() => {});
 
       setConnectModal(false);
       showToast(`Connected with ${result.admin_name || "Gaushala"}`, "success");
@@ -826,6 +932,53 @@ export default function ProfileScreen() {
       showToast("Vacation saved! Deliveries will be paused.", "success");
     } catch (error: any) {
       showToast(error?.message || "Could not save vacation", "error");
+    }
+  };
+
+  const localToday = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  };
+
+  const openVacationEdit = (v: any, field: "start" | "end") => {
+    setEditingVac({ id: v.id, field, start: v.start_date, end: v.end_date });
+    setPickedDate(field === "start" ? v.start_date : v.end_date);
+  };
+
+  const handleSaveVacationEdit = async () => {
+    if (!editingVac) return;
+    const newStart =
+      editingVac.field === "start" ? pickedDate : editingVac.start;
+    const newEnd = editingVac.field === "end" ? pickedDate : editingVac.end;
+    if (newStart < localToday() && editingVac.field === "start") {
+      showToast("Start date cannot be before today.", "error");
+      return;
+    }
+    if (newEnd < newStart) {
+      showToast("End date must be on or after start date.", "error");
+      return;
+    }
+    setSavingVac(true);
+    try {
+      const updated = await api.updateVacation(editingVac.id, newStart, newEnd);
+      setVacations((prev) =>
+        prev.map((v) =>
+          v.id === editingVac.id
+            ? {
+                ...v,
+                start_date: updated.start_date,
+                end_date: updated.end_date,
+              }
+            : v,
+        ),
+      );
+      setEditingVac(null);
+      showToast("Vacation updated", "success");
+      fetchData();
+    } catch (error: any) {
+      showToast(error?.message || "Could not update vacation", "error");
+    } finally {
+      setSavingVac(false);
     }
   };
 
@@ -949,10 +1102,10 @@ export default function ProfileScreen() {
     try {
       const nextBook = editingAddressId
         ? addressBook.map((address) =>
-          address.id === editingAddressId
-            ? { ...address, ...normalizedAddress }
-            : address,
-        )
+            address.id === editingAddressId
+              ? { ...address, ...normalizedAddress }
+              : address,
+          )
         : [...addressBook, normalizedAddress];
       const normalizedBook = nextBook.map((address) => ({
         ...address,
@@ -1177,6 +1330,22 @@ export default function ProfileScreen() {
           </View>
         </View>
         {/* ── Vacation Mode (Card visual design untouched) ── */}
+        <TouchableOpacity style={styles.card} accessibilityRole="button" onPress={() => router.push("/(customer)/gaumali-history" as any)} activeOpacity={0.85}>
+          <View style={[styles.cardHeader, { marginBottom: 0 }]}>
+            <View style={[styles.cardIconBox, { backgroundColor: "#EAF5EC" }]}><Ionicons name="calendar-outline" size={20} color={Colors.primary} /></View>
+            <Text style={[styles.cardTitle, { flex: 1 }]}>Gaumali Booking History</Text>
+            <Ionicons name="chevron-forward" size={20} color={Colors.primary} />
+          </View>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.card} accessibilityRole="button" onPress={() => router.push("/(customer)/wallet" as any)} activeOpacity={0.85}>
+          <View style={[styles.cardHeader, { marginBottom: 0 }]}>
+            <View style={[styles.cardIconBox, { backgroundColor: "#FFF4E6" }]}>
+              <Ionicons name="wallet-outline" size={20} color={Colors.primary} />
+            </View>
+            <Text style={[styles.cardTitle, { flex: 1 }]}>My Wallet</Text>
+            <Ionicons name="chevron-forward" size={20} color={Colors.primary} />
+          </View>
+        </TouchableOpacity>
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <View style={[styles.cardIconBox, { backgroundColor: "#FFF4E6" }]}>
@@ -1200,20 +1369,71 @@ export default function ProfileScreen() {
           </Text>
           {vacations.length > 0 ? (
             <View style={styles.vacationList}>
-              {vacations.map((v) => (
-                <View key={v.id} style={styles.vacationChip}>
-                  <Ionicons name="sunny-outline" size={14} color="#d97706" />
-                  <Text style={styles.vacationChipText}>
-                    {formatDate(v.start_date)} → {formatDate(v.end_date)}
-                  </Text>
-                  <TouchableOpacity
-                    style={styles.vacationDeleteBtn}
-                    onPress={() => handleDeleteVacation(v.id)}
-                  >
-                    <Ionicons name="close" size={12} color="#d97706" />
-                  </TouchableOpacity>
-                </View>
-              ))}
+              {vacations.map((v) => {
+                const started = v.start_date < localToday();
+                return (
+                  <View key={v.id} style={styles.vacationCard}>
+                    <View style={styles.vacBoxRow}>
+                      <TouchableOpacity
+                        style={[styles.vacBox, started && styles.vacBoxLocked]}
+                        activeOpacity={0.8}
+                        disabled={started}
+                        onPress={() => openVacationEdit(v, "start")}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.vacBoxLabel}>FROM</Text>
+                          <Text style={styles.vacBoxValue}>
+                            {formatDate(v.start_date)}
+                          </Text>
+                        </View>
+                        {!started && (
+                          <Ionicons
+                            name="create-outline"
+                            size={16}
+                            color={Colors.primary}
+                          />
+                        )}
+                      </TouchableOpacity>
+
+                      <Ionicons
+                        name="arrow-forward"
+                        size={14}
+                        color="#d97706"
+                      />
+
+                      <TouchableOpacity
+                        style={styles.vacBox}
+                        activeOpacity={0.8}
+                        onPress={() => openVacationEdit(v, "end")}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.vacBoxLabel}>TO</Text>
+                          <Text style={styles.vacBoxValue}>
+                            {formatDate(v.end_date)}
+                          </Text>
+                        </View>
+                        <Ionicons
+                          name="create-outline"
+                          size={16}
+                          color={Colors.primary}
+                        />
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.vacationDeleteBtn}
+                        onPress={() => handleDeleteVacation(v.id)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Ionicons
+                          name="trash-outline"
+                          size={16}
+                          color="#ef4444"
+                        />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                );
+              })}
             </View>
           ) : (
             <View style={styles.emptyState}>
@@ -1257,7 +1477,7 @@ export default function ProfileScreen() {
                   order.product?.name ||
                   (order.items?.length > 0
                     ? order.items[0]?.name ||
-                    `Order #${String(order.id).slice(-4)}`
+                      `Order #${String(order.id).slice(-4)}`
                     : `Order #${String(order.id).slice(-4)}`);
                 return (
                   <View
@@ -1321,18 +1541,41 @@ export default function ProfileScreen() {
         </View>
 
         {/* ── Connect with Gaushala ── */}
-        <TouchableOpacity style={styles.card} activeOpacity={0.88} accessibilityRole="button"
-          onPress={() => router.push("/(customer)/returns" as any)}>
+        <TouchableOpacity
+          style={styles.card}
+          activeOpacity={0.88}
+          accessibilityRole="button"
+          onPress={() => router.push("/(customer)/returns" as any)}
+        >
           <View style={[styles.cardHeader, { marginBottom: 0 }]}>
             <View style={[styles.cardIconBox, { backgroundColor: "#FFF4E6" }]}>
-              <Ionicons name="swap-horizontal-outline" size={19} color={Colors.primary} />
+              <Ionicons
+                name="swap-horizontal-outline"
+                size={19}
+                color={Colors.primary}
+              />
             </View>
             <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={[styles.cardTitle, { flex: 0 }]}>Returns & Exchanges</Text>
-              <Text style={{ color: "#888", fontSize: 12, lineHeight: 18, marginTop: 4 }}>Bottle returns, product requests & pickups</Text>
+              <Text style={[styles.cardTitle, { flex: 0 }]}>
+                Returns & Exchanges
+              </Text>
+              <Text
+                style={{
+                  color: "#888",
+                  fontSize: 12,
+                  lineHeight: 18,
+                  marginTop: 4,
+                }}
+              >
+                Bottle returns, product requests & pickups
+              </Text>
             </View>
             <View style={styles.addIconBtn}>
-              <Ionicons name="chevron-forward" size={18} color={Colors.primary} />
+              <Ionicons
+                name="chevron-forward"
+                size={18}
+                color={Colors.primary}
+              />
             </View>
           </View>
         </TouchableOpacity>
@@ -1455,6 +1698,60 @@ export default function ProfileScreen() {
           />
         </TouchableOpacity>
       </ScrollView>
+
+      {/* ── Edit Vacation Date Modal ── */}
+      <Modal visible={!!editingVac} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <View style={styles.dragHandle} />
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {editingVac?.field === "start"
+                  ? "Edit Start Date"
+                  : "Edit End Date"}
+              </Text>
+              <TouchableOpacity
+                style={styles.closeBtn}
+                onPress={() => setEditingVac(null)}
+              >
+                <Ionicons name="close" size={15} color="#666" />
+              </TouchableOpacity>
+            </View>
+            {editingVac && (
+              <Calendar
+                current={pickedDate}
+                minDate={
+                  editingVac.field === "start"
+                    ? localToday()
+                    : editingVac.start > localToday()
+                      ? editingVac.start
+                      : localToday()
+                }
+                markedDates={{
+                  [pickedDate]: {
+                    selected: true,
+                    selectedColor: Colors.primary,
+                  },
+                }}
+                onDayPress={(day: any) => setPickedDate(day.dateString)}
+                theme={{
+                  todayTextColor: Colors.primary,
+                  selectedDayBackgroundColor: Colors.primary,
+                  arrowColor: Colors.primary,
+                  textDayFontWeight: "600",
+                  textMonthFontWeight: "800",
+                }}
+              />
+            )}
+            <Button
+              title={savingVac ? "Saving…" : "Save"}
+              onPress={handleSaveVacationEdit}
+              loading={savingVac}
+              style={{ marginTop: 16 }}
+            />
+          </View>
+        </View>
+      </Modal>
 
       {/* ── Vacation Modal ── */}
       <Modal visible={vacationModal} animationType="slide" transparent>
@@ -2329,5 +2626,42 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#111827",
     fontWeight: "700",
+  },
+  vacationCard: {
+    backgroundColor: "#FFFBEB",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+    padding: 10,
+  },
+  vacBoxRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  vacBox: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#fff",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  vacBoxLocked: {
+    backgroundColor: "#F9FAFB",
+    borderColor: "#E5E7EB",
+    opacity: 0.7,
+  },
+  vacBoxLabel: {
+    fontSize: 9,
+    fontWeight: "700",
+    color: "#b45309",
+    letterSpacing: 0.5,
+  },
+  vacBoxValue: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#92400e",
+    marginTop: 2,
   },
 });

@@ -20,6 +20,7 @@ import {
   Animated,
   Easing,
   Dimensions,
+  ActivityIndicator,
 } from "react-native";
 import {
   SafeAreaView,
@@ -30,6 +31,7 @@ import * as ImagePicker from "expo-image-picker";
 import { useFocusEffect, useRouter } from "expo-router";
 import SwipeToConfirm from "../../src/components/SwipeToConfirm";
 import { api } from "../../src/services/api";
+import { useProductVisibilitySync } from "../../src/hooks/useProductVisibilitySync";
 import AdminFeedbackModal from "../../src/components/productfeedback";
 import LoadingScreen from "../../src/components/LoadingScreen";
 import { useAuth } from "../../src/contexts/AuthContext";
@@ -229,6 +231,7 @@ type Product = {
   image?: string | null;
   images?: string[];
   is_available: boolean;
+  is_active?: boolean;
   product_type?: string;
   dietary_preference?: string;
   description?: string;
@@ -237,6 +240,7 @@ type Product = {
   seller_name?: string;
   seller_address?: string;
   shelf_life?: string;
+  purchase_type?: "one_time" | "subscription" | "both";
 };
 
 const getProductId = (product?: Product | null) =>
@@ -261,6 +265,8 @@ type FormData = {
   seller_address: string;
   shelf_life: string;
   quantityValue: string;
+  purchase_type: string;
+
 };
 
 const EMPTY_FORM: FormData = {
@@ -282,6 +288,7 @@ const EMPTY_FORM: FormData = {
   seller_address: "",
   shelf_life: "",
   quantityValue: "",
+  purchase_type: "both",
 };
 
 const CATEGORIES = [
@@ -302,6 +309,12 @@ const CATEGORIES = [
 const UNITS = ["visit", "ml", "L", "g", "kg" , "pcs", "dozen", "bottle", "pack", "box", "jar", "can"];
 const DIETARY_OPTIONS = ["Veg", "Non-Veg", "Vegan", "Gluten-Free"];
 const TABS = ["Details", "Highlights", "Information"];
+
+const PURCHASE_TYPES = [
+  { value: "one_time", label: "Buy Once" },
+  { value: "subscription", label: "Subscription" },
+  { value: "both", label: "Both" },
+] as const;
 
 // ── Animated Success Tick Component
 function SuccessTick({
@@ -448,6 +461,8 @@ export default function InventoryScreen() {
   const [formData, setFormData] = useState<FormData>({ ...EMPTY_FORM });
   const [showSuccessTick, setShowSuccessTick] = useState(false);
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   // ── Detail / Edit Modal State
   const [detailModal, setDetailModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -465,6 +480,13 @@ export default function InventoryScreen() {
   const [feedbackMap, setFeedbackMap] = useState<Record<string, { average_rating: number; total_reviews: number }>>({});
 
   // ── Fetch Data
+  useProductVisibilitySync(user?.id, async () => {
+    const data = await api.getProducts(undefined, undefined, true);
+    setProducts(data);
+    api.setScreenSnapshot("inventory-products", data);
+    setSelectedProduct(previous => previous ? data.find(item => getProductId(item) === getProductId(previous)) || null : null);
+  });
+
   const fetchData = useCallback(async () => {
     try {
       const [data, cutoffs, feedbackSummaries] = await Promise.all([
@@ -553,8 +575,10 @@ export default function InventoryScreen() {
     return missing;
   }, [formData]);
 
-  const handleAddProduct = async () => {
-    try {
+const handleAddProduct = async () => {
+  if (isSubmitting) return;
+  setIsSubmitting(true);
+  try {
       const images: string[] = [];
       if (formData.image2) images.push(formData.image2);
       if (formData.image3) images.push(formData.image3);
@@ -582,10 +606,13 @@ export default function InventoryScreen() {
         seller_name: formData.seller_name || undefined,
         seller_address: formData.seller_address || undefined,
         shelf_life: formData.shelf_life || undefined,
+        purchase_type: formData.purchase_type || "both",
       });
 
+      setIsSubmitting(false);
       setShowSuccessTick(true);
     } catch (e: any) {
+      setIsSubmitting(false);
       const message = e?.message || "Could not add product";
       showAlert("Something went wrong", message);
       showSnackbar(message, "error");
@@ -631,6 +658,7 @@ const openDetail = (product: Product) => {
       seller_address: product.seller_address || "",
       shelf_life: product.shelf_life || "",
       quantityValue: parsedQuantity,
+      purchase_type: product.purchase_type || "both",
     });
   };
 
@@ -700,6 +728,7 @@ const openDetail = (product: Product) => {
         seller_name: editForm.seller_name || undefined,
         seller_address: editForm.seller_address || undefined,
         shelf_life: editForm.shelf_life || undefined,
+        purchase_type: editForm.purchase_type || "both",
       });
       setShowEditSuccessTick(true);
     } catch (e: any) {
@@ -722,24 +751,25 @@ const openDetail = (product: Product) => {
     product: Product,
     productId: string,
     nextState: boolean,
+    field: "is_available" | "is_active" = "is_available",
   ) => {
     setProductAction({ id: productId, type: "availability" });
     try {
-      await api.updateProduct(productId, { is_available: nextState });
+      await api.updateProduct(productId, { [field]: nextState });
       setProducts((prev) =>
         prev.map((item) =>
           getProductId(item) === productId
-            ? { ...item, is_available: nextState }
+            ? { ...item, [field]: nextState }
             : item,
         ),
       );
       if (getProductId(selectedProduct) === productId) {
         setSelectedProduct((prev) =>
-          prev ? { ...prev, is_available: nextState } : prev,
+          prev ? { ...prev, [field]: nextState } : prev,
         );
       }
       showSnackbar(
-        nextState
+        field === "is_active" ? `${product.name} is now ${nextState ? "active" : "inactive"}` : nextState
           ? `${product.name} is now available`
           : `${product.name} is now unavailable`,
         "success",
@@ -787,8 +817,8 @@ const openDetail = (product: Product) => {
     Alert.alert(
       nextState ? "Make Product Available?" : "Make Product Unavailable?",
       nextState
-        ? `${product.name} will be visible for orders.`
-        : `${product.name} will be hidden from orders.`,
+        ? `${product.name} will be available. Inactive products remain hidden.`
+        : `${product.name} will be marked unavailable. Use Mark Inactive to hide it from customers.`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -986,6 +1016,7 @@ const openDetail = (product: Product) => {
                 onPress={() => {
                   setShowCustomCat(false);
                   update("category", cat);
+                  if (cat === "service") update("purchase_type", "one_time");
                 }}
               >
                 <Text
@@ -1061,6 +1092,27 @@ const openDetail = (product: Product) => {
               </TouchableOpacity>
             </View>
           )}
+        <Text style={styles.fieldLabel}>Purchase Type</Text>
+<View style={styles.purchaseRow}>
+  {PURCHASE_TYPES.map((opt) => {
+    const isActive = (data.purchase_type || "both") === opt.value;
+    return (
+      <TouchableOpacity
+        key={opt.value}
+        style={[styles.purchaseChip, isActive && styles.purchaseChipActive]}
+        onPress={() => update("purchase_type", opt.value)}
+      >
+        <Text
+          style={[styles.purchaseChipText, isActive && styles.purchaseChipTextActive]}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+        >
+          {opt.label}
+        </Text>
+      </TouchableOpacity>
+    );
+  })}
+</View>
 
           {/* ── Quantity: numeric amount, unit chips below ── */}
           <Text style={styles.fieldLabel}>Quantity</Text>
@@ -1359,26 +1411,35 @@ const openDetail = (product: Product) => {
                 <Ionicons name="scale-outline" size={12} color={C.dark} />
                 <Text style={styles.metaChipText}>{p.unit}</Text>
               </View>
+              
             ) : null}
+            {p.purchase_type ? (
+  <View style={styles.metaChip}>
+    <Ionicons name="repeat-outline" size={12} color={C.dark} />
+    <Text style={styles.metaChipText}>
+      {p.purchase_type === "one_time" ? "Buy once" : p.purchase_type === "subscription" ? "Subscription only" : "Buy / Subscribe"}
+    </Text>
+  </View>
+) : null}
             <View
               style={[
                 styles.metaChip,
-                { backgroundColor: p.is_available ? C.successBg : "#FFF0F0" },
+                { backgroundColor: p.is_active !== false ? C.successBg : "#FFF0F0" },
               ]}
             >
               <View
                 style={[
                   styles.statusDot,
-                  { backgroundColor: p.is_available ? C.success : "#FF6B6B" },
+                  { backgroundColor: p.is_active !== false ? C.success : "#FF6B6B" },
                 ]}
               />
               <Text
                 style={[
                   styles.metaChipText,
-                  { color: p.is_available ? "#16A34A" : "#DC2626" },
+                  { color: p.is_active !== false ? "#16A34A" : "#DC2626" },
                 ]}
               >
-                {p.is_available ? "Available" : "Unavailable"}
+                {p.is_active === false ? "Inactive" : "Active"}
               </Text>
             </View>
           </View>
@@ -1537,6 +1598,21 @@ const openDetail = (product: Product) => {
               <Text style={styles.detailEditBtnText}>Edit Product</Text>
             </TouchableOpacity>
 
+            <TouchableOpacity
+              style={[styles.detailSmallBtn, { backgroundColor: selectedProduct?.is_active === false ? C.successBg : "#FFF0F0", marginBottom: 10 }]}
+              disabled={availabilityBusy || deleteBusy}
+              onPress={() => {
+                if (!selectedProduct || !selectedProductId) return;
+                const active = selectedProduct.is_active === false;
+                Alert.alert(active ? "Activate Product?" : "Make Product Inactive?",
+                  active ? "This product will appear in the customer catalog again." : "This product will be hidden from customers. Existing orders and subscriptions will not be changed.",
+                  [{ text: "Cancel", style: "cancel" }, { text: active ? "Activate" : "Make Inactive", style: active ? "default" : "destructive",
+                    onPress: () => performAvailabilityUpdate(selectedProduct, selectedProductId, active, "is_active") }]);
+              }}
+            >
+              <Ionicons name={selectedProduct?.is_active === false ? "eye-outline" : "eye-off-outline"} size={18} color={C.success} />
+              <Text style={styles.detailSmallBtnText}>{availabilityBusy ? "Updating..." : selectedProduct?.is_active === false ? "Mark Active" : "Mark Inactive"}</Text>
+            </TouchableOpacity>
             <View style={styles.detailSmallBtnsRow}>
               <TouchableOpacity
                 style={[
@@ -1828,7 +1904,7 @@ const openDetail = (product: Product) => {
             style={[
               styles.statusPill,
               {
-                backgroundColor: product.is_available
+                backgroundColor: product.is_active !== false
                   ? C.successBg
                   : "#FFF0F0",
               },
@@ -1838,7 +1914,7 @@ const openDetail = (product: Product) => {
               style={[
                 styles.statusDot,
                 {
-                  backgroundColor: product.is_available
+                  backgroundColor: product.is_active !== false
                     ? C.success
                     : "#FF6B6B",
                 },
@@ -1847,10 +1923,10 @@ const openDetail = (product: Product) => {
             <Text
               style={[
                 styles.statusText,
-                { color: product.is_available ? "#16A34A" : "#DC2626" },
+                { color: product.is_active !== false ? "#16A34A" : "#DC2626" },
               ]}
             >
-              {product.is_available ? "Available" : "Unavailable"}
+              {product.is_active === false ? "Inactive" : "Active"}
             </Text>
           </View>
         </View>
@@ -1959,6 +2035,15 @@ const openDetail = (product: Product) => {
                 <Text style={styles.cancelBtnText}>Cancel</Text>
               </TouchableOpacity>
             </ScrollView>
+
+            {isSubmitting && (
+  <View style={styles.loadingOverlay}>
+    <View style={styles.loadingBox}>
+      <ActivityIndicator size="large" color={C.dark} />
+      <Text style={styles.loadingText}>Adding product...</Text>
+    </View>
+  </View>
+)}
 
             <SuccessTick visible={showSuccessTick} onDone={onTickDone} />
           </View>
@@ -2943,4 +3028,43 @@ detailFeedbackBtnText: {
   fontWeight: "800",
   color: "#B45309",
 },
+purchaseRow: {
+  flexDirection: "row",
+  gap: 6,
+  marginBottom: 16,
+},
+purchaseChip: {
+  alignItems: "center",
+  justifyContent: "center",
+  paddingVertical: 5,
+  paddingHorizontal: 10,
+  borderRadius: 8,
+  backgroundColor: C.inputBg,
+  borderWidth: 1,
+  borderColor: C.border,
+},
+purchaseChipActive: {
+  backgroundColor: C.primary + "20",
+  borderColor: C.primary,
+},
+purchaseChipText: { fontSize: 11, fontWeight: "600", color: C.textMuted },
+purchaseChipTextActive: { color: C.dark },
+loadingOverlay: {
+  ...StyleSheet.absoluteFillObject,
+  backgroundColor: "rgba(61,31,10,0.55)",
+  justifyContent: "center",
+  alignItems: "center",
+  zIndex: 998,
+  borderTopLeftRadius: 28,
+  borderTopRightRadius: 28,
+},
+loadingBox: {
+  backgroundColor: C.bg,
+  paddingVertical: 24,
+  paddingHorizontal: 32,
+  borderRadius: 20,
+  alignItems: "center",
+  gap: 12,
+},
+loadingText: { fontSize: 14, fontWeight: "700", color: C.text },
 });

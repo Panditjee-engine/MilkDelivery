@@ -9,6 +9,7 @@ export default function CustomerLayout() {
   const insets = useSafeAreaInsets();
   return (
     <Tabs
+      backBehavior="history"
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: Colors.primary,
@@ -56,10 +57,10 @@ export default function CustomerLayout() {
         }}
       />
       <Tabs.Screen
-        name="wallet"
+        name="gaumali"
         options={{
-          title: 'Wallet',
-          tabBarIcon: ({ color, size }) => <Ionicons name="wallet" size={size} color={color} />,
+          title: 'Gaumali',
+          tabBarIcon: ({ color, size }) => <Ionicons name="leaf" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -70,6 +71,10 @@ export default function CustomerLayout() {
         }}
       />
       <Tabs.Screen name="order-notifications" options={{ href: null }} />
+      <Tabs.Screen name="wallet" options={{ href: null }} />
+      <Tabs.Screen name="gaumali-history" options={{ href: null }} />
+      <Tabs.Screen name="gaumali-details" options={{ href: null }} />
+      <Tabs.Screen name="gaumali-cart" options={{ href: null }} />
       <Tabs.Screen name="product-search" options={{ href: null }} />
       <Tabs.Screen name="product-details" options={{ href: null }} />
       <Tabs.Screen name="edit-profile" options={{ href: null }} />
