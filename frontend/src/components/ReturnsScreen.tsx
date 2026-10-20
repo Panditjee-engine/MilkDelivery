@@ -32,12 +32,16 @@ const labels: Record<string, string> = {
   approved: "Ready for pickup",
   rejected: "Rejected",
   picked_up: "Pickup confirmed",
+  lost: "Lost - deposit charged",
+  cracked: "Cracked - deposit charged",
 };
 const colors: Record<string, string> = {
   requested: "#9A6700",
   approved: "#2563EB",
   rejected: "#B42318",
   picked_up: "#15803D",
+  lost: "#B42318",
+  cracked: "#B42318",
 };
 
 export default function ReturnsScreen({
@@ -604,11 +608,17 @@ useFocusEffect(
                   />
                   {row.status === "picked_up" && (
                     <Text style={s.muted}>
-                      Pickup recorded. Refund or exchange completion is not yet
-                      confirmed.
+                      {row.kind === "bottle_return" ? "Bottles collected. The deposit is released when no pending milk deliveries or outstanding bottles remain." : "Pickup recorded. Refund or exchange completion is not yet confirmed."}
                     </Text>
                   )}
                   <View style={s.actions}>
+                    {role !== "customer" && row.kind === "bottle_return" && row.status === "approved" && (
+                      <TouchableOpacity disabled={busy} style={s.secondary} onPress={() => Alert.alert(
+                        "Record bottle loss or damage?",
+                        "This closes the remaining bottles on this request and charges the held ₹50 once. A new ₹50 deposit is reserved when funds are available.",
+                        [{text:"Cancel",style:"cancel"},{text:"Lost",style:"destructive",onPress:()=>void perform(()=>api.chargeBottleDamage(row.id,"lost"))},{text:"Cracked",style:"destructive",onPress:()=>void perform(()=>api.chargeBottleDamage(row.id,"cracked"))}],
+                      )}><Text style={s.error}>Lost / Cracked</Text></TouchableOpacity>
+                    )}
                     {role === "admin" && row.status === "requested" && (
                       <>
                         <TouchableOpacity

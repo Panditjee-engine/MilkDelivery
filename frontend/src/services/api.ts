@@ -647,6 +647,12 @@ class ApiService {
       body: JSON.stringify(data),
     });
   }
+  chargeBottleDamage(id: string, reason: "lost" | "cracked") {
+    return this.request<any>(`/returns/${encodeURIComponent(id)}/bottle-damage`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    });
+  }
   updateReturnRequest(
     id: string,
     action: string,

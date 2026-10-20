@@ -26,6 +26,7 @@ import Constants from "expo-constants";
 import * as Sharing from "expo-sharing";
 import { Calendar } from "react-native-calendars";
 import { api, StatementTemplateSettings } from "../../src/services/api";
+import { notifyBottleDeposit } from "../../src/utils/bottleDepositNotice";
 import WalletHistoryFilter, {
   defaultHistoryFilter,
   matchesWalletHistory,
@@ -586,6 +587,14 @@ export default function WalletScreen() {
       api.getScreenSnapshot("screen:(customer)/wallet:balance") === undefined,
   );
   const [refreshing, setRefreshing] = useState(false);
+  const [bottleHold, setBottleHold] = useState(0);
+  const [availableBalance, setAvailableBalance] = useState<number | null>(null);
+  const showBottleHold = (amount: number) => Alert.alert(
+    "Bottle security deposit",
+    `₹${amount.toFixed(2)} from your wallet is reserved as a refundable bottle security deposit. This amount is not available for purchases. It is released when your bottle account is cleared. A confirmed lost or damaged bottle may be charged against this deposit.`,
+    [{ text: "Got it" }],
+  );
+  useEffect(() => { setBottleHold(0); setAvailableBalance(null); }, [user?.id]);
   const [balance, setBalance] = useCachedScreenState(
     "screen:(customer)/wallet:balance",
     0,
@@ -746,6 +755,12 @@ export default function WalletScreen() {
         api.getMe().catch(() => null),
       ]);
       setBalance(Number(walletData.balance || 0));
+      const held = Math.max(0, Number(walletData.bottle_deposit_held) || 0);
+      setBottleHold(held);
+      setAvailableBalance(Number(walletData.available_balance ?? walletData.balance ?? 0));
+      if (held > 0) {
+        void notifyBottleDeposit(walletData);
+      }
       setTransactions(txData);
       setRechargeRequests(Array.isArray(requestData) ? requestData : []);
       if (meData) updateUserRef.current(meData);
@@ -1137,7 +1152,7 @@ export default function WalletScreen() {
               <View style={styles.heroInfoIcon}>
                 <Ionicons name="wallet-outline" size={15} color="#fff" />
               </View>
-              <View>
+              <View style={styles.heroTextColumn}>
                 <Text style={styles.heroInfoLabel}>My Wallet</Text>
                 <Text style={styles.heroInfoValue}>Active</Text>
               </View>
@@ -1146,21 +1161,21 @@ export default function WalletScreen() {
               <View style={styles.heroInfoIcon}>
                 <Ionicons name="cash-outline" size={15} color="#fff" />
               </View>
-              <View>
+              <View style={styles.heroTextColumn}>
                 <Text style={styles.heroInfoLabel}>Total Balance</Text>
-                <Text style={styles.heroInfoValue}>Available</Text>
+                <Text style={styles.heroInfoValue}>Including holds</Text>
               </View>
             </View>
           </View>
-          <Text style={styles.heroAmount}>₹{balance.toFixed(2)}</Text>
+          <Text style={styles.heroAmount} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>₹{balance.toFixed(2)}</Text>
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
               <View style={styles.statIconGreen}>
                 <Ionicons name="arrow-down" size={12} color="#22c55e" />
               </View>
-              <View>
+              <View style={styles.heroTextColumn}>
                 <Text style={styles.statLabel}>Total Added</Text>
-                <Text style={styles.statValue}>₹{credits.toFixed(0)}</Text>
+                <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit>₹{credits.toFixed(0)}</Text>
               </View>
             </View>
             <View style={styles.statDivider} />
@@ -1168,12 +1183,28 @@ export default function WalletScreen() {
               <View style={styles.statIconRed}>
                 <Ionicons name="arrow-up" size={12} color="#ef4444" />
               </View>
-              <View>
+              <View style={styles.heroTextColumn}>
                 <Text style={styles.statLabel}>Total Spent</Text>
-                <Text style={styles.statValue}>₹{debits.toFixed(0)}</Text>
+                <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit>₹{debits.toFixed(0)}</Text>
               </View>
             </View>
           </View>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={`Bottle hold amount ₹${bottleHold.toFixed(2)}. View details`}
+            onPress={() => bottleHold > 0 ? showBottleHold(bottleHold) : Alert.alert("Bottle security deposit", "No bottle deposit is currently on hold in your wallet.")}
+            style={styles.bottleHoldSection}
+          >
+            <View style={styles.bottleHoldHeader}>
+              <Ionicons name="lock-closed-outline" size={18} color="#fff" />
+              <View style={styles.heroTextColumn}>
+                <Text style={styles.bottleHoldLabel}>Bottle Hold Amount</Text>
+                <Text style={styles.bottleHoldValue}>₹{bottleHold.toFixed(2)}</Text>
+              </View>
+              <Ionicons name="information-circle-outline" size={18} color="#fff" />
+            </View>
+            {availableBalance !== null && <Text style={styles.availableBalanceText}>Available to spend: ₹{availableBalance.toFixed(2)}</Text>}
+          </TouchableOpacity>
           <TouchableOpacity
             style={styles.addMoneyBtn}
             onPress={() => setRechargeModal(true)}
@@ -1925,12 +1956,14 @@ const styles = StyleSheet.create({
   },
   heroTop: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 10,
-    alignItems: "center",
+    alignItems: "stretch",
     marginBottom: 14,
   },
   heroInfoCard: {
     flex: 1,
+    minWidth: 120,
     flexDirection: "row",
     alignItems: "center",
     gap: 9,
@@ -1942,6 +1975,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   heroInfoIcon: {
+    flexShrink: 0,
     width: 30,
     height: 30,
     borderRadius: 10,
@@ -1964,23 +1998,30 @@ const styles = StyleSheet.create({
     fontSize: 44,
     fontWeight: "800",
     color: "#fff",
-    letterSpacing: -1,
+    letterSpacing: 0,
     marginBottom: 20,
   },
   statsRow: {
     flexDirection: "row",
     backgroundColor: "rgba(255,255,255,0.12)",
     borderRadius: 14,
-    padding: 14,
+    padding: 10,
     marginBottom: 16,
   },
-  statItem: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10 },
+  heroTextColumn: { flex: 1, minWidth: 0 },
+  statItem: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 6 },
+  bottleHoldSection: { padding: 12, marginBottom: 16, borderRadius: 8, backgroundColor: "rgba(255,255,255,0.12)", gap: 8 },
+  bottleHoldHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
+  bottleHoldLabel: { color: "#fff", fontSize: 13, lineHeight: 18, fontWeight: "600" },
+  bottleHoldValue: { color: "#fff", fontSize: 16, lineHeight: 22, fontWeight: "800", marginTop: 2 },
+  availableBalanceText: { color: "#fff", fontSize: 12, lineHeight: 18 },
   statDivider: {
     width: 1,
     backgroundColor: "rgba(255,255,255,0.2)",
-    marginHorizontal: 12,
+    marginHorizontal: 8,
   },
   statIconGreen: {
+    flexShrink: 0,
     width: 28,
     height: 28,
     borderRadius: 14,
@@ -1989,6 +2030,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   statIconRed: {
+    flexShrink: 0,
     width: 28,
     height: 28,
     borderRadius: 14,
@@ -2003,6 +2045,7 @@ const styles = StyleSheet.create({
   },
   statValue: { fontSize: 14, fontWeight: "700", color: "#fff" },
   addMoneyBtn: {
+    minHeight: 48,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",

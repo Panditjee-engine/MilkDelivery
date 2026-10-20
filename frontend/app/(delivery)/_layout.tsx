@@ -49,6 +49,7 @@ export default function DeliveryLayout() {
           tabBarIcon: ({ color, size }) => <Ionicons name="cube" size={size} color={color} />,
         }}
       />
+        <Tabs.Screen name="gaumali" options={{ title: 'Gaumali', tabBarIcon: ({color,size}) => <Ionicons name="leaf" color={color} size={size}/> }} />
       <Tabs.Screen
         name="profile"
         options={{
@@ -56,7 +57,7 @@ export default function DeliveryLayout() {
           tabBarIcon: ({ color, size }) => <Ionicons name="person" size={size} color={color} />,
         }}
       />
-      <Tabs.Screen name="gaumali" options={{ title: 'Gaumali', tabBarIcon: ({color,size}) => <Ionicons name="leaf" color={color} size={size}/> }} />
+    
       <Tabs.Screen name="delivery-guidelines" options={{ href: null }} />
       <Tabs.Screen name="contact-support" options={{ href: null }} />
       <Tabs.Screen name="faqs" options={{ href: null }} />

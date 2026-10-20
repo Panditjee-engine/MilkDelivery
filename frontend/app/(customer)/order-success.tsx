@@ -1,9 +1,11 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { Colors } from "../../src/constants/colors";
+import { api } from "../../src/services/api";
+import { notifyBottleDeposit } from "../../src/utils/bottleDepositNotice";
 
 function first(value?: string | string[]) {
   return Array.isArray(value) ? value[0] : value;
@@ -32,6 +34,13 @@ function paymentLabel(method?: string) {
 }
 
 export default function OrderSuccessScreen() {
+  useEffect(() => {
+    let active = true;
+    void api.getWallet().then(wallet => {
+      if (active) void notifyBottleDeposit(wallet);
+    }).catch(() => { /* A wallet refresh failure must not undo a confirmed order. */ });
+    return () => { active = false; };
+  }, []);
   const params = useLocalSearchParams<{
     amount?: string;
     items?: string;
