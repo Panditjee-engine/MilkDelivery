@@ -241,6 +241,7 @@ type Product = {
   seller_address?: string;
   shelf_life?: string;
   purchase_type?: "one_time" | "subscription" | "both";
+  wishlist_count?: number;
 };
 
 const getProductId = (product?: Product | null) =>
@@ -286,7 +287,6 @@ type FormData = {
   shelf_life: string;
   quantityValue: string;
   purchase_type: string;
-
 };
 
 const EMPTY_FORM: FormData = {
@@ -441,9 +441,13 @@ export default function InventoryScreen() {
   const { alertConfig, showAlert, dismissAlert } = useCustomAlert();
 
   // ── Core State
-  const [loading, setLoading] = useState(() => !api.getScreenSnapshot("inventory-products"));
+  const [loading, setLoading] = useState(
+    () => !api.getScreenSnapshot("inventory-products"),
+  );
   const [refreshing, setRefreshing] = useState(false);
-  const [products, setProducts] = useState<Product[]>(() => api.getScreenSnapshot<Product[]>("inventory-products") || []);
+  const [products, setProducts] = useState<Product[]>(
+    () => api.getScreenSnapshot<Product[]>("inventory-products") || [],
+  );
 
   // -- for search
   const [searchQuery, setSearchQuery] = useState("");
@@ -493,8 +497,15 @@ export default function InventoryScreen() {
   const [productAction, setProductAction] = useState<{ id: string; type: "availability" | "delete"; } | null>(null);
   const [showEditSuccessTick, setShowEditSuccessTick] = useState(false);
   const [orderCutoffs, setOrderCutoffs] = useState<OrderCutoffRule[]>([]);
-  const [feedbackModalProduct, setFeedbackModalProduct] = useState<{ id: string; name: string } | null>(null);
-  const [feedbackMap, setFeedbackMap] = useState<Record<string, { average_rating: number; total_reviews: number }>>({});
+  const [feedbackModalProduct, setFeedbackModalProduct] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+  const [feedbackMap, setFeedbackMap] = useState<
+    Record<string, { average_rating: number; total_reviews: number }>
+  >({});
+
+  const [wishMap, setWishMap] = useState<Record<string, number>>({});
   const [summaryFilter, setSummaryFilter] = useState<SummaryFilter | null>(null);
 
   // ── Fetch Data
@@ -502,20 +513,30 @@ export default function InventoryScreen() {
     const data = await api.getProducts(undefined, undefined, true);
     setProducts(data);
     api.setScreenSnapshot("inventory-products", data);
-    setSelectedProduct(previous => previous ? data.find(item => getProductId(item) === getProductId(previous)) || null : null);
+    setSelectedProduct((previous) =>
+      previous
+        ? data.find((item) => getProductId(item) === getProductId(previous)) ||
+          null
+        : null,
+    );
   });
 
   const fetchData = useCallback(async () => {
     try {
-      const [data, cutoffs, feedbackSummaries] = await Promise.all([
+      const [data, cutoffs, feedbackSummaries, wishStats] = await Promise.all([
+        
         api.getProducts(),
         api.getAdminOrderCutoffs().catch(() => []),
         api.getAdminFeedbackSummary().catch(() => []),
+        api.getAdminWishlistStats(500).catch(() => null),
       ]);
       setProducts(data);
       api.setScreenSnapshot("inventory-products", data);
       setOrderCutoffs(cutoffs || []);
-      const map: Record<string, { average_rating: number; total_reviews: number }> = {};
+      const map: Record<
+        string,
+        { average_rating: number; total_reviews: number }
+      > = {};
       (feedbackSummaries || []).forEach((item: any) => {
         map[item.product_id] = {
           average_rating: item.average_rating,
@@ -523,6 +544,18 @@ export default function InventoryScreen() {
         };
       });
       setFeedbackMap(map);
+
+const stats = (wishStats as any)?.data ?? wishStats;
+
+const wm: Record<string, number> = {};
+
+(stats?.products ?? []).forEach((p: any) => {
+  const id = String(p.product_id ?? "").trim();
+  if (id) wm[id] = Number(p.wishlist_count ?? 0);
+});
+
+setWishMap(wm);
+
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -787,9 +820,11 @@ export default function InventoryScreen() {
         );
       }
       showSnackbar(
-        field === "is_active" ? `${product.name} is now ${nextState ? "active" : "inactive"}` : nextState
-          ? `${product.name} is now available`
-          : `${product.name} is now unavailable`,
+        field === "is_active"
+          ? `${product.name} is now ${nextState ? "active" : "inactive"}`
+          : nextState
+            ? `${product.name} is now available`
+            : `${product.name} is now unavailable`,
         "success",
       );
       fetchData();
@@ -1016,7 +1051,11 @@ export default function InventoryScreen() {
 
           <View style={styles.row}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.fieldLabel}>{data.category === "service" ? "Price per booking (₹)" : "Price (₹)"}</Text>
+              <Text style={styles.fieldLabel}>
+                {data.category === "service"
+                  ? "Price per booking (₹)"
+                  : "Price (₹)"}
+              </Text>
               <TextInput
                 style={styles.input}
                 placeholder="e.g. 60"
@@ -1132,27 +1171,33 @@ export default function InventoryScreen() {
               </TouchableOpacity>
             </View>
           )}
-          <Text style={styles.fieldLabel}>Purchase Type</Text>
-          <View style={styles.purchaseRow}>
-            {PURCHASE_TYPES.map((opt) => {
-              const isActive = (data.purchase_type || "both") === opt.value;
-              return (
-                <TouchableOpacity
-                  key={opt.value}
-                  style={[styles.purchaseChip, isActive && styles.purchaseChipActive]}
-                  onPress={() => update("purchase_type", opt.value)}
-                >
-                  <Text
-                    style={[styles.purchaseChipText, isActive && styles.purchaseChipTextActive]}
-                    numberOfLines={1}
-                    adjustsFontSizeToFit
-                  >
-                    {opt.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+            <Text style={styles.fieldLabel}>Purchase Type</Text>
+                    <View style={styles.purchaseRow}>
+                      {PURCHASE_TYPES.map((opt) => {
+                        const isActive = (data.purchase_type || "both") === opt.value;
+                        return (
+                          <TouchableOpacity
+                            key={opt.value}
+                            style={[
+                    styles.purchaseChip,
+                    isActive && styles.purchaseChipActive,
+                  ]}
+                            onPress={() => update("purchase_type", opt.value)}
+                          >
+                            <Text
+                              style={[
+                      styles.purchaseChipText,
+                      isActive && styles.purchaseChipTextActive,
+                    ]}
+                              numberOfLines={1}
+                              adjustsFontSizeToFit
+                            >
+                              {opt.label}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
 
           {/* ── Quantity: numeric amount, unit chips below ── */}
           <Text style={styles.fieldLabel}>Quantity</Text>
@@ -1187,15 +1232,21 @@ export default function InventoryScreen() {
             ))}
           </View>
 
-          <Text style={styles.fieldLabel}>{data.category === "service" ? "Booking capacity: Unlimited" : "Stock (optional)"}</Text>
-          {data.category !== "service" && <TextInput
-            style={styles.input}
-            placeholder="0"
-            placeholderTextColor={C.textLight}
-            keyboardType="numeric"
-            value={data.stock}
-            onChangeText={(v) => update("stock", v)}
-          />}
+          <Text style={styles.fieldLabel}>
+            {data.category === "service"
+              ? "Booking capacity: Unlimited"
+              : "Stock (optional)"}
+          </Text>
+          {data.category !== "service" && (
+            <TextInput
+              style={styles.input}
+              placeholder="0"
+              placeholderTextColor={C.textLight}
+              keyboardType="numeric"
+              value={data.stock}
+              onChangeText={(v) => update("stock", v)}
+            />
+          )}
         </View>
       );
     }
@@ -1418,7 +1469,9 @@ export default function InventoryScreen() {
             <Text style={[styles.detailName, { flex: 1 }]}>{p.name}</Text>
             <TouchableOpacity
               style={styles.detailFeedbackBtn}
-              onPress={() => setFeedbackModalProduct({ id: selectedProductId, name: p.name })}
+              onPress={() =>
+                setFeedbackModalProduct({ id: selectedProductId, name: p.name })
+              }
             >
               <Ionicons name="star" size={14} color="#F59E0B" />
               <Text style={styles.detailFeedbackBtnText}>
@@ -1451,26 +1504,35 @@ export default function InventoryScreen() {
                 <Ionicons name="scale-outline" size={12} color={C.dark} />
                 <Text style={styles.metaChipText}>{p.unit}</Text>
               </View>
-
             ) : null}
             {p.purchase_type ? (
-              <View style={styles.metaChip}>
-                <Ionicons name="repeat-outline" size={12} color={C.dark} />
-                <Text style={styles.metaChipText}>
-                  {p.purchase_type === "one_time" ? "Buy once" : p.purchase_type === "subscription" ? "Subscription only" : "Buy / Subscribe"}
-                </Text>
-              </View>
-            ) : null}
+                          <View style={styles.metaChip}>
+                            <Ionicons name="repeat-outline" size={12} color={C.dark} />
+                            <Text style={styles.metaChipText}>
+                              {p.purchase_type === "one_time"
+                    ? "Buy once"
+                    : p.purchase_type === "subscription"
+                      ? "Subscription only"
+                      : "Buy / Subscribe"}
+                            </Text>
+                          </View>
+                        ) : null}
             <View
               style={[
                 styles.metaChip,
-                { backgroundColor: p.is_active !== false ? C.successBg : "#FFF0F0" },
+                {
+                  backgroundColor:
+                    p.is_active !== false ? C.successBg : "#FFF0F0",
+                },
               ]}
             >
               <View
                 style={[
                   styles.statusDot,
-                  { backgroundColor: p.is_active !== false ? C.success : "#FF6B6B" },
+                  {
+                    backgroundColor:
+                      p.is_active !== false ? C.success : "#FF6B6B",
+                  },
                 ]}
               />
               <Text
@@ -1578,55 +1640,55 @@ export default function InventoryScreen() {
           p.customer_care ||
           p.seller_name ||
           p.shelf_life) && (
-            <View style={styles.detailSection}>
-              <Text style={styles.detailSectionTitle}>
-                <Ionicons
-                  name="information-circle-outline"
-                  size={14}
-                  color={C.dark}
-                />{" "}
-                Information
-              </Text>
-              {p.description ? (
-                <View style={styles.infoBlock}>
-                  <Text style={styles.infoLabel}>Description</Text>
-                  <Text style={styles.infoValueMultiline}>{p.description}</Text>
-                </View>
-              ) : null}
-              {p.shelf_life ? (
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Shelf Life</Text>
-                  <Text style={styles.infoValue}>{p.shelf_life}</Text>
-                </View>
-              ) : null}
-              {p.seller_name ? (
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Seller</Text>
-                  <Text style={styles.infoValue}>{p.seller_name}</Text>
-                </View>
-              ) : null}
-              {p.seller_address ? (
-                <View style={styles.infoBlock}>
-                  <Text style={styles.infoLabel}>Seller Address</Text>
-                  <Text style={styles.infoValueMultiline}>
-                    {p.seller_address}
-                  </Text>
-                </View>
-              ) : null}
-              {p.customer_care ? (
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Customer Care</Text>
-                  <Text style={styles.infoValue}>{p.customer_care}</Text>
-                </View>
-              ) : null}
-              {p.disclaimer ? (
-                <View style={styles.infoBlock}>
-                  <Text style={styles.infoLabel}>Disclaimer</Text>
-                  <Text style={styles.infoValueMultiline}>{p.disclaimer}</Text>
-                </View>
-              ) : null}
-            </View>
-          )}
+          <View style={styles.detailSection}>
+            <Text style={styles.detailSectionTitle}>
+              <Ionicons
+                name="information-circle-outline"
+                size={14}
+                color={C.dark}
+              />{" "}
+              Information
+            </Text>
+            {p.description ? (
+              <View style={styles.infoBlock}>
+                <Text style={styles.infoLabel}>Description</Text>
+                <Text style={styles.infoValueMultiline}>{p.description}</Text>
+              </View>
+            ) : null}
+            {p.shelf_life ? (
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Shelf Life</Text>
+                <Text style={styles.infoValue}>{p.shelf_life}</Text>
+              </View>
+            ) : null}
+            {p.seller_name ? (
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Seller</Text>
+                <Text style={styles.infoValue}>{p.seller_name}</Text>
+              </View>
+            ) : null}
+            {p.seller_address ? (
+              <View style={styles.infoBlock}>
+                <Text style={styles.infoLabel}>Seller Address</Text>
+                <Text style={styles.infoValueMultiline}>
+                  {p.seller_address}
+                </Text>
+              </View>
+            ) : null}
+            {p.customer_care ? (
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Customer Care</Text>
+                <Text style={styles.infoValue}>{p.customer_care}</Text>
+              </View>
+            ) : null}
+            {p.disclaimer ? (
+              <View style={styles.infoBlock}>
+                <Text style={styles.infoLabel}>Disclaimer</Text>
+                <Text style={styles.infoValueMultiline}>{p.disclaimer}</Text>
+              </View>
+            ) : null}
+          </View>
+        )}
 
         {isAdmin && (
           <View style={styles.detailActions}>
@@ -1639,21 +1701,58 @@ export default function InventoryScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.detailSmallBtn, { backgroundColor: selectedProduct?.is_active === false ? C.successBg : "#FFF0F0", marginBottom: 10 }]}
+              style={[
+                styles.detailSmallBtn,
+                {
+                  backgroundColor:
+                    selectedProduct?.is_active === false
+                      ? C.successBg
+                      : "#FFF0F0",
+                  marginBottom: 10,
+                },
+              ]}
               disabled={availabilityBusy || deleteBusy}
               onPress={() => {
                 if (!selectedProduct || !selectedProductId) return;
                 const active = selectedProduct.is_active === false;
-                Alert.alert(active ? "Activate Product?" : "Make Product Inactive?",
-                  active ? "This product will appear in the customer catalog again." : "This product will be hidden from customers. Existing orders and subscriptions will not be changed.",
-                  [{ text: "Cancel", style: "cancel" }, {
-                    text: active ? "Activate" : "Make Inactive", style: active ? "default" : "destructive",
-                    onPress: () => performAvailabilityUpdate(selectedProduct, selectedProductId, active, "is_active")
-                  }]);
+                Alert.alert(
+                  active ? "Activate Product?" : "Make Product Inactive?",
+                  active
+                    ? "This product will appear in the customer catalog again."
+                    : "This product will be hidden from customers. Existing orders and subscriptions will not be changed.",
+                  [
+                    { text: "Cancel", style: "cancel" },
+                    {
+                      text: active ? "Activate" : "Make Inactive",
+                      style: active ? "default" : "destructive",
+                      onPress: () =>
+                        performAvailabilityUpdate(
+                          selectedProduct,
+                          selectedProductId,
+                          active,
+                          "is_active",
+                        ),
+                    },
+                  ],
+                );
               }}
             >
-              <Ionicons name={selectedProduct?.is_active === false ? "eye-outline" : "eye-off-outline"} size={18} color={C.success} />
-              <Text style={styles.detailSmallBtnText}>{availabilityBusy ? "Updating..." : selectedProduct?.is_active === false ? "Mark Active" : "Mark Inactive"}</Text>
+              <Ionicons
+                name={
+                  selectedProduct?.is_active === false
+                    ? "eye-outline"
+                    : "eye-off-outline"
+                }
+                size={18}
+                color={C.success}
+              />
+              <Text style={styles.detailSmallBtnText}>
+                {availabilityBusy
+                  ? "Updating..."
+                  : selectedProduct?.is_active === false
+                    ? "Mark Active"
+                    : "Mark Inactive"}
+              </Text>
             </TouchableOpacity>
             <View style={styles.detailSmallBtnsRow}>
               <TouchableOpacity
@@ -1749,7 +1848,12 @@ export default function InventoryScreen() {
               returnKeyType="search"
             />
             {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchQuery("")} hitSlop={10} accessibilityLabel="Clear product search" accessibilityRole="button">
+              <TouchableOpacity
+                onPress={() => setSearchQuery("")}
+                hitSlop={10}
+                accessibilityLabel="Clear product search"
+                accessibilityRole="button"
+              >
                 <Ionicons name="close-circle" size={17} color={C.textLight} />
               </TouchableOpacity>
             )}
@@ -1848,7 +1952,9 @@ export default function InventoryScreen() {
                   <Ionicons name="receipt-outline" size={20} color={C.dark} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.orderSummaryTitle}>Product Order Summary</Text>
+                  <Text style={styles.orderSummaryTitle}>
+                    Product Order Summary
+                  </Text>
                   <Text style={styles.orderSummarySub}>
                     Check today orders by Milk, Paneer or any inventory product
                   </Text>
@@ -3221,4 +3327,12 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   loadingText: { fontSize: 14, fontWeight: "700", color: C.text },
+  noRatingText: { fontSize: 11, color: C.textLight, fontWeight: "500" },
+  savedRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 2,
+  },
+  savedText: { fontSize: 11, fontWeight: "700", color: C.textMuted },
 });

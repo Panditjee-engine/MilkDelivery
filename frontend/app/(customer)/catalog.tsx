@@ -1,8 +1,12 @@
-import ServiceSlotPicker, { isServiceProduct, productStock } from "../../src/components/ServiceSlotPicker";
+import ServiceSlotPicker, {
+  isServiceProduct,
+  productStock,
+} from "../../src/components/ServiceSlotPicker";
 import NewProductBadge from "../../src/components/NewProductBadge";
 import { useLoyaltyQuote } from "../../src/hooks/useLoyaltyQuote";
 import LoyaltyBreakdown from "../../src/components/LoyaltyBreakdown";
 import { newlyAddedProducts } from "../../src/utils/newProducts";
+import WishlistToast from "../../src/components/WishlistToast";
 import { useProductAgeClock } from "../../src/hooks/useProductAgeClock";
 import React, {
   useState,
@@ -1197,6 +1201,8 @@ function ProductCard({
   deliveryWindow,
   rating,
   compact = false,
+  isWishlisted = false,
+  onToggleWishlist,
 }: {
   product: any;
   onOpenDetails: () => void;
@@ -1208,6 +1214,8 @@ function ProductCard({
   deliveryWindow?: DeliveryWindowRule | null;
   rating?: { average: number; total: number } | null;
   compact?: boolean;
+  isWishlisted?: boolean;
+  onToggleWishlist?: () => void;
 }) {
   const theme = getCategoryTheme(product.category);
   const isDairy = isDairyProduct(product) || isServiceProduct(product);
@@ -1321,6 +1329,21 @@ function ProductCard({
             <Text style={cardS.qtyBadgeTxt}>{cartQty}</Text>
           </View>
         )}
+        <TouchableOpacity
+          style={cardS.heartBtn}
+          activeOpacity={0.8}
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          onPress={(event) => {
+            event.stopPropagation?.();
+            onToggleWishlist?.();
+          }}
+        >
+          <Ionicons
+            name={isWishlisted ? "heart" : "heart-outline"}
+            size={15}
+            color={isWishlisted ? "#EF4444" : "#555"}
+          />
+        </TouchableOpacity>
       </View>
       <View style={cardS.body}>
         <NewProductBadge product={product} />
@@ -1694,9 +1717,24 @@ const cardS = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.55)",
   },
   imgDotActive: { backgroundColor: "#fff", width: 12 },
+  heartBtn: {
+    position: "absolute",
+    right: 6,
+    bottom: 6,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#fff",
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
 });
 
-// ─── Category Section ────────────────────────────────────────────────────────
+// ─── Category Section
 function CategorySection({
   value,
   label,
@@ -1711,6 +1749,8 @@ function CategorySection({
   ratings,
   expanded = false,
   onViewAll,
+  wishlistIds,
+  onToggleWishlist,
 }: {
   value: string;
   label: string;
@@ -1725,19 +1765,43 @@ function CategorySection({
   ratings: Record<string, { average: number; total: number }>;
   expanded?: boolean;
   onViewAll?: () => void;
+  wishlistIds: Set<string>;
+  onToggleWishlist: (p: any) => void;
 }) {
   const theme = getCategoryTheme(value);
   return (
     <View style={secS.section}>
       <View style={secS.header}>
         <View style={[secS.dot, { backgroundColor: theme.accent }]} />
-        <Text style={[secS.title, { flexShrink: 1 }]} numberOfLines={1}>{label}</Text>
+        <Text style={[secS.title, { flexShrink: 1 }]} numberOfLines={1}>
+          {label}
+        </Text>
         <Text style={[secS.count, { color: theme.accent }]}>
           {items.length}
         </Text>
-        {onViewAll && <TouchableOpacity onPress={onViewAll} accessibilityRole="button" style={{ marginLeft: "auto", paddingVertical: 8, paddingLeft: 10 }}><Text style={{ color: Colors.primary, fontSize: 12, fontWeight: "700" }}>View All</Text></TouchableOpacity>}
+        {onViewAll && (
+          <TouchableOpacity
+            onPress={onViewAll}
+            accessibilityRole="button"
+            style={{ marginLeft: "auto", paddingVertical: 8, paddingLeft: 10 }}
+          >
+            <Text
+              style={{ color: Colors.primary, fontSize: 12, fontWeight: "700" }}
+            >
+              View All
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
-      <ScrollView horizontal={!expanded} scrollEnabled={!expanded} showsHorizontalScrollIndicator={false} contentContainerStyle={[secS.list, !expanded && { flexWrap: "nowrap", paddingBottom: 4 }]}>
+      <ScrollView
+        horizontal={!expanded}
+        scrollEnabled={!expanded}
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={[
+          secS.list,
+          !expanded && { flexWrap: "nowrap", paddingBottom: 4 },
+        ]}
+      >
         {(expanded ? items : items.slice(0, 10)).map((item) => {
           const qty = cart
             .filter((c) => c.product.id === item.id)
@@ -1758,6 +1822,10 @@ function CategorySection({
                 deliveryWindows,
               )}
               rating={ratings[String(resolveProductId(item))] || null}
+              isWishlisted={[item.id, item._id, item.product_id].some(
+  (x) => x && wishlistIds.has(String(x)),
+)}
+              onToggleWishlist={() => onToggleWishlist(item)}
             />
           );
         })}
@@ -4310,6 +4378,11 @@ export default function CatalogScreen() {
   const [toastVisible, setToastVisible] = useState(false);
   const [toastProduct, setToastProduct] = useState("");
   const [toastIsSub, setToastIsSub] = useState(false);
+  const [wishlistIds, setWishlistIds] = useState<Set<string>>(new Set());
+  const [wishToastVisible, setWishToastVisible] = useState(false);
+  const [wishToastKey, setWishToastKey] = useState(0);
+  const [wishToastName, setWishToastName] = useState("");
+  const [wishToastTitle, setWishToastTitle] = useState("Added to favourites");
   const [activeNewSlide, setActiveNewSlide] = useState(0);
   const [catalogSlides, setCatalogSlides] = useState<CatalogSlide[]>([]);
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(
@@ -4322,15 +4395,29 @@ export default function CatalogScreen() {
   const newSlidesScrollRef = useRef<ScrollView>(null);
   const activeNewSlideRef = useRef(0);
   const isFocused = useIsFocused();
-  const { addToCartProduct, addToCartQty, category: routeCategory, collection } = useLocalSearchParams<{
+  const {
+    addToCartProduct,
+    addToCartQty,
+    category: routeCategory,
+    collection,
+  } = useLocalSearchParams<{
     addToCartProduct?: string;
     addToCartQty?: string;
     category?: string;
     collection?: string;
   }>();
   useEffect(() => {
-    if (collection === '__popular' || collection === '__recent' || collection === '__new') { setSelectedCategory(null); setDiscoveryView(collection); }
-    else if (typeof routeCategory === 'string') { setSelectedCategory(routeCategory || null); setDiscoveryView(null); }
+    if (
+      collection === "__popular" ||
+      collection === "__recent" ||
+      collection === "__new"
+    ) {
+      setSelectedCategory(null);
+      setDiscoveryView(collection);
+    } else if (typeof routeCategory === "string") {
+      setSelectedCategory(routeCategory || null);
+      setDiscoveryView(null);
+    }
   }, [routeCategory, collection]);
 
   const tomorrow = useMemo(() => {
@@ -4402,6 +4489,14 @@ export default function CatalogScreen() {
       );
     } catch {}
   }, []);
+
+  useEffect(() => {
+    if (!isFocused || !userId) return;
+    api
+      .getWishlistIds()
+      .then((ids) => setWishlistIds(new Set((ids || []).map(String))))
+      .catch(() => {});
+  }, [isFocused, userId]);
 
   const fetchPaymentMethods = useCallback(async () => {
     try {
@@ -4563,12 +4658,24 @@ export default function CatalogScreen() {
     };
   }, [saveCartNow]);
 
-
   useProductVisibilitySync(linkedAdminId ?? undefined, async () => {
-    const rows = await api.getCatalogProducts(linkedAdminId ?? undefined, selectedCategory || undefined);
+    const rows = await api.getCatalogProducts(
+      linkedAdminId ?? undefined,
+      selectedCategory || undefined,
+    );
     setProducts(rows);
-    setQuickAddProduct(previous => previous ? rows.find(row => getProductId(row) === getProductId(previous)) || null : null);
-    setSubscribeProduct(previous => previous ? rows.find(row => getProductId(row) === getProductId(previous)) || null : null);
+    setQuickAddProduct((previous) =>
+      previous
+        ? rows.find((row) => getProductId(row) === getProductId(previous)) ||
+          null
+        : null,
+    );
+    setSubscribeProduct((previous) =>
+      previous
+        ? rows.find((row) => getProductId(row) === getProductId(previous)) ||
+          null
+        : null,
+    );
   });
 
   const fetchData = useCallback(async () => {
@@ -4628,12 +4735,31 @@ export default function CatalogScreen() {
     ]).then(([popular, orders, searches]) => {
       if (!current) return;
       setPopularIds(popular);
-      const bought = [...orders].filter((order: any) => order.status === "delivered" || (!['cancelled', 'canceled', 'rejected', 'skipped'].includes(order.status) && ['paid', 'settled'].includes(order.payment_status)))
-        .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-      setRecentBoughtIds([...new Set<string>(bought.flatMap((order: any) => (order.items || []).map((item: any) => String(item.product_id))))]);
+      const bought = [...orders]
+        .filter(
+          (order: any) =>
+            order.status === "delivered" ||
+            (!["cancelled", "canceled", "rejected", "skipped"].includes(
+              order.status,
+            ) &&
+              ["paid", "settled"].includes(order.payment_status)),
+        )
+        .sort(
+          (a: any, b: any) =>
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+        );
+      setRecentBoughtIds([
+        ...new Set<string>(
+          bought.flatMap((order: any) =>
+            (order.items || []).map((item: any) => String(item.product_id)),
+          ),
+        ),
+      ]);
       setRecentSearches(searches);
     });
-    return () => { current = false; };
+    return () => {
+      current = false;
+    };
   }, [isFocused, linkedAdminId, user?.id]);
 
   useEffect(() => {
@@ -4737,6 +4863,44 @@ export default function CatalogScreen() {
     },
     [orderCutoffs],
   );
+
+  const handleToggleWishlist = async (product: any) => {
+    const id = String(resolveProductId(product));
+    if (!id || id === "null") return;
+    const wasLiked = wishlistIds.has(id);
+
+    setWishlistIds((prev) => {
+      const next = new Set(prev);
+      wasLiked ? next.delete(id) : next.add(id);
+      return next;
+    });
+    setWishToastTitle(
+      wasLiked ? "Removed from favourites" : "Added to favourites",
+    );
+    setWishToastName(product.name);
+    setWishToastKey((k) => k + 1);
+    setWishToastVisible(true);
+
+    try {
+      const res = await api.toggleWishlist(id);
+      setWishlistIds((prev) => {
+        const next = new Set(prev);
+        res.wishlisted ? next.add(id) : next.delete(id);
+        return next;
+      });
+    } catch {
+      setWishlistIds((prev) => {
+        const next = new Set(prev);
+        wasLiked ? next.add(id) : next.delete(id);
+        return next;
+      });
+      setWishToastVisible(false);
+      Alert.alert(
+        "Couldn't update favourites",
+        "Please check your connection and try again.",
+      );
+    }
+  };
 
   const handleAddToCart = (p: any) => {
     if (showCutoffPopupIfBlocked(p)) return;
@@ -5142,14 +5306,32 @@ export default function CatalogScreen() {
 
   const productAgeNow = useProductAgeClock();
   const discoverySections = useMemo(() => {
-    const byId = new Map(products.map(product => [String(resolveProductId(product)), product]));
+    const byId = new Map(
+      products.map((product) => [String(resolveProductId(product)), product]),
+    );
     return [
-      { value: "__new", label: "Newly Added", items: newlyAddedProducts(products, productAgeNow) },
-      { value: "__popular", label: "Popular Products", items: popularIds.map(id => byId.get(id)).filter(Boolean) },
-      { value: "__recent", label: "Recently Bought", items: recentBoughtIds.map(id => byId.get(id)).filter(Boolean) },
-    ].filter(section => section.items.length > 0);
+      {
+        value: "__new",
+        label: "Newly Added",
+        items: newlyAddedProducts(products, productAgeNow),
+      },
+      {
+        value: "__popular",
+        label: "Popular Products",
+        items: popularIds.map((id) => byId.get(id)).filter(Boolean),
+      },
+      {
+        value: "__recent",
+        label: "Recently Bought",
+        items: recentBoughtIds.map((id) => byId.get(id)).filter(Boolean),
+      },
+    ].filter((section) => section.items.length > 0);
   }, [products, popularIds, recentBoughtIds, productAgeNow]);
-  const sections = discoveryView ? discoverySections.filter(section => section.value === discoveryView) : selectedCategory ? grouped : [...discoverySections, ...grouped];
+  const sections = discoveryView
+    ? discoverySections.filter((section) => section.value === discoveryView)
+    : selectedCategory
+      ? grouped
+      : [...discoverySections, ...grouped];
 
   const newSlides = useMemo(
     () => (catalogSlides.length > 0 ? catalogSlides : NEWLY_ADDED_SLIDES),
@@ -5192,6 +5374,17 @@ export default function CatalogScreen() {
         <View style={mainS.headerTop}>
           <Text style={mainS.pageTitle}>Shop</Text>
           <View style={mainS.headerBtns}>
+            <TouchableOpacity
+              style={mainS.iconBtn}
+              onPress={() => router.push("/(customer)/wishlist" as any)}
+            >
+              <Ionicons name="heart-outline" size={19} color="#EF4444" />
+              {wishlistIds.size > 0 && (
+                <View style={[mainS.dot, { backgroundColor: "#EF4444" }]}>
+                  <Text style={mainS.dotTxt}>{wishlistIds.size}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
             <TouchableOpacity
               style={mainS.iconBtn}
               onPress={() => router.push("/(customer)/product-search" as any)}
@@ -5336,7 +5529,10 @@ export default function CatalogScreen() {
       >
         <TouchableOpacity
           style={[mainS.chip, !selectedCategory && mainS.chipActive]}
-          onPress={() => { setSelectedCategory(null); setDiscoveryView(null); }}
+          onPress={() => {
+            setSelectedCategory(null);
+            setDiscoveryView(null);
+          }}
         >
           <Text
             style={[mainS.chipTxt, !selectedCategory && mainS.chipTxtActive]}
@@ -5351,7 +5547,10 @@ export default function CatalogScreen() {
               mainS.chip,
               selectedCategory === cat.value && mainS.chipActive,
             ]}
-            onPress={() => { setSelectedCategory(cat.value); setDiscoveryView(null); }}
+            onPress={() => {
+              setSelectedCategory(cat.value);
+              setDiscoveryView(null);
+            }}
           >
             <Text
               style={[
@@ -5364,12 +5563,44 @@ export default function CatalogScreen() {
           </TouchableOpacity>
         ))}
       </ScrollView>
-      {!selectedCategory && !discoveryView && recentSearches.length > 0 && <View style={{ paddingTop: 12 }}>
-        <Text style={{ paddingHorizontal: 20, fontSize: 14, fontWeight: "700", color: T.text }}>Recent Searches</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 10, gap: 8 }}>
-          {recentSearches.slice(0, 8).map(term => <TouchableOpacity key={term} style={mainS.chip} onPress={() => router.push({ pathname: "/(customer)/product-search", params: { query: term } } as any)}><Text style={mainS.chipTxt}>{term}</Text></TouchableOpacity>)}
-        </ScrollView>
-      </View>}
+      {!selectedCategory && !discoveryView && recentSearches.length > 0 && (
+        <View style={{ paddingTop: 12 }}>
+          <Text
+            style={{
+              paddingHorizontal: 20,
+              fontSize: 14,
+              fontWeight: "700",
+              color: T.text,
+            }}
+          >
+            Recent Searches
+          </Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{
+              paddingHorizontal: 20,
+              paddingVertical: 10,
+              gap: 8,
+            }}
+          >
+            {recentSearches.slice(0, 8).map((term) => (
+              <TouchableOpacity
+                key={term}
+                style={mainS.chip}
+                onPress={() =>
+                  router.push({
+                    pathname: "/(customer)/product-search",
+                    params: { query: term },
+                  } as any)
+                }
+              >
+                <Text style={mainS.chipTxt}>{term}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      )}
     </>
   );
 
@@ -5403,8 +5634,18 @@ export default function CatalogScreen() {
             cutoffRules={orderCutoffs}
             deliveryWindows={deliveryWindows}
             ratings={ratings}
+            wishlistIds={wishlistIds} // <-- ADD
+            onToggleWishlist={handleToggleWishlist} // <-- ADD
             expanded={Boolean(selectedCategory || discoveryView)}
-            onViewAll={!selectedCategory && !discoveryView ? () => { if (item.value.startsWith("__")) setDiscoveryView(item.value); else setSelectedCategory(item.value); } : undefined}
+            onViewAll={
+              !selectedCategory && !discoveryView
+                ? () => {
+                    if (item.value.startsWith("__"))
+                      setDiscoveryView(item.value);
+                    else setSelectedCategory(item.value);
+                  }
+                : undefined
+            }
           />
         )}
       />
@@ -5484,6 +5725,15 @@ export default function CatalogScreen() {
         visible={toastVisible}
         productName={toastProduct}
         isSubscription={toastIsSub}
+      />
+      <WishlistToast
+        visible={wishToastVisible}
+        triggerKey={wishToastKey}
+        title={wishToastTitle}
+        productName={wishToastName}
+        bottomOffset={cart.length > 0 ? 84 : 20}
+        onHide={() => setWishToastVisible(false)}
+        onView={() => router.push("/(customer)/wishlist" as any)}
       />
       <BannerDetailsModal
         slide={selectedBannerSlide}

@@ -76,6 +76,7 @@ export default function CustomerLayout() {
       <Tabs.Screen name="gaumali-details" options={{ href: null }} />
       <Tabs.Screen name="gaumali-cart" options={{ href: null }} />
       <Tabs.Screen name="product-search" options={{ href: null }} />
+       <Tabs.Screen name="wishlist" options={{ href: null }} />
       <Tabs.Screen name="product-details" options={{ href: null }} />
       <Tabs.Screen name="edit-profile" options={{ href: null }} />
       <Tabs.Screen name="payment-success" options={{ href: null }} />
