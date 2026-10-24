@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
+  ActivityIndicator,
   View,
   Text,
   StyleSheet,
@@ -411,6 +412,9 @@ export default function SubscriptionsScreen() {
   const [acceptedIds, setAcceptedIds] = useState<Set<string>>(new Set());
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkLoading, setBulkLoading] = useState(false);
+
   useEffect(() => {
     fetchData();
   }, []);
@@ -485,6 +489,7 @@ export default function SubscriptionsScreen() {
   const changeFilter = useCallback((f: FilterType) => {
     animate();
     setExpandedId(null);
+    setSelectedIds(new Set());
     setFilter(f);
   }, []);
 
@@ -544,6 +549,67 @@ export default function SubscriptionsScreen() {
     );
   }, []);
 
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }, []);
+
+  const handleBulkDelivered = () => {
+    const ids = Array.from(selectedIds);
+    if (!ids.length || bulkLoading) return;
+    Alert.alert(
+      "📦 Mark Delivered",
+      `${ids.length} subscriptions ko aaj ke liye delivered mark karna hai?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Mark Delivered",
+          onPress: async () => {
+            setBulkLoading(true);
+            try {
+              const result = await api.bulkUpdateSubscriptionDelivery(ids, "delivered");
+              const today = todayStr();
+              const okIds = result.results.filter((r: any) => r.success).map((r: any) => r.id);
+              const failures = result.results.filter((r: any) => !r.success);
+
+              setDeliveredToday((prev) => {
+                const next = new Set(prev);
+                okIds.forEach((id: string) => next.add(`${id}:${today}`));
+                return next;
+              });
+              setDeliveredDatesMap((prev) => {
+                const next = { ...prev };
+                okIds.forEach((id: string) => {
+                  const set = new Set(next[id] ?? []);
+                  set.add(today);
+                  next[id] = set;
+                });
+                return next;
+              });
+              setSelectedIds(new Set(failures.map((f: any) => f.id)));
+
+              if (result.failed) {
+                Alert.alert(
+                  "Kuch deliveries fail hui",
+                  `${result.updated} updated, ${result.failed} failed.\n${failures[0]?.error || ""}`,
+                );
+              } else {
+                Alert.alert("✅ Delivered!", `${result.updated} subscriptions delivered.`);
+              }
+            } catch (err: any) {
+              Alert.alert("Error", err?.message || "Bulk update failed");
+            } finally {
+              setBulkLoading(false);
+            }
+          },
+        },
+      ],
+    );
+  };
+
   // ── Filters ──────────────────────────────────────────────────────────────
 
   const isExpiredTabMember = (sub: Subscription, accepted: boolean) =>
@@ -596,10 +662,32 @@ export default function SubscriptionsScreen() {
 
   const isShiftOff = !checkinStatus?.checked_in || checkinStatus?.checked_out;
 
+  const selectableToday =
+    filter === "today"
+      ? filtered.filter((s) => {
+        const key = `${s.id}:${todayStr()}`;
+        return (
+          acceptedIds.has(s.id) &&
+          isDeliveryToday(s) &&
+          !isOnVacation(s) &&
+          !isShiftOff &&
+          !deliveredToday.has(key)
+        );
+      })
+      : [];
+
   const renderSubCard = (sub: Subscription) => {
     const key = `${sub.id}:${todayStr()}`;
     const accepted = acceptedIds.has(sub.id);
     const delivers = isDeliveryToday(sub) && !isOnVacation(sub);
+    const selectable =
+      filter === "today" &&
+      accepted &&
+      delivers &&
+      !isShiftOff &&
+      !deliveredToday.has(key) &&
+      !isEffectivelyExpired(sub, accepted, delivers) &&
+      !isCancelledStatus(sub);
     return (
       <SubCard
         key={sub.id}
@@ -617,6 +705,9 @@ export default function SubscriptionsScreen() {
         onToggleExpand={() => toggleExpand(sub.id)}
         onAccept={() => handleAccept(sub)}
         onMarkDelivered={() => handleMarkDelivered(sub)}
+        selectable={selectable}
+        selected={selectedIds.has(sub.id)}
+        onToggleSelect={() => toggleSelect(sub.id)}
       />
     );
   };
@@ -688,6 +779,41 @@ export default function SubscriptionsScreen() {
         ))}
       </View>
 
+      {filter === "today" && selectableToday.length > 0 && (
+        <View style={styles.bulkBar}>
+          <Text style={styles.bulkInfoText}>{selectedIds.size} selected</Text>
+          <TouchableOpacity
+            style={styles.bulkChip}
+            onPress={() => setSelectedIds(new Set(selectableToday.map((s) => s.id)))}
+            disabled={bulkLoading}
+          >
+            <Text style={styles.bulkChipText}>Select All ({selectableToday.length})</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.bulkChip}
+            onPress={() => setSelectedIds(new Set())}
+            disabled={selectedIds.size === 0 || bulkLoading}
+          >
+            <Text style={styles.bulkChipText}>Clear</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.bulkDeliveredBtn,
+              (selectedIds.size === 0 || bulkLoading) && { opacity: 0.55 },
+            ]}
+            onPress={handleBulkDelivered}
+            disabled={selectedIds.size === 0 || bulkLoading}
+          >
+            {bulkLoading ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Ionicons name="checkmark-circle" size={15} color="#fff" />
+            )}
+            <Text style={styles.bulkDeliveredText}>Mark Delivered</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       <ScrollView
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -754,6 +880,9 @@ function SubCard({
   onToggleExpand,
   onAccept,
   onMarkDelivered,
+  selectable,
+  selected,
+  onToggleSelect,
 }: {
   sub: Subscription;
   context: FilterType;
@@ -769,6 +898,9 @@ function SubCard({
   onToggleExpand: () => void;
   onAccept: () => void;
   onMarkDelivered: () => void;
+  selectable?: boolean;
+  selected?: boolean;
+  onToggleSelect?: () => void;
 }) {
   const patternKey = getPattern(sub);
   const pattern = PATTERN_CONFIG[patternKey] ?? {
@@ -780,12 +912,12 @@ function SubCard({
   const address = formatAddress(sub.customer_address || sub.address);
 
   const rawAddr = sub.customer_address || sub.address;
-const latRaw = rawAddr?.lat ?? rawAddr?.latitude;
-const lngRaw = rawAddr?.lng ?? rawAddr?.longitude;
-const hasCoords =
-  latRaw != null && lngRaw != null && !isNaN(Number(latRaw)) && !isNaN(Number(lngRaw));
-const openMap = () =>
-  hasCoords ? openRouteInMaps(Number(latRaw), Number(lngRaw)) : openAddressInMaps(address);
+  const latRaw = rawAddr?.lat ?? rawAddr?.latitude;
+  const lngRaw = rawAddr?.lng ?? rawAddr?.longitude;
+  const hasCoords =
+    latRaw != null && lngRaw != null && !isNaN(Number(latRaw)) && !isNaN(Number(lngRaw));
+  const openMap = () =>
+    hasCoords ? openRouteInMaps(Number(latRaw), Number(lngRaw)) : openAddressInMaps(address);
 
   const items = sub.items ?? [];
   const daysLeft = daysUntilEnd(sub.end_date);
@@ -794,7 +926,7 @@ const openMap = () =>
   const expired = context === "expired" ? true : isEffectivelyExpired;
 
   const showMap =
-  context === "today" && !expired && address !== "Address not available";
+    context === "today" && !expired && address !== "Address not available";
 
   const trueExpired = isExpired(sub);
   const showStartMsg =
@@ -830,9 +962,9 @@ const openMap = () =>
       style={[
         styles.card,
         context === "today" &&
-          deliversToday &&
-          !expired &&
-          (isDeliveredToday ? styles.cardDone : styles.cardPending),
+        deliversToday &&
+        !expired &&
+        (isDeliveredToday ? styles.cardDone : styles.cardPending),
         expired && (isCancelled ? styles.cardCancelled : styles.cardExpired),
         isExpanded && styles.cardExpanded,
       ]}
@@ -901,6 +1033,15 @@ const openMap = () =>
         </View>
 
         <View style={styles.cardHeader}>
+          {selectable && (
+            <TouchableOpacity
+              style={[styles.selectBox, selected && styles.selectBoxActive]}
+              onPress={onToggleSelect}
+              activeOpacity={0.75}
+            >
+              {selected ? <Ionicons name="checkmark" size={14} color="#fff" /> : null}
+            </TouchableOpacity>
+          )}
           <View
             style={[
               styles.productIconWrap,
@@ -1019,7 +1160,7 @@ const openMap = () =>
                 />
                 <Text style={styles.quickRowText}>Delivery: {dateLabel}</Text>
               </>
-                
+
             )}
             {showMap && (
               <TouchableOpacity style={styles.mapIconBtn} onPress={openMap}>
@@ -1033,7 +1174,7 @@ const openMap = () =>
       {/* Expanded detail */}
       {isExpanded && (
         <View style={styles.expandedBody}>
-                   <View style={styles.itemsBox}>
+          <View style={styles.itemsBox}>
             {items.map((item, i) => (
               <View key={i} style={styles.itemRow}>
                 <View style={styles.itemDot} />
@@ -1061,7 +1202,7 @@ const openMap = () =>
             </View>
           </View>
 
-                   <View style={styles.addressRow}>
+          <View style={styles.addressRow}>
             <Ionicons name="location-outline" size={13} color={C.primary} />
             <Text style={styles.addressText}>{address}</Text>
             {showMap && (
@@ -1741,6 +1882,51 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: C.green,
   },
+
+  bulkBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginHorizontal: 14,
+    marginTop: 10,
+    padding: 8,
+    backgroundColor: C.card,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  bulkInfoText: { fontSize: 12, fontWeight: "800", color: C.textMuted, flex: 1 },
+  bulkChip: {
+    borderRadius: 999,
+    backgroundColor: C.bg,
+    borderWidth: 1,
+    borderColor: C.border,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  bulkChipText: { fontSize: 11, fontWeight: "800", color: C.textMuted },
+  bulkDeliveredBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    borderRadius: 999,
+    backgroundColor: C.green,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  bulkDeliveredText: { fontSize: 11.5, fontWeight: "800", color: "#fff" },
+  selectBox: {
+    width: 24,
+    height: 24,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: C.light,
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  selectBoxActive: { backgroundColor: C.green, borderColor: C.green },
+
   deliverBtnEarly: { backgroundColor: C.accent },
   deliverBtnText: { fontSize: 12.5, fontWeight: "700", color: "#fff" },
   doneBtn: {
