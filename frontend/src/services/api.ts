@@ -587,6 +587,93 @@ export interface ServerCartRow {
   product: any | null;
 }
 
+export interface WishlistToggleResult {
+  success: boolean;
+  wishlisted: boolean;
+  wishlist_count: number;
+}
+
+export interface WishlistRow {
+  product_id: string;
+  added_at_ist?: string | null;
+  product: any | null;
+}
+
+export interface WishlistStatsRow {
+  product_id: string;
+  product_name?: string | null;
+  wishlist_count: number;
+}
+
+export interface WishlistStats {
+  total_wishlists: number;
+  products: WishlistStatsRow[];
+}
+
+// ── Work assignments
+export type AssignmentStatus =
+  | "assigned"
+  | "accepted"
+  | "declined"
+  | "submitted"
+  | "approved"
+  | "rejected";
+
+export interface AssignmentHistoryItem {
+  status: AssignmentStatus;
+  at?: string;
+  by_id?: string | null;
+  by_name?: string | null;
+  note?: string | null;
+}
+
+export interface WorkAssignment {
+  id: string;
+  admin_id: string;
+  worker_id: string;
+  worker_name: string;
+  title: string;
+  description?: string | null;
+  priority: "low" | "normal" | "high";
+  due_date?: string | null; // YYYY-MM-DD
+  points: number;
+  cow_id?: string | null;
+  cow_name?: string | null;
+  cow_tag?: string | null;
+  status: AssignmentStatus;
+  accepted_at?: string | null;
+  declined_at?: string | null;
+  decline_reason?: string | null;
+  submitted_at?: string | null;
+  submission_note?: string | null;
+  photos?: string[]; // only returned by the detail endpoints
+  photo_count?: number;
+  submission_count?: number;
+  reviewed_at?: string | null;
+  review_note?: string | null;
+  points_awarded?: boolean;
+  points_given?: number;
+  history?: AssignmentHistoryItem[];
+  created_at: string;
+  updated_at?: string | null;
+}
+
+export interface AssignmentCreate {
+  worker_ids: string[];
+  title: string;
+  description?: string | null;
+  priority?: "low" | "normal" | "high";
+  due_date?: string | null;
+  points?: number;
+  cow_id?: string | null;
+}
+
+export interface AssignmentListResponse {
+  total: number;
+  counts: Record<AssignmentStatus, number>;
+  assignments: WorkAssignment[];
+}
+
 class ApiService {
   async getReferralDirectory(): Promise<
     Array<{
@@ -1088,6 +1175,32 @@ class ApiService {
       method: "DELETE",
       silentErrorLog: true,
     });
+  }
+
+    async toggleWishlist(product_id: string): Promise<WishlistToggleResult> {
+    return this.fetchRequest<WishlistToggleResult>(
+      `/wishlist/${encodeURIComponent(product_id)}/toggle`,
+      { method: "POST", silentErrorLog: true },
+    );
+  }
+
+  async getWishlist(): Promise<WishlistRow[]> {
+    return this.fetchRequest<WishlistRow[]>("/wishlist", {
+      silentErrorLog: true,
+    });
+  }
+
+  async getWishlistIds(): Promise<string[]> {
+    return this.fetchRequest<string[]>("/wishlist/ids", {
+      silentErrorLog: true,
+    });
+  }
+
+  async getAdminWishlistStats(limit = 100): Promise<WishlistStats> {
+    return this.fetchRequest<WishlistStats>(
+      `/admin/wishlist/stats?limit=${limit}`,
+      { silentErrorLog: true },
+    );
   }
 
   async updateProfile(data: any) {
@@ -2601,6 +2714,138 @@ class ApiService {
       method: "DELETE",
     });
   }
+
+  // ── Work assignments (ADMIN) ─────────────────────────────
+
+  async getAdminAssignments(params?: {
+    status?: string; // "submitted" or "submitted,rejected,declined"
+    worker_id?: string;
+    due_date?: string;
+  }): Promise<AssignmentListResponse> {
+    const p = new URLSearchParams();
+    if (params?.status) p.append("status", params.status);
+    if (params?.worker_id) p.append("worker_id", params.worker_id);
+    if (params?.due_date) p.append("due_date", params.due_date);
+    const q = p.toString() ? `?${p.toString()}` : "";
+    return this.request<AssignmentListResponse>(`/admin/assignments${q}`);
+  }
+
+  async getAdminAssignment(id: string): Promise<WorkAssignment> {
+    return this.request<WorkAssignment>(
+      `/admin/assignments/${encodeURIComponent(id)}`,
+    );
+  }
+
+  async createAssignment(data: AssignmentCreate) {
+    return this.request<{
+      success: boolean;
+      created: number;
+      assignments: WorkAssignment[];
+    }>("/admin/assignments", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateAssignment(
+    id: string,
+    data: Partial<{
+      title: string;
+      description: string;
+      priority: "low" | "normal" | "high";
+      due_date: string;
+      points: number;
+    }>,
+  ) {
+    return this.request<WorkAssignment>(
+      `/admin/assignments/${encodeURIComponent(id)}`,
+      { method: "PUT", body: JSON.stringify(data) },
+    );
+  }
+
+  async reviewAssignment(
+    id: string,
+    data: { action: "approve" | "reject"; points?: number; note?: string | null },
+  ) {
+    return this.request<{
+      success: boolean;
+      assignment_id: string;
+      new_status: "approved" | "rejected";
+      points_given: number;
+    }>(`/admin/assignments/${encodeURIComponent(id)}/review`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteAssignment(id: string) {
+    return this.request<{ success: boolean; id: string }>(
+      `/admin/assignments/${encodeURIComponent(id)}`,
+      { method: "DELETE" },
+    );
+  }
+
+  // ── Work assignments (WORKER / gausevak) ─────────────────
+  // Workers use worker_token, like your other worker* methods.
+
+  private async workerRequest<T>(
+    path: string,
+    method: "GET" | "POST" = "GET",
+    body?: unknown,
+  ): Promise<T> {
+    const token = await AsyncStorage.getItem("worker_token");
+    const response = await fetch(`${API_BASE}/api${path}`, {
+      method,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.detail || "Request failed");
+    return result as T;
+  }
+
+  async workerGetAssignments(status?: string) {
+    const q = status ? `?status=${encodeURIComponent(status)}` : "";
+    return this.workerRequest<{
+      total: number;
+      pending_action: number;
+      assignments: WorkAssignment[];
+    }>(`/worker/assignments${q}`);
+  }
+
+  async workerGetAssignment(id: string) {
+    return this.workerRequest<WorkAssignment>(
+      `/worker/assignments/${encodeURIComponent(id)}`,
+    );
+  }
+
+  async workerAcceptAssignment(id: string) {
+    return this.workerRequest<{ success: boolean; new_status: string }>(
+      `/worker/assignments/${encodeURIComponent(id)}/accept`,
+      "POST",
+    );
+  }
+
+  async workerCancelAssignment(id: string, reason?: string) {
+    return this.workerRequest<{ success: boolean; new_status: string }>(
+      `/worker/assignments/${encodeURIComponent(id)}/cancel`,
+      "POST",
+      { reason },
+    );
+  }
+
+  // photos = base64 data URIs, e.g. "data:image/jpeg;base64,...."
+  async workerSubmitAssignment(id: string, photos: string[], note?: string) {
+    return this.workerRequest<{ success: boolean; new_status: string }>(
+      `/worker/assignments/${encodeURIComponent(id)}/submit`,
+      "POST",
+      { photos, note },
+    );
+  }
+
 
   async getCowMilkHistory(cowId: string, days: number = 90) {
     return this.request<{

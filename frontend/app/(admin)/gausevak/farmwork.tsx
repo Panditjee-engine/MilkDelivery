@@ -69,6 +69,16 @@ interface FarmSaleSummary {
   by_product: Record<string, number>;
 }
 
+interface WorkSummary {
+  assigned: number;
+  accepted: number;
+  submitted: number;
+  approved: number;
+  rejected: number;
+  declined: number;
+  total: number;
+}
+
 const today = () => new Date().toISOString().split("T")[0];
 const currentShift = (): "morning" | "evening" => {
   const h = new Date().getHours();
@@ -77,23 +87,22 @@ const currentShift = (): "morning" | "evening" => {
 const fmt = (n: number | null | undefined, decimals = 1) =>
   n == null ? "—" : Number(n).toFixed(decimals);
 
-// ════════════════════════════════════════════════
-// TABS CONFIG
-// ════════════════════════════════════════════════
-
 const TABS = [
   { key: "feed", label: "Feed", icon: "leaf" as const, color: C.green },
   { key: "milk", label: "Milk", icon: "water" as const, color: C.blue },
   { key: "health", label: "Health", icon: "heart" as const, color: C.red },
-   { key: "farmSale", label: "Sales", icon: "cash" as const, color: C.purple },
+  { key: "farmSale", label: "Sales", icon: "cash" as const, color: C.purple },
+  { key: "work", label: "Work", icon: "clipboard" as const, color: C.primary },
 ] as const;
-type TabKey = typeof TABS[number]["key"];
+type TabKey = (typeof TABS)[number]["key"];
 
-// ════════════════════════════════════════════════
-// TAB BAR
-// ════════════════════════════════════════════════
-
-function TabBar({ active, onChange }: { active: TabKey; onChange: (k: TabKey) => void }) {
+function TabBar({
+  active,
+  onChange,
+}: {
+  active: TabKey;
+  onChange: (k: TabKey) => void;
+}) {
   return (
     <View style={tabStyles.bar}>
       {TABS.map((t) => {
@@ -101,7 +110,13 @@ function TabBar({ active, onChange }: { active: TabKey; onChange: (k: TabKey) =>
         return (
           <TouchableOpacity
             key={t.key}
-            style={[tabStyles.tab, isActive && { backgroundColor: t.color + "14", borderColor: t.color + "60" }]}
+            style={[
+              tabStyles.tab,
+              isActive && {
+                backgroundColor: t.color + "14",
+                borderColor: t.color + "60",
+              },
+            ]}
             onPress={() => onChange(t.key)}
             activeOpacity={0.7}
           >
@@ -110,7 +125,15 @@ function TabBar({ active, onChange }: { active: TabKey; onChange: (k: TabKey) =>
               size={15}
               color={isActive ? t.color : C.textLight}
             />
-            <Text style={[tabStyles.label, { color: isActive ? t.color : C.textLight, fontWeight: isActive ? "700" : "500" }]}>
+            <Text
+              style={[
+                tabStyles.label,
+                {
+                  color: isActive ? t.color : C.textLight,
+                  fontWeight: isActive ? "700" : "500",
+                },
+              ]}
+            >
               {t.label}
             </Text>
           </TouchableOpacity>
@@ -150,10 +173,6 @@ const tabStyles = StyleSheet.create({
   label: { fontSize: 12, letterSpacing: -0.1 },
 });
 
-// ════════════════════════════════════════════════
-// SHARED COMPONENTS
-// ════════════════════════════════════════════════
-
 function SectionHeader({
   icon,
   title,
@@ -170,7 +189,12 @@ function SectionHeader({
   const router = useRouter();
   return (
     <View style={sectionStyles.header}>
-      <View style={[sectionStyles.iconWrap, { backgroundColor: accentColor + "18" }]}>
+      <View
+        style={[
+          sectionStyles.iconWrap,
+          { backgroundColor: accentColor + "18" },
+        ]}
+      >
         <Ionicons name={icon} size={20} color={accentColor} />
       </View>
       <View style={sectionStyles.headerText}>
@@ -178,11 +202,19 @@ function SectionHeader({
         <Text style={sectionStyles.subtitle}>{subtitle}</Text>
       </View>
       <TouchableOpacity
-        style={[sectionStyles.openBtn, { borderColor: accentColor + "40", backgroundColor: accentColor + "0E" }]}
+        style={[
+          sectionStyles.openBtn,
+          {
+            borderColor: accentColor + "40",
+            backgroundColor: accentColor + "0E",
+          },
+        ]}
         onPress={() => router.push(route as any)}
         activeOpacity={0.7}
       >
-        <Text style={[sectionStyles.openBtnText, { color: accentColor }]}>Open</Text>
+        <Text style={[sectionStyles.openBtnText, { color: accentColor }]}>
+          Open
+        </Text>
         <Ionicons name="arrow-forward" size={11} color={accentColor} />
       </TouchableOpacity>
     </View>
@@ -190,7 +222,12 @@ function SectionHeader({
 }
 
 const sectionStyles = StyleSheet.create({
-  header: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 18 },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 18,
+  },
   iconWrap: {
     width: 44,
     height: 44,
@@ -199,8 +236,18 @@ const sectionStyles = StyleSheet.create({
     justifyContent: "center",
   },
   headerText: { flex: 1 },
-  title: { fontSize: 16, fontWeight: "700", color: C.text, letterSpacing: -0.4 },
-  subtitle: { fontSize: 11, color: C.textLight, fontWeight: "500", marginTop: 2 },
+  title: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: C.text,
+    letterSpacing: -0.4,
+  },
+  subtitle: {
+    fontSize: 11,
+    color: C.textLight,
+    fontWeight: "500",
+    marginTop: 2,
+  },
   openBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -214,9 +261,18 @@ const sectionStyles = StyleSheet.create({
 });
 
 function StatPill({
-  label, value, color, bgColor, borderColor, icon,
+  label,
+  value,
+  color,
+  bgColor,
+  borderColor,
+  icon,
 }: {
-  label: string; value: string | number; color: string; bgColor: string; borderColor: string;
+  label: string;
+  value: string | number;
+  color: string;
+  bgColor: string;
+  borderColor: string;
   icon: React.ComponentProps<typeof Ionicons>["name"];
 }) {
   return (
@@ -243,7 +299,13 @@ const pillStyles = StyleSheet.create({
     paddingVertical: 10,
     flex: 1,
   },
-  iconWrap: { width: 28, height: 28, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+  iconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   value: { fontSize: 17, fontWeight: "700", letterSpacing: -0.5 },
   label: {
     fontSize: 9,
@@ -255,23 +317,47 @@ const pillStyles = StyleSheet.create({
   },
 });
 
-function ProgressBar({ value, total, color }: { value: number; total: number; color: string }) {
+function ProgressBar({
+  value,
+  total,
+  color,
+}: {
+  value: number;
+  total: number;
+  color: string;
+}) {
   const pct = total > 0 ? Math.min((value / total) * 100, 100) : 0;
   return (
     <View style={{ marginTop: 14 }}>
       <View style={progressStyles.track}>
-        <View style={[progressStyles.fill, { width: `${pct}%` as any, backgroundColor: color }]} />
+        <View
+          style={[
+            progressStyles.fill,
+            { width: `${pct}%` as any, backgroundColor: color },
+          ]}
+        />
       </View>
     </View>
   );
 }
 
 const progressStyles = StyleSheet.create({
-  track: { height: 6, backgroundColor: C.border, borderRadius: 6, overflow: "hidden" },
+  track: {
+    height: 6,
+    backgroundColor: C.border,
+    borderRadius: 6,
+    overflow: "hidden",
+  },
   fill: { height: 6, borderRadius: 6 },
 });
 
-function Card({ accentColor, children }: { accentColor: string; children: React.ReactNode }) {
+function Card({
+  accentColor,
+  children,
+}: {
+  accentColor: string;
+  children: React.ReactNode;
+}) {
   return (
     <View style={[cardStyles.card, { borderColor: accentColor + "28" }]}>
       {/* Top accent line */}
@@ -302,9 +388,15 @@ function SkeletonCard() {
     <View style={[cardStyles.card, { borderColor: C.border }]}>
       <View style={{ height: 3, backgroundColor: C.border }} />
       <View style={{ padding: 20, gap: 12 }}>
-        <View style={{ height: 44, backgroundColor: C.border, borderRadius: 12 }} />
-        <View style={{ height: 66, backgroundColor: C.border, borderRadius: 12 }} />
-        <View style={{ height: 6, backgroundColor: C.border, borderRadius: 6 }} />
+        <View
+          style={{ height: 44, backgroundColor: C.border, borderRadius: 12 }}
+        />
+        <View
+          style={{ height: 66, backgroundColor: C.border, borderRadius: 12 }}
+        />
+        <View
+          style={{ height: 6, backgroundColor: C.border, borderRadius: 6 }}
+        />
       </View>
     </View>
   );
@@ -314,12 +406,21 @@ function SkeletonCard() {
 // SECTION PANELS
 // ════════════════════════════════════════════════
 
-function FeedPanel({ loading, summary, date, shift }: {
-  loading: boolean; summary: FeedSummary | null; date: string; shift: string;
+function FeedPanel({
+  loading,
+  summary,
+  date,
+  shift,
+}: {
+  loading: boolean;
+  summary: FeedSummary | null;
+  date: string;
+  shift: string;
 }) {
-  const pct = summary && summary.total_cows > 0
-    ? Math.round(((summary.fed_count ?? 0) / summary.total_cows) * 100)
-    : 0;
+  const pct =
+    summary && summary.total_cows > 0
+      ? Math.round(((summary.fed_count ?? 0) / summary.total_cows) * 100)
+      : 0;
 
   return (
     <Card accentColor={C.green}>
@@ -331,11 +432,20 @@ function FeedPanel({ loading, summary, date, shift }: {
         route="/(admin)/gausevak/feed"
       />
       {loading ? (
-        <View style={{ height: 66, backgroundColor: C.border, borderRadius: 12 }} />
+        <View
+          style={{ height: 66, backgroundColor: C.border, borderRadius: 12 }}
+        />
       ) : summary ? (
         <>
           <View style={{ flexDirection: "row", gap: 8 }}>
-            <StatPill label="Fed" value={summary.fed_count ?? 0} color={C.green} bgColor={C.greenBg} borderColor={C.greenBorder} icon="checkmark-circle-outline" />
+            <StatPill
+              label="Fed"
+              value={summary.fed_count ?? 0}
+              color={C.green}
+              bgColor={C.greenBg}
+              borderColor={C.greenBorder}
+              icon="checkmark-circle-outline"
+            />
             <StatPill
               label="Pending"
               value={summary.unfed_count ?? 0}
@@ -344,13 +454,26 @@ function FeedPanel({ loading, summary, date, shift }: {
               borderColor={summary.unfed_count > 0 ? C.amberBorder : C.border}
               icon="time-outline"
             />
-            <StatPill label="Total" value={summary.total_cows ?? 0} color={C.textMuted} bgColor={C.bg} borderColor={C.border} icon="list-outline" />
+            <StatPill
+              label="Total"
+              value={summary.total_cows ?? 0}
+              color={C.textMuted}
+              bgColor={C.bg}
+              borderColor={C.border}
+              icon="list-outline"
+            />
           </View>
-          <ProgressBar value={summary.fed_count ?? 0} total={summary.total_cows ?? 1} color={C.green} />
+          <ProgressBar
+            value={summary.fed_count ?? 0}
+            total={summary.total_cows ?? 1}
+            color={C.green}
+          />
           <View style={styles.progressRow}>
             <View style={[styles.dot, { backgroundColor: C.green }]} />
             <Text style={styles.progressHint}>
-              {summary.total_cows > 0 ? `${pct}% of herd fed` : "No cows registered"}
+              {summary.total_cows > 0
+                ? `${pct}% of herd fed`
+                : "No cows registered"}
             </Text>
           </View>
         </>
@@ -364,8 +487,14 @@ function FeedPanel({ loading, summary, date, shift }: {
   );
 }
 
-function MilkPanel({ loading, summary, date }: {
-  loading: boolean; summary: MilkSummary | null; date: string;
+function MilkPanel({
+  loading,
+  summary,
+  date,
+}: {
+  loading: boolean;
+  summary: MilkSummary | null;
+  date: string;
 }) {
   return (
     <Card accentColor={C.blue}>
@@ -377,26 +506,56 @@ function MilkPanel({ loading, summary, date }: {
         route="/(admin)/gausevak/milkyield"
       />
       {loading ? (
-        <View style={{ height: 66, backgroundColor: C.border, borderRadius: 12 }} />
+        <View
+          style={{ height: 66, backgroundColor: C.border, borderRadius: 12 }}
+        />
       ) : summary ? (
         <>
           <View style={{ flexDirection: "row", gap: 8 }}>
-            <StatPill label="Morning" value={`${fmt(summary.total_morning)} L`} color={C.blue} bgColor={C.blueBg} borderColor={C.blueBorder} icon="sunny-outline" />
-            <StatPill label="Evening" value={`${fmt(summary.total_evening)} L`} color={C.amber} bgColor={C.amberBg} borderColor={C.amberBorder} icon="moon-outline" />
+            <StatPill
+              label="Morning"
+              value={`${fmt(summary.total_morning)} L`}
+              color={C.blue}
+              bgColor={C.blueBg}
+              borderColor={C.blueBorder}
+              icon="sunny-outline"
+            />
+            <StatPill
+              label="Evening"
+              value={`${fmt(summary.total_evening)} L`}
+              color={C.amber}
+              bgColor={C.amberBg}
+              borderColor={C.amberBorder}
+              icon="moon-outline"
+            />
           </View>
 
           {/* Grand Total Row */}
-          <View style={[styles.totalRow, { backgroundColor: C.blueBg, borderColor: C.blueBorder }]}>
+          <View
+            style={[
+              styles.totalRow,
+              { backgroundColor: C.blueBg, borderColor: C.blueBorder },
+            ]}
+          >
             <Ionicons name="stats-chart" size={15} color={C.blue} />
-            <Text style={[styles.totalLabel, { color: C.textMuted }]}>Grand Total Today</Text>
-            <Text style={[styles.totalValue, { color: C.blue }]}>{fmt(summary.grand_total)} L</Text>
+            <Text style={[styles.totalLabel, { color: C.textMuted }]}>
+              Grand Total Today
+            </Text>
+            <Text style={[styles.totalValue, { color: C.blue }]}>
+              {fmt(summary.grand_total)} L
+            </Text>
           </View>
 
-          <ProgressBar value={summary.active_cows ?? 0} total={summary.total_cows ?? 1} color={C.blue} />
+          <ProgressBar
+            value={summary.active_cows ?? 0}
+            total={summary.total_cows ?? 1}
+            color={C.blue}
+          />
           <View style={styles.progressRow}>
             <View style={[styles.dot, { backgroundColor: C.blue }]} />
             <Text style={styles.progressHint}>
-              {summary.active_cows ?? 0} of {summary.total_cows ?? 0} cows milked
+              {summary.active_cows ?? 0} of {summary.total_cows ?? 0} cows
+              milked
             </Text>
           </View>
         </>
@@ -410,8 +569,14 @@ function MilkPanel({ loading, summary, date }: {
   );
 }
 
-function HealthPanel({ loading, summary, date }: {
-  loading: boolean; summary: HealthSummary | null; date: string;
+function HealthPanel({
+  loading,
+  summary,
+  date,
+}: {
+  loading: boolean;
+  summary: HealthSummary | null;
+  date: string;
 }) {
   return (
     <Card accentColor={C.red}>
@@ -423,11 +588,20 @@ function HealthPanel({ loading, summary, date }: {
         route="/(admin)/gausevak/health"
       />
       {loading ? (
-        <View style={{ height: 66, backgroundColor: C.border, borderRadius: 12 }} />
+        <View
+          style={{ height: 66, backgroundColor: C.border, borderRadius: 12 }}
+        />
       ) : summary ? (
         <>
           <View style={{ flexDirection: "row", gap: 8 }}>
-            <StatPill label="Healthy" value={summary.healthy ?? 0} color={C.green} bgColor={C.greenBg} borderColor={C.greenBorder} icon="shield-checkmark-outline" />
+            <StatPill
+              label="Healthy"
+              value={summary.healthy ?? 0}
+              color={C.green}
+              bgColor={C.greenBg}
+              borderColor={C.greenBorder}
+              icon="shield-checkmark-outline"
+            />
             <StatPill
               label="Sick"
               value={summary.sick ?? 0}
@@ -441,13 +615,20 @@ function HealthPanel({ loading, summary, date }: {
               value={summary.under_observation ?? 0}
               color={summary.under_observation > 0 ? C.amber : C.textLight}
               bgColor={summary.under_observation > 0 ? C.amberBg : C.bg}
-              borderColor={summary.under_observation > 0 ? C.amberBorder : C.border}
+              borderColor={
+                summary.under_observation > 0 ? C.amberBorder : C.border
+              }
               icon="eye-outline"
             />
           </View>
 
           {(summary.sick > 0 || summary.under_observation > 0) && (
-            <View style={[styles.alertBanner, { backgroundColor: C.redBg, borderColor: C.redBorder }]}>
+            <View
+              style={[
+                styles.alertBanner,
+                { backgroundColor: C.redBg, borderColor: C.redBorder },
+              ]}
+            >
               <Ionicons name="warning-outline" size={14} color={C.red} />
               <Text style={[styles.alertText, { color: C.red }]}>
                 {summary.sick > 0
@@ -457,7 +638,11 @@ function HealthPanel({ loading, summary, date }: {
             </View>
           )}
 
-          <ProgressBar value={summary.healthy ?? 0} total={summary.total ?? 1} color={C.green} />
+          <ProgressBar
+            value={summary.healthy ?? 0}
+            total={summary.total ?? 1}
+            color={C.green}
+          />
           <View style={styles.progressRow}>
             <View style={[styles.dot, { backgroundColor: C.green }]} />
             <Text style={styles.progressHint}>
@@ -477,8 +662,14 @@ function HealthPanel({ loading, summary, date }: {
   );
 }
 
-function FarmSalePanel({ loading, summary, date }: {
-  loading: boolean; summary: FarmSaleSummary | null; date: string;
+function FarmSalePanel({
+  loading,
+  summary,
+  date,
+}: {
+  loading: boolean;
+  summary: FarmSaleSummary | null;
+  date: string;
 }) {
   const router = useRouter();
   const products = summary ? Object.entries(summary.by_product) : [];
@@ -493,7 +684,9 @@ function FarmSalePanel({ loading, summary, date }: {
         route="/(admin)/gausevak/farmsale"
       />
       {loading ? (
-        <View style={{ height: 66, backgroundColor: C.border, borderRadius: 12 }} />
+        <View
+          style={{ height: 66, backgroundColor: C.border, borderRadius: 12 }}
+        />
       ) : summary ? (
         <>
           <View style={{ flexDirection: "row", gap: 8 }}>
@@ -526,7 +719,9 @@ function FarmSalePanel({ loading, summary, date }: {
               ))}
               {products.length > 4 && (
                 <View style={styles.productChip}>
-                  <Text style={styles.productChipText}>+{products.length - 4} more</Text>
+                  <Text style={styles.productChipText}>
+                    +{products.length - 4} more
+                  </Text>
                 </View>
               )}
             </View>
@@ -551,9 +746,112 @@ function FarmSalePanel({ loading, summary, date }: {
   );
 }
 
+function WorkPanel({
+  loading,
+  summary,
+  date,
+}: {
+  loading: boolean;
+  summary: WorkSummary | null;
+  date: string;
+}) {
+  const router = useRouter();
+  const inProgress = (summary?.assigned ?? 0) + (summary?.accepted ?? 0);
+  const issues = (summary?.rejected ?? 0) + (summary?.declined ?? 0);
+  return (
+    <Card accentColor={C.primary}>
+      <SectionHeader
+        icon="clipboard"
+        title="Assign Work"
+        subtitle={`Tasks for gausevak  ·  ${date}`}
+        accentColor={C.primary}
+        route="/(admin)/gausevak/assignwork"
+      />
+      {loading ? (
+        <View
+          style={{ height: 66, backgroundColor: C.border, borderRadius: 12 }}
+        />
+      ) : summary && summary.total > 0 ? (
+        <>
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <StatPill
+              label="To Review"
+              value={summary.submitted}
+              color={summary.submitted > 0 ? C.amber : C.textLight}
+              bgColor={summary.submitted > 0 ? C.amberBg : C.bg}
+              borderColor={summary.submitted > 0 ? C.amberBorder : C.border}
+              icon="eye-outline"
+            />
+            <StatPill
+              label="In Progress"
+              value={inProgress}
+              color={C.blue}
+              bgColor={C.blueBg}
+              borderColor={C.blueBorder}
+              icon="time-outline"
+            />
+            <StatPill
+              label="Approved"
+              value={summary.approved}
+              color={C.green}
+              bgColor={C.greenBg}
+              borderColor={C.greenBorder}
+              icon="checkmark-circle-outline"
+            />
+          </View>
+
+          {summary.submitted > 0 && (
+            <View
+              style={[
+                styles.alertBanner,
+                { backgroundColor: C.amberBg, borderColor: C.amberBorder },
+              ]}
+            >
+              <Ionicons name="alert-circle-outline" size={14} color={C.amber} />
+              <Text style={[styles.alertText, { color: C.amber }]}>
+                {summary.submitted} submitted work waiting for your review
+              </Text>
+            </View>
+          )}
+
+          <ProgressBar
+            value={summary.approved}
+            total={summary.total}
+            color={C.primary}
+          />
+          <View style={styles.progressRow}>
+            <View style={[styles.dot, { backgroundColor: C.primary }]} />
+            <Text style={styles.progressHint}>
+              {summary.approved} of {summary.total} tasks approved
+              {issues > 0 ? `  ·  ${issues} rejected or cancelled` : ""}
+            </Text>
+          </View>
+        </>
+      ) : (
+        <View style={styles.emptyState}>
+          <Ionicons name="clipboard-outline" size={28} color={C.border} />
+          <Text style={styles.emptyText}>No work assigned yet</Text>
+          <TouchableOpacity
+            onPress={() => router.push("/(admin)/gausevak/assignwork" as any)}
+          >
+            <Text style={{ color: C.primary, fontWeight: "700", fontSize: 12 }}>
+              Assign first work
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </Card>
+  );
+}
+
 // ─── Parse health summary from API response
 function parseHealthSummary(logs: any[]): HealthSummary {
-  const summary: HealthSummary = { total: 0, healthy: 0, sick: 0, under_observation: 0 };
+  const summary: HealthSummary = {
+    total: 0,
+    healthy: 0,
+    sick: 0,
+    under_observation: 0,
+  };
   if (!Array.isArray(logs)) return summary;
   logs.forEach((log) => {
     summary.total++;
@@ -582,28 +880,53 @@ export default function GausevakTabs() {
 
   const [feedSummary, setFeedSummary] = useState<FeedSummary | null>(null);
   const [milkSummary, setMilkSummary] = useState<MilkSummary | null>(null);
-  const [healthSummary, setHealthSummary] = useState<HealthSummary | null>(null);
+  const [healthSummary, setHealthSummary] = useState<HealthSummary | null>(
+    null,
+  );
 
   const [farmSaleLoading, setFarmSaleLoading] = useState(true);
-const [farmSaleSummary, setFarmSaleSummary] = useState<FarmSaleSummary | null>(null);
+  const [farmSaleSummary, setFarmSaleSummary] =
+    useState<FarmSaleSummary | null>(null);
+
+  const [workLoading, setWorkLoading] = useState(true);
+  const [workSummary, setWorkSummary] = useState<WorkSummary | null>(null);
 
   // ── Smooth swipe with animation
   const translateX = useRef(new Animated.Value(0)).current;
   const opacity = useRef(new Animated.Value(1)).current;
 
-  const switchTab = useCallback((newTab: TabKey) => {
-    Animated.parallel([
-      Animated.timing(opacity, { toValue: 0, duration: 100, useNativeDriver: true }),
-      Animated.timing(translateX, { toValue: -20, duration: 100, useNativeDriver: true }),
-    ]).start(() => {
-      setActiveTab(newTab);
-      translateX.setValue(20);
+  const switchTab = useCallback(
+    (newTab: TabKey) => {
       Animated.parallel([
-        Animated.timing(opacity, { toValue: 1, duration: 180, useNativeDriver: true }),
-        Animated.timing(translateX, { toValue: 0, duration: 180, useNativeDriver: true }),
-      ]).start();
-    });
-  }, [opacity, translateX]);
+        Animated.timing(opacity, {
+          toValue: 0,
+          duration: 100,
+          useNativeDriver: true,
+        }),
+        Animated.timing(translateX, {
+          toValue: -20,
+          duration: 100,
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        setActiveTab(newTab);
+        translateX.setValue(20);
+        Animated.parallel([
+          Animated.timing(opacity, {
+            toValue: 1,
+            duration: 180,
+            useNativeDriver: true,
+          }),
+          Animated.timing(translateX, {
+            toValue: 0,
+            duration: 180,
+            useNativeDriver: true,
+          }),
+        ]).start();
+      });
+    },
+    [opacity, translateX],
+  );
 
   const panResponder = useRef(
     PanResponder.create({
@@ -618,8 +941,16 @@ const [farmSaleSummary, setFarmSaleSummary] = useState<FarmSaleSummary | null>(n
               translateX.setValue(30);
               opacity.setValue(0);
               Animated.parallel([
-                Animated.timing(opacity, { toValue: 1, duration: 200, useNativeDriver: true }),
-                Animated.timing(translateX, { toValue: 0, duration: 200, useNativeDriver: true }),
+                Animated.timing(opacity, {
+                  toValue: 1,
+                  duration: 200,
+                  useNativeDriver: true,
+                }),
+                Animated.timing(translateX, {
+                  toValue: 0,
+                  duration: 200,
+                  useNativeDriver: true,
+                }),
               ]).start();
             }
             return next;
@@ -632,15 +963,23 @@ const [farmSaleSummary, setFarmSaleSummary] = useState<FarmSaleSummary | null>(n
               translateX.setValue(-30);
               opacity.setValue(0);
               Animated.parallel([
-                Animated.timing(opacity, { toValue: 1, duration: 200, useNativeDriver: true }),
-                Animated.timing(translateX, { toValue: 0, duration: 200, useNativeDriver: true }),
+                Animated.timing(opacity, {
+                  toValue: 1,
+                  duration: 200,
+                  useNativeDriver: true,
+                }),
+                Animated.timing(translateX, {
+                  toValue: 0,
+                  duration: 200,
+                  useNativeDriver: true,
+                }),
               ]).start();
             }
             return next;
           });
         }
       },
-    })
+    }),
   ).current;
 
   const loadFeed = useCallback(async () => {
@@ -655,8 +994,11 @@ const [farmSaleSummary, setFarmSaleSummary] = useState<FarmSaleSummary | null>(n
           shift,
         });
       }
-    } catch (e) { console.log("Feed error", e); }
-    finally { setFeedLoading(false); }
+    } catch (e) {
+      console.log("Feed error", e);
+    } finally {
+      setFeedLoading(false);
+    }
   }, [dateStr, shift]);
 
   const loadMilk = useCallback(async () => {
@@ -664,16 +1006,23 @@ const [farmSaleSummary, setFarmSaleSummary] = useState<FarmSaleSummary | null>(n
       setMilkLoading(true);
       const res = await api.getAdminMilkLogs(dateStr);
       if (res?.summary) setMilkSummary(res.summary);
-    } catch (e) { console.log("Milk error", e); }
-    finally { setMilkLoading(false); }
+    } catch (e) {
+      console.log("Milk error", e);
+    } finally {
+      setMilkLoading(false);
+    }
   }, [dateStr]);
 
   const loadHealth = useCallback(async () => {
     try {
       setHealthLoading(true);
       const res = await api.getAdminHealthLogs(dateStr);
-      const logs = Array.isArray(res) ? res : res?.cows ?? [];
-      if (res?.summary && typeof res.summary === "object" && "healthy" in res.summary) {
+      const logs = Array.isArray(res) ? res : (res?.cows ?? []);
+      if (
+        res?.summary &&
+        typeof res.summary === "object" &&
+        "healthy" in res.summary
+      ) {
         setHealthSummary({
           total: res.summary.total ?? logs.length,
           healthy: res.summary.healthy ?? 0,
@@ -683,34 +1032,82 @@ const [farmSaleSummary, setFarmSaleSummary] = useState<FarmSaleSummary | null>(n
       } else {
         setHealthSummary(parseHealthSummary(logs));
       }
-    } catch (e) { console.log("Health error", e); }
-    finally { setHealthLoading(false); }
+    } catch (e) {
+      console.log("Health error", e);
+    } finally {
+      setHealthLoading(false);
+    }
   }, [dateStr]);
 
   const loadFarmSale = useCallback(async () => {
-  try {
-    setFarmSaleLoading(true);
-    const res = await api.getAdminFarmSales({ date: dateStr });
-    setFarmSaleSummary({
-      total_sales: res.total_sales ?? 0,
-      total_amount: res.total_amount ?? 0,
-      by_product: res.by_product ?? {},
-    });
-  } catch (e) { console.log("Farm sale error", e); }
-  finally { setFarmSaleLoading(false); }
-}, [dateStr]);
+    try {
+      setFarmSaleLoading(true);
+      const res = await api.getAdminFarmSales({ date: dateStr });
+      setFarmSaleSummary({
+        total_sales: res.total_sales ?? 0,
+        total_amount: res.total_amount ?? 0,
+        by_product: res.by_product ?? {},
+      });
+    } catch (e) {
+      console.log("Farm sale error", e);
+    } finally {
+      setFarmSaleLoading(false);
+    }
+  }, [dateStr]);
 
-useEffect(() => { loadFeed(); loadMilk(); loadHealth(); loadFarmSale(); }, [loadFeed, loadMilk, loadHealth, loadFarmSale]);
+  const loadWork = useCallback(async () => {
+    try {
+      setWorkLoading(true);
+      const res = await api.getAdminAssignments();
+      const c = res?.counts ?? {};
+      const n = (k: string) => c[k] ?? 0;
+      setWorkSummary({
+        assigned: n("assigned"),
+        accepted: n("accepted"),
+        submitted: n("submitted"),
+        approved: n("approved"),
+        rejected: n("rejected"),
+        declined: n("declined"),
+        total: res?.total ?? 0,
+      });
+    } catch (e) {
+      console.log("Work error", e);
+    } finally {
+      setWorkLoading(false);
+    }
+  }, []);
 
-const onRefresh = useCallback(async () => {
-  setRefreshing(true);
-  await Promise.all([loadFeed(), loadMilk(), loadHealth(), loadFarmSale()]);
-  setRefreshing(false);
-}, [loadFeed, loadMilk, loadHealth, loadFarmSale]);
+  useEffect(() => {
+    loadFeed();
+    loadMilk();
+    loadHealth();
+    loadFarmSale();
+    loadWork();
+  }, [loadFeed, loadMilk, loadHealth, loadFarmSale, loadWork]);
 
-  const dateLabel = new Date().toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await Promise.all([
+      loadFeed(),
+      loadMilk(),
+      loadHealth(),
+      loadFarmSale(),
+      loadWork(),
+    ]);
+    setRefreshing(false);
+  }, [loadFeed, loadMilk, loadHealth, loadFarmSale, loadWork]);
+
+  const dateLabel = new Date().toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+  });
   const activeTabConfig = TABS.find((t) => t.key === activeTab)!;
-  const isAllLoading = feedLoading && milkLoading && healthLoading && farmSaleLoading;
+  const isAllLoading =
+    feedLoading &&
+    milkLoading &&
+    healthLoading &&
+    farmSaleLoading &&
+    workLoading;
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
@@ -735,16 +1132,26 @@ const onRefresh = useCallback(async () => {
             <Ionicons name="calendar-outline" size={11} color={C.textMuted} />
             <Text style={styles.dateText}>{dateLabel}</Text>
           </View>
-          <View style={[
-            styles.shiftBadge,
-            { backgroundColor: shift === "morning" ? C.amberBg : "#EDE7F6", borderColor: shift === "morning" ? C.amberBorder : "#DDD6FE" },
-          ]}>
+          <View
+            style={[
+              styles.shiftBadge,
+              {
+                backgroundColor: shift === "morning" ? C.amberBg : "#EDE7F6",
+                borderColor: shift === "morning" ? C.amberBorder : "#DDD6FE",
+              },
+            ]}
+          >
             <Ionicons
               name={shift === "morning" ? "sunny-outline" : "moon-outline"}
               size={11}
               color={shift === "morning" ? C.amber : C.purple}
             />
-            <Text style={[styles.shiftText, { color: shift === "morning" ? C.amber : C.purple }]}>
+            <Text
+              style={[
+                styles.shiftText,
+                { color: shift === "morning" ? C.amber : C.purple },
+              ]}
+            >
               {shift === "morning" ? "Morning" : "Evening"}
             </Text>
           </View>
@@ -756,44 +1163,77 @@ const onRefresh = useCallback(async () => {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.primary} colors={[C.primary]} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={C.primary}
+            colors={[C.primary]}
+          />
         }
       >
         {/* ── Quick Stats Strip ── */}
         <View style={styles.statsStrip}>
-          <TouchableOpacity style={styles.stripItem} onPress={() => switchTab("feed")} activeOpacity={0.7}>
-            <Text style={[styles.stripValue, { color: C.green }]}>{feedSummary?.fed_count ?? "—"}</Text>
+          <TouchableOpacity
+            style={styles.stripItem}
+            onPress={() => switchTab("feed")}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.stripValue, { color: C.green }]}>
+              {feedSummary?.fed_count ?? "—"}
+            </Text>
             <Text style={styles.stripLabel}>Fed</Text>
           </TouchableOpacity>
           <View style={styles.stripDivider} />
-          <TouchableOpacity style={styles.stripItem} onPress={() => switchTab("milk")} activeOpacity={0.7}>
-            <Text style={[styles.stripValue, { color: C.blue }]}>{fmt(milkSummary?.grand_total)} L</Text>
+          <TouchableOpacity
+            style={styles.stripItem}
+            onPress={() => switchTab("milk")}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.stripValue, { color: C.blue }]}>
+              {fmt(milkSummary?.grand_total)} L
+            </Text>
             <Text style={styles.stripLabel}>Milk Today</Text>
           </TouchableOpacity>
           <View style={styles.stripDivider} />
-          <TouchableOpacity style={styles.stripItem} onPress={() => switchTab("health")} activeOpacity={0.7}>
-            <Text style={[
-              styles.stripValue,
-              { color: (healthSummary?.sick ?? 0) > 0 ? C.red : C.green },
-            ]}>
+          <TouchableOpacity
+            style={styles.stripItem}
+            onPress={() => switchTab("health")}
+            activeOpacity={0.7}
+          >
+            <Text
+              style={[
+                styles.stripValue,
+                { color: (healthSummary?.sick ?? 0) > 0 ? C.red : C.green },
+              ]}
+            >
               {healthSummary?.healthy ?? "—"}
             </Text>
             <Text style={styles.stripLabel}>Healthy</Text>
           </TouchableOpacity>
           <View style={styles.stripDivider} />
-<TouchableOpacity style={styles.stripItem} onPress={() => switchTab("farmSale")} activeOpacity={0.7}>
-  <Text style={[styles.stripValue, { color: C.purple }]}>
-    ₹{farmSaleSummary?.total_amount.toFixed(0) ?? "—"}
+          <TouchableOpacity
+            style={styles.stripItem}
+            onPress={() => switchTab("farmSale")}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.stripValue, { color: C.purple }]}>
+              ₹{farmSaleSummary?.total_amount.toFixed(0) ?? "—"}
+            </Text>
+            <Text style={styles.stripLabel}>Sales</Text>
+          </TouchableOpacity>
+
+              <View style={styles.stripDivider} />
+<TouchableOpacity style={styles.stripItem} onPress={() => switchTab("work")} activeOpacity={0.7}>
+  <Text style={[styles.stripValue, { color: (workSummary?.submitted ?? 0) > 0 ? C.amber : C.primary }]}>
+    {workSummary?.submitted ?? "—"}
   </Text>
-  <Text style={styles.stripLabel}>Sales</Text>
+  <Text style={styles.stripLabel}>To Review</Text>
 </TouchableOpacity>
+
         </View>
 
         {/* ── Tab Bar ── */}
-        <TabBar
-          active={activeTab}
-          onChange={(k) => switchTab(k)}
-        />
+        <TabBar active={activeTab} onChange={(k) => switchTab(k)} />
 
         {/* ── Swipeable Card ── */}
         <View {...panResponder.panHandlers}>
@@ -802,18 +1242,41 @@ const onRefresh = useCallback(async () => {
           ) : (
             <Animated.View style={{ opacity, transform: [{ translateX }] }}>
               {activeTab === "feed" && (
-                <FeedPanel loading={feedLoading} summary={feedSummary} date={dateLabel} shift={shift} />
+                <FeedPanel
+                  loading={feedLoading}
+                  summary={feedSummary}
+                  date={dateLabel}
+                  shift={shift}
+                />
               )}
               {activeTab === "milk" && (
-                <MilkPanel loading={milkLoading} summary={milkSummary} date={dateLabel} />
+                <MilkPanel
+                  loading={milkLoading}
+                  summary={milkSummary}
+                  date={dateLabel}
+                />
               )}
               {activeTab === "health" && (
-                <HealthPanel loading={healthLoading} summary={healthSummary} date={dateLabel} />
+                <HealthPanel
+                  loading={healthLoading}
+                  summary={healthSummary}
+                  date={dateLabel}
+                />
               )}
-
+              {activeTab === "work" && (
+                <WorkPanel
+                  loading={workLoading}
+                  summary={workSummary}
+                  date={dateLabel}
+                />
+              )}
               {activeTab === "farmSale" && (
-  <FarmSalePanel loading={farmSaleLoading} summary={farmSaleSummary} date={dateLabel} />
-)}
+                <FarmSalePanel
+                  loading={farmSaleLoading}
+                  summary={farmSaleSummary}
+                  date={dateLabel}
+                />
+              )}
             </Animated.View>
           )}
         </View>
@@ -821,12 +1284,20 @@ const onRefresh = useCallback(async () => {
         {/* ── Dot Indicators ── */}
         <View style={styles.dotRow}>
           {TABS.map((t) => (
-            <TouchableOpacity key={t.key} onPress={() => switchTab(t.key)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <TouchableOpacity
+              key={t.key}
+              onPress={() => switchTab(t.key)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
               <View
                 style={[
                   styles.dotIndicator,
                   activeTab === t.key
-                    ? { backgroundColor: activeTabConfig.color, width: 22, borderRadius: 4 }
+                    ? {
+                        backgroundColor: activeTabConfig.color,
+                        width: 22,
+                        borderRadius: 4,
+                      }
                     : { backgroundColor: C.border, width: 8, borderRadius: 4 },
                 ]}
               />
@@ -836,15 +1307,25 @@ const onRefresh = useCallback(async () => {
 
         {/* ── Swipe Hint ── */}
         <View style={styles.swipeHint}>
-          <Ionicons name="swap-horizontal-outline" size={12} color={C.textLight} />
-          <Text style={styles.swipeHintText}>Swipe left or right to switch sections</Text>
+          <Ionicons
+            name="swap-horizontal-outline"
+            size={12}
+            color={C.textLight}
+          />
+          <Text style={styles.swipeHintText}>
+            Swipe left or right to switch sections
+          </Text>
         </View>
 
         {/* ── Footer ── */}
         <View style={styles.footer}>
           <Ionicons name="refresh-outline" size={11} color={C.textLight} />
           <Text style={styles.footerText}>
-            Pull to refresh  ·  {new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+            Pull to refresh ·{" "}
+            {new Date().toLocaleTimeString("en-IN", {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
           </Text>
         </View>
       </ScrollView>
@@ -883,7 +1364,12 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginBottom: 1,
   },
-  headerTitle: { fontSize: 19, fontWeight: "700", color: C.text, letterSpacing: -0.5 },
+  headerTitle: {
+    fontSize: 19,
+    fontWeight: "700",
+    color: C.text,
+    letterSpacing: -0.5,
+  },
   headerRight: { flexDirection: "row", gap: 6, alignItems: "center" },
   dateBadge: {
     flexDirection: "row",
@@ -930,7 +1416,12 @@ const styles = StyleSheet.create({
   },
   stripItem: { flex: 1, alignItems: "center" },
   stripValue: { fontSize: 20, fontWeight: "700", letterSpacing: -0.6 },
-  stripLabel: { fontSize: 10, fontWeight: "500", color: C.textLight, marginTop: 3 },
+  stripLabel: {
+    fontSize: 10,
+    fontWeight: "500",
+    color: C.textLight,
+    marginTop: 3,
+  },
   stripDivider: { width: 1, backgroundColor: C.border, marginVertical: 4 },
 
   // Progress

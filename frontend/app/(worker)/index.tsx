@@ -34,6 +34,7 @@ import FeedScreen from "./feed";
 import HealthScreen from "./health";
 import Scanner from "../../src/components/Scanner";
 import FarmSaleScreen from "./farm-sale";
+import AssignedWorkScreen from "./assignedwork"; 
 
 if (
   Platform.OS === "android" &&
@@ -41,6 +42,8 @@ if (
 ) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
+
+const router = useRouter();
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
 const PALETTE = {
@@ -57,8 +60,20 @@ const PALETTE = {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type QuickAction = "milk" | "feed" | "health" | "farmSale" | null;
+type QuickAction =
+  | "milk"
+  | "feed"
+  | "health"
+  | "farmSale"
+  | "assignedWork"
+  | null;
+
+ type ActionKey = "milk" | "feed" | "health" | "farmSale" | "assignedWork";
+
 type CowTab = "milk" | "feed" | "health";
+
+
+
 type ExtraTaskType =
   | "cleaning"
   | "maintenance"
@@ -130,7 +145,7 @@ function formatPointTime(value?: string) {
 // ─── Icon helpers for actions ─────────────────────────────────────────────────
 // Instead of emojis, we define icon configs for each action
 const ACTION_ICON: Record<
-  "milk" | "feed" | "health" | "farmSale",
+  ActionKey,
   {
     library: "MaterialCommunity" | "FontAwesome5" | "Ionicons";
     name: string;
@@ -141,6 +156,11 @@ const ACTION_ICON: Record<
   feed: { library: "FontAwesome5", name: "seedling", size: 24 },
   health: { library: "MaterialCommunity", name: "heart-pulse", size: 28 },
   farmSale: { library: "MaterialCommunity", name: "cash-register", size: 26 },
+  assignedWork: {
+    library: "MaterialCommunity",
+    name: "clipboard-check-outline",
+    size: 28,
+  },
 };
 
 function ActionIcon({
@@ -148,7 +168,7 @@ function ActionIcon({
   size,
   color,
 }: {
-  actionKey: "milk" | "feed" | "health" | "farmSale";
+   actionKey: ActionKey;
   size?: number;
   color?: string;
 }) {
@@ -236,6 +256,11 @@ const ACTION_KEYS = {
     gradient: ["#ef4444", "#dc2626"] as const,
     bg: "#fef2f2",
   },
+  assignedWork: {
+    color: "#d81db9",
+    gradient: ["#e040c8", "#d81db9"] as const,
+    bg: "#fdf2f8",
+  },
   farmSale: {
     color: "#0891b2",
     gradient: ["#0891b2", "#0e7490"] as const,
@@ -322,7 +347,7 @@ function useTaskMeta() {
 }
 
 function useActionMeta() {
-  const { t } = useLang();
+  const { t,lang  } = useLang();
   return {
     milk: { ...ACTION_KEYS.milk, label: t("milkLabel"), desc: t("milkDesc") },
     feed: { ...ACTION_KEYS.feed, label: t("feedLabel"), desc: t("feedDesc") },
@@ -335,6 +360,11 @@ function useActionMeta() {
       ...ACTION_KEYS.farmSale,
       label: t("farm Sale") ?? "Farm Sale",
       desc: t("Enter Farm Sale Details") ?? "Record product sold on farm",
+    },
+        assignedWork: {
+      ...ACTION_KEYS.assignedWork,
+      label: lang === "hi" ? "असाइन किया गया काम" : "Assigned Work",
+      desc: lang === "hi" ? "एडमिन द्वारा दिए गए कार्य" : "Tasks given by your admin",
     },
   };
 }
@@ -1259,10 +1289,12 @@ function BigActionButton({
   actionKey,
   onPress,
   delay,
+  badge = 0,
 }: {
   actionKey: keyof ReturnType<typeof useActionMeta>;
   onPress: () => void;
   delay: number;
+  badge?: number;
 }) {
   const ACTION_META = useActionMeta();
   const meta = ACTION_META[actionKey];
@@ -1327,6 +1359,22 @@ function BigActionButton({
             <Text style={bb.label}>{meta.label}</Text>
             <Text style={bb.desc}>{meta.desc}</Text>
           </View>
+                    {badge > 0 && (
+            <View
+              style={{
+                backgroundColor: meta.color,
+                borderRadius: 99,
+                minWidth: 24,
+                paddingHorizontal: 8,
+                paddingVertical: 3,
+                alignItems: "center",
+              }}
+            >
+              <Text style={{ color: "#fff", fontWeight: "900", fontSize: 12 }}>
+                {badge}
+              </Text>
+            </View>
+          )}
           <View style={[bb.arrowWrap, { backgroundColor: meta.color + "15" }]}>
             <Ionicons name="chevron-forward" size={20} color={meta.color} />
           </View>
@@ -1384,6 +1432,7 @@ function FullScreenModal({
           )}
           {action === "feed" && <FeedScreen onFedCountChange={onFedCount} />}
           {action === "health" && <HealthScreen />}
+            {action === "assignedWork" && <AssignedWorkScreen />}
           {action === "farmSale" && <FarmSaleScreen />}
         </View>
       </View>
@@ -2355,10 +2404,9 @@ function ExtraTasksSummaryCard({
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 
 function DashboardContent() {
+   const router = useRouter();
   const { worker, workerToken } = useAuth();
   const { lang, t } = useLang();
-  const router = useRouter();
-
   const [activeAction, setActiveAction] = useState<QuickAction>(null);
   const [cows, setCows] = useState<Cow[]>([]);
   const [cowsLoading, setCowsLoading] = useState(true);
@@ -2379,6 +2427,17 @@ function DashboardContent() {
   const [extraTasksLoading, setExtraTasksLoading] = useState(false);
 
   const headerAnim = useRef(new Animated.Value(0)).current;
+
+  const [pendingWork, setPendingWork] = useState(0);
+
+  const fetchPendingWork = useCallback(async () => {
+    try {
+      const r = await api.workerGetAssignments();
+      setPendingWork(r.pending_action ?? 0);
+    } catch {
+      setPendingWork(0);
+    }
+  }, []);
 
   const fetchCows = async () => {
     if (!workerToken) return;
@@ -2479,7 +2538,8 @@ function DashboardContent() {
   useFocusEffect(
     useCallback(() => {
       fetchExtraTasks();
-    }, [fetchExtraTasks]),
+      fetchPendingWork();
+    }, [fetchExtraTasks, fetchPendingWork]),
   );
 
   useEffect(() => {
@@ -2671,6 +2731,13 @@ function DashboardContent() {
         actionKey="farmSale"
         delay={240}
         onPress={() => setActiveAction("farmSale")}
+      />
+
+      <BigActionButton
+        actionKey="assignedWork"
+        delay={320}
+        badge={pendingWork}
+        onPress={() => setActiveAction("assignedWork")}
       />
 
       <TouchableOpacity

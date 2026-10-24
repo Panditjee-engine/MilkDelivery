@@ -777,13 +777,11 @@ export default function WalletScreen() {
     fetchData();
   }, [fetchData]);
 
-  useFocusEffect(
-    useCallback(() => {
-      fetchData();
-      const interval = setInterval(fetchData, 3000);
-      return () => clearInterval(interval);
-    }, [fetchData]),
-  );
+useFocusEffect(
+  useCallback(() => {
+    fetchData();
+  }, [fetchData]),
+);
 
   const onRefresh = useCallback(() => {
     api.refreshLists();
