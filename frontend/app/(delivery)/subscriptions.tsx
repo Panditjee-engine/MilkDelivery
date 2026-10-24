@@ -2050,3 +2050,4 @@ const styles = StyleSheet.create({
   mapLinkText: { fontSize: 11, fontWeight: "700", color: "#fff" },
 });
 //for confirmation 22 august
+//rider bulk mark delivered
