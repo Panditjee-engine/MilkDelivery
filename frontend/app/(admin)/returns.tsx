@@ -5,9 +5,10 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../../src/services/api";
 import ReturnPhoto from "../../src/components/ReturnPhoto";
+import BottleLedger from "../../src/components/BottleLedger";
 import { formatDeliveryAddress } from "../../src/utils/address";
 
-type Request = { id: string; has_pickup_photo?: boolean; order_id: string; status: string; kind: string; customer_name?: string; reason?: string; bottle_count?: number; created_at?: string; address?: any; items?: { product_name?: string; quantity: number }[] };
+type Request = { damage_status?: string; damage_reason?: string; id: string; has_pickup_photo?: boolean; order_id: string; status: string; kind: string; customer_name?: string; reason?: string; bottle_count?: number; created_at?: string; address?: any; items?: { product_name?: string; quantity: number }[] };
 const statuses = [
   { key: "all", title: "All", color: "#BB6B3F", bg: "#FFF0E4" },
   { key: "requested", title: "Pending", color: "#946200", bg: "#FFF5D6" },
@@ -58,6 +59,7 @@ export default function AdminReturns() {
     setApproving(row); setPartnerId(""); setPartners([]); void loadPartners();
   };
   const generation = useRef(0);
+  const [disputeNote, setDisputeNote] = useState("");
   const load = useCallback(async () => {
     const version = ++generation.current;
     try {
@@ -79,6 +81,8 @@ export default function AdminReturns() {
     try {
       const updated = action === "lost" || action === "cracked"
         ? await api.chargeBottleDamage(id, action)
+        : action === "damage_review" || action === "damage_reject" || action === "damage_dismiss"
+        ? await api.decideBottleDamage(id, action === "damage_review" ? "review" : action === "damage_dismiss" ? "dismiss" : "reject", disputeNote)
         : await api.updateReturnRequest(id, action, rider);
       setRows(previous => previous.map(row => row.id === id ? updated : row));
       setApproving(null);
@@ -99,6 +103,7 @@ export default function AdminReturns() {
     <FlatList data={filtered} keyExtractor={item => item.id} contentContainerStyle={s.list} keyboardShouldPersistTaps="handled"
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); void load(); }} tintColor="#BB6B3F" />}
       ListHeaderComponent={<View style={s.controls}>
+        <BottleLedger key={JSON.stringify(rows.map(row => (row as any).updated_at))} />
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.statusRow}>{statuses.map(item => <TouchableOpacity key={item.key} accessibilityRole="tab" accessibilityState={{ selected: status === item.key }} onPress={() => setStatus(item.key)} style={[s.score, { borderBottomColor: status === item.key ? item.color : "transparent" }]}><Text style={[s.number, { color: item.color }]}>{counts[item.key]}</Text><Text style={[s.scoreLabel, status === item.key && { color: item.color, fontWeight: "700" }]}>{item.title}</Text></TouchableOpacity>)}</ScrollView>
         <View style={s.search}><Ionicons name="search-outline" size={19} color="#8A8178" /><TextInput accessibilityLabel="Search requests" value={search} onChangeText={setSearch} placeholder="Customer, order or product" placeholderTextColor="#8A8178" style={s.searchInput} autoCorrect={false} />{search ? <TouchableOpacity accessibilityLabel="Clear search" onPress={() => setSearch("")}><Ionicons name="close-circle" size={20} color="#8A8178" /></TouchableOpacity> : null}</View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.kindRow}>{kinds.map(item => <TouchableOpacity key={item.key} accessibilityRole="tab" accessibilityState={{ selected: kind === item.key }} onPress={() => setKind(item.key)} style={[s.kind, kind === item.key && s.kindSelected]}><Ionicons name={item.icon} size={16} color={kind === item.key ? "#BB6B3F" : "#76685D"} /><Text style={[s.kindText, kind === item.key && { color: "#BB6B3F" }]}>{item.label}</Text></TouchableOpacity>)}</ScrollView>
@@ -119,10 +124,20 @@ export default function AdminReturns() {
           <View style={s.orderRow}><Text style={s.caption}>Order #{row.order_id.slice(0, 8)}</Text>{row.kind === "bottle_return" && <Text style={s.quantity}>{row.bottle_count || 0} bottles</Text>}</View>
           <Text style={s.products} numberOfLines={open ? undefined : 2}>{(row.items || []).map(item => `${item.product_name || "Product"} × ${item.quantity}`).join(" · ")}</Text>
           {open && <View style={s.details}><Text style={s.detailLabel}>REASON</Text><Text style={s.detailText}>{row.reason || "Not provided"}</Text><Text style={s.detailLabel}>PICKUP ADDRESS</Text><Text style={s.detailText}>{formatDeliveryAddress(row.address) || "Address not available"}</Text></View>}
-          {open && row.status === "picked_up" && <Text style={s.notice}>{row.kind === "bottle_return" ? "Bottles collected. The deposit is released when no pending milk deliveries or outstanding bottles remain." : "Pickup confirmed. Refund or exchange completion is still pending."}</Text>}
-          {open && <ReturnPhoto id={row.id} exists={!!row.has_pickup_photo} />}
+          {open && row.status === "picked_up" && <Text style={s.notice}>{row.kind === "bottle_return" ? "Bottles collected. The wallet hold is recalculated from remaining bottles and completed deliveries." : "Pickup confirmed. Refund or exchange completion is still pending."}</Text>}
+          {open && <ReturnPhoto id={row.id} exists={!!row.has_pickup_photo} editable={row.kind === "bottle_return" && !row.damage_status} />}
+          {!!row.damage_status && <Text style={s.notice}>Bottle {row.damage_reason}: {row.damage_status.replace(/_/g, ' ')}</Text>}
+          {open && row.damage_status === "disputed" && <View style={{ gap: 8 }}>
+            <Text style={s.notice}>Customer disputed this charge. No money has been deducted.</Text>
+            <TextInput accessibilityLabel="Dispute resolution reason" placeholder="Resolution reason" maxLength={500} value={disputeNote} onChangeText={setDisputeNote} style={s.searchInput} />
+            <TouchableOpacity disabled={!!busy || !disputeNote.trim()} style={s.reject} onPress={() => void update(row.id, "damage_dismiss")}><Text style={s.rejectText}>Close without charge</Text></TouchableOpacity>
+          </View>}
+          {open && row.damage_status === "admin_review" && <View style={s.actions}>
+            <TouchableOpacity disabled={!!busy} style={s.primary} onPress={() => Alert.alert("Send for customer confirmation?", "The customer will review the evidence and accept or dispute the Rs 50 charge. No money is deducted now.", [{text:"Cancel",style:"cancel"},{text:"Send",onPress:()=>void update(row.id,"damage_review")}])}><Text style={s.primaryText}>Request Customer Confirmation</Text></TouchableOpacity>
+            <TouchableOpacity disabled={!!busy} style={s.reject} onPress={() => void update(row.id,"damage_reject")}><Text style={s.rejectText}>Reject Report</Text></TouchableOpacity>
+          </View>}
           {open && (row.status === "requested" || row.status === "approved") && <View style={s.actions}>
-            {row.kind === "bottle_return" && <TouchableOpacity disabled={!!busy} style={s.reject} onPress={() => Alert.alert("Record bottle loss or damage?", "This closes the remaining bottles on this request and charges the held ₹50 once. A new ₹50 deposit is reserved when funds are available.", [{text:"Cancel",style:"cancel"},{text:"Lost",style:"destructive",onPress:()=>void update(row.id,"lost")},{text:"Cracked",style:"destructive",onPress:()=>void update(row.id,"cracked")}])}><Text style={s.rejectText}>Lost / Cracked</Text></TouchableOpacity>}
+            {row.kind === "bottle_return" && !row.damage_status && <TouchableOpacity disabled={!!busy} style={s.reject} onPress={() => Alert.alert("Report bottle loss or damage?", "Attach evidence first. Customer acceptance is required before any Rs 50 charge.", [{text:"Cancel",style:"cancel"},{text:"Lost",onPress:()=>void update(row.id,"lost")},{text:"Cracked",onPress:()=>void update(row.id,"cracked")}])}><Text style={s.rejectText}>Lost / Cracked</Text></TouchableOpacity>}
             {row.status === "requested" && <TouchableOpacity disabled={!!busy} style={[s.reject, !!busy && s.disabled]} onPress={() => confirm(row, "reject")}><Ionicons name="close" size={17} color="#B44145" /><Text style={s.rejectText}>Reject</Text></TouchableOpacity>}
             <TouchableOpacity disabled={!!busy} style={[s.primary, !!busy && s.disabled]} onPress={() => row.status === "requested" ? choosePartner(row) : confirm(row, "pickup")}>
               {busy === row.id ? <ActivityIndicator size="small" color="white" /> : <Ionicons name={row.status === "requested" ? "checkmark" : "bag-check-outline"} size={18} color="white" />}<Text style={s.primaryText}>{row.status === "requested" ? "Approve" : "Confirm Pickup"}</Text>

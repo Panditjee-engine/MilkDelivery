@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Alert, BackHandler, Image, NativeModules, Platform, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { AccessibilityInfo, Animated, ActivityIndicator, Alert, BackHandler, Image, NativeModules, Platform, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import Constants from "expo-constants";
@@ -36,6 +36,35 @@ const money = (amount: number) => `₹${Number(amount).toLocaleString("en-IN")}`
 const historyDate = (value: string) => { const date = new Date(`${value}T12:00:00`); return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }); };
 const historyTime = (value: string) => { const match = /^(\d{2}):(\d{2})$/.exec(value); if (!match) return value; const hour = Number(match[1]); return `${hour % 12 || 12}:${match[2]} ${hour >= 12 ? "PM" : "AM"}`; };
 const label = (value?: string) => (value || "Unknown").replace(/_/g, " ");
+function AppointmentWindow({ service, overlay = false }: { service: Service; overlay?: boolean }) {
+  const window = service.appointment_window;
+  const pulse = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    let mounted = true;
+    let animation: Animated.CompositeAnimation | undefined;
+    const update = (reduce: boolean) => {
+      if (!mounted) return;
+      animation?.stop();
+      pulse.setValue(1);
+      if (reduce || !overlay || !window?.is_active) return;
+      animation = Animated.loop(Animated.sequence([
+        Animated.timing(pulse, { toValue: 0.82, duration: 1200, useNativeDriver: true, isInteraction: false }),
+        Animated.timing(pulse, { toValue: 1, duration: 1200, useNativeDriver: true, isInteraction: false }),
+      ]));
+      animation.start();
+    };
+    void AccessibilityInfo.isReduceMotionEnabled().then(update).catch(() => {});
+    const listener = AccessibilityInfo.addEventListener('reduceMotionChanged', update);
+    return () => { mounted = false; animation?.stop(); listener.remove(); };
+  }, [overlay, window?.is_active, pulse]);
+  if (!window) return null;
+  return <Animated.View pointerEvents="none" style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: overlay ? (window.is_active ? "#166534" : "#4B5563") : "#FFF1E8", borderRadius: 6, padding: 6, marginVertical: overlay ? 0 : 4, opacity: pulse }}>
+    <Ionicons name="time-outline" size={13} color={overlay ? "#FFFFFF" : Colors.primaryDark} />
+    <Text numberOfLines={1} ellipsizeMode="tail" style={{ minWidth: 0, flexShrink: 1, fontSize: 10, lineHeight: 14, fontWeight: "700", color: overlay ? "#FFFFFF" : Colors.primaryDark }}>
+      {window.is_active ? `Daily ${historyTime(window.start_time)} - ${historyTime(window.end_time)} IST` : "Appointments currently closed"}
+    </Text>
+  </Animated.View>;
+}
 const message = (e: unknown) => e instanceof Error ? e.message :
   typeof e === "object" && e !== null && "description" in e ? String(e.description) : "Please try again.";
 const nativeCheckoutAvailable = () => Platform.OS !== "web" && Constants.appOwnership !== "expo" &&
@@ -54,6 +83,7 @@ function ServiceImage({ service, large = false }: { service: Service; large?: bo
     {!!width && <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false} onMomentumScrollEnd={event => setPage(Math.round(event.nativeEvent.contentOffset.x / width))}>{slides.map(uri => <View key={uri} style={{ width, height: "100%", alignItems: "center", justifyContent: "center" }}>
       {failed[uri] ? <Ionicons name="leaf-outline" size={40} color={Colors.primaryDark} /> : <Image accessibilityLabel={service.name} source={{ uri }} style={{ width, height: "100%" }} resizeMode="cover" onError={() => setFailed(current => ({ ...current, [uri]: true }))} />}
     </View>)}</ScrollView>}
+    <View pointerEvents="none" style={{ position: "absolute", top: 6, left: 6, right: large ? 12 : 48, alignItems: "flex-start" }}><AppointmentWindow service={service} overlay /></View>
     {slides.length > 1 && <View pointerEvents="none" style={{ position: "absolute", bottom: 8, alignSelf: "center", flexDirection: "row", gap: 4, backgroundColor: "#ffffffdd", padding: 5, borderRadius: 8 }}>{slides.map((_, i) => <View key={i} style={{ width: i === page ? 14 : 5, height: 5, borderRadius: 3, backgroundColor: i === page ? Colors.primaryDark : "#aaa" }} />)}</View>}
   </View>;
 }
@@ -345,6 +375,7 @@ export default function GaumaliScreen({ historyOnly = false, detailId, startBook
         onChangeText={value => { setDate(value); setStart(""); setSlots([]); }} />}
       {!dateOK && <Text style={s.error}>Enter a valid date today or later (YYYY-MM-DD).</Text>}
       <Text style={s.section}>Available Slots</Text>
+      {service && <AppointmentWindow service={service} />}
       {slotLoading ? <ActivityIndicator color={Colors.primaryDark} /> : <View style={s.wrap}>
         {slots.map(slot => <TouchableOpacity key={slot.start} disabled={busy || slot.available <= 0} accessibilityRole="radio"
           accessibilityState={{ checked: start === slot.start, disabled: busy || slot.available <= 0 }}

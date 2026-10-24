@@ -30,6 +30,7 @@ import { api } from "../../src/services/api";
 import { Colors } from "../../src/constants/colors";
 import LoadingScreen from "../../src/components/LoadingScreen";
 import OrderItemFeedback from "../../src/components/OrderItemFeedback";
+import { loyaltyRateLabel } from "../../src/utils/loyaltyLabel";
 
 if (
   Platform.OS === "android" &&
@@ -41,6 +42,9 @@ if (
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface OrderItem {
+  discount_percent?: number;
+  discount_amount?: number;
+  original_price?: number;
   product_id: string;
   name?: string;
   product_name?: string;
@@ -52,6 +56,8 @@ interface OrderItem {
 }
 
 interface Order {
+  subtotal?: number;
+  loyalty_discount?: number;
   id: string;
   subscription_id?: string;
   user_id: string;
@@ -1009,6 +1015,7 @@ function OrderCard({
           }}
         >
           <Text style={cd.amount}>₹{order.total_amount?.toFixed(2)}</Text>
+          {!!order.loyalty_discount && <Text style={{color:'#15803D',fontSize:12}}>Loyalty discount{loyaltyRateLabel(undefined, order.items)}: -₹{order.loyalty_discount.toFixed(2)}</Text>}
           {order.delivery_otp && isActive ? (
             <View
               style={[

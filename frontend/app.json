@@ -2,7 +2,7 @@
   "expo": {
     "name": "Gau Satva",
     "slug": "frontend",
-    "version": "1.0.23",
+    "version": "1.0.24",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "gausatv",

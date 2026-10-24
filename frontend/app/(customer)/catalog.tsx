@@ -1,5 +1,7 @@
 import ServiceSlotPicker, { isServiceProduct, productStock } from "../../src/components/ServiceSlotPicker";
 import NewProductBadge from "../../src/components/NewProductBadge";
+import { useLoyaltyQuote } from "../../src/hooks/useLoyaltyQuote";
+import LoyaltyBreakdown from "../../src/components/LoyaltyBreakdown";
 import { newlyAddedProducts } from "../../src/utils/newProducts";
 import { useProductAgeClock } from "../../src/hooks/useProductAgeClock";
 import React, {
@@ -367,6 +369,9 @@ interface CartItem {
 
 function isUnavailable(p: any): boolean {
   return !p?.is_available || (p?.stock ?? 0) <= 0;
+}
+function quoteItems(cart: CartItem[]) {
+  return cart.filter(i => !isUnavailable(i.product)).map(i => ({product_id: resolveProductId(i.product), quantity:i.quantity, price:i.product.price, amount:i.product.price*i.quantity}));
 }
 function getPayableTotal(cart: CartItem[]): number {
   return cart
@@ -1996,7 +2001,8 @@ function SubscribeModal({
 
   const theme = getCategoryTheme(product?.category);
   const unitPrice = product?.price ?? 0;
-  const total = unitPrice * qty;
+  const loyalty = useLoyaltyQuote(product ? [{product_id:resolveProductId(product),quantity:qty,price:unitPrice,amount:unitPrice*qty}] : []);
+  const total = loyalty.data?.total ?? unitPrice * qty;
   const canAfford = walletBalance >= total;
   const deliveries = estimateDeliveryCount(
     pattern,
@@ -2052,6 +2058,7 @@ function SubscribeModal({
 
   const confirm = async () => {
     if (!product) return;
+    if (!loyalty.ready) { Alert.alert("Check total", loyalty.error || "Please wait while pricing is calculated."); return; }
     const cutoffRule = getOrderCutoffForProduct(product, cutoffRules);
     if (cutoffRule && isOrderCutoffPassed(cutoffRule)) {
       Alert.alert(
@@ -2112,6 +2119,8 @@ function SubscribeModal({
         return;
       }
       const payload: Parameters<typeof api.createSubscription>[0] = {
+        // Final payable amount is always recomputed by the server.
+        quoted_total: loyalty.data?.total,
         items: [
           {
             product_id: productId,
@@ -2305,6 +2314,7 @@ function SubscribeModal({
                   </Text>
                 </View>
 
+                <LoyaltyBreakdown quote={loyalty} />
                 <Text style={sheetS.sectionLabel}>Schedule</Text>
                 <View style={subModalS.patternRow}>
                   {subscriptionPatterns.map((p) => {
@@ -3289,11 +3299,13 @@ function CartSheet({
 
   const unavailableItems = cart.filter((i) => isUnavailable(i.product));
   const hasUnavailable = unavailableItems.length > 0;
-  const cartTotal = getPayableTotal(cart);
+  const loyalty = useLoyaltyQuote(quoteItems(cart), visible);
+  const cartTotal = loyalty.data?.total ?? getPayableTotal(cart);
   const canAfford = walletBalance >= cartTotal;
   if (!visible) return null;
 
   const handleConfirmOrderPress = () => {
+    if (!loyalty.ready) { Alert.alert("Check total", loyalty.error || "Please wait while the payable amount is calculated."); return; }
     console.log("[Cart] confirm place order", {
       paymentMethod,
       itemCount: cart.length,
@@ -3520,6 +3532,7 @@ function CartSheet({
 
             {cart.length > 0 && (
               <View style={cartS.footer}>
+                <LoyaltyBreakdown quote={loyalty} />
                 <View style={cartS.divider} />
                 <View style={cartS.totalRow}>
                   <Text style={cartS.totalLabel}>Total</Text>
@@ -4878,13 +4891,15 @@ export default function CatalogScreen() {
     );
   };
 
-  const cartTotal = getPayableTotal(cart);
+  const loyalty = useLoyaltyQuote(quoteItems(cart));
+  const cartTotal = loyalty.data?.total ?? getPayableTotal(cart);
 
   // ── FIXED: All cart items go as ONE buy_once subscription
   const handlePlaceOrder = async (
     paymentMethod: PaymentMethod,
     serviceSlot?: string,
   ) => {
+    if (!loyalty.ready) { Alert.alert("Check total", loyalty.error || "Please wait while pricing is calculated."); return; }
     console.log("[Cart] handlePlaceOrder started", {
       paymentMethod,
       itemCount: cart.length,
@@ -4980,6 +4995,7 @@ export default function CatalogScreen() {
         items: orderItems as Parameters<
           typeof api.createSubscription
         >[0]["items"],
+        quoted_total: loyalty.data?.total,
         pattern: "buy_once",
         custom_days: null,
         start_date: tomorrow,
