@@ -779,13 +779,14 @@ export default function SubscriptionsScreen() {
         ))}
       </View>
 
-      {filter === "today" && selectableToday.length > 0 && (
+      {filter === "today" && (
         <View style={styles.bulkBar}>
+          <View style={styles.bulkRow}>
           <Text style={styles.bulkInfoText}>{selectedIds.size} selected</Text>
           <TouchableOpacity
             style={styles.bulkChip}
             onPress={() => setSelectedIds(new Set(selectableToday.map((s) => s.id)))}
-            disabled={bulkLoading}
+            disabled={bulkLoading || selectableToday.length === 0}
           >
             <Text style={styles.bulkChipText}>Select All ({selectableToday.length})</Text>
           </TouchableOpacity>
@@ -796,13 +797,14 @@ export default function SubscriptionsScreen() {
           >
             <Text style={styles.bulkChipText}>Clear</Text>
           </TouchableOpacity>
+          </View>
           <TouchableOpacity
             style={[
               styles.bulkDeliveredBtn,
-              (selectedIds.size === 0 || bulkLoading) && { opacity: 0.55 },
+              (selectedIds.size === 0 || selectableToday.length === 0 || bulkLoading || isShiftOff) && { opacity: 0.55 },
             ]}
             onPress={handleBulkDelivered}
-            disabled={selectedIds.size === 0 || bulkLoading}
+            disabled={selectedIds.size === 0 || selectableToday.length === 0 || bulkLoading || isShiftOff}
           >
             {bulkLoading ? (
               <ActivityIndicator size="small" color="#fff" />
@@ -1884,8 +1886,7 @@ const styles = StyleSheet.create({
   },
 
   bulkBar: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexShrink: 0,
     gap: 8,
     marginHorizontal: 14,
     marginTop: 10,
@@ -1895,6 +1896,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: C.border,
   },
+  bulkRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8 },
   bulkInfoText: { fontSize: 12, fontWeight: "800", color: C.textMuted, flex: 1 },
   bulkChip: {
     borderRadius: 999,
@@ -1908,6 +1910,8 @@ const styles = StyleSheet.create({
   bulkDeliveredBtn: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
+    minHeight: 44,
     gap: 5,
     borderRadius: 999,
     backgroundColor: C.green,

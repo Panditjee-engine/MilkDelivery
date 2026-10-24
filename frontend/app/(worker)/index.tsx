@@ -43,8 +43,6 @@ if (
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-const router = useRouter();
-
 // ─── Palette ──────────────────────────────────────────────────────────────────
 const PALETTE = {
   primary: "#FFBF55",
@@ -2404,7 +2402,7 @@ function ExtraTasksSummaryCard({
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 
 function DashboardContent() {
-   const router = useRouter();
+  const router = useRouter();
   const { worker, workerToken } = useAuth();
   const { lang, t } = useLang();
   const [activeAction, setActiveAction] = useState<QuickAction>(null);
