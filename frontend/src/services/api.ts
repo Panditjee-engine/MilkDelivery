@@ -653,6 +653,14 @@ class ApiService {
       body: JSON.stringify({ reason }),
     });
   }
+  getBottleLedger() {
+    return this.request<any>("/returns/bottles/ledger");
+  }
+  decideBottleDamage(id: string, action: "review" | "accept" | "reject" | "dismiss", note = "") {
+    return this.request<any>(`/returns/${encodeURIComponent(id)}/bottle-damage/decision`, {
+      method: "POST", body: JSON.stringify({ action, note }),
+    });
+  }
   updateReturnRequest(
     id: string,
     action: string,
@@ -1441,6 +1449,7 @@ class ApiService {
   }
 
   async createSubscription(data: {
+    quoted_total?: number;
     items: Array<{
       product_id: string;
       quantity: number;

@@ -40,7 +40,7 @@ type DeliveryWindow = {
   is_active: boolean;
 };
 
-type Scope = "all" | "product";
+type Scope = "all" | "product" | "gaumali";
 type TimeTarget = "start" | "end" | null;
 type TimeDraft = { hour: number; minute: string; period: "AM" | "PM" };
 
@@ -159,7 +159,7 @@ export default function AdminDeliveryWindowScreen() {
   const startEdit = (item: DeliveryWindow) => {
     setTimeTarget(null);
     setEditing(item);
-    setScope(item.product_id ? "product" : "all");
+    setScope(item.product_id === "__gaumali__" ? "gaumali" : item.product_id ? "product" : "all");
     setProductId(item.product_id || "");
     setStartTime(item.start_time || "06:00");
     setEndTime(item.end_time || "09:00");
@@ -258,6 +258,10 @@ export default function AdminDeliveryWindowScreen() {
   };
 
   const validate = () => {
+    if (scope === "gaumali" && (!startTime.endsWith(":00") || !endTime.endsWith(":00"))) {
+      Alert.alert("Select whole hours", "Gaumali slots start on the hour. Please select 00 minutes.");
+      return false;
+    }
     if (scope === "product" && !productId) {
       Alert.alert("Select product", "Please choose a product for individual delivery window.");
       return false;
@@ -274,7 +278,7 @@ export default function AdminDeliveryWindowScreen() {
     setSaving(true);
     try {
       const payload = {
-        product_id: scope === "product" ? productId : null,
+        product_id: scope === "gaumali" ? "__gaumali__" : scope === "product" ? productId : null,
         start_time: startTime,
         end_time: endTime,
         is_active: isActive,
@@ -338,7 +342,7 @@ export default function AdminDeliveryWindowScreen() {
     <>
       <Text style={s.label}>Scope</Text>
       <View style={s.segment}>
-        {(["all", "product"] as Scope[]).map((item) => {
+        {(["all", "product", "gaumali"] as Scope[]).map((item) => {
           const active = scope === item;
           return (
             <TouchableOpacity
@@ -352,7 +356,7 @@ export default function AdminDeliveryWindowScreen() {
                 color={active ? "#fff" : C.dark}
               />
               <Text style={[s.segmentText, active && s.segmentTextActive]}>
-                {item === "all" ? "All Products" : "Individual"}
+                {item === "all" ? "All Products" : item === "gaumali" ? "Gaumali" : "Individual"}
               </Text>
             </TouchableOpacity>
           );

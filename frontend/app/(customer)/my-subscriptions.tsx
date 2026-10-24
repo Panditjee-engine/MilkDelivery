@@ -24,6 +24,7 @@ import { api } from "../../src/services/api";
 import { Colors } from "../../src/constants/colors";
 import LoadingScreen from "../../src/components/LoadingScreen";
 import ServiceSlotPicker from "../../src/components/ServiceSlotPicker";
+import { loyaltyRateLabel } from "../../src/utils/loyaltyLabel";
 
 // ─── Types
 
@@ -45,6 +46,7 @@ interface SubscriptionItem {
 }
 
 interface Subscription {
+  pricing?: {subtotal: number; discount: number; total: number; percent?: number};
   id: string;
   items?: SubscriptionItem[];
   total_quantity?: number;
@@ -883,6 +885,7 @@ function SubscriptionCard({
             {sub.items && sub.items.length > 1 && (
               <View style={{ width: "100%", marginTop: 4 }}>
                 <Text style={C.cellLabel}>All Items</Text>
+                {!!sub.pricing?.discount && <Text style={{color:'#15803D',fontSize:12}}>Loyalty discount{loyaltyRateLabel(sub.pricing.percent)} per delivery: -₹{sub.pricing.discount.toFixed(2)}</Text>}
                 {sub.items.map((item, idx) => (
                   <View key={idx} style={C.itemRow}>
                     <Text style={C.itemRowTxt}>

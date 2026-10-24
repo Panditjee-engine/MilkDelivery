@@ -2,6 +2,7 @@ import { api } from "./api";
 
 export type PaymentMethod = "wallet" | "online" | "cod";
 export interface Service {
+  appointment_window?: { start_time: string; end_time: string; is_active: boolean; timezone: string };
   image?: string;
   images?: string[];
   id: string; name: string; description: string; price: number;
