@@ -2266,7 +2266,7 @@ export default function OrdersScreen() {
           setCancelOrder(null);
         }}
       />
-      <RatingPopup orders={orders} />
+      <RatingPopup />
       <FilterModal
         visible={filterModalVisible}
         orders={orders}
