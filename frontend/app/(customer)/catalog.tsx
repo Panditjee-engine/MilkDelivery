@@ -5228,7 +5228,8 @@ export default function CatalogScreen() {
     setQuickAddProduct(p);
     setQuickAddVisible(true);
   };
-  const handleSubscribe = (p: any) => {
+
+  /*const handleSubscribe = (p: any) => {
     if (!requireCustomerName(user?.name, () => router.push("/(customer)/edit-profile" as any))) return;
     if (showCutoffPopupIfBlocked(p)) return;
     if (productStock(p) === 0) {
@@ -5248,8 +5249,50 @@ export default function CatalogScreen() {
       return;
     }
     startNewSubscription(p);
-  };
+  }; */
 
+  // Does the customer already have an active recurring subscription for this product?
+const findActiveSubscriptionForProduct = (p: any) => {
+  const pid = String(resolveProductId(p));
+  if (!pid || pid === "null") return null;
+  return (
+    activeSubscriptions.find(
+      (s: any) =>
+        s.pattern !== "buy_once" &&
+        ((s.items || []).some((i: any) => String(i.product_id) === pid) ||
+          String(s.product_id ?? s.product?.id ?? "") === pid),
+    ) || null
+  );
+};
+
+// Original flow: open the subscribe modal for a new subscription
+const startNewSubscription = (p: any) => {
+  if (
+    !requireCustomerName(user?.name, () =>
+      router.push("/(customer)/edit-profile" as any),
+    )
+  )
+    return;
+  if (showCutoffPopupIfBlocked(p)) return;
+  if (productStock(p) === 0) {
+    alert("Out of stock");
+    return;
+  }
+  setSubscribeProduct(p);
+  setSubscribeVisible(true);
+};
+
+// Entry point from the product card
+const handleSubscribe = (p: any) => {
+  const existing = findActiveSubscriptionForProduct(p);
+  if (existing) {
+    setExistingSubProduct(p);
+    setExistingSub(existing);
+    setExistingSubVisible(true);
+    return;
+  }
+  startNewSubscription(p);
+};
 
 const handleEditSubscriptionQty = async (
   qty: number,
