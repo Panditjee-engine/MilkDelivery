@@ -36,6 +36,10 @@ export default function DeliveryLayout() {
         }}
       />
       <Tabs.Screen
+        name="farm-orders"
+        options={{ title: 'Farm Orders', tabBarIcon: ({color, size}) => <Ionicons name="list" color={color} size={size} /> }}
+      />
+      <Tabs.Screen
         name="deliveries"
         options={{
           title: 'OTP Order',

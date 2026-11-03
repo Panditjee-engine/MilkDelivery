@@ -36,6 +36,7 @@ import Svg, {
   Text as SvgText,
 } from "react-native-svg";
 import { useAuth } from "../../src/contexts/AuthContext";
+import { useCatalogOrder, orderedSections, buyableProduct } from '../../src/hooks/useCatalogOrder';
 import { api } from "../../src/services/api";
 import { Colors } from "../../src/constants/colors";
 import LoadingScreen from "../../src/components/LoadingScreen";
@@ -1443,6 +1444,7 @@ const productGridStyles = StyleSheet.create({
 // ─── Main Screen
 export default function CustomerHome() {
   const { user } = useAuth();
+  const catalogOrder = useCatalogOrder((user as any)?.admin_id ?? (user as any)?.referral_admin_id);
   const router = useRouter();
   const isFocused = useIsFocused();
 
@@ -1454,12 +1456,11 @@ export default function CustomerHome() {
   const [browseProducts, setBrowseProducts] = useState<any[]>([]);
   const [popularIds, setPopularIds] = useState<string[]>([]);
   const [recentBoughtIds, setRecentBoughtIds] = useState<string[]>([]);
-  const [recentSearches, setRecentSearches] = useState<string[]>([]);
   useEffect(() => {
     if (!isFocused) return;
     let active = true;
-    Promise.all([api.getPopularProductIds((user as any)?.admin_id ?? undefined).catch(() => []), api.getProductSearchHistory().catch(() => [])]).then(([popular, searches]) => {
-      if (active) { setPopularIds(popular); setRecentSearches(searches); }
+    api.getPopularProductIds((user as any)?.admin_id ?? undefined).catch(() => []).then(popular => {
+      if (active) setPopularIds(popular);
     });
     return () => { active = false; };
   }, [isFocused, user?.id, (user as any)?.admin_id]);
@@ -1468,13 +1469,13 @@ export default function CustomerHome() {
     const byId = new Map(browseProducts.map(product => [String(product.id), product]));
     const groups: Record<string, any[]> = {};
     browseProducts.forEach(product => { const key = product.category || 'other'; (groups[key] ||= []).push(product); });
-    return [
+    return orderedSections([
       { key: '__new', label: 'Newly Added', items: newlyAddedProducts(browseProducts, productAgeNow) },
       { key: '__popular', label: 'Popular Products', items: popularIds.map(id => byId.get(id)).filter(Boolean) },
       { key: '__recent', label: 'Recently Bought', items: recentBoughtIds.map(id => byId.get(id)).filter(Boolean) },
       ...Object.entries(groups).sort(([a], [b]) => Number(!['milk', 'dairy'].includes(a)) - Number(!['milk', 'dairy'].includes(b))).map(([key, items]) => ({ key, label: key.replace(/_/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase()), items })),
-    ].filter(section => section.items.length);
-  }, [browseProducts, popularIds, recentBoughtIds, productAgeNow]);
+    ].map(section => ({...section, items: section.items.filter(buyableProduct)})).filter(section => section.items.length), catalogOrder, section => section.key);
+  }, [browseProducts, popularIds, recentBoughtIds, productAgeNow, catalogOrder]);
   const [adminsList, setAdminsList] = useState<any[]>([]);
   const [contentSlides, setContentSlides] = useState<BannerSlide[]>([]);
   const [orderCutoffs, setOrderCutoffs] = useState<OrderCutoffRule[]>([]);
@@ -1826,7 +1827,6 @@ export default function CustomerHome() {
         </View>
 
         {/* ── Popular Items ── */}
-        {recentSearches.length > 0 && <View style={s.sectionWrap}><Text style={s.sectionTitle}>Recent Searches</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 10 }}>{recentSearches.slice(0, 8).map(term => <TouchableOpacity key={term} onPress={() => router.push({ pathname: '/(customer)/product-search', params: { query: term } } as any)} style={{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, backgroundColor: '#fff' }}><Text style={{ color: Colors.primary, fontSize: 12 }}>{term}</Text></TouchableOpacity>)}</ScrollView></View>}
         {homeSections.map(section => <View key={section.key} style={s.sectionWrap}>
           <View style={s.sectionHeaderRow}><Text style={s.sectionTitle}>{section.label}</Text><TouchableOpacity onPress={() => router.push({ pathname: '/(customer)/catalog', params: section.key.startsWith('__') ? { collection: section.key } : { category: section.key } } as any)}><Text style={s.seeAllText}>View All</Text></TouchableOpacity></View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingBottom: 6 }}>{section.items.slice(0, 10).map((product, index) => <ProductGridCard key={product.id} product={product} index={index} cutoffRule={getOrderCutoffForProduct(product, orderCutoffs)} deliveryWindow={getDeliveryWindowForProduct(product, deliveryWindows)} onOpenDetails={() => openProductDetails(product)} />)}</ScrollView>

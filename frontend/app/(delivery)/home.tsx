@@ -208,6 +208,10 @@ export default function DeliveryHome() {
             </View>
 
             {/* Assigned Deliveries */}
+            <TouchableOpacity style={styles.section} onPress={() => router.push('/(delivery)/farm-orders')}>
+              <Text style={styles.sectionTitle}>Orders & Subscriptions</Text>
+              <Text>View linked farm records</Text>
+            </TouchableOpacity>
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>OTP Orders</Text>

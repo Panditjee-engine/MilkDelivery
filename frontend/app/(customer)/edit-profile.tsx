@@ -26,6 +26,7 @@ import * as Location from "expo-location";
 import LeafletMap, { LeafletHandle } from "../../src/components/LeafletMap";
 import { useRouter, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useAuth } from "../../src/contexts/AuthContext";
+import { hasCustomerName } from "../../src/utils/customerName";
 import { api } from "../../src/services/api";
 import { Colors } from "../../src/constants/colors";
 import Button from "../../src/components/Button";
@@ -519,7 +520,7 @@ const choosePhotoSource = (fromCamera: boolean) => {
         return;
       }
     }
-    if (!name.trim()) {
+    if (!hasCustomerName(name)) {
       Alert.alert("Name required", "Please enter your name.");
       return;
     }

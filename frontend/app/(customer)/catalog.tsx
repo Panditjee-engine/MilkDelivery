@@ -49,6 +49,8 @@ import { Colors } from "../../src/constants/colors";
 import Button from "../../src/components/Button";
 import LoadingScreen from "../../src/components/LoadingScreen";
 import { useAuth } from "../../src/contexts/AuthContext";
+import { requireCustomerName } from "../../src/utils/customerName";
+import { useCatalogOrder, orderedSections, buyableProduct } from '../../src/hooks/useCatalogOrder';
 import {
   formatDeliveryAddress,
   hasCompleteDeliveryAddress,
@@ -2127,6 +2129,10 @@ function SubscribeModal({
   };
 
   const confirm = async () => {
+    if (!requireCustomerName(user?.name, () => {
+      onClose();
+      router.push("/(customer)/edit-profile" as any);
+    })) return;
     if (!product) return;
     if (!loyalty.ready) { Alert.alert("Check total", loyalty.error || "Please wait while pricing is calculated."); return; }
     const cutoffRule = getOrderCutoffForProduct(product, cutoffRules);
@@ -4557,13 +4563,13 @@ export default function CatalogScreen() {
   const [linkedAdminId, setLinkedAdminId] = useState<string | null>(
     (user as any)?.admin_id ?? (user as any)?.referral_admin_id ?? null,
   );
+  const catalogOrder = useCatalogOrder(linkedAdminId);
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [discoveryView, setDiscoveryView] = useState<string | null>(null);
   const [popularIds, setPopularIds] = useState<string[]>([]);
   const [recentBoughtIds, setRecentBoughtIds] = useState<string[]>([]);
-  const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -4982,8 +4988,7 @@ export default function CatalogScreen() {
     Promise.all([
       api.getPopularProductIds(linkedAdminId ?? undefined).catch(() => []),
       api.getOrders().catch(() => []),
-      api.getProductSearchHistory().catch(() => []),
-    ]).then(([popular, orders, searches]) => {
+    ]).then(([popular, orders]) => {
       if (!current) return;
       setPopularIds(popular);
       const bought = [...orders]
@@ -5006,7 +5011,6 @@ export default function CatalogScreen() {
           ),
         ),
       ]);
-      setRecentSearches(searches);
     });
     return () => {
       current = false;
@@ -5224,16 +5228,8 @@ export default function CatalogScreen() {
     setQuickAddProduct(p);
     setQuickAddVisible(true);
   };
-  const findActiveSubscriptionForProduct = (p: any) => {
-    const pid = String(resolveProductId(p));
-    return activeSubscriptions.find(
-      (s: any) =>
-        s.pattern !== "buy_once" &&
-        (s.items || []).some((i: any) => String(i.product_id) === pid),
-    );
-  };
-
-  const startNewSubscription = (p: any) => {
+  const handleSubscribe = (p: any) => {
+    if (!requireCustomerName(user?.name, () => router.push("/(customer)/edit-profile" as any))) return;
     if (showCutoffPopupIfBlocked(p)) return;
     if (productStock(p) === 0) {
       alert("Out of stock");
@@ -5415,6 +5411,10 @@ const handleEditSubscriptionQty = async (
     paymentMethod: PaymentMethod,
     serviceSlot?: string,
   ) => {
+    if (!requireCustomerName(user?.name, () => {
+      setCartVisible(false);
+      router.push("/(customer)/edit-profile" as any);
+    })) return;
     if (!loyalty.ready) { Alert.alert("Check total", loyalty.error || "Please wait while pricing is calculated."); return; }
     console.log("[Cart] handlePlaceOrder started", {
       paymentMethod,
@@ -5679,11 +5679,12 @@ const handleEditSubscriptionQty = async (
       },
     ].filter((section) => section.items.length > 0);
   }, [products, popularIds, recentBoughtIds, productAgeNow]);
-  const sections = discoveryView
+  const visibleSections = discoveryView
     ? discoverySections.filter((section) => section.value === discoveryView)
     : selectedCategory
       ? grouped
       : [...discoverySections, ...grouped];
+  const sections = orderedSections(visibleSections.map(section => ({...section, items: section.items.filter(buyableProduct)})).filter(section => section.items.length), catalogOrder, section => section.value);
 
   const newSlides = useMemo(
     () => (catalogSlides.length > 0 ? catalogSlides : NEWLY_ADDED_SLIDES),
@@ -5710,12 +5711,12 @@ const handleEditSubscriptionQty = async (
 
   const sortedCategories = useMemo(
     () =>
-      [...categories].sort(
+      orderedSections([...categories].sort(
         (a, b) =>
           categoryRank(a.value) - categoryRank(b.value) ||
           String(a.label).localeCompare(String(b.label)),
-      ),
-    [categories],
+      ), catalogOrder, category => category.value),
+    [categories, catalogOrder],
   );
 
   if (loading) return <LoadingScreen />;
@@ -5892,7 +5893,7 @@ const handleEditSubscriptionQty = async (
             All
           </Text>
         </TouchableOpacity>
-        {categories.map((cat) => (
+        {sortedCategories.map((cat) => (
           <TouchableOpacity
             key={cat.value}
             style={[
@@ -5915,44 +5916,6 @@ const handleEditSubscriptionQty = async (
           </TouchableOpacity>
         ))}
       </ScrollView>
-      {!selectedCategory && !discoveryView && recentSearches.length > 0 && (
-        <View style={{ paddingTop: 12 }}>
-          <Text
-            style={{
-              paddingHorizontal: 20,
-              fontSize: 14,
-              fontWeight: "700",
-              color: T.text,
-            }}
-          >
-            Recent Searches
-          </Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{
-              paddingHorizontal: 20,
-              paddingVertical: 10,
-              gap: 8,
-            }}
-          >
-            {recentSearches.slice(0, 8).map((term) => (
-              <TouchableOpacity
-                key={term}
-                style={mainS.chip}
-                onPress={() =>
-                  router.push({
-                    pathname: "/(customer)/product-search",
-                    params: { query: term },
-                  } as any)
-                }
-              >
-                <Text style={mainS.chipTxt}>{term}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-      )}
     </>
   );
 
