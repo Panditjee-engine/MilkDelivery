@@ -10,6 +10,7 @@ import {
   Dimensions,
   Animated,
   PanResponder,
+    Image,  
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -41,6 +42,8 @@ const C = {
   amberBorder: "#FDE68A",
   purple: "#7C3AED",
 };
+const LOGO_URL =
+  "https://panditjeeweb02.blob.core.windows.net/banners/gausatv-logo.jpeg";
 
 // ─── Types
 interface FeedSummary {
@@ -775,16 +778,16 @@ function WorkPanel({
         <>
           <View style={{ flexDirection: "row", gap: 8 }}>
             <StatPill
-              label="To Review"
-              value={summary.submitted}
+              label="Review"
+             value={`${summary.submitted}/${summary.total}`}
               color={summary.submitted > 0 ? C.amber : C.textLight}
               bgColor={summary.submitted > 0 ? C.amberBg : C.bg}
               borderColor={summary.submitted > 0 ? C.amberBorder : C.border}
               icon="eye-outline"
             />
             <StatPill
-              label="In Progress"
-              value={inProgress}
+              label="working"
+              value={`${inProgress}/${summary.total}`}
               color={C.blue}
               bgColor={C.blueBg}
               borderColor={C.blueBorder}
@@ -792,7 +795,7 @@ function WorkPanel({
             />
             <StatPill
               label="Approved"
-              value={summary.approved}
+              value={`${summary.approved}/${summary.total}`}
               color={C.green}
               bgColor={C.greenBg}
               borderColor={C.greenBorder}
@@ -1117,8 +1120,12 @@ export default function GausevakTabs() {
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <View style={styles.logoWrap}>
-            <Ionicons name="leaf" size={18} color="white" />
-          </View>
+  <Image
+    source={{ uri: LOGO_URL }}
+    style={styles.logoImg}
+    resizeMode="cover"
+  />
+</View>
           <View>
             <Text style={styles.headerLabel}>GauSevak</Text>
             <Text style={styles.headerTitle}>
@@ -1349,13 +1356,16 @@ const styles = StyleSheet.create({
   },
   headerLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
   logoWrap: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: C.green,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  width: 38,
+  height: 38,
+  borderRadius: 12,
+  backgroundColor: C.card,
+  borderWidth: 1,
+  borderColor: C.border,
+  overflow: "hidden",
+  alignItems: "center",
+  justifyContent: "center",
+},
   headerLabel: {
     fontSize: 9,
     letterSpacing: 2,
@@ -1520,4 +1530,6 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
   },
   productChipText: { fontSize: 11, fontWeight: "600", color: C.purple },
+
+logoImg: { width: "100%", height: "100%" },
 });

@@ -268,7 +268,7 @@ export default function DeliveriesScreen() {
         style: "destructive",
         onPress: async () => {
           try {
-            await api.cancelOrder(order.id || order._id);
+            await api.cancelDeliveryOrder(order.id || order._id);
             Alert.alert("✓ Order Cancelled");
             await fetchData();
           } catch (error: any) {
@@ -600,6 +600,17 @@ function OrderCard({
   const contactPhone = order.display_phone || order.customer_phone || "N/A";
   const addressText = formatOrderAddress(order.display_address || order.address);
   const items: any[] = order.items || [];
+
+  const productLabel =
+  items.length === 0
+    ? "Product"
+    : items.length === 1
+      ? `${items[0].product_name || "Product"} × ${items[0].quantity}`
+      : `${items[0].product_name || "Product"} +${items.length - 1} more`;
+
+const customerName = order.customer_name || "Customer";
+const customerPhone = order.customer_phone || "N/A";
+
   const isWalletPayment =
     String(order.payment_method || "").toLowerCase().trim() === "wallet";
 
@@ -628,12 +639,15 @@ function OrderCard({
         activeOpacity={0.8}
         onPress={() => setExpanded((v) => !v)}
       >
-        <View style={{ flex: 1 }}>
-          <Text style={styles.customerName} numberOfLines={1}>
-            {contactName}
-          </Text>
-          <Text style={styles.phone}>{contactPhone}</Text>
-        </View>
+      <View style={{ flex: 1 }}>
+  <Text style={styles.productTitle} numberOfLines={1}>
+    {productLabel}
+  </Text>
+  <Text style={styles.customerName} numberOfLines={1}>
+    {customerName}
+  </Text>
+  <Text style={styles.phone}>{customerPhone}</Text>
+</View>
 
         {canOpenMap && (
           <TouchableOpacity style={styles.mapIconBtn} onPress={openMap}>
@@ -1039,4 +1053,5 @@ const styles = StyleSheet.create({
   },
   cancelLink: { marginTop: 10, padding: 6 },
   cancelLinkText: { color: "#D64545", fontWeight: "600", fontSize: 13 },
+  productTitle: { fontSize: 13, fontWeight: "600", color: C.dark, marginBottom: 2 },
 });
