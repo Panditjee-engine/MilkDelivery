@@ -15,6 +15,9 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
+import DateTimePicker, {
+  DateTimePickerEvent,
+} from "@react-native-community/datetimepicker";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -22,7 +25,10 @@ import { api } from "../../../src/services/api";
 import type {
   WorkAssignment,
   AssignmentStatus,
+  TaskType ,
 } from "../../../src/services/api";
+import TaskTypeDropdown from "../../../src/components/TaskTypeDropdown";
+
 
 // ─── Palette
 const C = {
@@ -127,6 +133,22 @@ const fmtShort = (x?: string | null) => {
   });
 };
 const timeOf = (i: any) => i?.created_at ?? i?.assigned_at ?? null;
+
+const toYMD = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate(),
+  ).padStart(2, "0")}`;
+
+const fromYMD = (v: string) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+  return m ? new Date(+m[1], +m[2] - 1, +m[3]) : new Date();
+};
+
+const startOfToday = () => {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+};
 
 // ─── Status rail (unchanged)
 function Rail({ status }: { status: Status }) {
@@ -647,6 +669,25 @@ function AssignForm({
   const [points, setPoints] = useState("1");
   const [busy, setBusy] = useState(false);
 
+  const [isCustom, setIsCustom] = useState(false);
+  const [showPicker, setShowPicker] = useState(false);
+  const onDateChange = (e: DateTimePickerEvent, d?: Date) => {
+  if (Platform.OS === "android") setShowPicker(false); // Android closes itself
+  if (e.type === "set" && d) setDue(toYMD(d));
+};
+
+  const handleTaskSelect = (task: TaskType | null) => {
+  if (!task) {
+    setIsCustom(true);
+    setTitle("");
+    return;
+  }
+  setIsCustom(false);
+  setTitle(task.label);
+  if (task.description && !desc.trim()) setDesc(task.description);
+  setPoints(String(task.points));
+};
+
   const submit = async () => {
     if (title.trim().length < 2)
       return Alert.alert("Write what needs to be done");
@@ -663,10 +704,12 @@ function AssignForm({
         points: parseInt(points, 10) || 0,
       });
       setTitle("");
+      setIsCustom(false);
       setDesc("");
       setDue("");
       setPoints("1");
       setPriority("normal");
+      setShowPicker(false);
       onDone();
     } catch (e: any) {
       Alert.alert("Could not assign", e?.message ?? "Something went wrong");
@@ -686,16 +729,20 @@ function AssignForm({
             contentContainerStyle={{ padding: 16 }}
             keyboardShouldPersistTaps="handled"
           >
-            <Text style={s.h1}>New work for {worker.name}</Text>
-            <Text style={s.label}>What needs to be done</Text>
-            <TextInput
-              style={s.input}
-              value={title}
-              onChangeText={setTitle}
-              maxLength={120}
-              placeholder="Clean shed 2 and refill water troughs"
-              placeholderTextColor={C.textLight}
-            />
+         <Text style={s.label}>What needs to be done</Text>
+<TaskTypeDropdown value={isCustom ? "" : title} onSelect={handleTaskSelect} />
+
+{isCustom && (
+  <TextInput
+    style={s.input}
+    value={title}
+    onChangeText={setTitle}
+    maxLength={120}
+    placeholder="Clean shed 2 and refill water troughs"
+    placeholderTextColor={C.textLight}
+    autoFocus
+  />
+)}
             <Text style={s.label}>Details (optional)</Text>
             <TextInput
               style={[s.input, { height: 90, textAlignVertical: "top" }]}
@@ -721,15 +768,58 @@ function AssignForm({
                 </TouchableOpacity>
               ))}
             </View>
-            <Text style={s.label}>Due date (YYYY-MM-DD, optional)</Text>
-            <TextInput
-              style={s.input}
-              value={due}
-              onChangeText={setDue}
-              placeholder="2026-10-25"
-              placeholderTextColor={C.textLight}
-              keyboardType="numbers-and-punctuation"
-            />
+           <Text style={s.label}>Due date (optional)</Text>
+<View style={s.rowGapSm}>
+  <TouchableOpacity
+    style={s.dateField}
+    activeOpacity={0.8}
+    onPress={() => setShowPicker(true)}
+  >
+    <Ionicons name="calendar-outline" size={18} color={C.textMuted} />
+    <Text style={{ flex: 1, color: due ? C.text : C.textLight, fontSize: 14 }}>
+      {due || "Select date"}
+    </Text>
+    {!!due && (
+      <TouchableOpacity
+        onPress={() => setDue("")}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+      >
+        <Ionicons name="close-circle" size={18} color={C.textLight} />
+      </TouchableOpacity>
+    )}
+  </TouchableOpacity>
+
+  <TouchableOpacity
+    style={s.todayBtn}
+    onPress={() => {
+      setDue(toYMD(new Date()));
+      setShowPicker(false);
+    }}
+  >
+    <Text style={s.todayTxt}>Today</Text>
+  </TouchableOpacity>
+</View>
+
+{showPicker && (
+  <View>
+    <DateTimePicker
+      value={fromYMD(due)}
+      mode="date"
+      display={Platform.OS === "ios" ? "inline" : "default"}
+      minimumDate={startOfToday()}
+      onChange={onDateChange}
+      accentColor={C.dark}
+    />
+    {Platform.OS === "ios" && (
+      <TouchableOpacity
+        style={[s.btnP, { alignSelf: "flex-end", marginTop: 6 }]}
+        onPress={() => setShowPicker(false)}
+      >
+        <Text style={s.btnPTxt}>Done</Text>
+      </TouchableOpacity>
+    )}
+  </View>
+)}
             <Text style={s.label}>Points on approval</Text>
             <TextInput
               style={s.input}
@@ -1146,6 +1236,27 @@ const s = StyleSheet.create({
     fontSize: 14,
     marginBottom: 6,
   },
+  dateField: {
+  flex: 1,
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 8,
+  borderWidth: 1,
+  borderColor: C.border,
+  backgroundColor: C.inputBg,
+  borderRadius: 10,
+  paddingHorizontal: 12,
+  paddingVertical: 11,
+},
+todayBtn: {
+  backgroundColor: C.chipBg,
+  borderWidth: 1,
+  borderColor: C.dark,
+  borderRadius: 10,
+  paddingHorizontal: 16,
+  paddingVertical: 11,
+},
+todayTxt: { color: C.dark, fontWeight: "700", fontSize: 14 },
   empty: {
     color: C.textLight,
     textAlign: "center",

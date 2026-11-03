@@ -674,6 +674,16 @@ export interface AssignmentListResponse {
   assignments: WorkAssignment[];
 }
 
+export interface TaskType {
+  id: string;
+  key: string;
+  label: string;
+  points: number;
+  description?: string | null;
+  is_default: boolean;
+  is_active: boolean;
+}
+
 class ApiService {
   async getReferralDirectory(): Promise<
     Array<{
@@ -1654,12 +1664,12 @@ class ApiService {
     });
   }
 
-  async updateSubscription(id: string, data: any) {
-    return this.request<any>(`/subscriptions/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(data),
-    });
-  }
+async updateSubscription(id: string, data: any) {
+  return this.request<any>(`/subscriptions/${id}`, {
+    method: "PATCH",   // was PUT
+    body: JSON.stringify(data),
+  });
+}
 
   async modifySubscriptionDate(id: string, date: string, quantity: number) {
     return this.request<any>(`/subscriptions/${id}/modify`, {
@@ -1674,12 +1684,27 @@ class ApiService {
     });
   }
 
+  async addSubscriptionModification(id: string, date: string, quantity: number) {
+  return this.request<any>(`/subscriptions/${id}/modifications`, {
+    method: "POST",
+    body: JSON.stringify({ date, quantity }),
+  });
+}
+
   //added by anurag
   async cancelOrder(orderId: string) {
     return this.request<any>(`/orders/${orderId}`, {
       method: "DELETE",
     });
   }
+
+  //for rider cancel order by golu
+  async cancelDeliveryOrder(orderId: string) {
+  return this.request<any>(
+    `/delivery/orders/${encodeURIComponent(orderId)}/cancel`,
+    { method: "POST" },
+  );
+}
 
   // anurag
   // Fetch ONLY subscriptions that belong to this logged-in admin
@@ -2047,13 +2072,14 @@ class ApiService {
 
   // Per-date delivered/pending status for a batch of subscriptions —
   // used to render the delivery calendar in the rider app. by golu
-  async getSubscriptionOrdersBulk(
-    subscriptionIds: string,
-  ): Promise<Record<string, Record<string, string>>> {
-    return this.request<Record<string, Record<string, string>>>(
-      `/delivery/subscription-orders?subscription_ids=${encodeURIComponent(subscriptionIds)}`,
-    );
-  }
+async getSubscriptionOrdersBulk(
+  subscriptionIds: string,
+): Promise<Record<string, Record<string, string>>> {
+  return this.request<Record<string, Record<string, string>>>(
+    `/delivery/subscription-orders?subscription_ids=${encodeURIComponent(subscriptionIds)}`,
+    { silentErrorLog: true },
+  );
+}
 
   async assignDeliveryPartner(orderId: string, partnerId: string) {
     return this.request<any>(
@@ -2434,6 +2460,7 @@ class ApiService {
     const query = params.toString() ? `?${params.toString()}` : "";
     return this.request<{ summary: any; cows: any[] }>(`/admin/feed${query}`);
   }
+  
 
   async getAdminMilkLogs(date?: string) {
     const params = new URLSearchParams();
@@ -2462,6 +2489,12 @@ class ApiService {
       }>;
     }>(`/admin/milk${query}`);
   }
+
+  async getAdminTaskTypes() {
+  return this.request<{ total: number; task_types: TaskType[] }>(
+    "/admin/task-types",
+  );
+}
 
   async getAdminHealthLogs(date?: string) {
     const params = new URLSearchParams();

@@ -656,15 +656,17 @@ const calS = StyleSheet.create({
   hintTxt: { fontSize: 10, fontWeight: "600", textAlign: "center" },
 });
 
-// ─── Toast ──────────────────────────────────────────────────────────────────
+// ─── Toast
 function AddedToCartToast({
   visible,
   productName,
   isSubscription,
+  message,
 }: {
   visible: boolean;
   productName: string;
   isSubscription?: boolean;
+  message?: string;
 }) {
   const ty = useRef(new Animated.Value(60)).current;
   const op = useRef(new Animated.Value(0)).current;
@@ -713,7 +715,7 @@ function AddedToCartToast({
       />
       <Text style={toastS.txt}>
         <Text style={{ fontWeight: "700" }}>{productName}</Text>
-        {isSubscription ? " subscribed" : " added"}
+        {message ?? (isSubscription ? " subscribed" : " added")}
       </Text>
     </Animated.View>
   );
@@ -1818,8 +1820,8 @@ function CategorySection({
               )}
               rating={ratings[String(resolveProductId(item))] || null}
               isWishlisted={[item.id, item._id, item.product_id].some(
-  (x) => x && wishlistIds.has(String(x)),
-)}
+                (x) => x && wishlistIds.has(String(x)),
+              )}
               onToggleWishlist={() => onToggleWishlist(item)}
             />
           );
@@ -4295,7 +4297,247 @@ const bannerModalS = StyleSheet.create({
   },
 });
 
-// ─── Main Screen ─────────────────────────────────────────────────────────────
+// ─── Already-subscribed popup
+function ExistingSubscriptionModal({
+  visible,
+  product,
+  subscriptionOnly,
+  onClose,
+  onEditQty,
+  onOrderToday,
+  onNewSlot,
+}: {
+  visible: boolean;
+  product: any;
+  subscriptionOnly: boolean;
+  onClose: () => void;
+  onEditQty: () => void;
+  onOrderToday: () => void;
+  onNewSlot: () => void;
+}) {
+  if (!product) return null;
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <View style={mBase.overlay}>
+        <AnimCard visible={visible}>
+          <View
+            style={[
+              mBase.iconRing,
+              { borderColor: T.amberBorder, backgroundColor: T.amberLight },
+            ]}
+          >
+            <Ionicons name="repeat" size={22} color={T.amber} />
+          </View>
+          <Text style={mBase.title}>Already subscribed</Text>
+          <Text style={mBase.sub}>
+            You already have an active subscription for{" "}
+            <Text style={{ fontWeight: "800", color: T.text }}>
+              {product.name}
+            </Text>
+            . What would you like to do?
+          </Text>
+
+          {subscriptionOnly && (
+            <View style={existS.note}>
+              <Ionicons
+                name="information-circle-outline"
+                size={14}
+                color={T.red}
+              />
+              <Text style={existS.noteTxt}>
+                This product is subscription-only, so it can't be added to cart.
+              </Text>
+            </View>
+          )}
+
+          <TouchableOpacity
+            style={[mBase.btn, { backgroundColor: T.amber, marginBottom: 8 }]}
+            onPress={onEditQty}
+          >
+            <Text style={mBase.btnTxt}>Change quantity</Text>
+          </TouchableOpacity>
+
+          {!subscriptionOnly && (
+            <TouchableOpacity
+              style={[mBase.btn, { backgroundColor: T.green, marginBottom: 8 }]}
+              onPress={onOrderToday}
+            >
+              <Text style={mBase.btnTxt}>Order for today only</Text>
+            </TouchableOpacity>
+          )}
+
+          <TouchableOpacity
+            style={[mBase.btn, existS.outlineBtn]}
+            onPress={onNewSlot}
+          >
+            <Text style={[mBase.btnTxt, { color: T.text }]}>
+              Subscribe for a different slot
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={mBase.cancelBtn} onPress={onClose}>
+            <Text style={mBase.cancelBtnTxt}>Cancel</Text>
+          </TouchableOpacity>
+        </AnimCard>
+      </View>
+    </Modal>
+  );
+}
+
+function EditSubscriptionQtyModal({
+  visible,
+  product,
+  currentQty,
+  submitting,
+  onClose,
+  onConfirm,
+}: {
+  visible: boolean;
+  product: any;
+  currentQty: number;
+  submitting: boolean;
+  onClose: () => void;
+  onConfirm: (qty: number, scope: "today" | "all") => void;
+}) {
+  const [qty, setQty] = useState(currentQty || 1);
+  const [scope, setScope] = useState<"today" | "all">("all");
+  const theme = getCategoryTheme(product?.category);
+
+  useEffect(() => {
+    if (visible) {
+      setQty(currentQty || 1);
+      setScope("all");
+    }
+  }, [visible, currentQty]);
+
+  if (!product) return null;
+  const total = (product.price ?? 0) * qty;
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <View style={sheetS.overlay}>
+        <View style={sheetS.sheet}>
+          <View style={sheetS.handle} />
+          <View style={[sheetS.prodRow, { backgroundColor: theme.bg }]}>
+            <View style={{ flex: 1 }}>
+              <Text style={sheetS.prodName}>{product.name}</Text>
+              <Text style={[sheetS.prodPrice, { color: theme.accent }]}>
+                ₹{product.price} · {formatUnit(product.unit)}
+              </Text>
+            </View>
+            <TouchableOpacity style={sheetS.closeBtn} onPress={onClose}>
+              <Ionicons name="close" size={14} color={T.muted} />
+            </TouchableOpacity>
+          </View>
+
+          <Text style={[sheetS.sectionLabel, { marginTop: 14 }]}>Apply change to</Text>
+          <View style={existS.scopeRow}>
+            {([
+              { v: "today", label: "Today only" },
+              { v: "all", label: "Till end of subscription" },
+            ] as const).map((o) => {
+              const active = scope === o.v;
+              return (
+                <TouchableOpacity
+                  key={o.v}
+                  style={[
+                    existS.scopeBtn,
+                    active && { backgroundColor: T.amber, borderColor: T.amber },
+                  ]}
+                  onPress={() => setScope(o.v)}
+                >
+                  <Text style={[existS.scopeTxt, active && { color: "#fff" }]}>
+                    {o.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          <Text style={sheetS.sectionLabel}>Quantity</Text>
+          <View style={sheetS.qtyRow}>
+            <TouchableOpacity
+              style={sheetS.qtyBtn}
+              onPress={() => setQty((q) => Math.max(1, q - 1))}
+            >
+              <Ionicons name="remove" size={15} color={T.text} />
+            </TouchableOpacity>
+            <View style={sheetS.qtyVal}>
+              <Text style={sheetS.qtyNum}>{qty}</Text>
+              <Text style={[sheetS.qtyUnit, { color: theme.accent }]}>
+                {formatUnit(product.unit)}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={[sheetS.qtyBtn, { backgroundColor: theme.accent }]}
+              onPress={() => {
+                const m = productStock(product, Infinity);
+                if (qty >= m) {
+                  alert(`Only ${m} available`);
+                  return;
+                }
+                setQty((q) => q + 1);
+              }}
+            >
+              <Ionicons name="add" size={15} color="#fff" />
+            </TouchableOpacity>
+          </View>
+
+          <Text style={existS.perDelivery}>
+            {scope === "today" ? "Today's delivery" : "Per delivery"}: ₹{total.toFixed(2)}
+          </Text>
+          <View style={{ height: 14 }} />
+          <Button
+            title={submitting ? "Updating…" : "Update quantity"}
+            onPress={() => onConfirm(qty, scope)}
+            loading={submitting}
+            disabled={submitting || qty === currentQty}
+          />
+          <View style={{ height: 16 }} />
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const existS = StyleSheet.create({
+  note: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: T.redLight,
+    borderRadius: T.radius.sm,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    marginBottom: 14,
+    width: "100%",
+  },
+  noteTxt: { flex: 1, fontSize: 11.5, fontWeight: "700", color: T.red },
+  outlineBtn: {
+    backgroundColor: "transparent",
+    borderWidth: 1.5,
+    borderColor: T.border,
+  },
+  perDelivery: { fontSize: 12, fontWeight: "700", color: T.muted },
+    scopeRow: { flexDirection: "row", gap: 8, marginBottom: 16 },
+  scopeBtn: {
+    flex: 1,
+    paddingVertical: 11,
+    borderRadius: T.radius.md,
+    borderWidth: 1.5,
+    borderColor: T.border,
+    backgroundColor: "#F7F6F4",
+    alignItems: "center",
+  },
+  scopeTxt: { fontSize: 12, fontWeight: "700", color: T.text },
+});
+
+// ─── Main Screen
 export default function CatalogScreen() {
   const router = useRouter();
   const { user, updateUser } = useAuth();
@@ -4319,6 +4561,12 @@ export default function CatalogScreen() {
   const [subscribeVisible, setSubscribeVisible] = useState(false);
   const [subscribeProduct, setSubscribeProduct] = useState<any>(null);
 
+  const [existingSubVisible, setExistingSubVisible] = useState(false);
+  const [existingSubProduct, setExistingSubProduct] = useState<any>(null);
+  const [existingSub, setExistingSub] = useState<any>(null);
+  const [editQtyVisible, setEditQtyVisible] = useState(false);
+  const [editQtySubmitting, setEditQtySubmitting] = useState(false);
+
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartVisible, setCartVisible] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -4328,6 +4576,9 @@ export default function CatalogScreen() {
   const lastSavedRef = useRef("");
   const userId = (user as any)?.id ?? (user as any)?._id;
   const userIdRef = useRef(userId);
+  const [toastMessage, setToastMessage] = useState<string | undefined>(
+    undefined,
+  );
 
   const cartSignature = (items: CartItem[]) =>
     JSON.stringify(
@@ -4829,9 +5080,10 @@ export default function CatalogScreen() {
     });
   };
 
-  const showToast = (name: string, sub: boolean) => {
+  const showToast = (name: string, sub: boolean, message?: string) => {
     setToastProduct(name);
     setToastIsSub(sub);
+    setToastMessage(message);
     setToastVisible(true);
     if (toastTimer.current) clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setToastVisible(false), 2800);
@@ -4959,7 +5211,16 @@ export default function CatalogScreen() {
     setQuickAddProduct(p);
     setQuickAddVisible(true);
   };
-  const handleSubscribe = (p: any) => {
+  const findActiveSubscriptionForProduct = (p: any) => {
+    const pid = String(resolveProductId(p));
+    return activeSubscriptions.find(
+      (s: any) =>
+        s.pattern !== "buy_once" &&
+        (s.items || []).some((i: any) => String(i.product_id) === pid),
+    );
+  };
+
+  const startNewSubscription = (p: any) => {
     if (showCutoffPopupIfBlocked(p)) return;
     if (productStock(p) === 0) {
       alert("Out of stock");
@@ -4968,6 +5229,97 @@ export default function CatalogScreen() {
     setSubscribeProduct(p);
     setSubscribeVisible(true);
   };
+
+  const handleSubscribe = (p: any) => {
+    const existing = findActiveSubscriptionForProduct(p);
+    if (existing) {
+      setExistingSubProduct(p);
+      setExistingSub(existing);
+      setExistingSubVisible(true);
+      return;
+    }
+    startNewSubscription(p);
+  };
+
+
+const handleEditSubscriptionQty = async (
+  qty: number,
+  scope: "today" | "all",
+) => {
+  if (!existingSub || !existingSubProduct) return;
+
+  const pid = String(resolveProductId(existingSubProduct));
+  const avail = productStock(existingSubProduct, Infinity);
+
+  if (qty > avail) {
+    alert(`Only ${avail} available`);
+    return;
+  }
+
+  setEditQtySubmitting(true);
+
+  try {
+    if (scope === "today") {
+      if (showCutoffPopupIfBlocked(existingSubProduct)) return;
+
+      await api.addSubscriptionModification(
+        existingSub.id,
+        dateToString(new Date()),
+        qty,
+      );
+
+      setEditQtyVisible(false);
+
+      showToast(
+        existingSubProduct.name,
+        true,
+        ` quantity for today set to ${qty}`,
+      );
+
+      await fetchSubs();
+      return;
+    }
+
+    // Update quantity for the entire subscription
+    const items = (existingSub.items || []).map((i: any) => {
+      const quantity =
+        String(i.product_id) === pid ? qty : i.quantity;
+
+      return {
+        product_id: i.product_id,
+        quantity,
+        price: i.price,
+        amount: i.price * quantity,
+      };
+    });
+
+    const oldQty =
+      (existingSub.items || []).find(
+        (i: any) => String(i.product_id) === pid,
+      )?.quantity ?? 0;
+
+    await api.editSubscription(existingSub.id, { items });
+
+    setEditQtyVisible(false);
+
+    showToast(
+      existingSubProduct.name,
+      true,
+      qty > oldQty
+        ? ` quantity increased to ${qty}`
+        : ` quantity decreased to ${qty}`,
+    );
+
+    await fetchSubs();
+  } catch (e: any) {
+    Alert.alert(
+      "Couldn't update quantity",
+      e?.message || "Please try again.",
+    );
+  } finally {
+    setEditQtySubmitting(false);
+  }
+};
 
   const handleQuickAddConfirm = async (qty: number) => {
     if (!quickAddProduct) return;
@@ -5661,6 +6013,41 @@ export default function CatalogScreen() {
         onToast={showToast}
       />
 
+      <ExistingSubscriptionModal
+        visible={existingSubVisible}
+        product={existingSubProduct}
+        subscriptionOnly={existingSubProduct?.purchase_type === "subscription"}
+        onClose={() => setExistingSubVisible(false)}
+        onEditQty={() => {
+          setExistingSubVisible(false);
+          setTimeout(() => setEditQtyVisible(true), 250);
+        }}
+        onOrderToday={() => {
+          setExistingSubVisible(false);
+          const p = existingSubProduct;
+          setTimeout(() => handleDairyBuyOnce(p), 250); // qty picker, then added to cart
+        }}
+        onNewSlot={() => {
+          setExistingSubVisible(false);
+          const p = existingSubProduct;
+          setTimeout(() => startNewSubscription(p), 250);
+        }}
+      />
+
+      <EditSubscriptionQtyModal
+        visible={editQtyVisible}
+        product={existingSubProduct}
+        currentQty={
+          (existingSub?.items || []).find(
+            (i: any) =>
+              String(i.product_id) ===
+              String(resolveProductId(existingSubProduct)),
+          )?.quantity ?? 1
+        }
+        submitting={editQtySubmitting}
+        onClose={() => setEditQtyVisible(false)}
+        onConfirm={handleEditSubscriptionQty}
+      />
       <CartSheet
         visible={cartVisible}
         cart={cart}
@@ -5709,6 +6096,7 @@ export default function CatalogScreen() {
         visible={toastVisible}
         productName={toastProduct}
         isSubscription={toastIsSub}
+        message={toastMessage}
       />
       <WishlistToast
         visible={wishToastVisible}

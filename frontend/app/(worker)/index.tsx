@@ -43,8 +43,6 @@ if (
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-const router = useRouter();
-
 // ─── Palette ──────────────────────────────────────────────────────────────────
 const PALETTE = {
   primary: "#FFBF55",
