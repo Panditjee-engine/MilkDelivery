@@ -279,7 +279,28 @@ export default function DeliveriesScreen() {
     ]);
   };
 
-    const needsLocation = myOrders.some((o) =>
+  const handleRejectOrder = (order: any) => {
+    Alert.alert("Remove Order", "Hide this order from your list?", [
+      { text: "No", style: "cancel" },
+      {
+        text: "Yes, Remove",
+        style: "destructive",
+        onPress: async () => {
+          const orderId = order.id || order._id;
+          try {
+            await api.rejectOrder(orderId);
+            setAvailableOrders((prev) =>
+              prev.filter((o) => (o.id || o._id) !== orderId),
+            );
+          } catch (error: any) {
+            Alert.alert("Error", error.message || "Failed to remove order");
+          }
+        },
+      },
+    ]);
+  };
+
+  const needsLocation = myOrders.some((o) =>
     ["picked_up", "out_for_delivery"].includes(o.status),
   );
   const { coords: riderCoords } = useRiderLocation(needsLocation);
@@ -399,6 +420,7 @@ export default function DeliveriesScreen() {
                         key={order.id || order._id}
                         order={order}
                         onAccept={() => handleAcceptOrder(order)}
+                        onReject={() => handleRejectOrder(order)}
                         isAvailable
                       />
                     ))}
@@ -580,6 +602,7 @@ function OrderCard({
   onPickup,
   onDeliver,
   onCancel,
+  onReject,
   isAvailable,
   riderCoords,
 }: {
@@ -588,6 +611,7 @@ function OrderCard({
   onPickup?: () => void;
   onDeliver?: () => void;
   onCancel?: () => void;
+  onReject?: () => void;
   isAvailable?: boolean;
   riderCoords?: { latitude: number; longitude: number } | null;
 }) {
@@ -598,21 +622,25 @@ function OrderCard({
     order.display_name ||
     (isPrePickup ? "Admin" : order.customer_name || "Customer");
   const contactPhone = order.display_phone || order.customer_phone || "N/A";
-  const addressText = formatOrderAddress(order.display_address || order.address);
+  const addressText = formatOrderAddress(
+    order.display_address || order.address,
+  );
   const items: any[] = order.items || [];
 
   const productLabel =
-  items.length === 0
-    ? "Product"
-    : items.length === 1
-      ? `${items[0].product_name || "Product"} × ${items[0].quantity}`
-      : `${items[0].product_name || "Product"} +${items.length - 1} more`;
+    items.length === 0
+      ? "Product"
+      : items.length === 1
+        ? `${items[0].product_name || "Product"} × ${items[0].quantity}`
+        : `${items[0].product_name || "Product"} +${items.length - 1} more`;
 
-const customerName = order.customer_name || "Customer";
-const customerPhone = order.customer_phone || "N/A";
+  const customerName = order.customer_name || "Customer";
+  const customerPhone = order.customer_phone || "N/A";
 
   const isWalletPayment =
-    String(order.payment_method || "").toLowerCase().trim() === "wallet";
+    String(order.payment_method || "")
+      .toLowerCase()
+      .trim() === "wallet";
 
   const destLat = Number(order.address?.lat);
   const destLng = Number(order.address?.lng);
@@ -620,7 +648,12 @@ const customerPhone = order.customer_phone || "N/A";
   const distText =
     !isPrePickup && hasDest && riderCoords
       ? formatDistance(
-          distanceKm(riderCoords.latitude, riderCoords.longitude, destLat, destLng),
+          distanceKm(
+            riderCoords.latitude,
+            riderCoords.longitude,
+            destLat,
+            destLng,
+          ),
         )
       : null;
 
@@ -639,21 +672,31 @@ const customerPhone = order.customer_phone || "N/A";
         activeOpacity={0.8}
         onPress={() => setExpanded((v) => !v)}
       >
-      <View style={{ flex: 1 }}>
-  <Text style={styles.productTitle} numberOfLines={1}>
-    {productLabel}
-  </Text>
-  <Text style={styles.customerName} numberOfLines={1}>
-    {customerName}
-  </Text>
-  <Text style={styles.phone}>{customerPhone}</Text>
-</View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.productTitle} numberOfLines={1}>
+            {productLabel}
+          </Text>
+          <Text style={styles.customerName} numberOfLines={1}>
+            {customerName}
+          </Text>
+          <Text style={styles.phone}>{customerPhone}</Text>
+        </View>
 
         {canOpenMap && (
           <TouchableOpacity style={styles.mapIconBtn} onPress={openMap}>
             <Ionicons name="map-outline" size={18} color="#fff" />
           </TouchableOpacity>
         )}
+        {isAvailable &&
+          onReject && ( // ← add this block
+            <TouchableOpacity
+              style={styles.rejectBtn}
+              onPress={onReject}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons name="close" size={18} color="#D64545" />
+            </TouchableOpacity>
+          )}
         <Ionicons
           name={expanded ? "chevron-up" : "chevron-down"}
           size={18}
@@ -757,7 +800,9 @@ function CompletedOrderCard({ order }: { order: any }) {
         </Text>
         <Text style={styles.completedBadge}>Delivered</Text>
       </View>
-      {!!order.delivery_slot && <Text style={styles.address}>Time: {order.delivery_slot}</Text>}
+      {!!order.delivery_slot && (
+        <Text style={styles.address}>Time: {order.delivery_slot}</Text>
+      )}
       <Text style={styles.address}>
         📍 {formatOrderAddress(order.display_address || order.address)}
       </Text>
@@ -992,6 +1037,14 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginBottom: 4,
   },
+  rejectBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#FDECEC",
+    justifyContent: "center",
+    alignItems: "center",
+  },
   stageTagText: { fontSize: 10, fontWeight: "700", color: C.dark },
   itemsBox: {
     backgroundColor: C.bg,
@@ -1036,7 +1089,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   mapButtonText: { color: "#FFFFFF", fontWeight: "600", fontSize: 13 },
-    collapsedRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  collapsedRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   mapIconBtn: {
     width: 38,
     height: 38,
@@ -1053,5 +1106,10 @@ const styles = StyleSheet.create({
   },
   cancelLink: { marginTop: 10, padding: 6 },
   cancelLinkText: { color: "#D64545", fontWeight: "600", fontSize: 13 },
-  productTitle: { fontSize: 13, fontWeight: "600", color: C.dark, marginBottom: 2 },
+  productTitle: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: C.dark,
+    marginBottom: 2,
+  },
 });

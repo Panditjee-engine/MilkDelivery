@@ -1759,13 +1759,13 @@ function RateProductModal({
   onClose: () => void;
   onSubmitted: () => void;
 }) {
-  const [rating, setRating] = useState(5);
+  const [rating, setRating] = useState(0);
   const [comment, setComment] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (day) {
-      setRating(day.rating || 5);
+      setRating(day.rating || 0);
       setComment("");
     }
   }, [day?.order_id]);
@@ -1773,6 +1773,10 @@ function RateProductModal({
   if (!day) return null;
 
   const submit = async () => {
+    if (rating < 1) {
+      Alert.alert("Rating required", "Please select a star rating.");
+      return;
+    }
     if (!day.order_id || !day.product_id) {
       Alert.alert("Error", "This delivery can't be rated right now.");
       return;
@@ -1880,16 +1884,13 @@ function DeliveryCalendarModal({
 
   if (!sub) return null;
 
-  const dayMap: Record<string, CalendarDayInfo> = {};
-  days.forEach((d) => (dayMap[d.delivery_date] = d));
-
-  const daysInMonth = new Date(yr, mo + 1, 0).getDate();
-  const firstDay = new Date(yr, mo, 1).getDay();
-  const cells: (number | null)[] = [];
-  for (let i = 0; i < firstDay; i++) cells.push(null);
-  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
-  const ds = (day: number) => dateToString(new Date(yr, mo, day));
   const today = dateToString(new Date());
+
+  // Only the dates that actually have a delivery in the selected month
+  const monthPrefix = `${yr}-${String(mo + 1).padStart(2, "0")}-`;
+  const deliveryDays = days
+    .filter((d) => d.delivery_date.startsWith(monthPrefix))
+    .sort((a, b) => a.delivery_date.localeCompare(b.delivery_date));
 
   const prevMo = () =>
     mo === 0 ? (setMo(11), setYr((y) => y - 1)) : setMo((m) => m - 1);
@@ -1943,56 +1944,59 @@ function DeliveryCalendarModal({
                 <Ionicons name="chevron-forward" size={14} color="#666" />
               </TouchableOpacity>
             </View>
-            <View style={calS.names}>
-              {DAY_NAMES.map((d) => (
-                <Text key={d} style={calS.dayName}>
-                  {d}
-                </Text>
-              ))}
-            </View>
 
             {loading ? (
               <View style={{ paddingVertical: 40, alignItems: "center" }}>
                 <Text style={{ color: "#999" }}>Loading…</Text>
               </View>
+            ) : deliveryDays.length === 0 ? (
+              <View style={{ paddingVertical: 30, alignItems: "center" }}>
+                <Text style={{ color: "#999", fontSize: 12 }}>
+                  No deliveries in this month
+                </Text>
+              </View>
             ) : (
-              <View style={calS.grid}>
-                {cells.map((day, i) => {
-                  if (!day) return <View key={`e-${i}`} style={calS.cell} />;
-                  const str = ds(day);
-                  const info = dayMap[str];
-                  const isToday = str === today;
-                  const color = info
-                    ? STATUS_COLORS[info.status] || "#ccc"
-                    : undefined;
+              <View style={CAL.chipRow}>
+                {deliveryDays.map((info) => {
+                  const dateObj = new Date(info.delivery_date + "T00:00:00");
+                  const color = STATUS_COLORS[info.status] || "#ccc";
+                  const canRate = info.status === "delivered";
+                  const isToday = info.delivery_date === today;
                   return (
                     <TouchableOpacity
-                      key={`d-${day}`}
-                      style={calS.cell}
-                      onPress={() => info && onDayPress(info)}
-                      disabled={!info || info.status !== "delivered"}
-                      activeOpacity={info?.status === "delivered" ? 0.6 : 1}
+                      key={info.delivery_date}
+                      style={[
+                        CAL.chip,
+                        {
+                          backgroundColor: color + "1A",
+                          borderColor: isToday ? Colors.primary : color + "55",
+                        },
+                      ]}
+                      onPress={() => onDayPress(info)}
+                      disabled={!canRate}
+                      activeOpacity={canRate ? 0.6 : 1}
                     >
-                      <Text
-                        style={[
-                          calS.dayNum,
-                          isToday && {
-                            color: Colors.primary,
-                            fontWeight: "700",
-                          },
-                        ]}
-                      >
-                        {day}
+                      <Text style={CAL.chipNum}>{dateObj.getDate()}</Text>
+                      <Text style={CAL.chipDay}>
+                        {DAY_NAMES[dateObj.getDay()]}
                       </Text>
-                      {info && (
-                        <View style={[CAL.dot, { backgroundColor: color }]}>
-                          {info.status === "delivered" && (
-                            <Ionicons
-                              name={info.rated ? "star" : "checkmark"}
-                              size={7}
-                              color="#fff"
-                            />
-                          )}
+                      {canRate && (
+                        <View
+                          style={[
+                            CAL.dot,
+                            {
+                              backgroundColor: color,
+                              top: 3,
+                              right: 3,
+                              bottom: undefined,
+                            },
+                          ]}
+                        >
+                          <Ionicons
+                            name={info.rated ? "star" : "checkmark"}
+                            size={7}
+                            color="#fff"
+                          />
                         </View>
                       )}
                     </TouchableOpacity>
@@ -2061,6 +2065,17 @@ const CAL = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  chip: {
+    width: 54,
+    height: 58,
+    borderRadius: 10,
+    borderWidth: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  chipNum: { fontSize: 15, fontWeight: "800", color: "#111" },
+  chipDay: { fontSize: 9, fontWeight: "600", color: "#777", marginTop: 2 },
   legend: {
     flexDirection: "row",
     flexWrap: "wrap",

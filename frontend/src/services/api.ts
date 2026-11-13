@@ -599,6 +599,12 @@ export interface WishlistRow {
   product: any | null;
 }
 
+export interface WishlistPage {
+  items: WishlistRow[];
+  next_cursor: string | null;
+  has_more: boolean;
+}
+
 export interface WishlistStatsRow {
   product_id: string;
   product_name?: string | null;
@@ -745,10 +751,13 @@ class ApiService {
     });
   }
   chargeBottleDamage(id: string, reason: "lost" | "cracked") {
-    return this.request<any>(`/returns/${encodeURIComponent(id)}/bottle-damage`, {
-      method: "POST",
-      body: JSON.stringify({ reason }),
-    });
+    return this.request<any>(
+      `/returns/${encodeURIComponent(id)}/bottle-damage`,
+      {
+        method: "POST",
+        body: JSON.stringify({ reason }),
+      },
+    );
   }
   updateReturnRequest(
     id: string,
@@ -1187,15 +1196,21 @@ class ApiService {
     });
   }
 
-    async toggleWishlist(product_id: string): Promise<WishlistToggleResult> {
+  async toggleWishlist(product_id: string): Promise<WishlistToggleResult> {
     return this.fetchRequest<WishlistToggleResult>(
       `/wishlist/${encodeURIComponent(product_id)}/toggle`,
       { method: "POST", silentErrorLog: true },
     );
   }
 
-  async getWishlist(): Promise<WishlistRow[]> {
-    return this.fetchRequest<WishlistRow[]>("/wishlist", {
+  async getWishlist(opts?: {
+    cursor?: string | null;
+    limit?: number;
+  }): Promise<WishlistPage> {
+    const params = new URLSearchParams();
+    params.append("limit", String(opts?.limit ?? 20));
+    if (opts?.cursor) params.append("cursor", opts.cursor);
+    return this.fetchRequest<WishlistPage>(`/wishlist?${params.toString()}`, {
       silentErrorLog: true,
     });
   }
@@ -1244,15 +1259,21 @@ class ApiService {
 
     const query = params.toString() ? `?${params.toString()}` : "";
     const rows = await this.request<any[]>(`/catalog/products${query}`);
-    return rows.filter(product => ![false, 0, "false", "0"].includes(product.is_active));
+    return rows.filter(
+      (product) => ![false, 0, "false", "0"].includes(product.is_active),
+    );
   }
 
   async getProductVisibility(adminId?: string) {
-    return this.request<Array<{ id: string; is_active: boolean }>>(`/catalog/product-visibility${adminId ? `?admin_id=${encodeURIComponent(adminId)}` : ""}`);
+    return this.request<Array<{ id: string; is_active: boolean }>>(
+      `/catalog/product-visibility${adminId ? `?admin_id=${encodeURIComponent(adminId)}` : ""}`,
+    );
   }
 
   async getPopularProductIds(adminId?: string) {
-    return this.request<string[]>(`/catalog/popular-products${adminId ? `?admin_id=${encodeURIComponent(adminId)}` : ""}`);
+    return this.request<string[]>(
+      `/catalog/popular-products${adminId ? `?admin_id=${encodeURIComponent(adminId)}` : ""}`,
+    );
   }
 
   async getProducts(adminId?: string, category?: string, fresh = false) {
@@ -1664,12 +1685,12 @@ class ApiService {
     });
   }
 
-async updateSubscription(id: string, data: any) {
-  return this.request<any>(`/subscriptions/${id}`, {
-    method: "PATCH",   // was PUT
-    body: JSON.stringify(data),
-  });
-}
+  async updateSubscription(id: string, data: any) {
+    return this.request<any>(`/subscriptions/${id}`, {
+      method: "PATCH", // was PUT
+      body: JSON.stringify(data),
+    });
+  }
 
   async modifySubscriptionDate(id: string, date: string, quantity: number) {
     return this.request<any>(`/subscriptions/${id}/modify`, {
@@ -1684,12 +1705,16 @@ async updateSubscription(id: string, data: any) {
     });
   }
 
-  async addSubscriptionModification(id: string, date: string, quantity: number) {
-  return this.request<any>(`/subscriptions/${id}/modifications`, {
-    method: "POST",
-    body: JSON.stringify({ date, quantity }),
-  });
-}
+  async addSubscriptionModification(
+    id: string,
+    date: string,
+    quantity: number,
+  ) {
+    return this.request<any>(`/subscriptions/${id}/modifications`, {
+      method: "POST",
+      body: JSON.stringify({ date, quantity }),
+    });
+  }
 
   //added by anurag
   async cancelOrder(orderId: string) {
@@ -1700,11 +1725,11 @@ async updateSubscription(id: string, data: any) {
 
   //for rider cancel order by golu
   async cancelDeliveryOrder(orderId: string) {
-  return this.request<any>(
-    `/delivery/orders/${encodeURIComponent(orderId)}/cancel`,
-    { method: "POST" },
-  );
-}
+    return this.request<any>(
+      `/delivery/orders/${encodeURIComponent(orderId)}/cancel`,
+      { method: "POST" },
+    );
+  }
 
   // anurag
   // Fetch ONLY subscriptions that belong to this logged-in admin
@@ -1896,19 +1921,10 @@ async updateSubscription(id: string, data: any) {
 
   // Keep reject separate for the rider app, using worker_token
   async rejectOrder(orderId: string) {
-    const token = await AsyncStorage.getItem("worker_token"); // ← rider token
-    const response = await fetch(
-      `${API_BASE}/api/delivery/orders/${orderId}/reject`,
-      {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      },
-    );
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.detail || "Reject failed");
-    return data;
+    return this.request<any>(`/delivery/orders/${orderId}/reject`, {
+      method: "POST",
+    });
   }
-
   async updateOrderStatus(orderId: string, status: string) {
     const response = await fetch(`${API_BASE}/api/delivery/status-update`, {
       method: "POST",
@@ -2072,14 +2088,14 @@ async updateSubscription(id: string, data: any) {
 
   // Per-date delivered/pending status for a batch of subscriptions —
   // used to render the delivery calendar in the rider app. by golu
-async getSubscriptionOrdersBulk(
-  subscriptionIds: string,
-): Promise<Record<string, Record<string, string>>> {
-  return this.request<Record<string, Record<string, string>>>(
-    `/delivery/subscription-orders?subscription_ids=${encodeURIComponent(subscriptionIds)}`,
-    { silentErrorLog: true },
-  );
-}
+  async getSubscriptionOrdersBulk(
+    subscriptionIds: string,
+  ): Promise<Record<string, Record<string, string>>> {
+    return this.request<Record<string, Record<string, string>>>(
+      `/delivery/subscription-orders?subscription_ids=${encodeURIComponent(subscriptionIds)}`,
+      { silentErrorLog: true },
+    );
+  }
 
   async assignDeliveryPartner(orderId: string, partnerId: string) {
     return this.request<any>(
@@ -2460,7 +2476,6 @@ async getSubscriptionOrdersBulk(
     const query = params.toString() ? `?${params.toString()}` : "";
     return this.request<{ summary: any; cows: any[] }>(`/admin/feed${query}`);
   }
-  
 
   async getAdminMilkLogs(date?: string) {
     const params = new URLSearchParams();
@@ -2491,10 +2506,10 @@ async getSubscriptionOrdersBulk(
   }
 
   async getAdminTaskTypes() {
-  return this.request<{ total: number; task_types: TaskType[] }>(
-    "/admin/task-types",
-  );
-}
+    return this.request<{ total: number; task_types: TaskType[] }>(
+      "/admin/task-types",
+    );
+  }
 
   async getAdminHealthLogs(date?: string) {
     const params = new URLSearchParams();
@@ -2798,7 +2813,11 @@ async getSubscriptionOrdersBulk(
 
   async reviewAssignment(
     id: string,
-    data: { action: "approve" | "reject"; points?: number; note?: string | null },
+    data: {
+      action: "approve" | "reject";
+      points?: number;
+      note?: string | null;
+    },
   ) {
     return this.request<{
       success: boolean;
@@ -2878,7 +2897,6 @@ async getSubscriptionOrdersBulk(
       { photos, note },
     );
   }
-
 
   async getCowMilkHistory(cowId: string, days: number = 90) {
     return this.request<{

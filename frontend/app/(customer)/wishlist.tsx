@@ -1,5 +1,5 @@
 // app/(customer)/wishlist.tsx
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -24,6 +24,8 @@ const PAD = 16;
 const GAP = 12;
 const CARD_W = Math.floor((SCREEN_WIDTH - PAD * 2 - GAP) / 2);
 
+const PAGE_SIZE = 20;
+
 const resolveId = (p: any) => p?.id || p?._id || p?.product_id || null;
 
 export default function WishlistScreen() {
@@ -32,6 +34,11 @@ export default function WishlistScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const loadingMoreRef = useRef(false); // blocks duplicate onEndReached calls
 
   const [toast, setToast] = useState({
     visible: false,
@@ -48,10 +55,13 @@ export default function WishlistScreen() {
       name: name ?? "",
     }));
 
+  // first page (screen focus + pull-to-refresh)
   const load = useCallback(async () => {
     try {
-      const data = await api.getWishlist();
-      setRows((data || []).filter((r) => r.product));
+      const page = await api.getWishlist({ limit: PAGE_SIZE });
+      setRows((page.items || []).filter((r) => r.product));
+      setCursor(page.next_cursor);
+      setHasMore(page.has_more);
     } catch {
       // keep whatever is on screen
     } finally {
@@ -59,6 +69,31 @@ export default function WishlistScreen() {
       setRefreshing(false);
     }
   }, []);
+
+  // next pages (when user scrolls near the bottom)
+  const loadMore = useCallback(async () => {
+    if (!hasMore || !cursor || loadingMoreRef.current || loading || refreshing)
+      return;
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+    try {
+      const page = await api.getWishlist({ cursor, limit: PAGE_SIZE });
+      setRows((prev) => {
+        const seen = new Set(prev.map((r) => String(r.product_id)));
+        const fresh = (page.items || []).filter(
+          (r) => r.product && !seen.has(String(r.product_id)),
+        );
+        return [...prev, ...fresh];
+      });
+      setCursor(page.next_cursor);
+      setHasMore(page.has_more);
+    } catch {
+      // user can scroll again to retry
+    } finally {
+      loadingMoreRef.current = false;
+      setLoadingMore(false);
+    }
+  }, [cursor, hasMore, loading, refreshing]);
 
   useFocusEffect(
     useCallback(() => {
@@ -168,6 +203,17 @@ export default function WishlistScreen() {
           keyExtractor={(r) => String(r.product_id)}
           renderItem={renderItem}
           numColumns={2}
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.5}
+          initialNumToRender={10}
+          windowSize={7}
+          ListFooterComponent={
+            loadingMore ? (
+              <View style={{ paddingVertical: 16 }}>
+                <ActivityIndicator color={Colors.primary} />
+              </View>
+            ) : null
+          }
           columnWrapperStyle={{ gap: GAP }}
           contentContainerStyle={{
             paddingHorizontal: PAD,
