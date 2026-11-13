@@ -247,6 +247,26 @@ type Product = {
 const getProductId = (product?: Product | null) =>
   product?.id || product?._id || product?.product_id || "";
 
+type SummaryFilter = "total" | "active" | "low" | "inactive";
+
+const LOW_STOCK_LIMIT = 5;
+
+const isInactiveProduct = (p: Product) => p.is_active === false;
+const isActiveProduct = (p: Product) =>
+  p.is_active !== false && p.is_available !== false;
+const isLowStockProduct = (p: Product) =>
+  p.is_active !== false && p.stock > 0 && p.stock <= LOW_STOCK_LIMIT;
+
+const SUMMARY_CONFIG: Record<
+  SummaryFilter,
+  { title: string; icon: string; color: string; match: (p: Product) => boolean }
+> = {
+  total: { title: "All Products", icon: "cube-outline", color: "#3D1F0A", match: () => true },
+  active: { title: "Active Products", icon: "checkmark-circle-outline", color: "#22C55E", match: isActiveProduct },
+  low: { title: "Low Stock Products", icon: "alert-circle-outline", color: "#F59E0B", match: isLowStockProduct },
+  inactive: { title: "Inactive Products", icon: "eye-off-outline", color: "#FF9675", match: isInactiveProduct },
+};
+
 type FormData = {
   name: string;
   category: string;
@@ -306,20 +326,7 @@ const CATEGORIES = [
   "gifting",
 ];
 // ── Fixed unit options — dairy-focused, dropdown/chip selection only (no free text)
-const UNITS = [
-  "visit",
-  "ml",
-  "L",
-  "g",
-  "kg",
-  "pcs",
-  "dozen",
-  "bottle",
-  "pack",
-  "box",
-  "jar",
-  "can",
-];
+const UNITS = ["visit", "ml", "L", "g", "kg", "pcs", "dozen", "bottle", "pack", "box", "jar", "can"];
 const DIETARY_OPTIONS = ["Veg", "Non-Veg", "Vegan", "Gluten-Free"];
 const TABS = ["Details", "Highlights", "Information"];
 
@@ -487,10 +494,7 @@ export default function InventoryScreen() {
   const [editForm, setEditForm] = useState<FormData>({ ...EMPTY_FORM });
   const [editTab, setEditTab] = useState(0);
   const [stockUpdating, setStockUpdating] = useState(false);
-  const [productAction, setProductAction] = useState<{
-    id: string;
-    type: "availability" | "delete";
-  } | null>(null);
+  const [productAction, setProductAction] = useState<{ id: string; type: "availability" | "delete"; } | null>(null);
   const [showEditSuccessTick, setShowEditSuccessTick] = useState(false);
   const [orderCutoffs, setOrderCutoffs] = useState<OrderCutoffRule[]>([]);
   const [feedbackModalProduct, setFeedbackModalProduct] = useState<{
@@ -502,6 +506,7 @@ export default function InventoryScreen() {
   >({});
 
   const [wishMap, setWishMap] = useState<Record<string, number>>({});
+  const [summaryFilter, setSummaryFilter] = useState<SummaryFilter | null>(null);
 
   // ── Fetch Data
   useProductVisibilitySync(user?.id, async () => {
@@ -684,7 +689,7 @@ setWishMap(wm);
     // Split "500 ml" back into quantityValue="500" and unit="ml"
     const unitMatch = (product.unit || "").trim().match(/^([\d.]+)\s*(\D+)$/);
     const parsedQuantity = unitMatch ? unitMatch[1] : "";
-    const parsedUnit = unitMatch ? unitMatch[2].trim() : product.unit || "";
+    const parsedUnit = unitMatch ? unitMatch[2].trim() : (product.unit || "");
     setEditForm({
       name: product.name || "",
       category: product.category || "",
@@ -929,10 +934,32 @@ setWishMap(wm);
     });
   }, [products, searchQuery]);
 
+  const summaryCounts = useMemo(
+    () => ({
+      total: products.length,
+      active: products.filter(isActiveProduct).length,
+      low: products.filter(isLowStockProduct).length,
+      inactive: products.filter(isInactiveProduct).length,
+    }),
+    [products],
+  );
+
+  const summaryList = useMemo(
+    () =>
+      summaryFilter
+        ? products.filter(SUMMARY_CONFIG[summaryFilter].match)
+        : [],
+    [products, summaryFilter],
+  );
+
+  const openProductFromSummary = (product: Product) => {
+    setSummaryFilter(null);
+    setTimeout(() => openDetail(product), 350);
+  };
+
   if (loading) return <LoadingScreen />;
 
-  const available = products.filter((p) => p.is_available).length;
-  const lowStock = products.filter((p) => p.stock > 0 && p.stock <= 5).length;
+  const available = summaryCounts.active;
 
   // ── Render Form Tabs (shared for Add & Edit)
   const renderFormTab = (
@@ -1144,33 +1171,33 @@ setWishMap(wm);
               </TouchableOpacity>
             </View>
           )}
-          <Text style={styles.fieldLabel}>Purchase Type</Text>
-          <View style={styles.purchaseRow}>
-            {PURCHASE_TYPES.map((opt) => {
-              const isActive = (data.purchase_type || "both") === opt.value;
-              return (
-                <TouchableOpacity
-                  key={opt.value}
-                  style={[
+            <Text style={styles.fieldLabel}>Purchase Type</Text>
+                    <View style={styles.purchaseRow}>
+                      {PURCHASE_TYPES.map((opt) => {
+                        const isActive = (data.purchase_type || "both") === opt.value;
+                        return (
+                          <TouchableOpacity
+                            key={opt.value}
+                            style={[
                     styles.purchaseChip,
                     isActive && styles.purchaseChipActive,
                   ]}
-                  onPress={() => update("purchase_type", opt.value)}
-                >
-                  <Text
-                    style={[
+                            onPress={() => update("purchase_type", opt.value)}
+                          >
+                            <Text
+                              style={[
                       styles.purchaseChipText,
                       isActive && styles.purchaseChipTextActive,
                     ]}
-                    numberOfLines={1}
-                    adjustsFontSizeToFit
-                  >
-                    {opt.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+                              numberOfLines={1}
+                              adjustsFontSizeToFit
+                            >
+                              {opt.label}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
 
           {/* ── Quantity: numeric amount, unit chips below ── */}
           <Text style={styles.fieldLabel}>Quantity</Text>
@@ -1479,17 +1506,17 @@ setWishMap(wm);
               </View>
             ) : null}
             {p.purchase_type ? (
-              <View style={styles.metaChip}>
-                <Ionicons name="repeat-outline" size={12} color={C.dark} />
-                <Text style={styles.metaChipText}>
-                  {p.purchase_type === "one_time"
+                          <View style={styles.metaChip}>
+                            <Ionicons name="repeat-outline" size={12} color={C.dark} />
+                            <Text style={styles.metaChipText}>
+                              {p.purchase_type === "one_time"
                     ? "Buy once"
                     : p.purchase_type === "subscription"
                       ? "Subscription only"
                       : "Buy / Subscribe"}
-                </Text>
-              </View>
-            ) : null}
+                            </Text>
+                          </View>
+                        ) : null}
             <View
               style={[
                 styles.metaChip,
@@ -1894,31 +1921,25 @@ setWishMap(wm);
         ListHeaderComponent={
           <View>
             <View style={[styles.summaryStrip, { marginHorizontal: 4 }]}>
-              <View style={styles.summaryItem}>
-                <Text style={styles.summaryVal}>{products.length}</Text>
+              <TouchableOpacity style={styles.summaryItem} activeOpacity={0.7} onPress={() => setSummaryFilter("total")}>
+                <Text style={styles.summaryVal}>{summaryCounts.total}</Text>
                 <Text style={styles.summaryLabel}>Total</Text>
-              </View>
+              </TouchableOpacity>
               <View style={styles.summaryDivider} />
-              <View style={styles.summaryItem}>
-                <Text style={[styles.summaryVal, { color: C.success }]}>
-                  {available}
-                </Text>
+              <TouchableOpacity style={styles.summaryItem} activeOpacity={0.7} onPress={() => setSummaryFilter("active")}>
+                <Text style={[styles.summaryVal, { color: C.success }]}>{summaryCounts.active}</Text>
                 <Text style={styles.summaryLabel}>Active</Text>
-              </View>
+              </TouchableOpacity>
               <View style={styles.summaryDivider} />
-              <View style={styles.summaryItem}>
-                <Text style={[styles.summaryVal, { color: "#F59E0B" }]}>
-                  {lowStock}
-                </Text>
+              <TouchableOpacity style={styles.summaryItem} activeOpacity={0.7} onPress={() => setSummaryFilter("low")}>
+                <Text style={[styles.summaryVal, { color: "#F59E0B" }]}>{summaryCounts.low}</Text>
                 <Text style={styles.summaryLabel}>Low Stock</Text>
-              </View>
+              </TouchableOpacity>
               <View style={styles.summaryDivider} />
-              <View style={styles.summaryItem}>
-                <Text style={[styles.summaryVal, { color: C.secondary }]}>
-                  {products.length - available}
-                </Text>
+              <TouchableOpacity style={styles.summaryItem} activeOpacity={0.7} onPress={() => setSummaryFilter("inactive")}>
+                <Text style={[styles.summaryVal, { color: C.secondary }]}>{summaryCounts.inactive}</Text>
                 <Text style={styles.summaryLabel}>Inactive</Text>
-              </View>
+              </TouchableOpacity>
             </View>
 
             <TouchableOpacity
@@ -1978,52 +1999,121 @@ setWishMap(wm);
               )}
 
               <View style={styles.productInfo}>
-                {/* Line 1: name - price */}
                 <Text style={styles.productName} numberOfLines={1}>
-                  {product.name} - ₹{product.price}
+                  {product.name}
                 </Text>
-
-                {/* Line 2: quantity · category · stock */}
-                <Text style={styles.productMeta} numberOfLines={1}>
-                  {[
-                    product.unit,
-                    product.category,
-                    `Stock ${product.stock ?? 0}`,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
+                <View style={styles.productPriceRow}>
+                  <Text style={styles.productPrice}>₹{product.price}</Text>
+                  {!!product.mrp && product.mrp > product.price && (
+                    <Text style={styles.productMrp}>₹{product.mrp}</Text>
+                  )}
+                </View>
+                <Text style={styles.productMeta}>
+                  {product.unit || product.category
+                    ? [product.unit, product.category]
+                      .filter(Boolean)
+                      .join(" · ")
+                    : "Details pending"}
                 </Text>
-
-                {/* Line 3: rating */}
-                {(() => {
-                  const fb = feedbackMap[getProductId(product)];
-                  return fb && fb.total_reviews > 0 ? (
-                    <View style={styles.ratingMiniBadge}>
-                      <Ionicons name="star" size={11} color="#F59E0B" />
-                      <Text style={styles.ratingMiniText}>
-                        {fb.average_rating.toFixed(1)} ({fb.total_reviews})
-                      </Text>
-                    </View>
-                  ) : (
-                    <Text style={styles.noRatingText}>No ratings yet</Text>
-                  );
-                })()}
-
-                {/* Line 4: heart + saved count */}
-                <View style={styles.savedRow}>
-                  <Ionicons name="heart" size={12} color="#EF4444" />
-                  <Text style={styles.savedText}>
-                   
-{Number(
-  wishMap[String(product._id ?? "")] ??
-  wishMap[String(getProductId(product))] ??
-  product.wishlist_count ??
-  0
-)}{" "}
-saved
-
+                {cutoffText ? (
+                  <View
+                    style={[
+                      styles.cutoffMiniBadge,
+                      cutoffPassed && styles.cutoffMiniBadgeBlocked,
+                    ]}
+                  >
+                    <Ionicons
+                      name={cutoffPassed ? "alert-circle-outline" : "time-outline"}
+                      size={10}
+                      color={cutoffPassed ? "#DC2626" : "#B45309"}
+                    />
+                    <Text
+                      style={[
+                        styles.cutoffMiniText,
+                        cutoffPassed && styles.cutoffMiniTextBlocked,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {cutoffText}
+                    </Text>
+                  </View>
+                ) : null}
+                {deliveryText ? (
+                  <View style={styles.deliveryMiniBadge}>
+                    <Ionicons name="bicycle-outline" size={10} color="#16A34A" />
+                    <Text style={styles.deliveryMiniText} numberOfLines={1}>
+                      {deliveryText}
+                    </Text>
+                  </View>
+                ) : null}
+                <View
+                  style={[
+                    styles.statusPill,
+                    {
+                      backgroundColor: product.is_active !== false
+                        ? C.successBg
+                        : "#FFF0F0",
+                    },
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.statusDot,
+                      {
+                        backgroundColor: product.is_active !== false
+                          ? C.success
+                          : "#FF6B6B",
+                      },
+                    ]}
+                  />
+                  <Text
+                    style={[
+                      styles.statusText,
+                      { color: product.is_active !== false ? "#16A34A" : "#DC2626" },
+                    ]}
+                  >
+                    {product.is_active === false ? "Inactive" : "Active"}
                   </Text>
                 </View>
+              </View>
+
+              <View style={{ alignItems: "center" }}>
+                <View
+                  style={[
+                    styles.stockBadge,
+                    product.stock <= 5 &&
+                    product.stock > 0 && { backgroundColor: "#FFF8E1" },
+                    product.stock === 0 && { backgroundColor: "#FFF0F0" },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.stockVal,
+                      product.stock <= 5 &&
+                      product.stock > 0 && { color: "#F59E0B" },
+                      product.stock === 0 && { color: "#DC2626" },
+                    ]}
+                  >
+                    {product.stock}
+                  </Text>
+                  <Text style={styles.stockLabel}>stock</Text>
+                </View>
+
+                {(() => {
+                  const productFeedback = product.id
+                    ? feedbackMap[product.id]
+                    : undefined;
+                  const totalReviews = productFeedback?.total_reviews ?? 0;
+
+                  return totalReviews > 0 && productFeedback ? (
+                    <View style={styles.ratingMiniBadge}>
+                      <Ionicons name="star" size={10} color="#F59E0B" />
+                      <Text style={styles.ratingMiniText}>
+                        {productFeedback.average_rating.toFixed(1)}
+                      </Text>
+                    </View>
+                  ) : null;
+                })()}
               </View>
 
               <Ionicons
@@ -2172,6 +2262,100 @@ saved
           </View>
         </View>
       </Modal>
+
+      {/* ── SUMMARY LIST MODAL ── */}
+      <Modal
+        visible={summaryFilter !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSummaryFilter(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalSheet, { maxHeight: "80%", paddingBottom: insets.bottom + 16 }]}>
+            <View style={styles.dragHandle} />
+            {summaryFilter && (
+              <>
+                <View style={styles.modalHeader}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
+                    <Ionicons
+                      name={SUMMARY_CONFIG[summaryFilter].icon as any}
+                      size={20}
+                      color={SUMMARY_CONFIG[summaryFilter].color}
+                    />
+                    <Text style={styles.modalTitle}>{SUMMARY_CONFIG[summaryFilter].title}</Text>
+                    <View style={styles.summaryCountPill}>
+                      <Text style={styles.summaryCountText}>{summaryList.length}</Text>
+                    </View>
+                  </View>
+                  <TouchableOpacity style={styles.closeBtn} onPress={() => setSummaryFilter(null)}>
+                    <Ionicons name="close" size={16} color={C.deep} />
+                  </TouchableOpacity>
+                </View>
+
+                {summaryList.length === 0 ? (
+                  <View style={styles.emptyState}>
+                    <Ionicons name="file-tray-outline" size={36} color={C.textLight} />
+                    <Text style={styles.emptyTitle}>No products found</Text>
+                  </View>
+                ) : (
+                  <FlatList
+                    data={summaryList}
+                    keyExtractor={(item) => getProductId(item) || item.name}
+                    showsVerticalScrollIndicator={false}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity
+                        style={styles.summaryRow}
+                        activeOpacity={0.7}
+                        onPress={() => openProductFromSummary(item)}
+                      >
+                        {item.image ? (
+                          <Image source={{ uri: item.image }} style={styles.summaryRowImg} />
+                        ) : (
+                          <View style={[styles.summaryRowImg, styles.imagePlaceholder]}>
+                            <Ionicons name="cube-outline" size={18} color={C.textLight} />
+                          </View>
+                        )}
+                        <View style={{ flex: 1, gap: 4 }}>
+                          <Text style={styles.productName} numberOfLines={1}>{item.name}</Text>
+                          <Text style={styles.productMeta}>
+                            ₹{item.price}
+                            {item.unit ? ` · ${item.unit}` : ""} · Stock {item.stock}
+                          </Text>
+                          <View style={styles.summaryTagRow}>
+                            {isInactiveProduct(item) ? (
+                              <View style={[styles.summaryTag, { backgroundColor: "#FFF0F0" }]}>
+                                <Text style={[styles.summaryTagText, { color: "#DC2626" }]}>Inactive</Text>
+                              </View>
+                            ) : (
+                              <View style={[styles.summaryTag, { backgroundColor: C.successBg }]}>
+                                <Text style={[styles.summaryTagText, { color: "#16A34A" }]}>
+                                  {item.is_available === false ? "Unavailable" : "Active"}
+                                </Text>
+                              </View>
+                            )}
+                            {isLowStockProduct(item) && (
+                              <View style={[styles.summaryTag, { backgroundColor: "#FFF8E1" }]}>
+                                <Text style={[styles.summaryTagText, { color: "#F59E0B" }]}>Low Stock</Text>
+                              </View>
+                            )}
+                            {item.stock === 0 && (
+                              <View style={[styles.summaryTag, { backgroundColor: "#FFF0F0" }]}>
+                                <Text style={[styles.summaryTagText, { color: "#DC2626" }]}>Out of stock</Text>
+                              </View>
+                            )}
+                          </View>
+                        </View>
+                        <Ionicons name="chevron-forward" size={16} color={C.textLight} />
+                      </TouchableOpacity>
+                    )}
+                  />
+                )}
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
+
       <AdminFeedbackModal
         visible={!!feedbackModalProduct}
         productId={feedbackModalProduct?.id || null}
@@ -2329,6 +2513,26 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
 
+  //summary count pill
+  summaryCountPill: {
+    backgroundColor: C.chipBg,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: 20,
+  },
+  summaryCountText: { fontSize: 12, fontWeight: "800", color: C.dark },
+  summaryRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: C.border,
+  },
+  summaryRowImg: { width: 44, height: 44, borderRadius: 12 },
+  summaryTagRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  summaryTag: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 20 },
+  summaryTagText: { fontSize: 10, fontWeight: "700" },
   // ── Summary Strip
   summaryStrip: {
     flexDirection: "row",

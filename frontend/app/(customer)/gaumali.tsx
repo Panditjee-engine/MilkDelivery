@@ -5,7 +5,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import {
+import { AccessibilityInfo, Animated,
   ActivityIndicator,
   Alert,
   BackHandler,
@@ -100,6 +100,35 @@ const historyTime = (value: string) => {
   return `${hour % 12 || 12}:${match[2]} ${hour >= 12 ? "PM" : "AM"}`;
 };
 const label = (value?: string) => (value || "Unknown").replace(/_/g, " ");
+function AppointmentWindow({ service, overlay = false }: { service: Service; overlay?: boolean }) {
+  const window = service.appointment_window;
+  const pulse = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    let mounted = true;
+    let animation: Animated.CompositeAnimation | undefined;
+    const update = (reduce: boolean) => {
+      if (!mounted) return;
+      animation?.stop();
+      pulse.setValue(1);
+      if (reduce || !overlay || !window?.is_active) return;
+      animation = Animated.loop(Animated.sequence([
+        Animated.timing(pulse, { toValue: 0.82, duration: 1200, useNativeDriver: true, isInteraction: false }),
+        Animated.timing(pulse, { toValue: 1, duration: 1200, useNativeDriver: true, isInteraction: false }),
+      ]));
+      animation.start();
+    };
+    void AccessibilityInfo.isReduceMotionEnabled().then(update).catch(() => {});
+    const listener = AccessibilityInfo.addEventListener('reduceMotionChanged', update);
+    return () => { mounted = false; animation?.stop(); listener.remove(); };
+  }, [overlay, window?.is_active, pulse]);
+  if (!window) return null;
+  return <Animated.View pointerEvents="none" style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: overlay ? (window.is_active ? "#166534" : "#4B5563") : "#FFF1E8", borderRadius: 6, padding: 6, marginVertical: overlay ? 0 : 4, opacity: pulse }}>
+    <Ionicons name="time-outline" size={13} color={overlay ? "#FFFFFF" : Colors.primaryDark} />
+    <Text numberOfLines={1} ellipsizeMode="tail" style={{ minWidth: 0, flexShrink: 1, fontSize: 10, lineHeight: 14, fontWeight: "700", color: overlay ? "#FFFFFF" : Colors.primaryDark }}>
+      {window.is_active ? `Daily ${historyTime(window.start_time)} - ${historyTime(window.end_time)} IST` : "Appointments currently closed"}
+    </Text>
+  </Animated.View>;
+}
 const message = (e: unknown) =>
   e instanceof Error
     ? e.message
@@ -184,7 +213,8 @@ function ServiceImage({
           ))}
         </ScrollView>
       )}
-      {slides.length > 1 && (
+      <View pointerEvents="none" style={{ position: "absolute", top: 6, left: 6, right: large ? 12 : 48, alignItems: "flex-start" }}><AppointmentWindow service={service} overlay /></View>
+    {slides.length > 1 && (
         <View
           pointerEvents="none"
           style={{

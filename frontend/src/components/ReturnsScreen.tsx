@@ -16,6 +16,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../services/api";
 import ReturnPhoto from "./ReturnPhoto";
+import BottleLedger from "./BottleLedger";
 import { formatDeliveryAddress } from "../utils/address";
 
 const kinds = [
@@ -179,6 +180,7 @@ useFocusEffect(
             <Text style={s.error}>{error} Tap to retry.</Text>
           </TouchableOpacity>
         ) : null}
+        {kind === "bottle_return" && <BottleLedger key={JSON.stringify(rows.map(row => row.updated_at))} />}
         {role === "delivery" && (
           <View style={s.form}>
             <TouchableOpacity
@@ -608,14 +610,19 @@ useFocusEffect(
                   />
                   {row.status === "picked_up" && (
                     <Text style={s.muted}>
-                      {row.kind === "bottle_return" ? "Bottles collected. The deposit is released when no pending milk deliveries or outstanding bottles remain." : "Pickup recorded. Refund or exchange completion is not yet confirmed."}
+                      {row.kind === "bottle_return" ? "Bottles collected. The wallet hold is recalculated from remaining bottles and completed deliveries." : "Pickup recorded. Refund or exchange completion is not yet confirmed."}
                     </Text>
                   )}
                   <View style={s.actions}>
-                    {role !== "customer" && row.kind === "bottle_return" && row.status === "approved" && (
+                    {!!row.damage_status && <Text style={s.muted}>Bottle {row.damage_reason}: {row.damage_status.replace(/_/g, ' ')}</Text>}
+                    {role === "customer" && row.damage_status === "customer_review" && <>
+                      <TouchableOpacity disabled={busy} style={s.secondary} onPress={() => Alert.alert("Accept bottle charge?", "Only the held Rs 50 will be charged. Review the evidence photo before accepting.", [{ text: "Cancel", style: "cancel" }, { text: "Accept Rs 50 charge", onPress: () => void perform(() => api.decideBottleDamage(row.id, "accept")) }])}><Text>Accept Rs 50 charge</Text></TouchableOpacity>
+                      <TouchableOpacity disabled={busy} style={s.secondary} onPress={() => void perform(() => api.decideBottleDamage(row.id, "reject"))}><Text>Dispute report</Text></TouchableOpacity>
+                    </>}
+                    {role !== "customer" && row.kind === "bottle_return" && row.status === "approved" && !row.damage_status && (
                       <TouchableOpacity disabled={busy} style={s.secondary} onPress={() => Alert.alert(
                         "Record bottle loss or damage?",
-                        "This closes the remaining bottles on this request and charges the held ₹50 once. A new ₹50 deposit is reserved when funds are available.",
+                        "Upload an evidence photo first. This sends a report to the admin; money is charged only after customer acceptance.",
                         [{text:"Cancel",style:"cancel"},{text:"Lost",style:"destructive",onPress:()=>void perform(()=>api.chargeBottleDamage(row.id,"lost"))},{text:"Cracked",style:"destructive",onPress:()=>void perform(()=>api.chargeBottleDamage(row.id,"cracked"))}],
                       )}><Text style={s.error}>Lost / Cracked</Text></TouchableOpacity>
                     )}

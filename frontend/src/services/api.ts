@@ -759,6 +759,14 @@ class ApiService {
       },
     );
   }
+  getBottleLedger() {
+    return this.request<any>("/returns/bottles/ledger");
+  }
+  decideBottleDamage(id: string, action: "review" | "accept" | "reject" | "dismiss", note = "") {
+    return this.request<any>(`/returns/${encodeURIComponent(id)}/bottle-damage/decision`, {
+      method: "POST", body: JSON.stringify({ action, note }),
+    });
+  }
   updateReturnRequest(
     id: string,
     action: string,
@@ -1585,6 +1593,7 @@ class ApiService {
   }
 
   async createSubscription(data: {
+    quoted_total?: number;
     items: Array<{
       product_id: string;
       quantity: number;
@@ -4944,6 +4953,51 @@ class ApiService {
       formData,
       "POST",
     );
+  }
+
+    // ── Rider bulk delivered ─────────────────────────────
+  async bulkUpdateOrderStatus(orderIds: string[], status: string) {
+    const results: any[] = [];
+    for (const orderId of orderIds) {
+      try {
+        await this.updateOrderStatus(orderId, status);
+        results.push({ id: orderId, success: true });
+      } catch (error: any) {
+        if (error?.message === "UNAUTHORIZED") throw error;
+        results.push({
+          id: orderId,
+          success: false,
+          error: error?.message || "Could not update this order.",
+        });
+      }
+    }
+    return {
+      updated: results.filter((r) => r.success).length,
+      failed: results.filter((r) => !r.success).length,
+      results,
+    };
+  }
+
+  async bulkUpdateSubscriptionDelivery(subscriptionIds: string[], status: string) {
+    const results: any[] = [];
+    for (const id of subscriptionIds) {
+      try {
+        await this.updateSubscriptionStatus(id, status);
+        results.push({ id, success: true });
+      } catch (error: any) {
+        if (error?.message === "UNAUTHORIZED") throw error;
+        results.push({
+          id,
+          success: false,
+          error: error?.message || "Could not update this subscription.",
+        });
+      }
+    }
+    return {
+      updated: results.filter((r) => r.success).length,
+      failed: results.filter((r) => !r.success).length,
+      results,
+    };
   }
 
   // Logout

@@ -15,7 +15,7 @@ export async function notifyBottleDeposit(wallet: {
     if ((await AsyncStorage.getItem("bottle-deposit-notice")) === id) return;
     Alert.alert(
       "Bottle security deposit",
-      `₹${amount.toFixed(2)} is reserved in your wallet for milk bottles. This is one deposit for your account, not a charge per bottle. It cannot be spent and is released when no pending milk deliveries or outstanding bottles remain. Confirmed loss or damage uses this deposit; a replacement ₹50 is reserved when funds are available.`,
+      `₹${amount.toFixed(2)} is reserved because an earlier milk bottle was still outstanding when a later day's delivery was completed. This is one account-level hold, not a charge per bottle. Loss or damage is charged only after admin review and your acceptance. After a charge, a new ₹50 hold starts on a later day's milk delivery.`,
       [{ text: "Got it" }],
     );
     await AsyncStorage.setItem("bottle-deposit-notice", id);
