@@ -5,9 +5,11 @@ import ServiceSlotPicker, {
 import NewProductBadge from "../../src/components/NewProductBadge";
 import { useLoyaltyQuote } from "../../src/hooks/useLoyaltyQuote";
 import LoyaltyBreakdown from "../../src/components/LoyaltyBreakdown";
+import { selectCoupon } from "../../src/services/couponSelection";
 import { newlyAddedProducts } from "../../src/utils/newProducts";
 import WishlistToast from "../../src/components/WishlistToast";
 import { useProductAgeClock } from "../../src/hooks/useProductAgeClock";
+import { StatusBar } from "expo-status-bar";
 import React, {
   useState,
   useEffect,
@@ -36,7 +38,7 @@ import {
 } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
 import { useProductVisibilitySync } from "../../src/hooks/useProductVisibilitySync";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import {
   SafeAreaView,
@@ -50,7 +52,11 @@ import Button from "../../src/components/Button";
 import LoadingScreen from "../../src/components/LoadingScreen";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { requireCustomerName } from "../../src/utils/customerName";
-import { useCatalogOrder, orderedSections, buyableProduct } from '../../src/hooks/useCatalogOrder';
+import {
+  useCatalogOrder,
+  orderedSections,
+  buyableProduct,
+} from "../../src/hooks/useCatalogOrder";
 import {
   formatDeliveryAddress,
   hasCompleteDeliveryAddress,
@@ -73,7 +79,8 @@ const GRID_PADDING = 20;
 const GRID_GAP = 12;
 const CARD_WIDTH = Math.floor((SCREEN_WIDTH - GRID_PADDING * 2 - GRID_GAP) / 2);
 const IMG_W = CARD_WIDTH - 2;
-const NEW_BANNER_WIDTH = SCREEN_WIDTH - 40;
+const NEW_BANNER_WIDTH = SCREEN_WIDTH;
+const BANNER_H = 240; // banner height below the status bar; adjust to taste
 const DAIRY_CATEGORIES = ["milk", "dairy"];
 const resolveProductId = (product: any) =>
   product?.id || product?._id || product?.product_id || null;
@@ -377,7 +384,14 @@ function isUnavailable(p: any): boolean {
   return !p?.is_available || (p?.stock ?? 0) <= 0;
 }
 function quoteItems(cart: CartItem[]) {
-  return cart.filter(i => !isUnavailable(i.product)).map(i => ({product_id: resolveProductId(i.product), quantity:i.quantity, price:i.product.price, amount:i.product.price*i.quantity}));
+  return cart
+    .filter((i) => !isUnavailable(i.product))
+    .map((i) => ({
+      product_id: resolveProductId(i.product),
+      quantity: i.quantity,
+      price: i.product.price,
+      amount: i.product.price * i.quantity,
+    }));
 }
 function getPayableTotal(cart: CartItem[]): number {
   return cart
@@ -2044,6 +2058,7 @@ function SubscribeModal({
   cutoffRules,
   tomorrow,
   onClose,
+  onBrowseCoupons,
   onSuccess,
   onToast,
 }: {
@@ -2054,6 +2069,7 @@ function SubscribeModal({
   cutoffRules: OrderCutoffRule[];
   tomorrow: string;
   onClose: () => void;
+  onBrowseCoupons: () => void;
   onSuccess: (refresh: () => void) => void;
   onToast: (n: string, s: boolean) => void;
 }) {
@@ -2073,7 +2089,18 @@ function SubscribeModal({
 
   const theme = getCategoryTheme(product?.category);
   const unitPrice = product?.price ?? 0;
-  const loyalty = useLoyaltyQuote(product ? [{product_id:resolveProductId(product),quantity:qty,price:unitPrice,amount:unitPrice*qty}] : []);
+  const loyalty = useLoyaltyQuote(
+    product
+      ? [
+          {
+            product_id: resolveProductId(product),
+            quantity: qty,
+            price: unitPrice,
+            amount: unitPrice * qty,
+          },
+        ]
+      : [],
+  );
   const total = loyalty.data?.total ?? unitPrice * qty;
   const canAfford = walletBalance >= total;
   const deliveries = estimateDeliveryCount(
@@ -2084,9 +2111,15 @@ function SubscribeModal({
   );
 
   const prevVisibleRef = useRef(false);
+  const preserveCouponDraft = useRef(false);
 
   useEffect(() => {
     if (visible && !prevVisibleRef.current) {
+      if (preserveCouponDraft.current) {
+        preserveCouponDraft.current = false;
+        prevVisibleRef.current = visible;
+        return;
+      }
       setStep(1);
       setQty(1);
       setPattern("daily");
@@ -2129,12 +2162,21 @@ function SubscribeModal({
   };
 
   const confirm = async () => {
-    if (!requireCustomerName(user?.name, () => {
-      onClose();
-      router.push("/(customer)/edit-profile" as any);
-    })) return;
+    if (
+      !requireCustomerName(user?.name, () => {
+        onClose();
+        router.push("/(customer)/edit-profile" as any);
+      })
+    )
+      return;
     if (!product) return;
-    if (!loyalty.ready) { Alert.alert("Check total", loyalty.error || "Please wait while pricing is calculated."); return; }
+    if (!loyalty.ready) {
+      Alert.alert(
+        "Check total",
+        loyalty.error || "Please wait while pricing is calculated.",
+      );
+      return;
+    }
     const cutoffRule = getOrderCutoffForProduct(product, cutoffRules);
     if (cutoffRule && isOrderCutoffPassed(cutoffRule)) {
       Alert.alert(
@@ -2197,6 +2239,7 @@ function SubscribeModal({
       const payload: Parameters<typeof api.createSubscription>[0] = {
         // Final payable amount is always recomputed by the server.
         quoted_total: loyalty.data?.total,
+        ...loyalty.couponPayload,
         items: [
           {
             product_id: productId,
@@ -2241,6 +2284,7 @@ function SubscribeModal({
         await api.createSubscription(payload);
       }
       onClose();
+      selectCoupon(loyalty.selectionKey);
       onToast(product.name, true);
       await onSuccess(() =>
         api
@@ -2390,7 +2434,7 @@ function SubscribeModal({
                   </Text>
                 </View>
 
-                <LoyaltyBreakdown quote={loyalty} />
+                <LoyaltyBreakdown quote={loyalty} onBrowse={() => { preserveCouponDraft.current = true; onBrowseCoupons(); }} />
                 <Text style={sheetS.sectionLabel}>Schedule</Text>
                 <View style={subModalS.patternRow}>
                   {subscriptionPatterns.map((p) => {
@@ -3311,6 +3355,7 @@ function CartSheet({
   onSelectAddress,
   onAddAddress,
   onClose,
+  onBrowseCoupons,
   onRemove,
   onUpdateQty,
   onPlaceOrder,
@@ -3325,6 +3370,7 @@ function CartSheet({
   onSelectAddress: (address: any) => void;
   onAddAddress: () => void;
   onClose: () => void;
+  onBrowseCoupons: () => void;
   onRemove: (id: string) => void;
   onUpdateQty: (id: string, q: number) => void;
   onPlaceOrder: (paymentMethod: PaymentMethod, serviceSlot?: string) => void;
@@ -3381,7 +3427,13 @@ function CartSheet({
   if (!visible) return null;
 
   const handleConfirmOrderPress = () => {
-    if (!loyalty.ready) { Alert.alert("Check total", loyalty.error || "Please wait while the payable amount is calculated."); return; }
+    if (!loyalty.ready) {
+      Alert.alert(
+        "Check total",
+        loyalty.error || "Please wait while the payable amount is calculated.",
+      );
+      return;
+    }
     console.log("[Cart] confirm place order", {
       paymentMethod,
       itemCount: cart.length,
@@ -3608,7 +3660,7 @@ function CartSheet({
 
             {cart.length > 0 && (
               <View style={cartS.footer}>
-                <LoyaltyBreakdown quote={loyalty} />
+                <LoyaltyBreakdown quote={loyalty} onBrowse={onBrowseCoupons} />
                 <View style={cartS.divider} />
                 <View style={cartS.totalRow}>
                   <Text style={cartS.totalLabel}>Total</Text>
@@ -4438,7 +4490,12 @@ function EditSubscriptionQtyModal({
   const total = (product.price ?? 0) * qty;
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent
+      onRequestClose={onClose}
+    >
       <View style={sheetS.overlay}>
         <View style={sheetS.sheet}>
           <View style={sheetS.handle} />
@@ -4454,19 +4511,26 @@ function EditSubscriptionQtyModal({
             </TouchableOpacity>
           </View>
 
-          <Text style={[sheetS.sectionLabel, { marginTop: 14 }]}>Apply change to</Text>
+          <Text style={[sheetS.sectionLabel, { marginTop: 14 }]}>
+            Apply change to
+          </Text>
           <View style={existS.scopeRow}>
-            {([
-              { v: "today", label: "Today only" },
-              { v: "all", label: "Till end of subscription" },
-            ] as const).map((o) => {
+            {(
+              [
+                { v: "today", label: "Today only" },
+                { v: "all", label: "Till end of subscription" },
+              ] as const
+            ).map((o) => {
               const active = scope === o.v;
               return (
                 <TouchableOpacity
                   key={o.v}
                   style={[
                     existS.scopeBtn,
-                    active && { backgroundColor: T.amber, borderColor: T.amber },
+                    active && {
+                      backgroundColor: T.amber,
+                      borderColor: T.amber,
+                    },
                   ]}
                   onPress={() => setScope(o.v)}
                 >
@@ -4508,7 +4572,8 @@ function EditSubscriptionQtyModal({
           </View>
 
           <Text style={existS.perDelivery}>
-            {scope === "today" ? "Today's delivery" : "Per delivery"}: ₹{total.toFixed(2)}
+            {scope === "today" ? "Today's delivery" : "Per delivery"}: ₹
+            {total.toFixed(2)}
           </Text>
           <View style={{ height: 14 }} />
           <Button
@@ -4543,7 +4608,7 @@ const existS = StyleSheet.create({
     borderColor: T.border,
   },
   perDelivery: { fontSize: 12, fontWeight: "700", color: T.muted },
-    scopeRow: { flexDirection: "row", gap: 8, marginBottom: 16 },
+  scopeRow: { flexDirection: "row", gap: 8, marginBottom: 16 },
   scopeBtn: {
     flex: 1,
     paddingVertical: 11,
@@ -4559,6 +4624,54 @@ const existS = StyleSheet.create({
 // ─── Main Screen
 export default function CatalogScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  //--floaring header--
+  const headerAnim = useRef(new Animated.Value(1)).current; // 1 = visible, 0 = hidden
+  const headerVisibleRef = useRef(true);
+  const lastScrollY = useRef(0);
+  const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [headerSolid, setHeaderSolid] = useState(false);
+
+  const setHeaderVisible = useCallback(
+    (visible: boolean) => {
+      if (headerVisibleRef.current === visible) return;
+      headerVisibleRef.current = visible;
+      Animated.timing(headerAnim, {
+        toValue: visible ? 1 : 0,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
+    },
+    [headerAnim],
+  );
+
+  const onListScroll = useCallback(
+    (e: any) => {
+      const y = e.nativeEvent.contentOffset.y;
+      const dy = y - lastScrollY.current;
+      lastScrollY.current = y;
+
+      const pastBanner = y > BANNER_H - 40;
+      setHeaderSolid((prev) => (prev === pastBanner ? prev : pastBanner));
+
+      if (y <= 10 || dy < -4)
+        setHeaderVisible(true); // top or scrolling up
+      else if (dy > 4) setHeaderVisible(false); // scrolling down
+
+      // user stopped scrolling -> bring icons back
+      if (idleTimer.current) clearTimeout(idleTimer.current);
+      idleTimer.current = setTimeout(() => setHeaderVisible(true), 700);
+    },
+    [setHeaderVisible],
+  );
+
+  useEffect(
+    () => () => {
+      if (idleTimer.current) clearTimeout(idleTimer.current);
+    },
+    [],
+  );
+  //-------------------
   const { user, updateUser } = useAuth();
   const [linkedAdminId, setLinkedAdminId] = useState<string | null>(
     (user as any)?.admin_id ?? (user as any)?.referral_admin_id ?? null,
@@ -4588,6 +4701,17 @@ export default function CatalogScreen() {
 
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartVisible, setCartVisible] = useState(false);
+  const couponReturnTarget = useRef<'cart' | 'subscription' | null>(null);
+  useFocusEffect(useCallback(() => {
+    const target = couponReturnTarget.current;
+    if (!target) return;
+    const frame = requestAnimationFrame(() => {
+      couponReturnTarget.current = null;
+      if (target === 'cart') setCartVisible(true);
+      else setSubscribeVisible(true);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, []));
   const [submitting, setSubmitting] = useState(false);
 
   const cartHydratedRef = useRef(false);
@@ -5252,126 +5376,124 @@ export default function CatalogScreen() {
   }; */
 
   // Does the customer already have an active recurring subscription for this product?
-const findActiveSubscriptionForProduct = (p: any) => {
-  const pid = String(resolveProductId(p));
-  if (!pid || pid === "null") return null;
-  return (
-    activeSubscriptions.find(
-      (s: any) =>
-        s.pattern !== "buy_once" &&
-        ((s.items || []).some((i: any) => String(i.product_id) === pid) ||
-          String(s.product_id ?? s.product?.id ?? "") === pid),
-    ) || null
-  );
-};
+  const findActiveSubscriptionForProduct = (p: any) => {
+    const pid = String(resolveProductId(p));
+    if (!pid || pid === "null") return null;
+    return (
+      activeSubscriptions.find(
+        (s: any) =>
+          s.pattern !== "buy_once" &&
+          ((s.items || []).some((i: any) => String(i.product_id) === pid) ||
+            String(s.product_id ?? s.product?.id ?? "") === pid),
+      ) || null
+    );
+  };
 
-// Original flow: open the subscribe modal for a new subscription
-const startNewSubscription = (p: any) => {
-  if (
-    !requireCustomerName(user?.name, () =>
-      router.push("/(customer)/edit-profile" as any),
+  // Original flow: open the subscribe modal for a new subscription
+  const startNewSubscription = (p: any) => {
+    if (
+      !requireCustomerName(user?.name, () =>
+        router.push("/(customer)/edit-profile" as any),
+      )
     )
-  )
-    return;
-  if (showCutoffPopupIfBlocked(p)) return;
-  if (productStock(p) === 0) {
-    alert("Out of stock");
-    return;
-  }
-  setSubscribeProduct(p);
-  setSubscribeVisible(true);
-};
+      return;
+    if (showCutoffPopupIfBlocked(p)) return;
+    if (productStock(p) === 0) {
+      alert("Out of stock");
+      return;
+    }
+    setSubscribeProduct(p);
+    setSubscribeVisible(true);
+  };
 
-// Entry point from the product card
-const handleSubscribe = (p: any) => {
-  const existing = findActiveSubscriptionForProduct(p);
-  if (existing) {
-    setExistingSubProduct(p);
-    setExistingSub(existing);
-    setExistingSubVisible(true);
-    return;
-  }
-  startNewSubscription(p);
-};
+  // Entry point from the product card
+  const handleSubscribe = (p: any) => {
+    const existing = findActiveSubscriptionForProduct(p);
+    if (existing) {
+      setExistingSubProduct(p);
+      setExistingSub(existing);
+      setExistingSubVisible(true);
+      return;
+    }
+    startNewSubscription(p);
+  };
 
-const handleEditSubscriptionQty = async (
-  qty: number,
-  scope: "today" | "all",
-) => {
-  if (!existingSub || !existingSubProduct) return;
+  const handleEditSubscriptionQty = async (
+    qty: number,
+    scope: "today" | "all",
+  ) => {
+    if (!existingSub || !existingSubProduct) return;
 
-  const pid = String(resolveProductId(existingSubProduct));
-  const avail = productStock(existingSubProduct, Infinity);
+    const pid = String(resolveProductId(existingSubProduct));
+    const avail = productStock(existingSubProduct, Infinity);
 
-  if (qty > avail) {
-    alert(`Only ${avail} available`);
-    return;
-  }
+    if (qty > avail) {
+      alert(`Only ${avail} available`);
+      return;
+    }
 
-  setEditQtySubmitting(true);
+    setEditQtySubmitting(true);
 
-  try {
-    if (scope === "today") {
-      if (showCutoffPopupIfBlocked(existingSubProduct)) return;
+    try {
+      if (scope === "today") {
+        if (showCutoffPopupIfBlocked(existingSubProduct)) return;
 
-      await api.addSubscriptionModification(
-        existingSub.id,
-        dateToString(new Date()),
-        qty,
-      );
+        await api.addSubscriptionModification(
+          existingSub.id,
+          dateToString(new Date()),
+          qty,
+        );
+
+        setEditQtyVisible(false);
+
+        showToast(
+          existingSubProduct.name,
+          true,
+          ` quantity for today set to ${qty}`,
+        );
+
+        await fetchSubs();
+        return;
+      }
+
+      // Update quantity for the entire subscription
+      const items = (existingSub.items || []).map((i: any) => {
+        const quantity = String(i.product_id) === pid ? qty : i.quantity;
+
+        return {
+          product_id: i.product_id,
+          quantity,
+          price: i.price,
+          amount: i.price * quantity,
+        };
+      });
+
+      const oldQty =
+        (existingSub.items || []).find((i: any) => String(i.product_id) === pid)
+          ?.quantity ?? 0;
+
+      await api.editSubscription(existingSub.id, { items });
 
       setEditQtyVisible(false);
 
       showToast(
         existingSubProduct.name,
         true,
-        ` quantity for today set to ${qty}`,
+        qty > oldQty
+          ? ` quantity increased to ${qty}`
+          : ` quantity decreased to ${qty}`,
       );
 
       await fetchSubs();
-      return;
+    } catch (e: any) {
+      Alert.alert(
+        "Couldn't update quantity",
+        e?.message || "Please try again.",
+      );
+    } finally {
+      setEditQtySubmitting(false);
     }
-
-    // Update quantity for the entire subscription
-    const items = (existingSub.items || []).map((i: any) => {
-      const quantity =
-        String(i.product_id) === pid ? qty : i.quantity;
-
-      return {
-        product_id: i.product_id,
-        quantity,
-        price: i.price,
-        amount: i.price * quantity,
-      };
-    });
-
-    const oldQty =
-      (existingSub.items || []).find(
-        (i: any) => String(i.product_id) === pid,
-      )?.quantity ?? 0;
-
-    await api.editSubscription(existingSub.id, { items });
-
-    setEditQtyVisible(false);
-
-    showToast(
-      existingSubProduct.name,
-      true,
-      qty > oldQty
-        ? ` quantity increased to ${qty}`
-        : ` quantity decreased to ${qty}`,
-    );
-
-    await fetchSubs();
-  } catch (e: any) {
-    Alert.alert(
-      "Couldn't update quantity",
-      e?.message || "Please try again.",
-    );
-  } finally {
-    setEditQtySubmitting(false);
-  }
-};
+  };
 
   const handleQuickAddConfirm = async (qty: number) => {
     if (!quickAddProduct) return;
@@ -5454,11 +5576,20 @@ const handleEditSubscriptionQty = async (
     paymentMethod: PaymentMethod,
     serviceSlot?: string,
   ) => {
-    if (!requireCustomerName(user?.name, () => {
-      setCartVisible(false);
-      router.push("/(customer)/edit-profile" as any);
-    })) return;
-    if (!loyalty.ready) { Alert.alert("Check total", loyalty.error || "Please wait while pricing is calculated."); return; }
+    if (
+      !requireCustomerName(user?.name, () => {
+        setCartVisible(false);
+        router.push("/(customer)/edit-profile" as any);
+      })
+    )
+      return;
+    if (!loyalty.ready) {
+      Alert.alert(
+        "Check total",
+        loyalty.error || "Please wait while pricing is calculated.",
+      );
+      return;
+    }
     console.log("[Cart] handlePlaceOrder started", {
       paymentMethod,
       itemCount: cart.length,
@@ -5555,6 +5686,7 @@ const handleEditSubscriptionQty = async (
           typeof api.createSubscription
         >[0]["items"],
         quoted_total: loyalty.data?.total,
+        ...loyalty.couponPayload,
         pattern: "buy_once",
         custom_days: null,
         start_date: tomorrow,
@@ -5592,6 +5724,7 @@ const handleEditSubscriptionQty = async (
         await api.createSubscription(payload);
       }
 
+      selectCoupon(loyalty.selectionKey);
       setSuccessItemCount(placedCount);
       setCart([]);
       api.clearCart().catch(() => undefined);
@@ -5727,7 +5860,16 @@ const handleEditSubscriptionQty = async (
     : selectedCategory
       ? grouped
       : [...discoverySections, ...grouped];
-  const sections = orderedSections(visibleSections.map(section => ({...section, items: section.items.filter(buyableProduct)})).filter(section => section.items.length), catalogOrder, section => section.value);
+  const sections = orderedSections(
+    visibleSections
+      .map((section) => ({
+        ...section,
+        items: section.items.filter(buyableProduct),
+      }))
+      .filter((section) => section.items.length),
+    catalogOrder,
+    (section) => section.value,
+  );
 
   const newSlides = useMemo(
     () => (catalogSlides.length > 0 ? catalogSlides : NEWLY_ADDED_SLIDES),
@@ -5754,11 +5896,15 @@ const handleEditSubscriptionQty = async (
 
   const sortedCategories = useMemo(
     () =>
-      orderedSections([...categories].sort(
-        (a, b) =>
-          categoryRank(a.value) - categoryRank(b.value) ||
-          String(a.label).localeCompare(String(b.label)),
-      ), catalogOrder, category => category.value),
+      orderedSections(
+        [...categories].sort(
+          (a, b) =>
+            categoryRank(a.value) - categoryRank(b.value) ||
+            String(a.label).localeCompare(String(b.label)),
+        ),
+        catalogOrder,
+        (category) => category.value,
+      ),
     [categories, catalogOrder],
   );
 
@@ -5766,61 +5912,8 @@ const handleEditSubscriptionQty = async (
 
   const ListHeader = (
     <>
-      <View style={mainS.pageHeader}>
-        <View style={mainS.headerTop}>
-          <Text style={mainS.pageTitle}>Shop</Text>
-          <View style={mainS.headerBtns}>
-            <TouchableOpacity
-              style={mainS.iconBtn}
-              onPress={() => router.push("/(customer)/wishlist" as any)}
-            >
-              <Ionicons name="heart-outline" size={19} color="#EF4444" />
-              {wishlistIds.size > 0 && (
-                <View style={[mainS.dot, { backgroundColor: "#EF4444" }]}>
-                  <Text style={mainS.dotTxt}>{wishlistIds.size}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={mainS.iconBtn}
-              onPress={() => router.push("/(customer)/product-search" as any)}
-            >
-              <Ionicons name="search-outline" size={18} color="#111111" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={mainS.iconBtn}
-              onPress={() => setSubSheetVisible(true)}
-            >
-              <Ionicons name="repeat-outline" size={17} color={T.amber} />
-              {activeSubscriptions.length > 0 && (
-                <View style={[mainS.dot, { backgroundColor: T.amber }]}>
-                  <Text style={mainS.dotTxt}>{activeSubscriptions.length}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={mainS.iconBtn}
-              onPress={() => setCartVisible(true)}
-            >
-              <Ionicons name="cart-outline" size={19} color={Colors.primary} />
-              {cart.length > 0 && (
-                <View style={[mainS.dot, { backgroundColor: Colors.primary }]}>
-                  <Text style={mainS.dotTxt}>{cart.length}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
-        <View style={mainS.headerSub}>
-          <Text style={mainS.productCount}>{products.length} products</Text>
-          <View style={mainS.walletPill}>
-            <Ionicons name="wallet-outline" size={10} color={Colors.primary} />
-            <Text style={mainS.walletTxt}>₹{walletBalance.toFixed(2)}</Text>
-          </View>
-        </View>
-      </View>
-
-      <View style={mainS.newSection}>
+      <View style={{ height: BANNER_H + insets.top }}>
+        {/* Banner slides (full bleed) */}
         <ScrollView
           ref={newSlidesScrollRef}
           horizontal
@@ -5836,81 +5929,87 @@ const handleEditSubscriptionQty = async (
           }}
         >
           {newSlides.map((slide) => (
-            <View key={slide.id} style={mainS.newSlide}>
+            <View
+              key={slide.id}
+              style={[mainS.newSlide, { height: BANNER_H + insets.top }]}
+            >
               <TouchableOpacity
-                activeOpacity={0.88}
+                style={{ flex: 1 }}
+                activeOpacity={0.9}
                 onPress={() => openBannerDetails(slide)}
               >
-                <View style={mainS.newCard}>
-                  {hasUploadedSlides ? (
-                    <View style={mainS.newCardFull}>
-                      <Image
-                        source={slide.image}
-                        style={mainS.newImageFull}
-                        resizeMode="cover"
-                      />
-                      <LinearGradient
-                        colors={["transparent", "rgba(0,0,0,0.7)"]}
-                        style={mainS.newCardScrim}
-                      />
-                      <View style={mainS.newTextBoxFull}>
-                        <Text style={mainS.newKicker} numberOfLines={1}>
-                          {slide.kicker}
-                        </Text>
-                        <Text style={mainS.newCardTitle} numberOfLines={1}>
-                          {slide.title}
-                        </Text>
-                        <Text
-                          style={mainS.newCardSub}
-                          numberOfLines={2}
-                          ellipsizeMode="tail"
-                        >
-                          {slide.subtitle}
-                        </Text>
-                      </View>
-                    </View>
-                  ) : (
+                {hasUploadedSlides ? (
+                  <View style={{ flex: 1 }}>
+                    <Image
+                      source={slide.image}
+                      style={mainS.newImageFull}
+                      resizeMode="cover"
+                    />
                     <LinearGradient
-                      colors={slide.colors as [string, string]}
-                      style={mainS.newCardInner}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                    >
-                      <View style={mainS.newTextBox}>
-                        <Text style={mainS.newKicker} numberOfLines={1}>
-                          {slide.kicker}
-                        </Text>
-                        <Text style={mainS.newCardTitle} numberOfLines={1}>
-                          {slide.title}
-                        </Text>
-                        <Text
-                          style={mainS.newCardSub}
-                          numberOfLines={2}
-                          ellipsizeMode="tail"
-                        >
-                          {slide.subtitle}
-                        </Text>
-                      </View>
-                      <Image
-                        source={slide.image}
-                        style={mainS.newImage}
-                        resizeMode="contain"
-                      />
-                      <View style={mainS.newGlow} />
-                    </LinearGradient>
-                  )}
-                </View>
+                      colors={["transparent", "rgba(0,0,0,0.7)"]}
+                      style={mainS.newCardScrim}
+                    />
+                    <View style={mainS.newTextBoxFull}>
+                      <Text style={mainS.newKicker} numberOfLines={1}>
+                        {slide.kicker}
+                      </Text>
+                      <Text style={mainS.newCardTitle} numberOfLines={1}>
+                        {slide.title}
+                      </Text>
+                      <Text style={mainS.newCardSub} numberOfLines={2}>
+                        {slide.subtitle}
+                      </Text>
+                    </View>
+                  </View>
+                ) : (
+                  <LinearGradient
+                    colors={slide.colors as [string, string]}
+                    style={[
+                      mainS.newCardInner,
+                      { paddingTop: insets.top + 80, paddingBottom: 40 },
+                    ]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                  >
+                    <View style={mainS.newTextBox}>
+                      <Text style={mainS.newKicker} numberOfLines={1}>
+                        {slide.kicker}
+                      </Text>
+                      <Text style={mainS.newCardTitle} numberOfLines={1}>
+                        {slide.title}
+                      </Text>
+                      <Text style={mainS.newCardSub} numberOfLines={2}>
+                        {slide.subtitle}
+                      </Text>
+                    </View>
+                    <Image
+                      source={slide.image}
+                      style={mainS.newImage}
+                      resizeMode="contain"
+                    />
+                    <View style={mainS.newGlow} />
+                  </LinearGradient>
+                )}
               </TouchableOpacity>
             </View>
           ))}
         </ScrollView>
-        <View style={mainS.newDots}>
+
+        {/* Top scrim so header stays readable */}
+        <LinearGradient
+          pointerEvents="none"
+          colors={["rgba(0,0,0,0.55)", "transparent"]}
+          style={[mainS.topScrim, { height: insets.top + 100 }]}
+        />
+
+        {/* Swipe dots inside the image */}
+        <View pointerEvents="none" style={mainS.newDotsInside}>
           {newSlides.map((slide, index) => (
             <View
               key={slide.id}
               style={[
-                mainS.newDot,
-                activeNewSlide === index && mainS.newDotActive,
+                mainS.newDotLight,
+                activeNewSlide === index && mainS.newDotLightActive,
               ]}
             />
           ))}
@@ -5963,8 +6062,10 @@ const handleEditSubscriptionQty = async (
   );
 
   return (
-    <SafeAreaView style={mainS.container} edges={["top"]}>
+    <SafeAreaView style={mainS.container} edges={[]}>
       <FlatList
+        onScroll={onListScroll}
+        scrollEventThrottle={16}
         data={sections}
         keyExtractor={(i) => i.value}
         ListHeaderComponent={ListHeader}
@@ -6007,7 +6108,81 @@ const handleEditSubscriptionQty = async (
           />
         )}
       />
+      <Animated.View
+        pointerEvents="box-none"
+        style={[
+          mainS.overlayHeader,
+          {
+            paddingTop: insets.top + 10,
+            opacity: headerAnim,
+            transform: [
+              {
+                translateY: headerAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [-(insets.top + 70), 0],
+                }),
+              },
+            ],
+          },
+        ]}
+      >
+        <View style={mainS.headerTop} pointerEvents="box-none">
+          <TouchableOpacity
+            style={[mainS.walletBtn, headerSolid && mainS.btnSolid]}
+            activeOpacity={0.7}
+            onPress={() => router.push("/(customer)/wallet" as any)}
+          >
+            <Ionicons name="wallet-outline" size={15} color="#fff" />
+            <Text style={mainS.walletBtnTxt}>₹{walletBalance.toFixed(0)}</Text>
+          </TouchableOpacity>
 
+          <View style={mainS.headerBtns}>
+            <TouchableOpacity
+              style={[mainS.bannerIconBtn, headerSolid && mainS.btnSolid]}
+              activeOpacity={0.7}
+              onPress={() => router.push("/(customer)/wishlist" as any)}
+            >
+              <Ionicons name="heart-outline" size={16} color="#fff" />
+              {wishlistIds.size > 0 && (
+                <View style={[mainS.dot, { backgroundColor: "#EF4444" }]}>
+                  <Text style={mainS.dotTxt}>{wishlistIds.size}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[mainS.bannerIconBtn, headerSolid && mainS.btnSolid]}
+              activeOpacity={0.7}
+              onPress={() => router.push("/(customer)/product-search" as any)}
+            >
+              <Ionicons name="search-outline" size={16} color="#fff" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[mainS.bannerIconBtn, headerSolid && mainS.btnSolid]}
+              activeOpacity={0.7}
+              onPress={() => setSubSheetVisible(true)}
+            >
+              <Ionicons name="repeat-outline" size={16} color="#fff" />
+              {activeSubscriptions.length > 0 && (
+                <View style={[mainS.dot, { backgroundColor: T.amber }]}>
+                  <Text style={mainS.dotTxt}>{activeSubscriptions.length}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[mainS.bannerIconBtn, headerSolid && mainS.btnSolid]}
+              activeOpacity={0.7}
+              onPress={() => setCartVisible(true)}
+            >
+              <Ionicons name="cart-outline" size={16} color="#fff" />
+              {cart.length > 0 && (
+                <View style={[mainS.dot, { backgroundColor: Colors.primary }]}>
+                  <Text style={mainS.dotTxt}>{cart.length}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Animated.View>
       <MiniCartPill cart={cart} onPress={() => setCartVisible(true)} />
 
       <QuickAddModal
@@ -6027,6 +6202,7 @@ const handleEditSubscriptionQty = async (
         cutoffRules={orderCutoffs}
         tomorrow={tomorrow}
         onClose={() => setSubscribeVisible(false)}
+        onBrowseCoupons={() => { couponReturnTarget.current = 'subscription'; setSubscribeVisible(false); }}
         onSuccess={async () => {
           await fetchSubs();
           const wallet = await api.getWallet();
@@ -6083,6 +6259,7 @@ const handleEditSubscriptionQty = async (
           openAddressRequired(router);
         }}
         onClose={() => setCartVisible(false)}
+        onBrowseCoupons={() => { couponReturnTarget.current = 'cart'; setCartVisible(false); }}
         onRemove={handleRemove}
         onUpdateQty={handleUpdateQty}
         onPlaceOrder={handlePlaceOrder}
@@ -6139,6 +6316,54 @@ const handleEditSubscriptionQty = async (
 }
 
 const mainS = StyleSheet.create({
+  bannerIconBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "rgba(0,0,0,0.28)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.25)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  walletBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    height: 32,
+    paddingHorizontal: 11,
+    borderRadius: 16,
+    backgroundColor: "rgba(0,0,0,0.28)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.25)",
+  },
+  walletBtnTxt: { fontSize: 12, fontWeight: "700", color: "#fff" },
+  overlayHeader: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 20,
+    zIndex: 20,
+  },
+  topScrim: { position: "absolute", top: 0, left: 0, right: 0 },
+  newDotsInside: {
+    position: "absolute",
+    bottom: 12,
+    left: 0,
+    right: 0,
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 6,
+  },
+  newDotLight: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "rgba(255,255,255,0.5)",
+  },
+  btnSolid: { backgroundColor: "rgba(17,17,17,0.85)" },
+  newDotLightActive: { width: 18, backgroundColor: "#fff" },
   container: { flex: 1, backgroundColor: T.bg },
   pageHeader: { paddingHorizontal: 20, paddingTop: 14, paddingBottom: 8 },
   headerTop: {
@@ -6222,13 +6447,13 @@ const mainS = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    height: 90,
+    height: 140,
   },
   newTextBoxFull: {
     position: "absolute",
     left: 18,
     right: 18,
-    bottom: 14,
+    bottom: 34, // was 14
     zIndex: 2,
   },
   newTextBox: { flex: 1, zIndex: 2 },

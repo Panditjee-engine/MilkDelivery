@@ -1,3 +1,5 @@
+import { FaqLink } from "../../src/components/FaqScreen";
+import { SupportLink } from "../../src/components/SupportScreen";
 import React, { useState } from "react";
 import {
   View,
@@ -179,6 +181,8 @@ export default function WorkerSettingsScreen() {
           <Ionicons name="log-out-outline" size={20} color={COLORS.red} />
           <Text style={st.logoutText}>{isHindi ? "लॉगआउट" : "Logout"}</Text>
         </TouchableOpacity>
+        <SupportLink role="worker"/>
+        <FaqLink role="worker"/>
       </ScrollView>
 
       <ExtraWorkModal

@@ -599,6 +599,12 @@ export interface WishlistRow {
   product: any | null;
 }
 
+export interface WishlistPage {
+  items: WishlistRow[];
+  next_cursor: string | null;
+  has_more: boolean;
+}
+
 export interface WishlistStatsRow {
   product_id: string;
   product_name?: string | null;
@@ -608,6 +614,14 @@ export interface WishlistStatsRow {
 export interface WishlistStats {
   total_wishlists: number;
   products: WishlistStatsRow[];
+}
+
+export interface ProductsPage {
+  items: any[];
+  total: number;
+  offset: number;
+  has_more: boolean;
+  counts: { total: number; active: number; low: number; inactive: number } | null;
 }
 
 // ── Work assignments
@@ -745,10 +759,13 @@ class ApiService {
     });
   }
   chargeBottleDamage(id: string, reason: "lost" | "cracked") {
-    return this.request<any>(`/returns/${encodeURIComponent(id)}/bottle-damage`, {
-      method: "POST",
-      body: JSON.stringify({ reason }),
-    });
+    return this.request<any>(
+      `/returns/${encodeURIComponent(id)}/bottle-damage`,
+      {
+        method: "POST",
+        body: JSON.stringify({ reason }),
+      },
+    );
   }
   getBottleLedger() {
     return this.request<any>("/returns/bottles/ledger");
@@ -1195,15 +1212,21 @@ class ApiService {
     });
   }
 
-    async toggleWishlist(product_id: string): Promise<WishlistToggleResult> {
+  async toggleWishlist(product_id: string): Promise<WishlistToggleResult> {
     return this.fetchRequest<WishlistToggleResult>(
       `/wishlist/${encodeURIComponent(product_id)}/toggle`,
       { method: "POST", silentErrorLog: true },
     );
   }
 
-  async getWishlist(): Promise<WishlistRow[]> {
-    return this.fetchRequest<WishlistRow[]>("/wishlist", {
+  async getWishlist(opts?: {
+    cursor?: string | null;
+    limit?: number;
+  }): Promise<WishlistPage> {
+    const params = new URLSearchParams();
+    params.append("limit", String(opts?.limit ?? 20));
+    if (opts?.cursor) params.append("cursor", opts.cursor);
+    return this.fetchRequest<WishlistPage>(`/wishlist?${params.toString()}`, {
       silentErrorLog: true,
     });
   }
@@ -1252,15 +1275,21 @@ class ApiService {
 
     const query = params.toString() ? `?${params.toString()}` : "";
     const rows = await this.request<any[]>(`/catalog/products${query}`);
-    return rows.filter(product => ![false, 0, "false", "0"].includes(product.is_active));
+    return rows.filter(
+      (product) => ![false, 0, "false", "0"].includes(product.is_active),
+    );
   }
 
   async getProductVisibility(adminId?: string) {
-    return this.request<Array<{ id: string; is_active: boolean }>>(`/catalog/product-visibility${adminId ? `?admin_id=${encodeURIComponent(adminId)}` : ""}`);
+    return this.request<Array<{ id: string; is_active: boolean }>>(
+      `/catalog/product-visibility${adminId ? `?admin_id=${encodeURIComponent(adminId)}` : ""}`,
+    );
   }
 
   async getPopularProductIds(adminId?: string) {
-    return this.request<string[]>(`/catalog/popular-products${adminId ? `?admin_id=${encodeURIComponent(adminId)}` : ""}`);
+    return this.request<string[]>(
+      `/catalog/popular-products${adminId ? `?admin_id=${encodeURIComponent(adminId)}` : ""}`,
+    );
   }
 
   async getProducts(adminId?: string, category?: string, fresh = false) {
@@ -1276,6 +1305,22 @@ class ApiService {
     const query = params.toString() ? `?${params.toString()}` : "";
     return this.request<any[]>(`/products${query}`);
   }
+
+  async getProductsPage(params: {
+  offset?: number;
+  limit?: number;
+  status?: "total" | "active" | "low" | "inactive";
+  search?: string;
+  category?: string;
+}) {
+  const p = new URLSearchParams();
+  p.append("offset", String(params.offset ?? 0));
+  p.append("limit", String(params.limit ?? 20));
+  if (params.status) p.append("status", params.status);
+  if (params.search) p.append("search", params.search);
+  if (params.category) p.append("category", params.category);
+  return this.request<ProductsPage>(`/admin/products-page?${p.toString()}`);
+}
 
   async getCustomerAppSettings() {
     return this.request<CustomerAppSettings>("/app-settings/catalog");
@@ -1572,6 +1617,8 @@ class ApiService {
   }
 
   async createSubscription(data: {
+    coupon_code?: string;
+    coupon_request_id?: string;
     quoted_total?: number;
     items: Array<{
       product_id: string;
@@ -1673,12 +1720,12 @@ class ApiService {
     });
   }
 
-async updateSubscription(id: string, data: any) {
-  return this.request<any>(`/subscriptions/${id}`, {
-    method: "PATCH",   // was PUT
-    body: JSON.stringify(data),
-  });
-}
+  async updateSubscription(id: string, data: any) {
+    return this.request<any>(`/subscriptions/${id}`, {
+      method: "PATCH", // was PUT
+      body: JSON.stringify(data),
+    });
+  }
 
   async modifySubscriptionDate(id: string, date: string, quantity: number) {
     return this.request<any>(`/subscriptions/${id}/modify`, {
@@ -1693,12 +1740,16 @@ async updateSubscription(id: string, data: any) {
     });
   }
 
-  async addSubscriptionModification(id: string, date: string, quantity: number) {
-  return this.request<any>(`/subscriptions/${id}/modifications`, {
-    method: "POST",
-    body: JSON.stringify({ date, quantity }),
-  });
-}
+  async addSubscriptionModification(
+    id: string,
+    date: string,
+    quantity: number,
+  ) {
+    return this.request<any>(`/subscriptions/${id}/modifications`, {
+      method: "POST",
+      body: JSON.stringify({ date, quantity }),
+    });
+  }
 
   //added by anurag
   async cancelOrder(orderId: string) {
@@ -1709,11 +1760,11 @@ async updateSubscription(id: string, data: any) {
 
   //for rider cancel order by golu
   async cancelDeliveryOrder(orderId: string) {
-  return this.request<any>(
-    `/delivery/orders/${encodeURIComponent(orderId)}/cancel`,
-    { method: "POST" },
-  );
-}
+    return this.request<any>(
+      `/delivery/orders/${encodeURIComponent(orderId)}/cancel`,
+      { method: "POST" },
+    );
+  }
 
   // anurag
   // Fetch ONLY subscriptions that belong to this logged-in admin
@@ -1905,19 +1956,10 @@ async updateSubscription(id: string, data: any) {
 
   // Keep reject separate for the rider app, using worker_token
   async rejectOrder(orderId: string) {
-    const token = await AsyncStorage.getItem("worker_token"); // ← rider token
-    const response = await fetch(
-      `${API_BASE}/api/delivery/orders/${orderId}/reject`,
-      {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      },
-    );
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.detail || "Reject failed");
-    return data;
+    return this.request<any>(`/delivery/orders/${orderId}/reject`, {
+      method: "POST",
+    });
   }
-
   async updateOrderStatus(orderId: string, status: string) {
     const response = await fetch(`${API_BASE}/api/delivery/status-update`, {
       method: "POST",
@@ -2081,14 +2123,14 @@ async updateSubscription(id: string, data: any) {
 
   // Per-date delivered/pending status for a batch of subscriptions —
   // used to render the delivery calendar in the rider app. by golu
-async getSubscriptionOrdersBulk(
-  subscriptionIds: string,
-): Promise<Record<string, Record<string, string>>> {
-  return this.request<Record<string, Record<string, string>>>(
-    `/delivery/subscription-orders?subscription_ids=${encodeURIComponent(subscriptionIds)}`,
-    { silentErrorLog: true },
-  );
-}
+  async getSubscriptionOrdersBulk(
+    subscriptionIds: string,
+  ): Promise<Record<string, Record<string, string>>> {
+    return this.request<Record<string, Record<string, string>>>(
+      `/delivery/subscription-orders?subscription_ids=${encodeURIComponent(subscriptionIds)}`,
+      { silentErrorLog: true },
+    );
+  }
 
   async assignDeliveryPartner(orderId: string, partnerId: string) {
     return this.request<any>(
@@ -2469,7 +2511,6 @@ async getSubscriptionOrdersBulk(
     const query = params.toString() ? `?${params.toString()}` : "";
     return this.request<{ summary: any; cows: any[] }>(`/admin/feed${query}`);
   }
-  
 
   async getAdminMilkLogs(date?: string) {
     const params = new URLSearchParams();
@@ -2500,10 +2541,10 @@ async getSubscriptionOrdersBulk(
   }
 
   async getAdminTaskTypes() {
-  return this.request<{ total: number; task_types: TaskType[] }>(
-    "/admin/task-types",
-  );
-}
+    return this.request<{ total: number; task_types: TaskType[] }>(
+      "/admin/task-types",
+    );
+  }
 
   async getAdminHealthLogs(date?: string) {
     const params = new URLSearchParams();
@@ -2807,7 +2848,11 @@ async getSubscriptionOrdersBulk(
 
   async reviewAssignment(
     id: string,
-    data: { action: "approve" | "reject"; points?: number; note?: string | null },
+    data: {
+      action: "approve" | "reject";
+      points?: number;
+      note?: string | null;
+    },
   ) {
     return this.request<{
       success: boolean;
@@ -2887,7 +2932,6 @@ async getSubscriptionOrdersBulk(
       { photos, note },
     );
   }
-
 
   async getCowMilkHistory(cowId: string, days: number = 90) {
     return this.request<{
@@ -3381,6 +3425,57 @@ async getSubscriptionOrdersBulk(
   }
 
   //vet id delete pass eidt by anurag
+
+  async vetGetShift() {
+    const token = await AsyncStorage.getItem("vet_token");
+    const response = await fetch(`${API_BASE}/api/vet/shift`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "Failed to fetch shift status");
+    return data as { on_duty: boolean; shift_started_at: string | null };
+  }
+
+  async vetSetShift(on_duty: boolean) {
+    const token = await AsyncStorage.getItem("vet_token");
+    const response = await fetch(`${API_BASE}/api/vet/shift`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ on_duty }),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.detail || "Failed to update shift");
+    return result as { on_duty: boolean; shift_started_at: string | null };
+  }
+
+    async getAdminVetShifts(params?: {
+    vet_id?: string;
+    date?: string; // YYYY-MM-DD
+    limit?: number;
+  }) {
+    const p = new URLSearchParams();
+    if (params?.vet_id) p.append("vet_id", params.vet_id);
+    if (params?.date) p.append("date", params.date);
+    if (params?.limit) p.append("limit", String(params.limit));
+    const q = p.toString() ? `?${p.toString()}` : "";
+    return this.request<{
+      on_duty_now: number;
+      total: number;
+      shifts: Array<{
+        id: string;
+        vet_id: string;
+        vet_name: string;
+        started_at: string | null;
+        ended_at: string | null;
+        duration_minutes: number | null;
+        ongoing: boolean;
+      }>;
+    }>(`/admin/vet-shifts${q}`);
+  }
+
   async deleteVeterinarian(id: string) {
     return this.request<{ success: boolean; id: string }>(
       `/admin/veterinarians/${id}`,

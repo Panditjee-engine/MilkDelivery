@@ -1953,6 +1953,7 @@ function CowFormFields({
   locations,
   onAddLocation,
   showAlert,
+   onTagScanned,
 }: {
   form: CowForm;
   setF: (k: keyof CowForm) => (v: any) => void;
@@ -1962,7 +1963,9 @@ function CowFormFields({
   locations: BusinessLocation[];
   onAddLocation: () => void;
   showAlert: (c: AlertConfig) => void;
+  onTagScanned?: (data: string, isBarcodeLinked: boolean) => void;
 }) {
+  const [scannerOpen, setScannerOpen] = useState(false); 
   const isBull = form.type === "bull";
   const motherOptions =
     cows?.filter((c) => c.type !== "bull" && !c.isSold && c.isActive) ?? [];
@@ -2014,12 +2017,51 @@ function CowFormFields({
               placeholderTextColor="#D4B8A8"
               editable={!tagLocked}
             />
-            {tagLocked && (
-              <Ionicons name="lock-closed-outline" size={13} color="#16a34a" />
-            )}
-          </View>
-          {tagLocked && (
-            <Text
+{tagLocked && (
+  <Ionicons name="lock-closed-outline" size={13} color="#16a34a" style={{ marginRight: 6 }} />
+)}
+{onTagScanned && (
+  <>
+    {tagLocked && (
+      <TouchableOpacity
+        onPress={() => onTagScanned("", false)}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        style={{ marginRight: 8 }}
+      >
+        <Ionicons name="close-circle" size={18} color="#C4A882" />
+      </TouchableOpacity>
+    )}
+    <TouchableOpacity
+      onPress={() => setScannerOpen(true)}
+      activeOpacity={0.85}
+      style={{
+        width: 32,
+        height: 32,
+        borderRadius: 10,
+        backgroundColor: "#f5f3ff",
+        borderWidth: 1.5,
+        borderColor: "#ddd6fe",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <Ionicons name="barcode-outline" size={18} color="#7c3aed" />
+    </TouchableOpacity>
+  </>
+)}
+</View>
+{onTagScanned && (
+  <ScannerModal
+    visible={scannerOpen}
+    onClose={() => setScannerOpen(false)}
+    onScanned={(data, format) => {
+      setScannerOpen(false);
+      onTagScanned(data, isBarcode(format));
+    }}
+  />
+)}
+{tagLocked && (
+  <Text
               style={{
                 fontSize: 11,
                 color: "#16a34a",
@@ -2284,6 +2326,15 @@ function AddCowModal({
   const fade = useRef(new Animated.Value(0)).current;
   const setF = (k: keyof CowForm) => (v: any) =>
     setForm((p) => ({ ...p, [k]: v }));
+
+  const handleTagScanned = (data: string, isBarcodeLinked: boolean) => {
+    setForm((p) => ({
+      ...p,
+      tag: data,
+      scannedQrData: data,
+      isBarcodeLinked: data ? isBarcodeLinked : false,
+    }));
+  };
 
   useEffect(() => {
     if (visible && prefillQrData) {
@@ -2635,6 +2686,7 @@ function AddCowModal({
                       locations={locations}
                       onAddLocation={() => setQuickAddVisible(true)}
                       showAlert={showAlert}
+                        onTagScanned={handleTagScanned} 
                     />
                   </ScrollView>
                   <TouchableOpacity

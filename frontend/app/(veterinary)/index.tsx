@@ -1,3 +1,5 @@
+import { FaqLink } from "../../src/components/FaqScreen";
+import { SupportLink } from "../../src/components/SupportScreen";
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   View,
@@ -9,10 +11,12 @@ import {
   Modal,
   ScrollView,
   Image,
+  Switch,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
+import { ActivityIndicator, Alert } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { api } from "../../src/services/api";
@@ -45,9 +49,24 @@ type AlertStyle = {
 };
 
 const ALERT_TYPES: { [key in AlertType]: AlertStyle } = {
-  healthy: { label: "HEALTH CHECK", icon: "heart-outline", color: C.accent, tint: C.soft },
-  ultrasound: { label: "DUE ULTRASOUND", icon: "pulse-outline", color: C.dark, tint: C.card },
-  cryo: { label: "CRYO TANK ALERT", icon: "snow-outline", color: C.primary, tint: C.soft },
+  healthy: {
+    label: "HEALTH CHECK",
+    icon: "heart-outline",
+    color: C.accent,
+    tint: C.soft,
+  },
+  ultrasound: {
+    label: "DUE ULTRASOUND",
+    icon: "pulse-outline",
+    color: C.dark,
+    tint: C.card,
+  },
+  cryo: {
+    label: "CRYO TANK ALERT",
+    icon: "snow-outline",
+    color: C.primary,
+    tint: C.soft,
+  },
 };
 
 type VetAlert = {
@@ -69,7 +88,9 @@ async function buildAlerts() {
     // TODO: use your real method that returns cows
     const cows: any[] = (await (api as any).getCows?.()) ?? [];
     cows
-      .filter((c) => String(c.health_status ?? c.status).toLowerCase() === "healthy")
+      .filter(
+        (c) => String(c.health_status ?? c.status).toLowerCase() === "healthy",
+      )
       .forEach((c) => {
         alerts.push({
           id: `healthy-${c.id ?? c._id}`,
@@ -130,16 +151,32 @@ const MODULES = [
     tint: C.card,
     color: C.accent,
     title: "Client Farms",
-    subtitle: "Dairy, beef & equine estates, GPS locations",
+    subtitle: "Dairy,equine estates, GPS locations",
   },
 ];
 
 const TABS = [
   { label: "Dashboard", icon: "grid-outline" as const, route: null },
-  { label: "Animals", icon: "paw-outline" as const, route: "/(veterinary)/cow" },
-  { label: "Records", icon: "document-text-outline" as const, route: "/(veterinary)/medical" },
-  { label: "Insem", icon: "flask-outline" as const, route: "/(veterinary)/insemination" },
-  { label: "Farm", icon: "business-outline" as const, route: "/(veterinary)/farm" },
+  {
+    label: "Animals",
+    icon: "paw-outline" as const,
+    route: "/(veterinary)/cow",
+  },
+  {
+    label: "Records",
+    icon: "document-text-outline" as const,
+    route: "/(veterinary)/medical",
+  },
+  {
+    label: "Insem",
+    icon: "flask-outline" as const,
+    route: "/(veterinary)/insemination",
+  },
+  {
+    label: "Farm",
+    icon: "business-outline" as const,
+    route: "/(veterinary)/farm",
+  },
 ];
 
 // ── Logout modal
@@ -158,8 +195,17 @@ function LogoutAlert({
   useEffect(() => {
     if (visible) {
       Animated.parallel([
-        Animated.spring(scale, { toValue: 1, useNativeDriver: true, damping: 14, stiffness: 200 }),
-        Animated.timing(opacity, { toValue: 1, duration: 180, useNativeDriver: true }),
+        Animated.spring(scale, {
+          toValue: 1,
+          useNativeDriver: true,
+          damping: 14,
+          stiffness: 200,
+        }),
+        Animated.timing(opacity, {
+          toValue: 1,
+          duration: 180,
+          useNativeDriver: true,
+        }),
       ]).start();
     } else {
       scale.setValue(0.9);
@@ -179,10 +225,18 @@ function LogoutAlert({
             You'll need to sign in again to access your veterinary dashboard.
           </Text>
           <View style={al.btnRow}>
-            <TouchableOpacity style={al.cancelBtn} onPress={onCancel} activeOpacity={0.8}>
+            <TouchableOpacity
+              style={al.cancelBtn}
+              onPress={onCancel}
+              activeOpacity={0.8}
+            >
               <Text style={al.cancelText}>Cancel</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={{ flex: 1 }} onPress={onConfirm} activeOpacity={0.8}>
+            <TouchableOpacity
+              style={{ flex: 1 }}
+              onPress={onConfirm}
+              activeOpacity={0.8}
+            >
               <LinearGradient
                 colors={[C.primary, C.dark]}
                 start={{ x: 0, y: 0 }}
@@ -231,7 +285,11 @@ function AlertCard({
         >
           <Text style={s.alertPrimaryText}>{alert.primaryLabel}</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={s.alertSecondary} onPress={onDismiss} activeOpacity={0.85}>
+        <TouchableOpacity
+          style={s.alertSecondary}
+          onPress={onDismiss}
+          activeOpacity={0.85}
+        >
           <Text style={s.alertSecondaryText}>{alert.dismissLabel}</Text>
         </TouchableOpacity>
       </View>
@@ -246,6 +304,8 @@ export default function VeterinaryDashboard() {
   const [vetData, setVetData] = useState(null as any);
   const [logoutVisible, setLogoutVisible] = useState(false);
   const [alerts, setAlerts] = useState([] as VetAlert[]);
+  const [onDuty, setOnDuty] = useState(false);
+  const [shiftBusy, setShiftBusy] = useState(false);
 
   const loadAlerts = useCallback(async () => {
     const [all, dismissedRaw] = await Promise.all([
@@ -257,7 +317,18 @@ export default function VeterinaryDashboard() {
   }, []);
 
   useEffect(() => {
-    AsyncStorage.getItem("vet_data").then((d) => d && setVetData(JSON.parse(d)));
+    AsyncStorage.getItem("vet_data").then((d) => {
+      if (d) {
+        const parsed = JSON.parse(d);
+        setVetData(parsed);
+        setOnDuty(!!parsed.on_duty); // instant, from cache
+      }
+    });
+    // then sync with server (source of truth)
+    (api as any)
+      .vetGetShift?.()
+      .then((r: any) => setOnDuty(!!r.on_duty))
+      .catch(() => {});
     loadAlerts();
   }, [loadAlerts]);
 
@@ -267,6 +338,29 @@ export default function VeterinaryDashboard() {
     const list: string[] = raw ? JSON.parse(raw) : [];
     await AsyncStorage.setItem(DISMISSED_KEY, JSON.stringify([...list, id]));
   };
+
+const toggleShift = async (next: boolean) => {
+  if (shiftBusy) return;
+  setOnDuty(next);          // flip immediately
+  setShiftBusy(true);
+  try {
+    const res = await (api as any).vetSetShift(next);
+    setOnDuty(!!res.on_duty);
+    const raw = await AsyncStorage.getItem("vet_data");
+    if (raw) {
+      const v = JSON.parse(raw);
+      await AsyncStorage.setItem(
+        "vet_data",
+        JSON.stringify({ ...v, on_duty: res.on_duty, shift_started_at: res.shift_started_at })
+      );
+    }
+  } catch (e: any) {
+    setOnDuty(!next);       // revert on failure
+    Alert.alert("Shift update failed", e?.message || "Please try again.");
+  } finally {
+    setShiftBusy(false);
+  }
+};
 
   const handleLogout = async () => {
     try {
@@ -299,14 +393,16 @@ export default function VeterinaryDashboard() {
         {/* Top bar */}
         <View style={[s.topBar, { paddingTop: insets.top + 10 }]}>
           <View style={s.brandRow}>
-<Image
-  source={{ uri: "https://panditjeeweb02.blob.core.windows.net/banners/gausatv-logo.jpeg" }}
-  style={s.logo}
-  resizeMode="cover"
-/>
+            <Image
+              source={{
+                uri: "https://panditjeeweb02.blob.core.windows.net/banners/gausatv-logo.jpeg",
+              }}
+              style={s.logo}
+              resizeMode="cover"
+            />
             <View>
               <Text style={s.brand}>
-               GausSatv Vet<Text style={{ color: C.dark }}>+</Text>
+                GausSatv Vet<Text style={{ color: C.dark }}>+</Text>
               </Text>
               <Text style={s.brandSub}>Dr. {name} · Field & Clinic Vet</Text>
             </View>
@@ -334,10 +430,19 @@ export default function VeterinaryDashboard() {
               {greeting}, Dr. {name}
             </Text>
           </View>
-          <View style={s.dutyPill}>
-            <View style={s.dutyDot} />
-            <Text style={s.dutyText}>On Field Duty</Text>
-          </View>
+          <View style={s.shiftBox}>
+  <Switch
+    value={onDuty}
+    onValueChange={toggleShift}
+    disabled={shiftBusy}
+    trackColor={{ false: "rgba(201,168,130,0.35)", true: C.primary }}
+    thumbColor="#fff"
+    ios_backgroundColor="rgba(201,168,130,0.35)"
+  />
+  <Text style={[s.shiftLabel, !onDuty && s.shiftLabelOff]}>
+    {shiftBusy ? "Updating..." : onDuty ? "On Duty" : "Off Duty"}
+  </Text>
+</View>
         </LinearGradient>
 
         {/* Urgent alerts */}
@@ -356,7 +461,11 @@ export default function VeterinaryDashboard() {
         <View style={s.list}>
           {alerts.length === 0 ? (
             <View style={s.emptyBox}>
-              <Ionicons name="checkmark-circle-outline" size={28} color={C.primary} />
+              <Ionicons
+                name="checkmark-circle-outline"
+                size={28}
+                color={C.primary}
+              />
               <Text style={s.emptyText}>All clear. No alerts right now.</Text>
             </View>
           ) : (
@@ -364,7 +473,9 @@ export default function VeterinaryDashboard() {
               <AlertCard
                 key={a.id}
                 alert={a}
-                onPrimary={() => a.primaryRoute && router.push(a.primaryRoute as any)}
+                onPrimary={() =>
+                  a.primaryRoute && router.push(a.primaryRoute as any)
+                }
                 onDismiss={() => dismissAlert(a.id)}
               />
             ))
@@ -398,6 +509,8 @@ export default function VeterinaryDashboard() {
             </TouchableOpacity>
           ))}
         </View>
+        <SupportLink role="veterinary"/>
+        <FaqLink role="veterinary"/>
       </ScrollView>
 
       {/* Bottom tab bar */}
@@ -411,8 +524,17 @@ export default function VeterinaryDashboard() {
               activeOpacity={0.7}
               onPress={() => t.route && router.push(t.route as any)}
             >
-              <Ionicons name={t.icon} size={22} color={active ? C.dark : C.textLight} />
-              <Text style={[s.tabLabel, active && { color: C.dark, fontWeight: "700" }]}>
+              <Ionicons
+                name={t.icon}
+                size={22}
+                color={active ? C.dark : C.textLight}
+              />
+              <Text
+                style={[
+                  s.tabLabel,
+                  active && { color: C.dark, fontWeight: "700" },
+                ]}
+              >
                 {t.label}
               </Text>
             </TouchableOpacity>
@@ -426,7 +548,12 @@ export default function VeterinaryDashboard() {
 // ── Styles
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: C.bg },
-
+  dutyPillOff: {
+    backgroundColor: "rgba(201,168,130,0.18)",
+    borderColor: "rgba(201,168,130,0.35)",
+  },
+  dutyDotOff: { backgroundColor: C.textLight },
+  dutyTextOff: { color: C.textLight },
   topBar: {
     backgroundColor: C.bg,
     flexDirection: "row",
@@ -438,12 +565,12 @@ const s = StyleSheet.create({
     borderBottomColor: C.border,
   },
   brandRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-logo: {
-  width: 40,
-  height: 40,
-  borderRadius: 12,
-  backgroundColor: C.card,
-},
+  logo: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: C.card,
+  },
   brand: { fontSize: 16, fontWeight: "800", color: C.text },
   brandSub: { fontSize: 11, color: C.textMuted, fontWeight: "500" },
   logoutBtn: {
@@ -496,7 +623,9 @@ logo: {
   },
   dutyDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: C.primary },
   dutyText: { fontSize: 10, fontWeight: "700", color: C.primary },
-
+shiftBox: { alignItems: "center", gap: 2 },
+shiftLabel: { fontSize: 10, fontWeight: "700", color: C.primary },
+shiftLabelOff: { color: C.textLight },
   sectionHead: {
     flexDirection: "row",
     alignItems: "center",
@@ -541,8 +670,18 @@ logo: {
   },
   alertType: { fontSize: 10, fontWeight: "800", letterSpacing: 0.8 },
   alertTag: { fontSize: 10, color: C.textLight, fontWeight: "600" },
-  alertTitle: { fontSize: 14, fontWeight: "800", color: C.text, marginBottom: 3 },
-  alertMsg: { fontSize: 12, color: C.textMuted, lineHeight: 17, marginBottom: 12 },
+  alertTitle: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: C.text,
+    marginBottom: 3,
+  },
+  alertMsg: {
+    fontSize: 12,
+    color: C.textMuted,
+    lineHeight: 17,
+    marginBottom: 12,
+  },
   alertBtns: { flexDirection: "row", gap: 8 },
   alertPrimary: { borderRadius: 9, paddingHorizontal: 14, paddingVertical: 8 },
   alertPrimaryText: { color: "#fff", fontSize: 12, fontWeight: "700" },
