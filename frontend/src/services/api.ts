@@ -1617,6 +1617,8 @@ class ApiService {
   }
 
   async createSubscription(data: {
+    coupon_code?: string;
+    coupon_request_id?: string;
     quoted_total?: number;
     items: Array<{
       product_id: string;

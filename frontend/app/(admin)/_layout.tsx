@@ -173,7 +173,9 @@ export default function AdminLayout() {
           }}
         />
         <Tabs.Screen name="returns" options={{ href: null }} />
-        
+        <Tabs.Screen name="faqs" options={{ href: null }} />
+      <Tabs.Screen name="support-ticket" options={{ href: null }} />
+      <Tabs.Screen name="contact-support" options={{ href: null }} />
       </Tabs>
     </NotificationProvider>
   );

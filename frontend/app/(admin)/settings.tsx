@@ -1,3 +1,5 @@
+import { FaqLink } from "../../src/components/FaqScreen";
+import { SupportLink } from "../../src/components/SupportScreen";
 import React, { useState, useEffect, useRef } from "react";
 import { useLocalSearchParams } from "expo-router";
 import {
@@ -2270,6 +2272,8 @@ export default function AdminSettingsScreen() {
             style={{ marginLeft: "auto" }}
           />
         </TouchableOpacity>
+        <SupportLink role="admin"/>
+        <FaqLink role="admin"/>
       </ScrollView>
 
       {/* ── Share Modal */}

@@ -164,16 +164,7 @@ export default function DeliveryProfileScreen() {
   };
 
   const handleContactAdmin = () => {
-    if (adminDetails?.phone) {
-      Linking.openURL(`tel:${adminDetails.phone}`).catch(() =>
-        Alert.alert("Error", "Unable to place the call."),
-      );
-    } else {
-      Alert.alert(
-        "Contact Support",
-        "Admin phone number is not available yet.",
-      );
-    }
+    router.push("/(delivery)/contact-support" as any);
   };
 
   const pickImage = async (fromCamera: boolean) => {
@@ -505,7 +496,7 @@ export default function DeliveryProfileScreen() {
               </View>
               <View style={styles.infoContent}>
                 <Text style={styles.infoLabel}>Contact Support</Text>
-                <Text style={styles.infoValue}>Get help anytime</Text>
+                <Text style={styles.infoValue}>Support requests</Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color={C.textLight} />
             </TouchableOpacity>

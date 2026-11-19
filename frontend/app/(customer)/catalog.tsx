@@ -5,6 +5,7 @@ import ServiceSlotPicker, {
 import NewProductBadge from "../../src/components/NewProductBadge";
 import { useLoyaltyQuote } from "../../src/hooks/useLoyaltyQuote";
 import LoyaltyBreakdown from "../../src/components/LoyaltyBreakdown";
+import { selectCoupon } from "../../src/services/couponSelection";
 import { newlyAddedProducts } from "../../src/utils/newProducts";
 import WishlistToast from "../../src/components/WishlistToast";
 import { useProductAgeClock } from "../../src/hooks/useProductAgeClock";
@@ -37,7 +38,7 @@ import {
 } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
 import { useProductVisibilitySync } from "../../src/hooks/useProductVisibilitySync";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import {
   SafeAreaView,
@@ -2057,6 +2058,7 @@ function SubscribeModal({
   cutoffRules,
   tomorrow,
   onClose,
+  onBrowseCoupons,
   onSuccess,
   onToast,
 }: {
@@ -2067,6 +2069,7 @@ function SubscribeModal({
   cutoffRules: OrderCutoffRule[];
   tomorrow: string;
   onClose: () => void;
+  onBrowseCoupons: () => void;
   onSuccess: (refresh: () => void) => void;
   onToast: (n: string, s: boolean) => void;
 }) {
@@ -2108,9 +2111,15 @@ function SubscribeModal({
   );
 
   const prevVisibleRef = useRef(false);
+  const preserveCouponDraft = useRef(false);
 
   useEffect(() => {
     if (visible && !prevVisibleRef.current) {
+      if (preserveCouponDraft.current) {
+        preserveCouponDraft.current = false;
+        prevVisibleRef.current = visible;
+        return;
+      }
       setStep(1);
       setQty(1);
       setPattern("daily");
@@ -2230,6 +2239,7 @@ function SubscribeModal({
       const payload: Parameters<typeof api.createSubscription>[0] = {
         // Final payable amount is always recomputed by the server.
         quoted_total: loyalty.data?.total,
+        ...loyalty.couponPayload,
         items: [
           {
             product_id: productId,
@@ -2274,6 +2284,7 @@ function SubscribeModal({
         await api.createSubscription(payload);
       }
       onClose();
+      selectCoupon(loyalty.selectionKey);
       onToast(product.name, true);
       await onSuccess(() =>
         api
@@ -2423,7 +2434,7 @@ function SubscribeModal({
                   </Text>
                 </View>
 
-                <LoyaltyBreakdown quote={loyalty} />
+                <LoyaltyBreakdown quote={loyalty} onBrowse={() => { preserveCouponDraft.current = true; onBrowseCoupons(); }} />
                 <Text style={sheetS.sectionLabel}>Schedule</Text>
                 <View style={subModalS.patternRow}>
                   {subscriptionPatterns.map((p) => {
@@ -3344,6 +3355,7 @@ function CartSheet({
   onSelectAddress,
   onAddAddress,
   onClose,
+  onBrowseCoupons,
   onRemove,
   onUpdateQty,
   onPlaceOrder,
@@ -3358,6 +3370,7 @@ function CartSheet({
   onSelectAddress: (address: any) => void;
   onAddAddress: () => void;
   onClose: () => void;
+  onBrowseCoupons: () => void;
   onRemove: (id: string) => void;
   onUpdateQty: (id: string, q: number) => void;
   onPlaceOrder: (paymentMethod: PaymentMethod, serviceSlot?: string) => void;
@@ -3647,7 +3660,7 @@ function CartSheet({
 
             {cart.length > 0 && (
               <View style={cartS.footer}>
-                <LoyaltyBreakdown quote={loyalty} />
+                <LoyaltyBreakdown quote={loyalty} onBrowse={onBrowseCoupons} />
                 <View style={cartS.divider} />
                 <View style={cartS.totalRow}>
                   <Text style={cartS.totalLabel}>Total</Text>
@@ -4688,6 +4701,17 @@ export default function CatalogScreen() {
 
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartVisible, setCartVisible] = useState(false);
+  const couponReturnTarget = useRef<'cart' | 'subscription' | null>(null);
+  useFocusEffect(useCallback(() => {
+    const target = couponReturnTarget.current;
+    if (!target) return;
+    const frame = requestAnimationFrame(() => {
+      couponReturnTarget.current = null;
+      if (target === 'cart') setCartVisible(true);
+      else setSubscribeVisible(true);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, []));
   const [submitting, setSubmitting] = useState(false);
 
   const cartHydratedRef = useRef(false);
@@ -5662,6 +5686,7 @@ export default function CatalogScreen() {
           typeof api.createSubscription
         >[0]["items"],
         quoted_total: loyalty.data?.total,
+        ...loyalty.couponPayload,
         pattern: "buy_once",
         custom_days: null,
         start_date: tomorrow,
@@ -5699,6 +5724,7 @@ export default function CatalogScreen() {
         await api.createSubscription(payload);
       }
 
+      selectCoupon(loyalty.selectionKey);
       setSuccessItemCount(placedCount);
       setCart([]);
       api.clearCart().catch(() => undefined);
@@ -6176,6 +6202,7 @@ export default function CatalogScreen() {
         cutoffRules={orderCutoffs}
         tomorrow={tomorrow}
         onClose={() => setSubscribeVisible(false)}
+        onBrowseCoupons={() => { couponReturnTarget.current = 'subscription'; setSubscribeVisible(false); }}
         onSuccess={async () => {
           await fetchSubs();
           const wallet = await api.getWallet();
@@ -6232,6 +6259,7 @@ export default function CatalogScreen() {
           openAddressRequired(router);
         }}
         onClose={() => setCartVisible(false)}
+        onBrowseCoupons={() => { couponReturnTarget.current = 'cart'; setCartVisible(false); }}
         onRemove={handleRemove}
         onUpdateQty={handleUpdateQty}
         onPlaceOrder={handlePlaceOrder}

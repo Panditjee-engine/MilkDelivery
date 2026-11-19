@@ -1,3 +1,5 @@
+import { FaqLink } from "../../src/components/FaqScreen";
+import { SupportLink } from "../../src/components/SupportScreen";
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   View,
@@ -507,6 +509,8 @@ const toggleShift = async (next: boolean) => {
             </TouchableOpacity>
           ))}
         </View>
+        <SupportLink role="veterinary"/>
+        <FaqLink role="veterinary"/>
       </ScrollView>
 
       {/* Bottom tab bar */}
