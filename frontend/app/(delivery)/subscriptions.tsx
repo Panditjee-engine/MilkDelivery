@@ -562,7 +562,7 @@ export default function SubscriptionsScreen() {
     if (!ids.length || bulkLoading) return;
     Alert.alert(
       "📦 Mark Delivered",
-      `${ids.length} subscriptions ko aaj ke liye delivered mark karna hai?`,
+      `Do you want to mark this (${ids.length})subscription as delivered for today?`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -593,7 +593,7 @@ export default function SubscriptionsScreen() {
 
               if (result.failed) {
                 Alert.alert(
-                  "Kuch deliveries fail hui",
+                  "deliveries failed",
                   `${result.updated} updated, ${result.failed} failed.\n${failures[0]?.error || ""}`,
                 );
               } else {
