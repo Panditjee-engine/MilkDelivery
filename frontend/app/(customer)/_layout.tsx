@@ -72,9 +72,13 @@ export default function CustomerLayout() {
       />
       <Tabs.Screen name="order-notifications" options={{ href: null }} />
       <Tabs.Screen name="wallet" options={{ href: null }} />
+      <Tabs.Screen name="faqs" options={{ href: null }} />
+      <Tabs.Screen name="support-ticket" options={{ href: null }} />
+      <Tabs.Screen name="contact-support" options={{ href: null }} />
       <Tabs.Screen name="gaumali-history" options={{ href: null }} />
       <Tabs.Screen name="gaumali-details" options={{ href: null }} />
       <Tabs.Screen name="gaumali-cart" options={{ href: null }} />
+      <Tabs.Screen name="coupons" options={{ href: null }} />
       <Tabs.Screen name="product-search" options={{ href: null }} />
        <Tabs.Screen name="wishlist" options={{ href: null }} />
       <Tabs.Screen name="product-details" options={{ href: null }} />

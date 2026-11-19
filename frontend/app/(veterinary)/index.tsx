@@ -1,3 +1,5 @@
+import { FaqLink } from "../../src/components/FaqScreen";
+import { SupportLink } from "../../src/components/SupportScreen";
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   View,
@@ -398,6 +400,8 @@ export default function VeterinaryDashboard() {
             </TouchableOpacity>
           ))}
         </View>
+        <SupportLink role="veterinary"/>
+        <FaqLink role="veterinary"/>
       </ScrollView>
 
       {/* Bottom tab bar */}

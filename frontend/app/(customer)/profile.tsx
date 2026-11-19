@@ -1,3 +1,5 @@
+import { FaqLink } from "../../src/components/FaqScreen";
+import { SupportLink } from "../../src/components/SupportScreen";
 import React, { useState, useEffect, useRef } from "react";
 import {
   View,
@@ -1735,6 +1737,8 @@ export default function ProfileScreen() {
             style={{ marginLeft: "auto" }}
           />
         </TouchableOpacity>
+        <SupportLink role="customer"/>
+        <FaqLink role="customer"/>
       </ScrollView>
 
       {/* ── Edit Vacation Date Modal ── */}
