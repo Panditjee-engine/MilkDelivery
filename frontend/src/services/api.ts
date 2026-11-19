@@ -616,6 +616,14 @@ export interface WishlistStats {
   products: WishlistStatsRow[];
 }
 
+export interface ProductsPage {
+  items: any[];
+  total: number;
+  offset: number;
+  has_more: boolean;
+  counts: { total: number; active: number; low: number; inactive: number } | null;
+}
+
 // ── Work assignments
 export type AssignmentStatus =
   | "assigned"
@@ -1297,6 +1305,22 @@ class ApiService {
     const query = params.toString() ? `?${params.toString()}` : "";
     return this.request<any[]>(`/products${query}`);
   }
+
+  async getProductsPage(params: {
+  offset?: number;
+  limit?: number;
+  status?: "total" | "active" | "low" | "inactive";
+  search?: string;
+  category?: string;
+}) {
+  const p = new URLSearchParams();
+  p.append("offset", String(params.offset ?? 0));
+  p.append("limit", String(params.limit ?? 20));
+  if (params.status) p.append("status", params.status);
+  if (params.search) p.append("search", params.search);
+  if (params.category) p.append("category", params.category);
+  return this.request<ProductsPage>(`/admin/products-page?${p.toString()}`);
+}
 
   async getCustomerAppSettings() {
     return this.request<CustomerAppSettings>("/app-settings/catalog");
@@ -3399,6 +3423,57 @@ class ApiService {
   }
 
   //vet id delete pass eidt by anurag
+
+  async vetGetShift() {
+    const token = await AsyncStorage.getItem("vet_token");
+    const response = await fetch(`${API_BASE}/api/vet/shift`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "Failed to fetch shift status");
+    return data as { on_duty: boolean; shift_started_at: string | null };
+  }
+
+  async vetSetShift(on_duty: boolean) {
+    const token = await AsyncStorage.getItem("vet_token");
+    const response = await fetch(`${API_BASE}/api/vet/shift`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ on_duty }),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.detail || "Failed to update shift");
+    return result as { on_duty: boolean; shift_started_at: string | null };
+  }
+
+    async getAdminVetShifts(params?: {
+    vet_id?: string;
+    date?: string; // YYYY-MM-DD
+    limit?: number;
+  }) {
+    const p = new URLSearchParams();
+    if (params?.vet_id) p.append("vet_id", params.vet_id);
+    if (params?.date) p.append("date", params.date);
+    if (params?.limit) p.append("limit", String(params.limit));
+    const q = p.toString() ? `?${p.toString()}` : "";
+    return this.request<{
+      on_duty_now: number;
+      total: number;
+      shifts: Array<{
+        id: string;
+        vet_id: string;
+        vet_name: string;
+        started_at: string | null;
+        ended_at: string | null;
+        duration_minutes: number | null;
+        ongoing: boolean;
+      }>;
+    }>(`/admin/vet-shifts${q}`);
+  }
+
   async deleteVeterinarian(id: string) {
     return this.request<{ success: boolean; id: string }>(
       `/admin/veterinarians/${id}`,

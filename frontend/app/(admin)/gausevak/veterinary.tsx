@@ -22,7 +22,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { api } from "../../../src/services/api";
 
-// ── Palette ───────────────────────────────────────────────────────────────────
+// ── Palette
 
 const C = {
   primary: "#FF9675",
@@ -55,6 +55,8 @@ interface Veterinary {
   admin_id?: string;
   farm_location_ids?: string[];
   farm_location_labels?: string[];
+  on_duty?: boolean;
+  shift_started_at?: string | null;
 }
 
 interface BusinessLocation {
@@ -449,12 +451,12 @@ function PasswordResetModal({
   const gradPair = AVATAR_GRADIENTS[colorIdx];
 
   return (
-     <Modal visible={visible} transparent animationType="fade">
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={Platform.OS === "android" ? 20 : 0}
-    >
+    <Modal visible={visible} transparent animationType="fade">
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "android" ? 20 : 0}
+      >
         <View style={dm.overlay}>
           <Animated.View
             style={[
@@ -805,6 +807,7 @@ function VetDetailModal({
   onToggleActive,
   onDeletePress,
   onPasswordPress,
+  onShiftsPress,
 }: {
   vet: Veterinary | null;
   visible: boolean;
@@ -814,6 +817,7 @@ function VetDetailModal({
   onToggleActive: (id: string, active: boolean) => Promise<void>;
   onDeletePress: (vet: Veterinary) => void;
   onPasswordPress: (vet: Veterinary) => void;
+  onShiftsPress: (vet: Veterinary) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -1162,7 +1166,7 @@ function VetDetailModal({
                   <View style={dm.detailInfo}>
                     <Text style={dm.detailLabel}>Farm Addresses</Text>
                     {vet.farm_location_labels &&
-                      vet.farm_location_labels.length > 0 ? (
+                    vet.farm_location_labels.length > 0 ? (
                       <View style={dm.locationTagsWrap}>
                         {vet.farm_location_labels.map((label, i) => (
                           <View key={i} style={dm.locationTag}>
@@ -1203,6 +1207,32 @@ function VetDetailModal({
                 {/* Action buttons */}
                 <SectionLabel style={{ marginTop: 8 }}>ACTIONS</SectionLabel>
                 <View style={dm.actionRow}>
+                  {/* View Shift Logs */}
+                  <TouchableOpacity
+                    style={dm.actionBtn}
+                    onPress={() => onShiftsPress(vet)}
+                  >
+                    <LinearGradient
+                      colors={["#FFF3E8", "#FFE8D6"]}
+                      style={dm.actionBtnInner}
+                    >
+                      <View
+                        style={[dm.actionIcon, { backgroundColor: C.card }]}
+                      >
+                        <Ionicons
+                          name="time-outline"
+                          size={18}
+                          color={C.dark}
+                        />
+                      </View>
+                      <Text style={dm.actionBtnText}>View Shift Logs</Text>
+                      <Ionicons
+                        name="chevron-forward"
+                        size={14}
+                        color={C.textLight}
+                      />
+                    </LinearGradient>
+                  </TouchableOpacity>
                   {/* Reset Password */}
                   <TouchableOpacity
                     style={dm.actionBtn}
@@ -1553,6 +1583,21 @@ function VetCard({
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
           >
+            {item.on_duty ? (
+              <View style={[styles.tag, { backgroundColor: "#E8F8EC" }]}>
+                <View
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: 3,
+                    backgroundColor: "#22C55E",
+                  }}
+                />
+                <Text style={[styles.tagText, { color: "#15803D" }]}>
+                  On Duty
+                </Text>
+              </View>
+            ) : null}
             <Text style={styles.avatarText}>{initials}</Text>
           </LinearGradient>
           <View style={styles.cardInfo}>
@@ -1633,9 +1678,19 @@ function VetCard({
 
 export default function VeterinaryScreen() {
   const router = useRouter();
-  const [vets, setVets] = useCachedScreenState<Veterinary[]>("screen:(admin)/gausevak/veterinary:vets", []);
-  const [locations, setLocations] = useCachedScreenState<BusinessLocation[]>("screen:(admin)/gausevak/veterinary:locations", []);
-  const [loading, setLoading] = useState(() => api.getScreenSnapshot("screen:(admin)/gausevak/veterinary:vets") === undefined);
+  const [vets, setVets] = useCachedScreenState<Veterinary[]>(
+    "screen:(admin)/gausevak/veterinary:vets",
+    [],
+  );
+  const [locations, setLocations] = useCachedScreenState<BusinessLocation[]>(
+    "screen:(admin)/gausevak/veterinary:locations",
+    [],
+  );
+  const [loading, setLoading] = useState(
+    () =>
+      api.getScreenSnapshot("screen:(admin)/gausevak/veterinary:vets") ===
+      undefined,
+  );
   const [modalVisible, setModalVisible] = useState(false);
   const [creating, setCreating] = useState(false);
   const [selectedVet, setSelectedVet] = useState<Veterinary | null>(null);
@@ -1694,7 +1749,10 @@ export default function VeterinaryScreen() {
 
   const fetchVets = async () => {
     try {
-      setLoading(api.getScreenSnapshot("screen:(admin)/gausevak/veterinary:vets") === undefined);
+      setLoading(
+        api.getScreenSnapshot("screen:(admin)/gausevak/veterinary:vets") ===
+          undefined,
+      );
       const data = await api.getAdminVeterinarians();
       setVets(data);
     } catch (e: any) {
@@ -1779,11 +1837,11 @@ export default function VeterinaryScreen() {
         vs.map((v) =>
           v.id === id
             ? {
-              ...v,
-              ...data,
-              farm_location_labels:
-                updated?.farm_location_labels ?? v.farm_location_labels,
-            }
+                ...v,
+                ...data,
+                farm_location_labels:
+                  updated?.farm_location_labels ?? v.farm_location_labels,
+              }
             : v,
         ),
       );
@@ -1791,11 +1849,11 @@ export default function VeterinaryScreen() {
         setSelectedVet((v) =>
           v
             ? {
-              ...v,
-              ...data,
-              farm_location_labels:
-                updated?.farm_location_labels ?? v.farm_location_labels,
-            }
+                ...v,
+                ...data,
+                farm_location_labels:
+                  updated?.farm_location_labels ?? v.farm_location_labels,
+              }
             : v,
         );
       showToast("Veterinarian updated!", "success");
@@ -1900,6 +1958,14 @@ export default function VeterinaryScreen() {
             {vets.length} total · {totalActive} active
           </Text>
         </View>
+        <TouchableOpacity
+          style={styles.backBtn}
+          onPress={() =>
+            router.push("/(admin)/gausevak/veterinary-shifts" as any)
+          }
+        >
+          <Ionicons name="time-outline" size={20} color={C.primary} />
+        </TouchableOpacity>
         <TouchableOpacity
           style={styles.addBtn}
           onPress={() => {
@@ -2019,6 +2085,17 @@ export default function VeterinaryScreen() {
         onPasswordPress={(vet) => {
           setDetailVisible(false);
           setTimeout(() => handlePasswordPress(vet), 320);
+        }}
+        onShiftsPress={(vet) => {
+          setDetailVisible(false);
+          setTimeout(
+            () =>
+              router.push({
+                pathname: "/(admin)/gausevak/veterinary-shifts",
+                params: { vet_id: vet.id, vet_name: vet.name },
+              } as any),
+            320,
+          );
         }}
       />
 
@@ -2199,7 +2276,7 @@ export default function VeterinaryScreen() {
                       style={[
                         styles.designationChip,
                         form.specialization === s &&
-                        styles.designationChipActive,
+                          styles.designationChipActive,
                       ]}
                       onPress={() =>
                         setForm((f) => ({
@@ -2217,7 +2294,7 @@ export default function VeterinaryScreen() {
                         style={[
                           styles.designationChipText,
                           form.specialization === s &&
-                          styles.designationChipTextActive,
+                            styles.designationChipTextActive,
                         ]}
                       >
                         {s}
