@@ -45,6 +45,7 @@
     },
     "plugins": [
       "expo-router",
+      "./plugins/withPortraitOptional",
       [
         "expo-splash-screen",
         {
